@@ -13,9 +13,9 @@ find_package(glfw3 CONFIG REQUIRED)
 
 # 실행 파일
 add_executable(PowerEngine
-    PowerEngine.cpp
-    PowerEngine.h
-)
+    "EngineCore.cpp"
+    "EngineCore.h"
+    "main.cpp")
 
 # (선택) MSVC에서 BMI가 커질 때를 대비해 종종 유용
 if (MSVC)
@@ -43,8 +43,7 @@ target_sources(VulkanCppModule
   PUBLIC
     FILE_SET cxx_modules TYPE CXX_MODULES
     BASE_DIRS "${Vulkan_INCLUDE_DIR}"
-    FILES     "${Vulkan_INCLUDE_DIR}/vulkan/vulkan.cppm"
-)
+    FILES     "${Vulkan_INCLUDE_DIR}/vulkan/vulkan.cppm")
 
 # ---- 실행 파일이 모듈을 실제로 사용하도록 링크 ----
 target_link_libraries(PowerEngine
