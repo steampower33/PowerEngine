@@ -2,7 +2,7 @@
 
 int main() {
     try {
-        EngineCore app;
+        HelloTriangleApplication app;
         app.run();
     }
     catch (const std::exception& e) {
