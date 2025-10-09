@@ -12,10 +12,9 @@ find_package(Vulkan REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 
 # 실행 파일
-add_executable(PowerEngine
-    "EngineCore.cpp"
-    "EngineCore.h"
-    "main.cpp")
+file(GLOB SRC CONFIGURE_DEPENDS
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+add_executable(PowerEngine ${SRC})
 
 # (선택) MSVC에서 BMI가 커질 때를 대비해 종종 유용
 if (MSVC)

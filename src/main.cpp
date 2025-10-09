@@ -1,9 +1,9 @@
-#include "EngineCore.h"
+#include "window.hpp"
 
 int main() {
     try {
-        HelloTriangleApplication app;
-        app.run();
+        Window win;
+        win.run();
     }
     catch (const std::exception& e) {
         std::cerr << e.what() << std::endl;
