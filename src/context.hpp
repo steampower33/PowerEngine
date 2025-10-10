@@ -1,6 +1,7 @@
 #pragma once
 
 #include "preamble.hpp"
+#include "swapchain.hpp"
 
 class Window;
 
@@ -32,6 +33,7 @@ public:
 	vk::Extent2D                     swapChainExtent;
 	std::vector<vk::raii::ImageView> swapChainImageViews;
 
+	vk::raii::DescriptorSetLayout descriptorSetLayout = nullptr;
 	vk::raii::PipelineLayout pipelineLayout = nullptr;
 	vk::raii::Pipeline graphicsPipeline = nullptr;
 
@@ -39,6 +41,13 @@ public:
 	vk::raii::DeviceMemory vertexBufferMemory = nullptr;
 	vk::raii::Buffer indexBuffer = nullptr;
 	vk::raii::DeviceMemory indexBufferMemory = nullptr;
+
+	std::vector<vk::raii::Buffer> uniformBuffers;
+	std::vector<vk::raii::DeviceMemory> uniformBuffersMemory;
+	std::vector<void*> uniformBuffersMapped;
+
+	vk::raii::DescriptorPool descriptorPool = nullptr;
+	std::vector<vk::raii::DescriptorSet> descriptorSets;
 
 	vk::raii::CommandPool commandPool = nullptr;
 	std::vector<vk::raii::CommandBuffer> commandBuffers;
@@ -68,8 +77,8 @@ public:
 
 private:
 	Window* window;
-
 	Context* ctx;
+	Swapchain* swapchain;
 
 	void createInstance();
 	std::vector<const char*> getRequiredExtensions();
@@ -80,10 +89,14 @@ private:
 	void createLogicalDevice();
 	void createSwapChain();
 	void createImageViews();
+	void createDescriptorSetLayout();
 	void createGraphicsPipeline();
 	void createCommandPool();
 	void createVertexBuffer();
 	void createIndexBuffer();
+	void createUniformBuffers();
+	void createDescriptorPool();
+	void createDescriptorSets();
 	void createCommandBuffers();
 	void createSyncObjects();
 
@@ -105,4 +118,6 @@ private:
 		vk::PipelineStageFlags2 src_stage_mask,
 		vk::PipelineStageFlags2 dst_stage_mask
 	);
+
+	void updateUniformBuffer(uint32_t currentImage);
 };
