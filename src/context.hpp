@@ -1,14 +1,14 @@
 #pragma once
 
 #include "preamble.hpp"
-#include "swapchain.hpp"
+#include "window.hpp"
 
-class Window;
+class Swapchain;
 
 class Context
 {
 public:
-	Context(Window* window);
+	Context(GLFWwindow* glfwWindow);
 	Context(const Context& rhs) = delete;
 	Context(Context&& rhs) = delete;
 	~Context();
@@ -17,50 +17,25 @@ public:
 	Context& operator=(Context&& rhs) = delete;
 
 	void draw();
-	void resize();
 
-	vk::raii::Context                context;
-	vk::raii::Instance               instance = nullptr;
-	vk::raii::DebugUtilsMessengerEXT debugMessenger = nullptr;
-	vk::raii::SurfaceKHR             surface = nullptr;
-	vk::raii::PhysicalDevice         physicalDevice = nullptr;
-	vk::raii::Device                 device = nullptr;
-	uint32_t                         queueIndex = ~0;
-	vk::raii::Queue                  queue = nullptr;
-	vk::raii::SwapchainKHR           swapChain = nullptr;
-	std::vector<vk::Image>           swapChainImages;
-	vk::SurfaceFormatKHR             swapChainSurfaceFormat;
-	vk::Extent2D                     swapChainExtent;
-	std::vector<vk::raii::ImageView> swapChainImageViews;
+	vk::raii::Context                context_;
+	vk::raii::Instance               instance_ = nullptr;
+	vk::raii::DebugUtilsMessengerEXT debugMessenger_ = nullptr;
+	vk::raii::SurfaceKHR             surface_ = nullptr;
+	vk::raii::PhysicalDevice         physicalDevice_ = nullptr;
+	vk::raii::Device                 device_ = nullptr;
+	uint32_t                         queueIndex_ = ~0;
+	vk::raii::Queue                  queue_ = nullptr;
+	vk::raii::CommandPool			 commandPool_ = nullptr;
+	vk::raii::DescriptorSetLayout	 descriptorSetLayout_ = nullptr;
+	vk::raii::PipelineLayout		 pipelineLayout_ = nullptr;
+	vk::raii::Pipeline				 graphicsPipeline_ = nullptr;
 
-	vk::raii::DescriptorSetLayout descriptorSetLayout = nullptr;
-	vk::raii::PipelineLayout pipelineLayout = nullptr;
-	vk::raii::Pipeline graphicsPipeline = nullptr;
+	vk::raii::DescriptorPool		 descriptorPool_ = nullptr;
 
-	vk::raii::Buffer vertexBuffer = nullptr;
-	vk::raii::DeviceMemory vertexBufferMemory = nullptr;
-	vk::raii::Buffer indexBuffer = nullptr;
-	vk::raii::DeviceMemory indexBufferMemory = nullptr;
+	bool framebufferResized_ = false;
 
-	std::vector<vk::raii::Buffer> uniformBuffers;
-	std::vector<vk::raii::DeviceMemory> uniformBuffersMemory;
-	std::vector<void*> uniformBuffersMapped;
-
-	vk::raii::DescriptorPool descriptorPool = nullptr;
-	std::vector<vk::raii::DescriptorSet> descriptorSets;
-
-	vk::raii::CommandPool commandPool = nullptr;
-	std::vector<vk::raii::CommandBuffer> commandBuffers;
-
-	std::vector<vk::raii::Semaphore> presentCompleteSemaphore;
-	std::vector<vk::raii::Semaphore> renderFinishedSemaphore;
-	std::vector<vk::raii::Fence> inFlightFences;
-	uint32_t semaphoreIndex = 0;
-	uint32_t currentFrame = 0;
-
-	bool framebufferResized = false;
-
-	std::vector<const char*> requiredDeviceExtension = {
+	std::vector<const char*> requiredDeviceExtension_ = {
 		vk::KHRSwapchainExtensionName,
 		vk::KHRSpirv14ExtensionName,
 		vk::KHRSynchronization2ExtensionName,
@@ -68,17 +43,10 @@ public:
 	};
 
 	vk::raii::ShaderModule createShaderModule(const std::vector<char>& code) const;
-	static uint32_t chooseSwapMinImageCount(vk::SurfaceCapabilitiesKHR const& surfaceCapabilities);
-	static vk::SurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& availableFormats);
-	static vk::PresentModeKHR chooseSwapPresentMode(const std::vector<vk::PresentModeKHR>& availablePresentModes);
-	vk::Extent2D chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& capabilities);
-	static std::vector<char> readFile(const std::string& filename);
-
 
 private:
-	Window* window;
-	Context* ctx;
-	Swapchain* swapchain;
+	GLFWwindow* glfwWindow_;
+	Swapchain* swapchain_;
 
 	void createInstance();
 	std::vector<const char*> getRequiredExtensions();
@@ -87,37 +55,12 @@ private:
 	void createSurface();
 	void pickPhysicalDevice();
 	void createLogicalDevice();
-	void createSwapChain();
-	void createImageViews();
+	void createCommandPool();
+	
 	void createDescriptorSetLayout();
 	void createGraphicsPipeline();
-	void createCommandPool();
-	void createVertexBuffer();
-	void createIndexBuffer();
-	void createUniformBuffers();
+
 	void createDescriptorPool();
-	void createDescriptorSets();
-	void createCommandBuffers();
-	void createSyncObjects();
 
-	void createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Buffer& buffer, vk::raii::DeviceMemory& bufferMemory);
-	uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties);
-	void copyBuffer(vk::raii::Buffer& srcBuffer, vk::raii::Buffer& dstBuffer, vk::DeviceSize size);
-
-	void recreateSwapChain();
-	void cleanupSwapChain();
-
-	void recordCommandBuffer(uint32_t imageIndex);
-
-	void transition_image_layout(
-		uint32_t imageIndex,
-		vk::ImageLayout old_layout,
-		vk::ImageLayout new_layout,
-		vk::AccessFlags2 src_access_mask,
-		vk::AccessFlags2 dst_access_mask,
-		vk::PipelineStageFlags2 src_stage_mask,
-		vk::PipelineStageFlags2 dst_stage_mask
-	);
-
-	void updateUniformBuffer(uint32_t currentImage);
+	static std::vector<char> readFile(const std::string& filename);
 };

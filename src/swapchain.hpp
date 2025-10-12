@@ -2,23 +2,94 @@
 
 #include "preamble.hpp"
 
-class Context;
-
 class Swapchain
 {
 public:
-    Swapchain(Context* ctx);
-    Swapchain(const Swapchain& rhs) = delete;
-    Swapchain(Swapchain&& rhs) = delete;
-    ~Swapchain();
+	Swapchain(
+		GLFWwindow* glfwWindow,
+		vk::raii::Device& device,
+		vk::raii::PhysicalDevice& physicalDevice,
+		vk::raii::SurfaceKHR& surface,
+		uint32_t queueFamilyIndex,
+		vk::raii::CommandPool& commandPool,
+		vk::raii::DescriptorSetLayout& descriptorSetLayout,
+		vk::raii::DescriptorPool& descriptorPool,
+		vk::raii::Queue& queue);
+	Swapchain(const Swapchain& rhs) = delete;
+	Swapchain(Swapchain&& rhs) = delete;
+	~Swapchain();
 
-    Swapchain& operator=(const Swapchain& rhs) = delete;
-    Swapchain& operator=(Swapchain&& rhs) = delete;
+	Swapchain& operator=(const Swapchain& rhs) = delete;
+	Swapchain& operator=(Swapchain&& rhs) = delete;
 
-    bool draw();
+	bool draw(bool& framebufferResized, vk::raii::Queue& queue, vk::raii::Pipeline& graphicsPipeline, vk::raii::PipelineLayout& pipelineLayout);
 
-    Context* ctx;
-
+	vk::raii::SwapchainKHR           swapChain_ = nullptr;
+	std::vector<vk::Image>           swapChainImages_;
+	vk::SurfaceFormatKHR             swapChainSurfaceFormat_;
+	vk::Extent2D                     swapChainExtent_;
+	std::vector<vk::raii::ImageView> swapChainImageViews_;
 
 private:
+	GLFWwindow* glfwWindow_;
+	vk::raii::Device& device_;
+	vk::raii::PhysicalDevice& physicalDevice_;
+	vk::raii::SurfaceKHR& surface_;
+	vk::raii::CommandPool& commandPool_;
+
+	std::vector<vk::raii::Semaphore> presentCompleteSemaphore_;
+	std::vector<vk::raii::Semaphore> renderFinishedSemaphore_;
+	std::vector<vk::raii::Fence> inFlightFences_;
+	uint32_t semaphoreIndex_ = 0;
+	uint32_t currentFrame_ = 0;
+
+	std::vector<vk::raii::Buffer> uniformBuffers_;
+	std::vector<vk::raii::DeviceMemory> uniformBuffersMemory_;
+	std::vector<void*> uniformBuffersMapped_;
+
+	std::vector<vk::raii::DescriptorSet> descriptorSets_;
+	std::vector<vk::raii::CommandBuffer> commandBuffers_;
+
+	vk::raii::Buffer vertexBuffer_ = nullptr;
+	vk::raii::DeviceMemory vertexBufferMemory_ = nullptr;
+	vk::raii::Buffer indexBuffer_ = nullptr;
+	vk::raii::DeviceMemory indexBufferMemory_ = nullptr;
+
+	void createSwapChain(vk::raii::PhysicalDevice& physicalDevice, vk::raii::SurfaceKHR& surface);
+	void createImageViews();
+
+	void createCommandBuffers(vk::raii::CommandPool& commandPool);
+	void createUniformBuffers();
+	void createDescriptorSets(vk::raii::DescriptorSetLayout& descriptorSetLayout, vk::raii::DescriptorPool& descriptorPool);
+
+	void createSyncObjects();
+
+	void cleanupSwapChain();
+	void recreateSwapChain();
+
+	void recordCommandBuffer(uint32_t imageIndex, vk::raii::Queue& queue, vk::raii::Pipeline& graphicsPipeline, vk::raii::PipelineLayout& pipelineLayout);
+
+	void transition_image_layout(
+		uint32_t imageIndex,
+		vk::ImageLayout old_layout,
+		vk::ImageLayout new_layout,
+		vk::AccessFlags2 src_access_mask,
+		vk::AccessFlags2 dst_access_mask,
+		vk::PipelineStageFlags2 src_stage_mask,
+		vk::PipelineStageFlags2 dst_stage_mask
+	);
+
+	static uint32_t chooseSwapMinImageCount(vk::SurfaceCapabilitiesKHR const& surfaceCapabilities);
+	static vk::SurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& availableFormats);
+	static vk::PresentModeKHR chooseSwapPresentMode(const std::vector<vk::PresentModeKHR>& availablePresentModes);
+	vk::Extent2D chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& capabilities);
+
+	void updateUniformBuffer(uint32_t currentImage);
+
+	void createVertexBuffer(vk::raii::Queue& queue);
+	void createIndexBuffer(vk::raii::Queue& queue);
+	uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties);
+	void copyBuffer(vk::raii::Buffer& srcBuffer, vk::raii::Buffer& dstBuffer, vk::DeviceSize size, vk::raii::Queue& queue);
+
+	void createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Buffer& buffer, vk::raii::DeviceMemory& bufferMemory);
 };

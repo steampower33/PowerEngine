@@ -1,3 +1,4 @@
+#include "context.hpp"
 #include "window.hpp"
 
 Window::Window()
@@ -6,36 +7,36 @@ Window::Window()
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-    window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
-    glfwSetWindowUserPointer(window, this);
-    glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+    glfwWindow_ = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
+    glfwSetWindowUserPointer(glfwWindow_, this);
+    glfwSetFramebufferSizeCallback(glfwWindow_, framebufferResizeCallback);
 
-    if (!window)
+    if (!glfwWindow_)
     {
         std::cerr << "Failure creating glfw window " << std::endl;
     }
 
-    ctx = new Context(this);
+    ctx_ = new Context(glfwWindow_);
 }
 
 void Window::framebufferResizeCallback(GLFWwindow* window, int width, int height) {
     auto app = static_cast<Window*>(glfwGetWindowUserPointer(window));
-    app->framebufferResized = true;
+    app->framebufferResized_ = true;
 }
 
 Window::~Window()
 {
-    glfwDestroyWindow(window);
+    glfwDestroyWindow(glfwWindow_);
 
     glfwTerminate();
 }
 
 void Window::run()
 {
-    while (!glfwWindowShouldClose(window)) {
+    while (!glfwWindowShouldClose(glfwWindow_)) {
         glfwPollEvents();
-        ctx->draw();
+        ctx_->draw();
     }
 
-    ctx->device.waitIdle();
+    ctx_->device_.waitIdle();
 }

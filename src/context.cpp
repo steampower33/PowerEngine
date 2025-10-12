@@ -1,85 +1,27 @@
 #include "context.hpp"
-#include "window.hpp"
+#include "swapchain.hpp"
 
-Context::Context(Window* window)
-    : window(window)
-    , ctx(this)
+Context::Context(GLFWwindow* glfwWindow)
+    : glfwWindow_(glfwWindow)
 {
     createInstance();
     setupDebugMessenger();
     createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
-    createSwapChain();
-    createImageViews();
-    createDescriptorSetLayout();
-    createGraphicsPipeline();
     createCommandPool();
-    createVertexBuffer();
-    createIndexBuffer();
-    createUniformBuffers();
-    createDescriptorPool();
-    createDescriptorSets();
-    createCommandBuffers();
-    createSyncObjects();
 
-    swapchain = new Swapchain(this);
+    createDescriptorSetLayout();
+    createDescriptorPool();
+
+    swapchain_ = new Swapchain(glfwWindow_, device_, physicalDevice_, surface_,  queueIndex_, commandPool_, descriptorSetLayout_, descriptorPool_, queue_);
+
+    createGraphicsPipeline();
 }
 
 void Context::draw()
 {
-    while (vk::Result::eTimeout == device.waitForFences(*inFlightFences[currentFrame], vk::True, UINT64_MAX))
-        ;
-    uint32_t imageIndex = 0;
-    try {
-        auto [res, idx] = swapChain.acquireNextImage(
-            UINT64_MAX, *presentCompleteSemaphore[semaphoreIndex], nullptr);
-        imageIndex = idx;
-        if (res == vk::Result::eSuboptimalKHR) {
-            framebufferResized = false;
-            recreateSwapChain();
-            return;
-        }
-    }
-    catch (const vk::OutOfDateKHRError&) {
-        framebufferResized = false;
-        recreateSwapChain();
-        return;
-    }
-
-    updateUniformBuffer(currentFrame);
-
-    device.resetFences(*inFlightFences[currentFrame]);
-    commandBuffers[currentFrame].reset();
-    recordCommandBuffer(imageIndex);
-
-    vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
-    const vk::SubmitInfo submitInfo{ .waitSemaphoreCount = 1, .pWaitSemaphores = &*presentCompleteSemaphore[semaphoreIndex],
-                        .pWaitDstStageMask = &waitDestinationStageMask, .commandBufferCount = 1, .pCommandBuffers = &*commandBuffers[currentFrame],
-                        .signalSemaphoreCount = 1, .pSignalSemaphores = &*renderFinishedSemaphore[imageIndex] };
-    queue.submit(submitInfo, *inFlightFences[currentFrame]);
-
-    const vk::PresentInfoKHR presentInfoKHR{ .waitSemaphoreCount = 1, .pWaitSemaphores = &*renderFinishedSemaphore[imageIndex],
-                                            .swapchainCount = 1, .pSwapchains = &*swapChain, .pImageIndices = &imageIndex };
-    try {
-        queue.presentKHR(presentInfoKHR);   // 실패 시 예외 발생 (리턴값 없음)
-    }
-    catch (const vk::OutOfDateKHRError&) {
-        framebufferResized = false;
-        recreateSwapChain();
-        return;
-    }
-    catch (const vk::SystemError& e) {
-        // 일부 버전에선 SuboptimalKHR가 SystemError로 던져진다
-        if (e.code() == vk::make_error_code(vk::Result::eSuboptimalKHR)) {
-            framebufferResized = false;
-            recreateSwapChain();
-            return;
-        }
-        throw; // 다른 에러는 그대로 위로
-    }
-    semaphoreIndex = (semaphoreIndex + 1) % presentCompleteSemaphore.size();
-    currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+    swapchain_->draw(framebufferResized_, queue_, graphicsPipeline_, pipelineLayout_);
 }
 
 void Context::createInstance() {
@@ -96,7 +38,7 @@ void Context::createInstance() {
     }
 
     // Check if the required layers are supported by the Vulkan implementation.
-    auto layerProperties = context.enumerateInstanceLayerProperties();
+    auto layerProperties = context_.enumerateInstanceLayerProperties();
     for (auto const& requiredLayer : requiredLayers)
     {
         if (std::ranges::none_of(layerProperties,
@@ -111,7 +53,7 @@ void Context::createInstance() {
     auto requiredExtensions = getRequiredExtensions();
 
     // Check if the required extensions are supported by the Vulkan implementation.
-    auto extensionProperties = context.enumerateInstanceExtensionProperties();
+    auto extensionProperties = context_.enumerateInstanceExtensionProperties();
     for (auto const& requiredExtension : requiredExtensions)
     {
         if (std::ranges::none_of(extensionProperties,
@@ -128,7 +70,7 @@ void Context::createInstance() {
         .ppEnabledLayerNames = requiredLayers.data(),
         .enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size()),
         .ppEnabledExtensionNames = requiredExtensions.data() };
-    instance = vk::raii::Instance(context, createInfo);
+    instance_ = vk::raii::Instance(context_, createInfo);
 }
 
 std::vector<const char*> Context::getRequiredExtensions() {
@@ -153,7 +95,7 @@ void Context::setupDebugMessenger() {
         .messageType = messageTypeFlags,
         .pfnUserCallback = &debugCallback
     };
-    debugMessenger = instance.createDebugUtilsMessengerEXT(debugUtilsMessengerCreateInfoEXT);
+    debugMessenger_ = instance_.createDebugUtilsMessengerEXT(debugUtilsMessengerCreateInfoEXT);
 }
 
 VKAPI_ATTR vk::Bool32 VKAPI_CALL Context::debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type, const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void*) {
@@ -166,15 +108,15 @@ VKAPI_ATTR vk::Bool32 VKAPI_CALL Context::debugCallback(vk::DebugUtilsMessageSev
 
 void Context::createSurface() {
     VkSurfaceKHR       _surface;
-    if (glfwCreateWindowSurface(*instance, window->window, nullptr, &_surface) != 0) {
+    if (glfwCreateWindowSurface(*instance_, glfwWindow_, nullptr, &_surface) != 0) {
         throw std::runtime_error("failed to create window surface!");
     }
-    surface = vk::raii::SurfaceKHR(instance, _surface);
+    surface_ = vk::raii::SurfaceKHR(instance_, _surface);
 
 }
 
 void Context::pickPhysicalDevice() {
-    std::vector<vk::raii::PhysicalDevice> devices = instance.enumeratePhysicalDevices();
+    std::vector<vk::raii::PhysicalDevice> devices = instance_.enumeratePhysicalDevices();
     const auto                            devIter = std::ranges::find_if(
         devices,
         [&](auto const& device)
@@ -190,7 +132,7 @@ void Context::pickPhysicalDevice() {
             // Check if all required device extensions are available
             auto availableDeviceExtensions = device.enumerateDeviceExtensionProperties();
             bool supportsAllRequiredExtensions =
-                std::ranges::all_of(requiredDeviceExtension,
+                std::ranges::all_of(requiredDeviceExtension_,
                     [&availableDeviceExtensions](auto const& requiredDeviceExtension)
                     {
                         return std::ranges::any_of(availableDeviceExtensions,
@@ -206,7 +148,7 @@ void Context::pickPhysicalDevice() {
         });
     if (devIter != devices.end())
     {
-        physicalDevice = *devIter;
+        physicalDevice_ = *devIter;
     }
     else
     {
@@ -215,20 +157,20 @@ void Context::pickPhysicalDevice() {
 }
 
 void Context::createLogicalDevice() {
-    std::vector<vk::QueueFamilyProperties> queueFamilyProperties = physicalDevice.getQueueFamilyProperties();
+    std::vector<vk::QueueFamilyProperties> queueFamilyProperties = physicalDevice_.getQueueFamilyProperties();
 
     // get the first index into queueFamilyProperties which supports both graphics and present
     for (uint32_t qfpIndex = 0; qfpIndex < queueFamilyProperties.size(); qfpIndex++)
     {
         if ((queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eGraphics) &&
-            physicalDevice.getSurfaceSupportKHR(qfpIndex, *surface))
+            physicalDevice_.getSurfaceSupportKHR(qfpIndex, *surface_))
         {
             // found a queue family that supports both graphics and present
-            queueIndex = qfpIndex;
+            queueIndex_ = qfpIndex;
             break;
         }
     }
-    if (queueIndex == ~0)
+    if (queueIndex_ == ~0)
     {
         throw std::runtime_error("Could not find a queue for graphics and present -> terminating");
     }
@@ -242,49 +184,21 @@ void Context::createLogicalDevice() {
 
     // create a Device
     float                     queuePriority = 0.0f;
-    vk::DeviceQueueCreateInfo deviceQueueCreateInfo{ .queueFamilyIndex = queueIndex, .queueCount = 1, .pQueuePriorities = &queuePriority };
+    vk::DeviceQueueCreateInfo deviceQueueCreateInfo{ .queueFamilyIndex = queueIndex_, .queueCount = 1, .pQueuePriorities = &queuePriority };
     vk::DeviceCreateInfo      deviceCreateInfo{ .pNext = &featureChain.get<vk::PhysicalDeviceFeatures2>(),
                                                 .queueCreateInfoCount = 1,
                                                 .pQueueCreateInfos = &deviceQueueCreateInfo,
-                                                .enabledExtensionCount = static_cast<uint32_t>(requiredDeviceExtension.size()),
-                                                .ppEnabledExtensionNames = requiredDeviceExtension.data() };
+                                                .enabledExtensionCount = static_cast<uint32_t>(requiredDeviceExtension_.size()),
+                                                .ppEnabledExtensionNames = requiredDeviceExtension_.data() };
 
-    device = vk::raii::Device(physicalDevice, deviceCreateInfo);
-    queue = vk::raii::Queue(device, queueIndex, 0);
+    device_ = vk::raii::Device(physicalDevice_, deviceCreateInfo);
+    queue_ = vk::raii::Queue(device_, queueIndex_, 0);
 }
 
-
-void Context::createSwapChain() {
-    auto surfaceCapabilities = physicalDevice.getSurfaceCapabilitiesKHR(*surface);
-    swapChainExtent = chooseSwapExtent(surfaceCapabilities);
-    swapChainSurfaceFormat = chooseSwapSurfaceFormat(physicalDevice.getSurfaceFormatsKHR(*surface));
-    vk::SwapchainCreateInfoKHR swapChainCreateInfo{ .surface = *surface,
-                                                    .minImageCount = chooseSwapMinImageCount(surfaceCapabilities),
-                                                    .imageFormat = swapChainSurfaceFormat.format,
-                                                    .imageColorSpace = swapChainSurfaceFormat.colorSpace,
-                                                    .imageExtent = swapChainExtent,
-                                                    .imageArrayLayers = 1,
-                                                    .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
-                                                    .imageSharingMode = vk::SharingMode::eExclusive,
-                                                    .preTransform = surfaceCapabilities.currentTransform,
-                                                    .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
-                                                    .presentMode = chooseSwapPresentMode(physicalDevice.getSurfacePresentModesKHR(*surface)),
-                                                    .clipped = true };
-
-    swapChain = vk::raii::SwapchainKHR(device, swapChainCreateInfo);
-    swapChainImages = swapChain.getImages();
-}
-
-void Context::createImageViews() {
-    assert(swapChainImageViews.empty());
-
-    vk::ImageViewCreateInfo imageViewCreateInfo{ .viewType = vk::ImageViewType::e2D, .format = swapChainSurfaceFormat.format,
-      .subresourceRange = { vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 } };
-    for (auto image : swapChainImages)
-    {
-        imageViewCreateInfo.image = image;
-        swapChainImageViews.emplace_back(device, imageViewCreateInfo);
-    }
+void Context::createCommandPool() {
+    vk::CommandPoolCreateInfo poolInfo{ .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+                                         .queueFamilyIndex = queueIndex_ };
+    commandPool_ = vk::raii::CommandPool(device_, poolInfo);
 }
 
 void Context::createGraphicsPipeline() {
@@ -320,67 +234,26 @@ void Context::createGraphicsPipeline() {
     };
     vk::PipelineDynamicStateCreateInfo dynamicState{ .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()), .pDynamicStates = dynamicStates.data() };
 
-    vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = 1, .pSetLayouts = &*descriptorSetLayout, .pushConstantRangeCount = 0 };
+    vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = 1, .pSetLayouts = &*descriptorSetLayout_, .pushConstantRangeCount = 0 };
 
-    pipelineLayout = vk::raii::PipelineLayout(device, pipelineLayoutInfo);
+    pipelineLayout_ = vk::raii::PipelineLayout(device_, pipelineLayoutInfo);
 
-    vk::PipelineRenderingCreateInfo pipelineRenderingCreateInfo{ .colorAttachmentCount = 1, .pColorAttachmentFormats = &swapChainSurfaceFormat.format };
+    vk::PipelineRenderingCreateInfo pipelineRenderingCreateInfo{ .colorAttachmentCount = 1, .pColorAttachmentFormats = &swapchain_->swapChainSurfaceFormat_.format };
     vk::GraphicsPipelineCreateInfo pipelineInfo{ .pNext = &pipelineRenderingCreateInfo,
         .stageCount = 2, .pStages = shaderStages,
         .pVertexInputState = &vertexInputInfo, .pInputAssemblyState = &inputAssembly,
         .pViewportState = &viewportState, .pRasterizationState = &rasterizer,
         .pMultisampleState = &multisampling, .pColorBlendState = &colorBlending,
-        .pDynamicState = &dynamicState, .layout = pipelineLayout, .renderPass = nullptr };
+        .pDynamicState = &dynamicState, .layout = pipelineLayout_, .renderPass = nullptr };
 
-    graphicsPipeline = vk::raii::Pipeline(device, nullptr, pipelineInfo);
-}
-
-void Context::createCommandPool() {
-    vk::CommandPoolCreateInfo poolInfo{ .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
-                                         .queueFamilyIndex = queueIndex };
-    commandPool = vk::raii::CommandPool(device, poolInfo);
+    graphicsPipeline_ = vk::raii::Pipeline(device_, nullptr, pipelineInfo);
 }
 
 [[nodiscard]] vk::raii::ShaderModule Context::createShaderModule(const std::vector<char>& code) const {
     vk::ShaderModuleCreateInfo createInfo{ .codeSize = code.size(), .pCode = reinterpret_cast<const uint32_t*>(code.data()) };
-    vk::raii::ShaderModule shaderModule{ device, createInfo };
+    vk::raii::ShaderModule shaderModule{ device_, createInfo };
 
     return shaderModule;
-}
-
-uint32_t Context::chooseSwapMinImageCount(vk::SurfaceCapabilitiesKHR const& surfaceCapabilities) {
-    auto minImageCount = std::max(3u, surfaceCapabilities.minImageCount);
-    if ((0 < surfaceCapabilities.maxImageCount) && (surfaceCapabilities.maxImageCount < minImageCount)) {
-        minImageCount = surfaceCapabilities.maxImageCount;
-    }
-    return minImageCount;
-}
-
-vk::SurfaceFormatKHR Context::chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& availableFormats) {
-    assert(!availableFormats.empty());
-    const auto formatIt = std::ranges::find_if(
-        availableFormats,
-        [](const auto& format) { return format.format == vk::Format::eB8G8R8A8Srgb && format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear; });
-    return formatIt != availableFormats.end() ? *formatIt : availableFormats[0];
-}
-
-vk::PresentModeKHR Context::chooseSwapPresentMode(const std::vector<vk::PresentModeKHR>& availablePresentModes) {
-    assert(std::ranges::any_of(availablePresentModes, [](auto presentMode) { return presentMode == vk::PresentModeKHR::eFifo; }));
-    return std::ranges::any_of(availablePresentModes,
-        [](const vk::PresentModeKHR value) { return vk::PresentModeKHR::eMailbox == value; }) ? vk::PresentModeKHR::eMailbox : vk::PresentModeKHR::eFifo;
-}
-
-vk::Extent2D Context::chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& capabilities) {
-    if (capabilities.currentExtent.width != 0xFFFFFFFF) {
-        return capabilities.currentExtent;
-    }
-    int width, height;
-    glfwGetFramebufferSize(window->window, &width, &height);
-
-    return {
-        std::clamp<uint32_t>(width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
-        std::clamp<uint32_t>(height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
-    };
 }
 
 std::vector<char> Context::readFile(const std::string& filename) {
@@ -395,249 +268,14 @@ std::vector<char> Context::readFile(const std::string& filename) {
     return buffer;
 }
 
-
-void Context::createVertexBuffer() {
-    vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
-    vk::raii::Buffer stagingBuffer({});
-    vk::raii::DeviceMemory stagingBufferMemory({});
-    createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBuffer, stagingBufferMemory);
-
-    void* dataStaging = stagingBufferMemory.mapMemory(0, bufferSize);
-    memcpy(dataStaging, vertices.data(), bufferSize);
-    stagingBufferMemory.unmapMemory();
-
-    createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer, vk::MemoryPropertyFlagBits::eDeviceLocal, vertexBuffer, vertexBufferMemory);
-
-    copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
-}
-
-void Context::createIndexBuffer() {
-    vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
-
-    vk::raii::Buffer stagingBuffer({});
-    vk::raii::DeviceMemory stagingBufferMemory({});
-    createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBuffer, stagingBufferMemory);
-
-    void* data = stagingBufferMemory.mapMemory(0, bufferSize);
-    memcpy(data, indices.data(), (size_t)bufferSize);
-    stagingBufferMemory.unmapMemory();
-
-    createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer, vk::MemoryPropertyFlagBits::eDeviceLocal, indexBuffer, indexBufferMemory);
-
-    copyBuffer(stagingBuffer, indexBuffer, bufferSize);
-}
-
-void Context::createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Buffer& buffer, vk::raii::DeviceMemory& bufferMemory) {
-    vk::BufferCreateInfo bufferInfo{ .size = size, .usage = usage, .sharingMode = vk::SharingMode::eExclusive };
-    buffer = vk::raii::Buffer(device, bufferInfo);
-    vk::MemoryRequirements memRequirements = buffer.getMemoryRequirements();
-    vk::MemoryAllocateInfo allocInfo{ .allocationSize = memRequirements.size, .memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties) };
-    bufferMemory = vk::raii::DeviceMemory(device, allocInfo);
-    buffer.bindMemory(bufferMemory, 0);
-}
-
-uint32_t Context::findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties) {
-    vk::PhysicalDeviceMemoryProperties memProperties = physicalDevice.getMemoryProperties();
-
-    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-        if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
-            return i;
-        }
-    }
-
-    throw std::runtime_error("failed to find suitable memory type!");
-}
-
-void Context::copyBuffer(vk::raii::Buffer& srcBuffer, vk::raii::Buffer& dstBuffer, vk::DeviceSize size) {
-    vk::CommandBufferAllocateInfo allocInfo{ .commandPool = commandPool, .level = vk::CommandBufferLevel::ePrimary, .commandBufferCount = 1 };
-    vk::raii::CommandBuffer commandCopyBuffer = std::move(device.allocateCommandBuffers(allocInfo).front());
-    commandCopyBuffer.begin(vk::CommandBufferBeginInfo{ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
-    commandCopyBuffer.copyBuffer(*srcBuffer, *dstBuffer, vk::BufferCopy(0, 0, size));
-    commandCopyBuffer.end();
-    queue.submit(vk::SubmitInfo{ .commandBufferCount = 1, .pCommandBuffers = &*commandCopyBuffer }, nullptr);
-    queue.waitIdle();
-}
-
-void Context::createCommandBuffers() {
-    commandBuffers.clear();
-    vk::CommandBufferAllocateInfo allocInfo{ .commandPool = commandPool, .level = vk::CommandBufferLevel::ePrimary,
-                                             .commandBufferCount = MAX_FRAMES_IN_FLIGHT };
-    commandBuffers = vk::raii::CommandBuffers(device, allocInfo);
-}
-
-void Context::createSyncObjects() {
-    presentCompleteSemaphore.clear();
-    renderFinishedSemaphore.clear();
-    inFlightFences.clear();
-
-    for (size_t i = 0; i < swapChainImages.size(); i++) {
-        presentCompleteSemaphore.emplace_back(device, vk::SemaphoreCreateInfo());
-        renderFinishedSemaphore.emplace_back(device, vk::SemaphoreCreateInfo());
-    }
-
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        inFlightFences.emplace_back(device, vk::FenceCreateInfo{ .flags = vk::FenceCreateFlagBits::eSignaled });
-    }
-}
-
-void Context::cleanupSwapChain() {
-    swapChainImageViews.clear();
-    swapChain = nullptr;
-}
-
-void Context::recreateSwapChain() {
-    int width = 0, height = 0;
-    glfwGetFramebufferSize(window->window, &width, &height);
-    while (width == 0 || height == 0) {
-        glfwGetFramebufferSize(window->window, &width, &height);
-        glfwWaitEvents();
-    }
-
-    device.waitIdle();
-
-    cleanupSwapChain();
-    createSwapChain();
-    createImageViews();
-}
-
-
-void Context::recordCommandBuffer(uint32_t imageIndex) {
-    commandBuffers[currentFrame].begin({});
-    // Before starting rendering, transition the swapchain image to COLOR_ATTACHMENT_OPTIMAL
-    transition_image_layout(
-        imageIndex,
-        vk::ImageLayout::eUndefined,
-        vk::ImageLayout::eColorAttachmentOptimal,
-        {},                                                     // srcAccessMask (no need to wait for previous operations)
-        vk::AccessFlagBits2::eColorAttachmentWrite,                // dstAccessMask
-        vk::PipelineStageFlagBits2::eTopOfPipe,                   // srcStage
-        vk::PipelineStageFlagBits2::eColorAttachmentOutput        // dstStage
-    );
-    vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
-    vk::RenderingAttachmentInfo attachmentInfo = {
-        .imageView = swapChainImageViews[imageIndex],
-        .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
-        .loadOp = vk::AttachmentLoadOp::eClear,
-        .storeOp = vk::AttachmentStoreOp::eStore,
-        .clearValue = clearColor
-    };
-    vk::RenderingInfo renderingInfo = {
-        .renderArea = {.offset = { 0, 0 }, .extent = swapChainExtent },
-        .layerCount = 1,
-        .colorAttachmentCount = 1,
-        .pColorAttachments = &attachmentInfo
-    };
-    commandBuffers[currentFrame].beginRendering(renderingInfo);
-    commandBuffers[currentFrame].bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline);
-    commandBuffers[currentFrame].setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height), 0.0f, 1.0f));
-    commandBuffers[currentFrame].setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapChainExtent));
-    commandBuffers[currentFrame].bindVertexBuffers(0, *vertexBuffer, { 0 });
-    commandBuffers[currentFrame].bindIndexBuffer(*indexBuffer, 0, vk::IndexTypeValue<decltype(indices)::value_type>::value);
-    commandBuffers[currentFrame].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, *descriptorSets[currentFrame], nullptr);
-    commandBuffers[currentFrame].drawIndexed(indices.size(), 1, 0, 0, 0);
-    commandBuffers[currentFrame].endRendering();
-    // After rendering, transition the swapchain image to PRESENT_SRC
-    transition_image_layout(
-        imageIndex,
-        vk::ImageLayout::eColorAttachmentOptimal,
-        vk::ImageLayout::ePresentSrcKHR,
-        vk::AccessFlagBits2::eColorAttachmentWrite,                 // srcAccessMask
-        {},                                                      // dstAccessMask
-        vk::PipelineStageFlagBits2::eColorAttachmentOutput,        // srcStage
-        vk::PipelineStageFlagBits2::eBottomOfPipe                  // dstStage
-    );
-    commandBuffers[currentFrame].end();
-}
-
-void Context::transition_image_layout(
-    uint32_t imageIndex,
-    vk::ImageLayout old_layout,
-    vk::ImageLayout new_layout,
-    vk::AccessFlags2 src_access_mask,
-    vk::AccessFlags2 dst_access_mask,
-    vk::PipelineStageFlags2 src_stage_mask,
-    vk::PipelineStageFlags2 dst_stage_mask
-) {
-    vk::ImageMemoryBarrier2 barrier = {
-        .srcStageMask = src_stage_mask,
-        .srcAccessMask = src_access_mask,
-        .dstStageMask = dst_stage_mask,
-        .dstAccessMask = dst_access_mask,
-        .oldLayout = old_layout,
-        .newLayout = new_layout,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = swapChainImages[imageIndex],
-        .subresourceRange = {
-            .aspectMask = vk::ImageAspectFlagBits::eColor,
-            .baseMipLevel = 0,
-            .levelCount = 1,
-            .baseArrayLayer = 0,
-            .layerCount = 1
-        }
-    };
-    vk::DependencyInfo dependency_info = {
-        .dependencyFlags = {},
-        .imageMemoryBarrierCount = 1,
-        .pImageMemoryBarriers = &barrier
-    };
-    commandBuffers[currentFrame].pipelineBarrier2(dependency_info);
-}
-
 void Context::createDescriptorSetLayout() {
     vk::DescriptorSetLayoutBinding uboLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr);
     vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = 1, .pBindings = &uboLayoutBinding };
-    descriptorSetLayout = vk::raii::DescriptorSetLayout(device, layoutInfo);
-    
-}
-
-void Context::createUniformBuffers()
-{
-    uniformBuffers.clear();
-    uniformBuffersMemory.clear();
-    uniformBuffersMapped.clear();
-
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        vk::DeviceSize bufferSize = sizeof(UniformBufferObject);
-        vk::raii::Buffer buffer({});
-        vk::raii::DeviceMemory bufferMem({});
-        createBuffer(bufferSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
-        uniformBuffers.emplace_back(std::move(buffer));
-        uniformBuffersMemory.emplace_back(std::move(bufferMem));
-        uniformBuffersMapped.emplace_back(uniformBuffersMemory[i].mapMemory(0, bufferSize));
-    }
-}
-
-void Context::updateUniformBuffer(uint32_t currentImage) {
-    static auto startTime = std::chrono::high_resolution_clock::now();
-
-    auto currentTime = std::chrono::high_resolution_clock::now();
-    float time = std::chrono::duration<float>(currentTime - startTime).count();
-
-    UniformBufferObject ubo{};
-    ubo.model = rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo.view = lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo.proj = glm::perspective(glm::radians(45.0f), static_cast<float>(swapChainExtent.width) / static_cast<float>(swapChainExtent.height), 0.1f, 10.0f);
-    ubo.proj[1][1] *= -1;
-
-    memcpy(uniformBuffersMapped[currentImage], &ubo, sizeof(ubo));
+    descriptorSetLayout_ = vk::raii::DescriptorSetLayout(device_, layoutInfo);
 }
 
 void Context::createDescriptorPool() {
     vk::DescriptorPoolSize poolSize(vk::DescriptorType::eUniformBuffer, MAX_FRAMES_IN_FLIGHT);
     vk::DescriptorPoolCreateInfo poolInfo{ .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, .maxSets = MAX_FRAMES_IN_FLIGHT, .poolSizeCount = 1, .pPoolSizes = &poolSize };
-    descriptorPool = vk::raii::DescriptorPool(device, poolInfo);
-}
-
-void Context::createDescriptorSets() {
-    std::vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, *descriptorSetLayout);
-    vk::DescriptorSetAllocateInfo allocInfo{ .descriptorPool = descriptorPool, .descriptorSetCount = static_cast<uint32_t>(layouts.size()), .pSetLayouts = layouts.data() };
-
-    descriptorSets = device.allocateDescriptorSets(allocInfo);
-
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        vk::DescriptorBufferInfo bufferInfo{ .buffer = uniformBuffers[i], .offset = 0, .range = sizeof(UniformBufferObject) };
-        vk::WriteDescriptorSet descriptorWrite{ .dstSet = descriptorSets[i], .dstBinding = 0, .dstArrayElement = 0, .descriptorCount = 1, .descriptorType = vk::DescriptorType::eUniformBuffer, .pBufferInfo = &bufferInfo };
-        device.updateDescriptorSets(descriptorWrite, {});
-    }
+    descriptorPool_ = vk::raii::DescriptorPool(device_, poolInfo);
 }

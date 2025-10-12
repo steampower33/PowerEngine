@@ -1,7 +1,8 @@
 #pragma once
 
 #include "preamble.hpp"
-#include "context.hpp"
+
+class Context;
 
 class Window
 {
@@ -16,11 +17,11 @@ public:
 
     void run();
 
-    GLFWwindow* window = nullptr;
-    bool framebufferResized = false;
+    GLFWwindow* glfwWindow_ = nullptr;
+    bool framebufferResized_ = false;
 
     static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
 private:
-    Context* ctx;
+    Context* ctx_;
 };
