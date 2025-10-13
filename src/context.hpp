@@ -1,7 +1,6 @@
 #pragma once
 
 #include "preamble.hpp"
-#include "window.hpp"
 
 class Swapchain;
 

@@ -177,7 +177,7 @@ void Context::createLogicalDevice() {
 
     // query for Vulkan 1.3 features
     vk::StructureChain<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan13Features, vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT> featureChain = {
-        {},                                                     // vk::PhysicalDeviceFeatures2
+        {.features = {.samplerAnisotropy = true } },            // vk::PhysicalDeviceFeatures2
         {.synchronization2 = true, .dynamicRendering = true },  // vk::PhysicalDeviceVulkan13Features
         {.extendedDynamicState = true }                         // vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT
     };
@@ -202,7 +202,7 @@ void Context::createCommandPool() {
 }
 
 void Context::createGraphicsPipeline() {
-    vk::raii::ShaderModule shaderModule = createShaderModule(readFile("F:/VulkanProject/PowerEngine/shaders/slang.spv"));
+    vk::raii::ShaderModule shaderModule = createShaderModule(readFile("shaders/slang.spv"));
 
     vk::PipelineShaderStageCreateInfo vertShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eVertex, .module = shaderModule,  .pName = "vertMain" };
     vk::PipelineShaderStageCreateInfo fragShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eFragment, .module = shaderModule, .pName = "fragMain" };
@@ -269,13 +269,28 @@ std::vector<char> Context::readFile(const std::string& filename) {
 }
 
 void Context::createDescriptorSetLayout() {
-    vk::DescriptorSetLayoutBinding uboLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr);
-    vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = 1, .pBindings = &uboLayoutBinding };
+    std::array bindings = {
+        vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr),
+        vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr)
+    };
+
+    vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(bindings.size()), .pBindings = bindings.data() };
     descriptorSetLayout_ = vk::raii::DescriptorSetLayout(device_, layoutInfo);
 }
 
 void Context::createDescriptorPool() {
-    vk::DescriptorPoolSize poolSize(vk::DescriptorType::eUniformBuffer, MAX_FRAMES_IN_FLIGHT);
-    vk::DescriptorPoolCreateInfo poolInfo{ .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, .maxSets = MAX_FRAMES_IN_FLIGHT, .poolSizeCount = 1, .pPoolSizes = &poolSize };
+
+    std::array poolSize{
+        vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, MAX_FRAMES_IN_FLIGHT),
+        vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, MAX_FRAMES_IN_FLIGHT)
+    };
+
+    vk::DescriptorPoolCreateInfo poolInfo{
+        .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+        .maxSets = MAX_FRAMES_IN_FLIGHT,
+        .poolSizeCount = static_cast<uint32_t>(poolSize.size()),
+        .pPoolSizes = poolSize.data()
+    };
+
     descriptorPool_ = vk::raii::DescriptorPool(device_, poolInfo);
 }

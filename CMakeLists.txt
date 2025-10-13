@@ -16,9 +16,19 @@ file(GLOB SRC CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 add_executable(PowerEngine ${SRC})
 
-# (선택) MSVC에서 BMI가 커질 때를 대비해 종종 유용
+# Additional Options
 if (MSVC)
   target_compile_options(PowerEngine PRIVATE /bigobj)
+  add_custom_command(TARGET PowerEngine POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:PowerEngine>/textures"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${CMAKE_SOURCE_DIR}/textures"
+          "$<TARGET_FILE_DIR:PowerEngine>/textures"  
+  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:PowerEngine>/shaders"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${CMAKE_SOURCE_DIR}/shaders"
+          "$<TARGET_FILE_DIR:PowerEngine>/shaders"
+)
 endif()
 
 # ---- Vulkan C++ Module 타깃 만들기 ----

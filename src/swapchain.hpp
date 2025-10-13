@@ -30,12 +30,24 @@ public:
 	vk::Extent2D                     swapChainExtent_;
 	std::vector<vk::raii::ImageView> swapChainImageViews_;
 
+	void createTextureImage();
+	void createTextureImageView();
+	void createTextureSampler();
+	vk::raii::ImageView createImageView(vk::raii::Image& image, vk::Format format);
+
+	void createImage(uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Image& image, vk::raii::DeviceMemory& imageMemory);
+	void copyBufferToImage(const vk::raii::Buffer& buffer, vk::raii::Image& image, uint32_t width, uint32_t height);
+	void transitionImageLayout(const vk::raii::Image& image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
+	std::unique_ptr<vk::raii::CommandBuffer> beginSingleTimeCommands();
+	void endSingleTimeCommands(vk::raii::CommandBuffer& commandBuffer);
+
 private:
 	GLFWwindow* glfwWindow_;
 	vk::raii::Device& device_;
 	vk::raii::PhysicalDevice& physicalDevice_;
 	vk::raii::SurfaceKHR& surface_;
 	vk::raii::CommandPool& commandPool_;
+	vk::raii::Queue& queue_;
 
 	std::vector<vk::raii::Semaphore> presentCompleteSemaphore_;
 	std::vector<vk::raii::Semaphore> renderFinishedSemaphore_;
@@ -54,6 +66,11 @@ private:
 	vk::raii::DeviceMemory vertexBufferMemory_ = nullptr;
 	vk::raii::Buffer indexBuffer_ = nullptr;
 	vk::raii::DeviceMemory indexBufferMemory_ = nullptr;
+
+	vk::raii::Image textureImage = nullptr;
+	vk::raii::DeviceMemory textureImageMemory = nullptr;
+	vk::raii::ImageView textureImageView = nullptr;
+	vk::raii::Sampler textureSampler = nullptr;
 
 	void createSwapChain(vk::raii::PhysicalDevice& physicalDevice, vk::raii::SurfaceKHR& surface);
 	void createImageViews();
@@ -86,8 +103,8 @@ private:
 
 	void updateUniformBuffer(uint32_t currentImage);
 
-	void createVertexBuffer(vk::raii::Queue& queue);
-	void createIndexBuffer(vk::raii::Queue& queue);
+	void createVertexBuffer();
+	void createIndexBuffer();
 	uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties);
 	void copyBuffer(vk::raii::Buffer& srcBuffer, vk::raii::Buffer& dstBuffer, vk::DeviceSize size, vk::raii::Queue& queue);
 

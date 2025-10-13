@@ -1,5 +1,8 @@
 #include "swapchain.hpp"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
 Swapchain::Swapchain(
     GLFWwindow* glfwWindow,
     vk::raii::Device& device,
@@ -10,20 +13,22 @@ Swapchain::Swapchain(
     vk::raii::DescriptorSetLayout& descriptorSetLayout,
     vk::raii::DescriptorPool& descriptorPool,
     vk::raii::Queue& queue)
-    : glfwWindow_(glfwWindow), device_(device), physicalDevice_(physicalDevice), surface_(surface), commandPool_(commandPool)
+    : glfwWindow_(glfwWindow), device_(device), physicalDevice_(physicalDevice), surface_(surface), commandPool_(commandPool), queue_(queue)
 {
     createSwapChain(physicalDevice, surface);
     createImageViews();
 
-    createCommandBuffers(commandPool);
+    createTextureImage();
+    createTextureImageView();
+    createTextureSampler();
+
+    createVertexBuffer();
+    createIndexBuffer();
 
     createUniformBuffers();
-
     createDescriptorSets(descriptorSetLayout, descriptorPool);
+    createCommandBuffers(commandPool);
     createSyncObjects();
-
-    createVertexBuffer(queue);
-    createIndexBuffer(queue);
 }
 
 Swapchain::~Swapchain()
@@ -318,18 +323,49 @@ void Swapchain::createUniformBuffers()
 void Swapchain::createDescriptorSets(vk::raii::DescriptorSetLayout& descriptorSetLayout, vk::raii::DescriptorPool& descriptorPool)
 {
     std::vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
-    vk::DescriptorSetAllocateInfo allocInfo{ .descriptorPool = descriptorPool, .descriptorSetCount = static_cast<uint32_t>(layouts.size()), .pSetLayouts = layouts.data() };
+    vk::DescriptorSetAllocateInfo allocInfo{
+        .descriptorPool = descriptorPool,
+        .descriptorSetCount = static_cast<uint32_t>(layouts.size()),
+        .pSetLayouts = layouts.data()
+    };
 
+    descriptorSets_.clear();
     descriptorSets_ = device_.allocateDescriptorSets(allocInfo);
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        vk::DescriptorBufferInfo bufferInfo{ .buffer = uniformBuffers_[i], .offset = 0, .range = sizeof(UniformBufferObject) };
-        vk::WriteDescriptorSet descriptorWrite{ .dstSet = descriptorSets_[i], .dstBinding = 0, .dstArrayElement = 0, .descriptorCount = 1, .descriptorType = vk::DescriptorType::eUniformBuffer, .pBufferInfo = &bufferInfo };
-        device_.updateDescriptorSets(descriptorWrite, {});
+        vk::DescriptorBufferInfo bufferInfo{
+            .buffer = uniformBuffers_[i],
+            .offset = 0,
+            .range = sizeof(UniformBufferObject)
+        };
+        vk::DescriptorImageInfo imageInfo{
+            .sampler = textureSampler,
+            .imageView = textureImageView,
+            .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
+        };
+        std::array descriptorWrites{
+            vk::WriteDescriptorSet{
+                .dstSet = descriptorSets_[i],
+                .dstBinding = 0,
+                .dstArrayElement = 0,
+                .descriptorCount = 1,
+                .descriptorType = vk::DescriptorType::eUniformBuffer,
+                .pBufferInfo = &bufferInfo
+            },
+            vk::WriteDescriptorSet{
+                .dstSet = descriptorSets_[i],
+                .dstBinding = 1,
+                .dstArrayElement = 0,
+                .descriptorCount = 1,
+                .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+                .pImageInfo = &imageInfo
+            }
+        };
+        device_.updateDescriptorSets(descriptorWrites, {});
     }
 }
 
-void Swapchain::createVertexBuffer(vk::raii::Queue& queue)
+void Swapchain::createVertexBuffer()
 {
     vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
     vk::raii::Buffer stagingBuffer({});
@@ -342,10 +378,10 @@ void Swapchain::createVertexBuffer(vk::raii::Queue& queue)
 
     createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer, vk::MemoryPropertyFlagBits::eDeviceLocal, vertexBuffer_, vertexBufferMemory_);
 
-    copyBuffer(stagingBuffer, vertexBuffer_, bufferSize, queue);
+    copyBuffer(stagingBuffer, vertexBuffer_, bufferSize, queue_);
 }
 
-void Swapchain::createIndexBuffer(vk::raii::Queue& queue) {
+void Swapchain::createIndexBuffer() {
     vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 
     vk::raii::Buffer stagingBuffer({});
@@ -358,7 +394,7 @@ void Swapchain::createIndexBuffer(vk::raii::Queue& queue) {
 
     createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer, vk::MemoryPropertyFlagBits::eDeviceLocal, indexBuffer_, indexBufferMemory_);
 
-    copyBuffer(stagingBuffer, indexBuffer_, bufferSize, queue);
+    copyBuffer(stagingBuffer, indexBuffer_, bufferSize, queue_);
 }
 
 void Swapchain::createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Buffer& buffer, vk::raii::DeviceMemory& bufferMemory) {
@@ -390,4 +426,134 @@ void Swapchain::copyBuffer(vk::raii::Buffer& srcBuffer, vk::raii::Buffer& dstBuf
     commandCopyBuffer.end();
     queue.submit(vk::SubmitInfo{ .commandBufferCount = 1, .pCommandBuffers = &*commandCopyBuffer }, nullptr);
     queue.waitIdle();
+}
+
+void Swapchain::createTextureImage() {
+    int texWidth, texHeight, texChannels;
+    stbi_uc* pixels = stbi_load("textures/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    vk::DeviceSize imageSize = texWidth * texHeight * 4;
+
+    if (!pixels) {
+        throw std::runtime_error("failed to load texture image!");
+    }
+
+    vk::raii::Buffer stagingBuffer({});
+    vk::raii::DeviceMemory stagingBufferMemory({});
+    createBuffer(imageSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBuffer, stagingBufferMemory);
+
+    void* data = stagingBufferMemory.mapMemory(0, imageSize);
+    memcpy(data, pixels, imageSize);
+    stagingBufferMemory.unmapMemory();
+
+    stbi_image_free(pixels);
+
+    createImage(texWidth, texHeight, vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, vk::MemoryPropertyFlagBits::eDeviceLocal, textureImage, textureImageMemory);
+
+    transitionImageLayout(textureImage, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+    copyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
+    transitionImageLayout(textureImage, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+}
+
+void Swapchain::createImage(uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Image& image, vk::raii::DeviceMemory& imageMemory) {
+    vk::ImageCreateInfo imageInfo{ .imageType = vk::ImageType::e2D, .format = format,
+                                  .extent = {width, height, 1}, .mipLevels = 1, .arrayLayers = 1,
+                                  .samples = vk::SampleCountFlagBits::e1, .tiling = tiling,
+                                  .usage = usage, .sharingMode = vk::SharingMode::eExclusive };
+
+    image = vk::raii::Image(device_, imageInfo);
+
+    vk::MemoryRequirements memRequirements = image.getMemoryRequirements();
+    vk::MemoryAllocateInfo allocInfo{ .allocationSize = memRequirements.size,
+                                     .memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties) };
+    imageMemory = vk::raii::DeviceMemory(device_, allocInfo);
+    image.bindMemory(imageMemory, 0);
+}
+
+void Swapchain::copyBufferToImage(const vk::raii::Buffer& buffer, vk::raii::Image& image, uint32_t width, uint32_t height) {
+    std::unique_ptr<vk::raii::CommandBuffer> commandBuffer = beginSingleTimeCommands();
+    vk::BufferImageCopy region{ .bufferOffset = 0, .bufferRowLength = 0, .bufferImageHeight = 0,
+                               .imageSubresource = { vk::ImageAspectFlagBits::eColor, 0, 0, 1 },
+                               .imageOffset = {0, 0, 0}, .imageExtent = {width, height, 1} };
+    commandBuffer->copyBufferToImage(buffer, image, vk::ImageLayout::eTransferDstOptimal, { region });
+    endSingleTimeCommands(*commandBuffer);
+}
+
+void Swapchain::transitionImageLayout(const vk::raii::Image& image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout) {
+    auto commandBuffer = beginSingleTimeCommands();
+
+    vk::ImageMemoryBarrier barrier{ .oldLayout = oldLayout, .newLayout = newLayout,
+                                   .image = image,
+                                   .subresourceRange = { vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 } };
+
+    vk::PipelineStageFlags sourceStage;
+    vk::PipelineStageFlags destinationStage;
+
+    if (oldLayout == vk::ImageLayout::eUndefined && newLayout == vk::ImageLayout::eTransferDstOptimal) {
+        barrier.srcAccessMask = {};
+        barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
+
+        sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+        destinationStage = vk::PipelineStageFlagBits::eTransfer;
+    }
+    else if (oldLayout == vk::ImageLayout::eTransferDstOptimal && newLayout == vk::ImageLayout::eShaderReadOnlyOptimal) {
+        barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+        barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+
+        sourceStage = vk::PipelineStageFlagBits::eTransfer;
+        destinationStage = vk::PipelineStageFlagBits::eFragmentShader;
+    }
+    else {
+        throw std::invalid_argument("unsupported layout transition!");
+    }
+    commandBuffer->pipelineBarrier(sourceStage, destinationStage, {}, {}, nullptr, barrier);
+    endSingleTimeCommands(*commandBuffer);
+}
+
+std::unique_ptr<vk::raii::CommandBuffer> Swapchain::beginSingleTimeCommands() {
+    vk::CommandBufferAllocateInfo allocInfo{ .commandPool = commandPool_, .level = vk::CommandBufferLevel::ePrimary, .commandBufferCount = 1 };
+    std::unique_ptr<vk::raii::CommandBuffer> commandBuffer = std::make_unique<vk::raii::CommandBuffer>(std::move(vk::raii::CommandBuffers(device_, allocInfo).front()));
+
+    vk::CommandBufferBeginInfo beginInfo{ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit };
+    commandBuffer->begin(beginInfo);
+
+    return commandBuffer;
+}
+
+void Swapchain::endSingleTimeCommands(vk::raii::CommandBuffer& commandBuffer) {
+    commandBuffer.end();
+
+    vk::SubmitInfo submitInfo{ .commandBufferCount = 1, .pCommandBuffers = &*commandBuffer };
+    queue_.submit(submitInfo, nullptr);
+    queue_.waitIdle();
+}
+
+void Swapchain::createTextureImageView() {
+    textureImageView = createImageView(textureImage, vk::Format::eR8G8B8A8Srgb);
+}
+
+
+void Swapchain::createTextureSampler() {
+    vk::PhysicalDeviceProperties properties = physicalDevice_.getProperties();
+    vk::SamplerCreateInfo samplerInfo{
+        .magFilter = vk::Filter::eLinear,
+        .minFilter = vk::Filter::eLinear,
+        .mipmapMode = vk::SamplerMipmapMode::eLinear,
+        .addressModeU = vk::SamplerAddressMode::eRepeat,
+        .addressModeV = vk::SamplerAddressMode::eRepeat,
+        .addressModeW = vk::SamplerAddressMode::eRepeat,
+        .mipLodBias = 0.0f,
+        .anisotropyEnable = vk::True,
+        .maxAnisotropy = properties.limits.maxSamplerAnisotropy,
+        .compareEnable = vk::False,
+        .compareOp = vk::CompareOp::eAlways };
+    textureSampler = vk::raii::Sampler(device_, samplerInfo);
+}
+
+vk::raii::ImageView Swapchain::createImageView(vk::raii::Image& image, vk::Format format) {
+    vk::ImageViewCreateInfo viewInfo{
+        .image = image,
+        .viewType = vk::ImageViewType::e2D,
+        .format = format,
+        .subresourceRange = { vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 } };
+    return vk::raii::ImageView(device_, viewInfo);
 }

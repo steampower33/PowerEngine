@@ -1,5 +1,5 @@
-#include "context.hpp"
 #include "window.hpp"
+#include "context.hpp"
 
 Window::Window()
 {
