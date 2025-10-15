@@ -16,7 +16,7 @@ Swapchain::Swapchain(
 	: glfwWindow_(glfwWindow), device_(device), physicalDevice_(physicalDevice), surface_(surface), commandPool_(commandPool), queue_(queue)
 {
 	createSwapchain(physicalDevice_, surface);
-	createSwapchainImageResources();
+	createPerImages();
 
 	createTextureImage();
 	createTextureImageView();
@@ -25,38 +25,35 @@ Swapchain::Swapchain(
 	createVertexBuffer();
 	createIndexBuffer();
 
-	createUniformBuffers();
-	createDescriptorSets(descriptorSetLayout, descriptorPool);
-	createCommandBuffers(commandPool);
-	createSyncObjects();
+	createPerFrames(descriptorSetLayout, descriptorPool);
 }
 
 Swapchain::~Swapchain()
 {
 }
 
-bool Swapchain::draw(bool& framebufferResized, vk::raii::Queue& queue, vk::raii::Pipeline& graphicsPipeline, vk::raii::PipelineLayout& pipelineLayout)
+void Swapchain::draw(bool& framebufferResized, vk::raii::Queue& queue, vk::raii::Pipeline& graphicsPipeline, vk::raii::PipelineLayout& pipelineLayout)
 {
-	while (vk::Result::eTimeout == device_.waitForFences(*inFlightFences_[currentFrame_], vk::True, UINT64_MAX))
+	while (vk::Result::eTimeout == device_.waitForFences(*frames_[currentFrame_].inFlight, vk::True, UINT64_MAX))
 		;
 	uint32_t imageIndex = 0;
 	try {
 		auto [res, idx] = swapchain_.acquireNextImage(
-			UINT64_MAX, *presentCompleteSemaphore_[currentFrame_], nullptr);
+			UINT64_MAX, *frames_[currentFrame_].imageAvailable, nullptr);
 		imageIndex = idx;
 		if (res == vk::Result::eSuboptimalKHR) {
 			framebufferResized = false;
 			recreateSwapChain();
-			return true;
+			return;
 		}
 	}
 	catch (const vk::OutOfDateKHRError&) {
 		framebufferResized = false;
 		recreateSwapChain();
-		return true;
+		return;
 	}
 
-	if (auto f = swapchainImageResources_[imageIndex].lastSubmitFence;
+	if (auto f = images_[imageIndex].lastSubmitFence;
 		f != VK_NULL_HANDLE)
 	{
 		// vk-hpp는 ArrayProxy 오버로드라 단일 펜스도 이렇게 호출 가능
@@ -67,31 +64,31 @@ bool Swapchain::draw(bool& framebufferResized, vk::raii::Queue& queue, vk::raii:
 			throw std::runtime_error("waitForFences failed: " + vk::to_string(r));
 		}
 	}
-	swapchainImageResources_[imageIndex].lastSubmitFence = inFlightFences_[currentFrame_];
-
+	images_[imageIndex].lastSubmitFence = frames_[currentFrame_].inFlight;
 
 	updateUniformBuffer(currentFrame_);
 
-	device_.resetFences(*inFlightFences_[currentFrame_]);
-	commandBuffers_[currentFrame_].reset();
+	device_.resetFences(*frames_[currentFrame_].inFlight);
+
+	frames_[currentFrame_].cmd.reset();
 	recordCommandBuffer(imageIndex, queue, graphicsPipeline, pipelineLayout);
 
 	vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
-	const vk::SubmitInfo submitInfo{ 
-		.waitSemaphoreCount = 1, 
-		.pWaitSemaphores = &*presentCompleteSemaphore_[currentFrame_],
-		.pWaitDstStageMask = &waitDestinationStageMask, 
-		.commandBufferCount = 1, 
-		.pCommandBuffers = &*commandBuffers_[currentFrame_],
-		.signalSemaphoreCount = 1, 
-		.pSignalSemaphores = &*renderFinishedSemaphore_[imageIndex] };
-	queue.submit(submitInfo, *inFlightFences_[currentFrame_]);
+	const vk::SubmitInfo submitInfo{
+		.waitSemaphoreCount = 1,
+		.pWaitSemaphores = &*frames_[currentFrame_].imageAvailable,
+		.pWaitDstStageMask = &waitDestinationStageMask,
+		.commandBufferCount = 1,
+		.pCommandBuffers = &*frames_[currentFrame_].cmd,
+		.signalSemaphoreCount = 1,
+		.pSignalSemaphores = &*images_[imageIndex].renderFinished_ };
+	queue.submit(submitInfo, *frames_[currentFrame_].inFlight);
 
-	const vk::PresentInfoKHR presentInfoKHR{ 
-		.waitSemaphoreCount = 1, 
-		.pWaitSemaphores = &*renderFinishedSemaphore_[imageIndex],
-		.swapchainCount = 1, 
-		.pSwapchains = &*swapchain_, 
+	const vk::PresentInfoKHR presentInfoKHR{
+		.waitSemaphoreCount = 1,
+		.pWaitSemaphores = &*images_[imageIndex].renderFinished_,
+		.swapchainCount = 1,
+		.pSwapchains = &*swapchain_,
 		.pImageIndices = &imageIndex };
 	try {
 		queue.presentKHR(presentInfoKHR);   // 실패 시 예외 발생 (리턴값 없음)
@@ -99,25 +96,23 @@ bool Swapchain::draw(bool& framebufferResized, vk::raii::Queue& queue, vk::raii:
 	catch (const vk::OutOfDateKHRError&) {
 		framebufferResized = false;
 		recreateSwapChain();
-		return true;
+		return;
 	}
 	catch (const vk::SystemError& e) {
 		// 일부 버전에선 SuboptimalKHR가 SystemError로 던져진다
 		if (e.code() == vk::make_error_code(vk::Result::eSuboptimalKHR)) {
 			framebufferResized = false;
 			recreateSwapChain();
-			return true;
+			return;
 		}
 		throw; // 다른 에러는 그대로 위로
 	}
 
 	currentFrame_ = (currentFrame_ + 1) % MAX_FRAMES_IN_FLIGHT;
-
-	return false;
 }
 
 void Swapchain::recordCommandBuffer(uint32_t imageIndex, vk::raii::Queue& queue, vk::raii::Pipeline& graphicsPipeline, vk::raii::PipelineLayout& pipelineLayout) {
-	commandBuffers_[currentFrame_].begin({});
+	frames_[currentFrame_].cmd.begin({});
 	// Before starting rendering, transition the swapchain image to COLOR_ATTACHMENT_OPTIMAL
 	transition_image_layout(
 		imageIndex,
@@ -139,7 +134,7 @@ void Swapchain::recordCommandBuffer(uint32_t imageIndex, vk::raii::Queue& queue,
 		.newLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
 		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
 		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.image = swapchainImageResources_[imageIndex].depthImage_,
+		.image = images_[imageIndex].depthImage_,
 		.subresourceRange = {
 			.aspectMask = vk::ImageAspectFlagBits::eDepth,
 			.baseMipLevel = 0,
@@ -153,13 +148,13 @@ void Swapchain::recordCommandBuffer(uint32_t imageIndex, vk::raii::Queue& queue,
 		.imageMemoryBarrierCount = 1,
 		.pImageMemoryBarriers = &depthBarrier
 	};
-	commandBuffers_[currentFrame_].pipelineBarrier2(depthDependencyInfo);
+	frames_[currentFrame_].cmd.pipelineBarrier2(depthDependencyInfo);
 
 	vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
 	vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
 
 	vk::RenderingAttachmentInfo colorAttachmentInfo = {
-			.imageView = *swapchainImageResources_[imageIndex].imageView_,
+			.imageView = *images_[imageIndex].imageView_,
 			.imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
 			.loadOp = vk::AttachmentLoadOp::eClear,
 			.storeOp = vk::AttachmentStoreOp::eStore,
@@ -167,7 +162,7 @@ void Swapchain::recordCommandBuffer(uint32_t imageIndex, vk::raii::Queue& queue,
 	};
 
 	vk::RenderingAttachmentInfo depthAttachmentInfo = {
-		.imageView = *swapchainImageResources_[imageIndex].depthImageView_,
+		.imageView = *images_[imageIndex].depthImageView_,
 		.imageLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
 		.loadOp = vk::AttachmentLoadOp::eClear,
 		.storeOp = vk::AttachmentStoreOp::eDontCare,
@@ -182,15 +177,15 @@ void Swapchain::recordCommandBuffer(uint32_t imageIndex, vk::raii::Queue& queue,
 		.pDepthAttachment = &depthAttachmentInfo
 	};
 
-	commandBuffers_[currentFrame_].beginRendering(renderingInfo);
-	commandBuffers_[currentFrame_].bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline);
-	commandBuffers_[currentFrame_].setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapchainExtent_.width), static_cast<float>(swapchainExtent_.height), 0.0f, 1.0f));
-	commandBuffers_[currentFrame_].setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
-	commandBuffers_[currentFrame_].bindVertexBuffers(0, *vertexBuffer_, { 0 });
-	commandBuffers_[currentFrame_].bindIndexBuffer(indexBuffer_, 0, vk::IndexTypeValue<decltype(indices)::value_type>::value);
-	commandBuffers_[currentFrame_].bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, *descriptorSets_[currentFrame_], nullptr);
-	commandBuffers_[currentFrame_].drawIndexed(indices.size(), 1, 0, 0, 0);
-	commandBuffers_[currentFrame_].endRendering();
+	frames_[currentFrame_].cmd.beginRendering(renderingInfo);
+	frames_[currentFrame_].cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline);
+	frames_[currentFrame_].cmd.setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapchainExtent_.width), static_cast<float>(swapchainExtent_.height), 0.0f, 1.0f));
+	frames_[currentFrame_].cmd.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
+	frames_[currentFrame_].cmd.bindVertexBuffers(0, *vertexBuffer_, { 0 });
+	frames_[currentFrame_].cmd.bindIndexBuffer(indexBuffer_, 0, vk::IndexTypeValue<decltype(indices)::value_type>::value);
+	frames_[currentFrame_].cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, *frames_[currentFrame_].descriptorSet, nullptr);
+	frames_[currentFrame_].cmd.drawIndexed(indices.size(), 1, 0, 0, 0);
+	frames_[currentFrame_].cmd.endRendering();
 	// After rendering, transition the swapchain image to PRESENT_SRC
 	transition_image_layout(
 		imageIndex,
@@ -201,7 +196,7 @@ void Swapchain::recordCommandBuffer(uint32_t imageIndex, vk::raii::Queue& queue,
 		vk::PipelineStageFlagBits2::eColorAttachmentOutput,        // srcStage
 		vk::PipelineStageFlagBits2::eBottomOfPipe                  // dstStage
 	);
-	commandBuffers_[currentFrame_].end();
+	frames_[currentFrame_].cmd.end();
 }
 
 void Swapchain::transition_image_layout(
@@ -222,7 +217,7 @@ void Swapchain::transition_image_layout(
 		.newLayout = new_layout,
 		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
 		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.image = swapchainImageResources_[imageIndex].image_,
+		.image = images_[imageIndex].image_,
 		.subresourceRange = {
 			.aspectMask = vk::ImageAspectFlagBits::eColor,
 			.baseMipLevel = 0,
@@ -236,7 +231,7 @@ void Swapchain::transition_image_layout(
 		.imageMemoryBarrierCount = 1,
 		.pImageMemoryBarriers = &barrier
 	};
-	commandBuffers_[currentFrame_].pipelineBarrier2(dependency_info);
+	frames_[currentFrame_].cmd.pipelineBarrier2(dependency_info);
 }
 
 void Swapchain::updateUniformBuffer(uint32_t currentImage) {
@@ -251,7 +246,7 @@ void Swapchain::updateUniformBuffer(uint32_t currentImage) {
 	ubo.proj = glm::perspective(glm::radians(45.0f), static_cast<float>(swapchainExtent_.width) / static_cast<float>(swapchainExtent_.height), 0.1f, 10.0f);
 	ubo.proj[1][1] *= -1;
 
-	memcpy(uniformBuffersMapped_[currentImage], &ubo, sizeof(ubo));
+	memcpy(frames_[currentImage].uboMapped, &ubo, sizeof(ubo));
 }
 
 void Swapchain::createSwapchain(vk::raii::PhysicalDevice& physicalDevice, vk::raii::SurfaceKHR& surface) {
@@ -274,18 +269,38 @@ void Swapchain::createSwapchain(vk::raii::PhysicalDevice& physicalDevice, vk::ra
 	swapchain_ = vk::raii::SwapchainKHR(device_, swapChainCreateInfo);
 }
 
-void Swapchain::createSwapchainImageResources()
+void Swapchain::createPerImages()
 {
 	auto images = swapchain_.getImages();
-	swapchainImageResources_.reserve(images.size());
+	images_.clear();
+	images_.reserve(images.size());
 	for (auto img : images) {
-		swapchainImageResources_.emplace_back(
-			img,
-			swapchainSurfaceFormat_,
-			device_,
-			physicalDevice_,
-			swapchainExtent_
-		);
+		PerImage i;
+		i.image_ = img;
+		i.imageView_ = createSwapchainImageView(img, swapchainSurfaceFormat_.format, device_);
+
+		vk::Format depthFormat = findDepthFormat(physicalDevice_);
+		createImage(device_, physicalDevice_, swapchainExtent_.width, swapchainExtent_.height, depthFormat, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment, vk::MemoryPropertyFlagBits::eDeviceLocal, i.depthImage_, i.depthMem_);
+		i.depthImageView_ = createImageView(device_, i.depthImage_, depthFormat, vk::ImageAspectFlagBits::eDepth);
+
+		i.renderFinished_ = vk::raii::Semaphore(device_, vk::SemaphoreCreateInfo());
+
+		i.lastSubmitFence = VK_NULL_HANDLE;
+		images_.emplace_back(std::move(i));
+	}
+}
+
+void Swapchain::createPerFrames(
+	vk::raii::DescriptorSetLayout& descriptorSetLayout,
+	vk::raii::DescriptorPool& descriptorPool)
+{
+	createUniformBuffers();
+	createDescriptorSets(descriptorSetLayout, descriptorPool);
+	createCommandBuffers(commandPool_);
+
+	for (auto& f : frames_) {
+		f.imageAvailable = vk::raii::Semaphore(device_, vk::SemaphoreCreateInfo());
+		f.inFlight = vk::raii::Fence(device_, vk::FenceCreateInfo{ .flags = vk::FenceCreateFlagBits::eSignaled });
 	}
 }
 
@@ -328,31 +343,17 @@ void Swapchain::cleanupSwapChain() {
 	swapchain_ = nullptr;
 }
 
-void Swapchain::createSyncObjects() {
-	presentCompleteSemaphore_.clear();
-	renderFinishedSemaphore_.clear();
-	inFlightFences_.clear();
-
-	presentCompleteSemaphore_.reserve(MAX_FRAMES_IN_FLIGHT);
-	inFlightFences_.reserve(MAX_FRAMES_IN_FLIGHT);
-	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		presentCompleteSemaphore_.emplace_back(device_, vk::SemaphoreCreateInfo());
-		inFlightFences_.emplace_back(device_, vk::FenceCreateInfo{ .flags = vk::FenceCreateFlagBits::eSignaled });
-		
-	}
-
-	auto images = swapchain_.getImages();
-	renderFinishedSemaphore_.reserve(images.size());
-	for (size_t i = 0; i < images.size(); ++i) {
-		renderFinishedSemaphore_.emplace_back(device_, vk::SemaphoreCreateInfo());
-	}
-}
-
 void Swapchain::createCommandBuffers(vk::raii::CommandPool& commandPool) {
-	commandBuffers_.clear();
+
 	vk::CommandBufferAllocateInfo allocInfo{ .commandPool = commandPool, .level = vk::CommandBufferLevel::ePrimary,
 											 .commandBufferCount = MAX_FRAMES_IN_FLIGHT };
-	commandBuffers_ = vk::raii::CommandBuffers(device_, allocInfo);
+	auto cmds = vk::raii::CommandBuffers(device_, allocInfo);
+
+	for (unsigned int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		frames_[i].cmd = std::move(cmds[i]);
+	}
+
 }
 
 void Swapchain::recreateSwapChain() {
@@ -368,25 +369,8 @@ void Swapchain::recreateSwapChain() {
 	cleanupSwapChain();
 	createSwapchain(physicalDevice_, surface_);
 
-	swapchainImageResources_.clear();
-	createSwapchainImageResources();
-}
-
-void Swapchain::createUniformBuffers()
-{
-	uniformBuffers_.clear();
-	uniformBuffersMemory_.clear();
-	uniformBuffersMapped_.clear();
-
-	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		vk::DeviceSize bufferSize = sizeof(UniformBufferObject);
-		vk::raii::Buffer buffer({});
-		vk::raii::DeviceMemory bufferMem({});
-		createBuffer(bufferSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
-		uniformBuffers_.emplace_back(std::move(buffer));
-		uniformBuffersMemory_.emplace_back(std::move(bufferMem));
-		uniformBuffersMapped_.emplace_back(uniformBuffersMemory_[i].mapMemory(0, bufferSize));
-	}
+	images_.clear();
+	createPerImages();
 }
 
 void Swapchain::createDescriptorSets(vk::raii::DescriptorSetLayout& descriptorSetLayout, vk::raii::DescriptorPool& descriptorPool)
@@ -398,12 +382,12 @@ void Swapchain::createDescriptorSets(vk::raii::DescriptorSetLayout& descriptorSe
 		.pSetLayouts = layouts.data()
 	};
 
-	descriptorSets_.clear();
-	descriptorSets_ = device_.allocateDescriptorSets(allocInfo);
-
+	auto sets = device_.allocateDescriptorSets(allocInfo);
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		frames_[i].descriptorSet = std::move(sets[i]);
+
 		vk::DescriptorBufferInfo bufferInfo{
-			.buffer = uniformBuffers_[i],
+			.buffer = frames_[i].ubo,
 			.offset = 0,
 			.range = sizeof(UniformBufferObject)
 		};
@@ -414,7 +398,7 @@ void Swapchain::createDescriptorSets(vk::raii::DescriptorSetLayout& descriptorSe
 		};
 		std::array descriptorWrites{
 			vk::WriteDescriptorSet{
-				.dstSet = descriptorSets_[i],
+				.dstSet = frames_[i].descriptorSet ,
 				.dstBinding = 0,
 				.dstArrayElement = 0,
 				.descriptorCount = 1,
@@ -422,7 +406,7 @@ void Swapchain::createDescriptorSets(vk::raii::DescriptorSetLayout& descriptorSe
 				.pBufferInfo = &bufferInfo
 			},
 			vk::WriteDescriptorSet{
-				.dstSet = descriptorSets_[i],
+				.dstSet = frames_[i].descriptorSet ,
 				.dstBinding = 1,
 				.dstArrayElement = 0,
 				.descriptorCount = 1,
@@ -439,15 +423,15 @@ void Swapchain::createVertexBuffer()
 	vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 	vk::raii::Buffer stagingBuffer({});
 	vk::raii::DeviceMemory stagingBufferMemory({});
-	createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBuffer, stagingBufferMemory);
+	createBuffer(device_, physicalDevice_, bufferSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBuffer, stagingBufferMemory);
 
 	void* dataStaging = stagingBufferMemory.mapMemory(0, bufferSize);
 	memcpy(dataStaging, vertices.data(), bufferSize);
 	stagingBufferMemory.unmapMemory();
 
-	createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer, vk::MemoryPropertyFlagBits::eDeviceLocal, vertexBuffer_, vertexBufferMemory_);
+	createBuffer(device_, physicalDevice_, bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer, vk::MemoryPropertyFlagBits::eDeviceLocal, vertexBuffer_, vertexBufferMemory_);
 
-	copyBuffer(stagingBuffer, vertexBuffer_, bufferSize, queue_);
+	copyBuffer(device_, commandPool_, stagingBuffer, vertexBuffer_, bufferSize, queue_);
 }
 
 void Swapchain::createIndexBuffer() {
@@ -455,34 +439,15 @@ void Swapchain::createIndexBuffer() {
 
 	vk::raii::Buffer stagingBuffer({});
 	vk::raii::DeviceMemory stagingBufferMemory({});
-	createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBuffer, stagingBufferMemory);
+	createBuffer(device_, physicalDevice_, bufferSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBuffer, stagingBufferMemory);
 
 	void* data = stagingBufferMemory.mapMemory(0, bufferSize);
 	memcpy(data, indices.data(), (size_t)bufferSize);
 	stagingBufferMemory.unmapMemory();
 
-	createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer, vk::MemoryPropertyFlagBits::eDeviceLocal, indexBuffer_, indexBufferMemory_);
+	createBuffer(device_, physicalDevice_, bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer, vk::MemoryPropertyFlagBits::eDeviceLocal, indexBuffer_, indexBufferMemory_);
 
-	copyBuffer(stagingBuffer, indexBuffer_, bufferSize, queue_);
-}
-
-void Swapchain::createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Buffer& buffer, vk::raii::DeviceMemory& bufferMemory) {
-	vk::BufferCreateInfo bufferInfo{ .size = size, .usage = usage, .sharingMode = vk::SharingMode::eExclusive };
-	buffer = vk::raii::Buffer(device_, bufferInfo);
-	vk::MemoryRequirements memRequirements = buffer.getMemoryRequirements();
-	vk::MemoryAllocateInfo allocInfo{ .allocationSize = memRequirements.size, .memoryTypeIndex = findMemoryType(physicalDevice_, memRequirements.memoryTypeBits, properties) };
-	bufferMemory = vk::raii::DeviceMemory(device_, allocInfo);
-	buffer.bindMemory(bufferMemory, 0);
-}
-
-void Swapchain::copyBuffer(vk::raii::Buffer& srcBuffer, vk::raii::Buffer& dstBuffer, vk::DeviceSize size, vk::raii::Queue& queue) {
-	vk::CommandBufferAllocateInfo allocInfo{ .commandPool = commandPool_, .level = vk::CommandBufferLevel::ePrimary, .commandBufferCount = 1 };
-	vk::raii::CommandBuffer commandCopyBuffer = std::move(device_.allocateCommandBuffers(allocInfo).front());
-	commandCopyBuffer.begin(vk::CommandBufferBeginInfo{ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
-	commandCopyBuffer.copyBuffer(*srcBuffer, *dstBuffer, vk::BufferCopy(0, 0, size));
-	commandCopyBuffer.end();
-	queue.submit(vk::SubmitInfo{ .commandBufferCount = 1, .pCommandBuffers = &*commandCopyBuffer }, nullptr);
-	queue.waitIdle();
+	copyBuffer(device_, commandPool_, stagingBuffer, indexBuffer_, bufferSize, queue_);
 }
 
 void Swapchain::createTextureImage() {
@@ -496,7 +461,7 @@ void Swapchain::createTextureImage() {
 
 	vk::raii::Buffer stagingBuffer({});
 	vk::raii::DeviceMemory stagingBufferMemory({});
-	createBuffer(imageSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBuffer, stagingBufferMemory);
+	createBuffer(device_, physicalDevice_, imageSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBuffer, stagingBufferMemory);
 
 	void* data = stagingBufferMemory.mapMemory(0, imageSize);
 	memcpy(data, pixels, imageSize);
@@ -590,9 +555,32 @@ void Swapchain::createTextureSampler() {
 	textureSampler = vk::raii::Sampler(device_, samplerInfo);
 }
 
-//void Swapchain::createDepthResources() {
-//	vk::Format depthFormat = findDepthFormat(physicalDevice_);
-//
-//	createImage(device_, physicalDevice_, swapchainExtent_.width, swapchainExtent_.height, depthFormat, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment, vk::MemoryPropertyFlagBits::eDeviceLocal, depthImage, depthImageMemory);
-//	depthImageView = createImageView(device_, depthImage, depthFormat, vk::ImageAspectFlagBits::eDepth);
-//}
+
+void Swapchain::createUniformBuffers()
+{
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		frames_[i].ubo.clear();
+		frames_[i].uboMem.clear();
+		frames_[i].uboMapped = nullptr;
+
+		vk::DeviceSize bufferSize = sizeof(UniformBufferObject);
+		vk::raii::Buffer buffer({});
+		vk::raii::DeviceMemory bufferMem({});
+		createBuffer(device_, physicalDevice_, bufferSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
+
+		frames_[i].ubo = std::move(buffer);
+		frames_[i].uboMem = std::move(bufferMem);
+		frames_[i].uboMapped = frames_[i].uboMem.mapMemory(0, bufferSize);
+	}
+}
+
+vk::raii::ImageView Swapchain::createSwapchainImageView(vk::Image& image, vk::Format format, vk::raii::Device& device)
+{
+	vk::ImageViewCreateInfo imageViewCreateInfo{
+		.image = image,
+		.viewType = vk::ImageViewType::e2D,
+		.format = format,
+	  .subresourceRange = { vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 }
+	};
+	return vk::raii::ImageView{ device, imageViewCreateInfo };
+}
