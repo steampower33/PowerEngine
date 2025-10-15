@@ -1,7 +1,5 @@
 #pragma once
 
-#include "preamble.hpp"
-
 class Swapchain;
 
 class Context

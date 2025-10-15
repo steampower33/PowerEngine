@@ -10,19 +10,19 @@
 #include <algorithm>
 #include <limits>
 #include <array>
-#include <assert.h>
+#include <cassert>
 #include <chrono>
 
-#ifdef __INTELLISENSE__
+#define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
+#include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
-#else
-import vulkan_hpp;
-#endif
 
-#include <vulkan/vk_platform.h>
-
-#define GLFW_INCLUDE_VULKAN // REQUIRED only for GLFW CreateWindowSurface.
+#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
+
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#define GLM_FORCE_RIGHT_HANDED
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -40,35 +40,62 @@ constexpr bool enableValidationLayers = false;
 constexpr bool enableValidationLayers = true;
 #endif
 
-struct Vertex {
-    glm::vec2 pos;
-    glm::vec3 color;
-    glm::vec2 texCoord;
+#include "vertex.hpp"
 
-    static vk::VertexInputBindingDescription getBindingDescription() {
-        return { 0, sizeof(Vertex), vk::VertexInputRate::eVertex };
-    }
+static uint32_t findMemoryType(vk::raii::PhysicalDevice& physicalDevice, uint32_t typeFilter, vk::MemoryPropertyFlags properties) {
+	vk::PhysicalDeviceMemoryProperties memProperties = physicalDevice.getMemoryProperties();
 
-    static std::array<vk::VertexInputAttributeDescription, 3> getAttributeDescriptions() {
-        return {
-            vk::VertexInputAttributeDescription(0, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, pos)),
-            vk::VertexInputAttributeDescription(1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, color)),
-            vk::VertexInputAttributeDescription(2, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, texCoord))
-        };
-    }
-};
+	for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+		if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+			return i;
+		}
+	}
 
-const std::vector<Vertex> vertices = {
-    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
-};
+	throw std::runtime_error("failed to find suitable memory type!");
+}
 
-inline const std::vector<uint16_t> indices = { 0,1,2, 2,3,0 };
+static void createImage(vk::raii::Device& device, vk::raii::PhysicalDevice& physicalDevice, uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Image& image, vk::raii::DeviceMemory& imageMemory) {
+	vk::ImageCreateInfo imageInfo{ .imageType = vk::ImageType::e2D, .format = format,
+								  .extent = {width, height, 1}, .mipLevels = 1, .arrayLayers = 1,
+								  .samples = vk::SampleCountFlagBits::e1, .tiling = tiling,
+								  .usage = usage, .sharingMode = vk::SharingMode::eExclusive };
 
-struct UniformBufferObject {
-    alignas(16) glm::mat4 model;
-    alignas(16) glm::mat4 view;
-    alignas(16) glm::mat4 proj;
-};
+	image = vk::raii::Image(device, imageInfo);
+
+	vk::MemoryRequirements memRequirements = image.getMemoryRequirements();
+	vk::MemoryAllocateInfo allocInfo{ .allocationSize = memRequirements.size,
+									 .memoryTypeIndex = findMemoryType(physicalDevice, memRequirements.memoryTypeBits, properties) };
+	imageMemory = vk::raii::DeviceMemory(device, allocInfo);
+	image.bindMemory(imageMemory, 0);
+}
+
+static vk::raii::ImageView createImageView(vk::raii::Device& device, vk::raii::Image& image, vk::Format format, vk::ImageAspectFlags aspectFlags) {
+	vk::ImageViewCreateInfo viewInfo{
+		.image = image,
+		.viewType = vk::ImageViewType::e2D,
+		.format = format,
+		.subresourceRange = { aspectFlags, 0, 1, 0, 1 }
+	};
+	return vk::raii::ImageView(device, viewInfo);
+}
+
+static vk::Format findSupportedFormat(vk::raii::PhysicalDevice& physicalDevice, const std::vector<vk::Format>& candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features) {
+	auto formatIt = std::ranges::find_if(candidates, [&](auto const format) {
+		vk::FormatProperties props = physicalDevice.getFormatProperties(format);
+		return (((tiling == vk::ImageTiling::eLinear) && ((props.linearTilingFeatures & features) == features)) ||
+			((tiling == vk::ImageTiling::eOptimal) && ((props.optimalTilingFeatures & features) == features)));
+		});
+	if (formatIt == candidates.end())
+	{
+		throw std::runtime_error("failed to find supported format!");
+	}
+	return *formatIt;
+}
+
+static vk::Format findDepthFormat(vk::raii::PhysicalDevice& physicalDevice) {
+	return findSupportedFormat(physicalDevice,
+		{ vk::Format::eD32Sfloat, vk::Format::eD32SfloatS8Uint, vk::Format::eD24UnormS8Uint },
+		vk::ImageTiling::eOptimal,
+		vk::FormatFeatureFlagBits::eDepthStencilAttachment
+	);
+}

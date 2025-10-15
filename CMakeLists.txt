@@ -16,6 +16,12 @@ file(GLOB SRC CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 add_executable(PowerEngine ${SRC})
 
+# preamble.hpp를 PCH로 지정
+target_precompile_headers(PowerEngine PRIVATE
+    # 컴파일러가 C++일 때만 적용 (C/ObjC와 구분)
+    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/src/preamble.hpp>"
+)
+
 # Additional Options
 if (MSVC)
   target_compile_options(PowerEngine PRIVATE /bigobj)

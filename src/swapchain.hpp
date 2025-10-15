@@ -1,6 +1,6 @@
 #pragma once
 
-#include "preamble.hpp"
+#include "swapchainImageResources.hpp"
 
 class Swapchain
 {
@@ -22,20 +22,17 @@ public:
 	Swapchain& operator=(const Swapchain& rhs) = delete;
 	Swapchain& operator=(Swapchain&& rhs) = delete;
 
+	vk::raii::SwapchainKHR           swapchain_ = nullptr;
+	vk::SurfaceFormatKHR             swapchainSurfaceFormat_;
+	vk::Extent2D                     swapchainExtent_;
+
 	bool draw(bool& framebufferResized, vk::raii::Queue& queue, vk::raii::Pipeline& graphicsPipeline, vk::raii::PipelineLayout& pipelineLayout);
 
-	vk::raii::SwapchainKHR           swapChain_ = nullptr;
-	std::vector<vk::Image>           swapChainImages_;
-	vk::SurfaceFormatKHR             swapChainSurfaceFormat_;
-	vk::Extent2D                     swapChainExtent_;
-	std::vector<vk::raii::ImageView> swapChainImageViews_;
-
+private:
 	void createTextureImage();
 	void createTextureImageView();
 	void createTextureSampler();
-	vk::raii::ImageView createImageView(vk::raii::Image& image, vk::Format format);
 
-	void createImage(uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Image& image, vk::raii::DeviceMemory& imageMemory);
 	void copyBufferToImage(const vk::raii::Buffer& buffer, vk::raii::Image& image, uint32_t width, uint32_t height);
 	void transitionImageLayout(const vk::raii::Image& image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
 	std::unique_ptr<vk::raii::CommandBuffer> beginSingleTimeCommands();
@@ -49,18 +46,20 @@ private:
 	vk::raii::CommandPool& commandPool_;
 	vk::raii::Queue& queue_;
 
-	std::vector<vk::raii::Semaphore> presentCompleteSemaphore_;
-	std::vector<vk::raii::Semaphore> renderFinishedSemaphore_;
-	std::vector<vk::raii::Fence> inFlightFences_;
-	uint32_t semaphoreIndex_ = 0;
-	uint32_t currentFrame_ = 0;
+	std::vector<SwapchainImageResources> swapchainImageResources_;
+
+	std::vector<vk::raii::DescriptorSet> descriptorSets_;
+	std::vector<vk::raii::CommandBuffer> commandBuffers_;
 
 	std::vector<vk::raii::Buffer> uniformBuffers_;
 	std::vector<vk::raii::DeviceMemory> uniformBuffersMemory_;
 	std::vector<void*> uniformBuffersMapped_;
 
-	std::vector<vk::raii::DescriptorSet> descriptorSets_;
-	std::vector<vk::raii::CommandBuffer> commandBuffers_;
+	std::vector<vk::raii::Semaphore> presentCompleteSemaphore_;
+	std::vector<vk::raii::Semaphore> renderFinishedSemaphore_;
+	std::vector<vk::raii::Fence> inFlightFences_;
+	uint32_t semaphoreIndex_ = 0;
+	uint32_t currentFrame_ = 0;
 
 	vk::raii::Buffer vertexBuffer_ = nullptr;
 	vk::raii::DeviceMemory vertexBufferMemory_ = nullptr;
@@ -71,10 +70,9 @@ private:
 	vk::raii::DeviceMemory textureImageMemory = nullptr;
 	vk::raii::ImageView textureImageView = nullptr;
 	vk::raii::Sampler textureSampler = nullptr;
-
-	void createSwapChain(vk::raii::PhysicalDevice& physicalDevice, vk::raii::SurfaceKHR& surface);
-	void createImageViews();
-
+	
+	void createSwapchain(vk::raii::PhysicalDevice& physicalDevice, vk::raii::SurfaceKHR& surface);
+	void createSwapchainImageResources();
 	void createCommandBuffers(vk::raii::CommandPool& commandPool);
 	void createUniformBuffers();
 	void createDescriptorSets(vk::raii::DescriptorSetLayout& descriptorSetLayout, vk::raii::DescriptorPool& descriptorPool);
@@ -105,7 +103,7 @@ private:
 
 	void createVertexBuffer();
 	void createIndexBuffer();
-	uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties);
+
 	void copyBuffer(vk::raii::Buffer& srcBuffer, vk::raii::Buffer& dstBuffer, vk::DeviceSize size, vk::raii::Queue& queue);
 
 	void createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Buffer& buffer, vk::raii::DeviceMemory& bufferMemory);

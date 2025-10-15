@@ -1,6 +1,6 @@
 #pragma once
 
-#include "preamble.hpp"
+#include "camera.hpp"
 
 class Context;
 
@@ -17,11 +17,26 @@ public:
 
     void run();
 
-    GLFWwindow* glfwWindow_ = nullptr;
-    bool framebufferResized_ = false;
+private:
+    // GLFW가 요구하는 정확한 시그니처(반환형 void, 첫 인자 GLFWwindow*)
+    static void CursorPosCallback(GLFWwindow* w, double x, double y);
+    static void FramebufferResizeCallback(GLFWwindow* w, int width, int height);
 
-    static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
+    // 실제 인스턴스 로직 (this 사용 가능)
+    void OnCursorPos(double x, double y);
+    void OnFramebufferResize(int width, int height);
+
 
 private:
-    Context* ctx_;
+    GLFWwindow* glfwWindow_{};
+    Context* ctx_{};
+    Camera* camera_{};
+
+    bool framebufferResized_ = false;
+
+    // 마우스 상태는 인스턴스 멤버로
+    bool   firstMouse_ = true;
+    double lastX_ = 0.0, lastY_ = 0.0;
+
+    void processKeyboard(float dt);
 };
