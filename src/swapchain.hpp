@@ -58,7 +58,6 @@ private:
 	std::vector<vk::raii::Semaphore> presentCompleteSemaphore_;
 	std::vector<vk::raii::Semaphore> renderFinishedSemaphore_;
 	std::vector<vk::raii::Fence> inFlightFences_;
-	uint32_t semaphoreIndex_ = 0;
 	uint32_t currentFrame_ = 0;
 
 	vk::raii::Buffer vertexBuffer_ = nullptr;

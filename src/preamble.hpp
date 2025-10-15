@@ -42,7 +42,7 @@ constexpr bool enableValidationLayers = true;
 
 #include "vertex.hpp"
 
-static uint32_t findMemoryType(vk::raii::PhysicalDevice& physicalDevice, uint32_t typeFilter, vk::MemoryPropertyFlags properties) {
+inline uint32_t findMemoryType(vk::raii::PhysicalDevice& physicalDevice, uint32_t typeFilter, vk::MemoryPropertyFlags properties) {
 	vk::PhysicalDeviceMemoryProperties memProperties = physicalDevice.getMemoryProperties();
 
 	for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
@@ -54,7 +54,7 @@ static uint32_t findMemoryType(vk::raii::PhysicalDevice& physicalDevice, uint32_
 	throw std::runtime_error("failed to find suitable memory type!");
 }
 
-static void createImage(vk::raii::Device& device, vk::raii::PhysicalDevice& physicalDevice, uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Image& image, vk::raii::DeviceMemory& imageMemory) {
+inline void createImage(vk::raii::Device& device, vk::raii::PhysicalDevice& physicalDevice, uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Image& image, vk::raii::DeviceMemory& imageMemory) {
 	vk::ImageCreateInfo imageInfo{ .imageType = vk::ImageType::e2D, .format = format,
 								  .extent = {width, height, 1}, .mipLevels = 1, .arrayLayers = 1,
 								  .samples = vk::SampleCountFlagBits::e1, .tiling = tiling,
@@ -69,7 +69,7 @@ static void createImage(vk::raii::Device& device, vk::raii::PhysicalDevice& phys
 	image.bindMemory(imageMemory, 0);
 }
 
-static vk::raii::ImageView createImageView(vk::raii::Device& device, vk::raii::Image& image, vk::Format format, vk::ImageAspectFlags aspectFlags) {
+inline vk::raii::ImageView createImageView(vk::raii::Device& device, vk::raii::Image& image, vk::Format format, vk::ImageAspectFlags aspectFlags) {
 	vk::ImageViewCreateInfo viewInfo{
 		.image = image,
 		.viewType = vk::ImageViewType::e2D,
@@ -79,7 +79,7 @@ static vk::raii::ImageView createImageView(vk::raii::Device& device, vk::raii::I
 	return vk::raii::ImageView(device, viewInfo);
 }
 
-static vk::Format findSupportedFormat(vk::raii::PhysicalDevice& physicalDevice, const std::vector<vk::Format>& candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features) {
+inline vk::Format findSupportedFormat(vk::raii::PhysicalDevice& physicalDevice, const std::vector<vk::Format>& candidates, vk::ImageTiling tiling, vk::FormatFeatureFlags features) {
 	auto formatIt = std::ranges::find_if(candidates, [&](auto const format) {
 		vk::FormatProperties props = physicalDevice.getFormatProperties(format);
 		return (((tiling == vk::ImageTiling::eLinear) && ((props.linearTilingFeatures & features) == features)) ||
@@ -92,7 +92,7 @@ static vk::Format findSupportedFormat(vk::raii::PhysicalDevice& physicalDevice, 
 	return *formatIt;
 }
 
-static vk::Format findDepthFormat(vk::raii::PhysicalDevice& physicalDevice) {
+inline vk::Format findDepthFormat(vk::raii::PhysicalDevice& physicalDevice) {
 	return findSupportedFormat(physicalDevice,
 		{ vk::Format::eD32Sfloat, vk::Format::eD32SfloatS8Uint, vk::Format::eD24UnormS8Uint },
 		vk::ImageTiling::eOptimal,

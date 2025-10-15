@@ -42,7 +42,7 @@ bool Swapchain::draw(bool& framebufferResized, vk::raii::Queue& queue, vk::raii:
 	uint32_t imageIndex = 0;
 	try {
 		auto [res, idx] = swapchain_.acquireNextImage(
-			UINT64_MAX, *presentCompleteSemaphore_[semaphoreIndex_], nullptr);
+			UINT64_MAX, *presentCompleteSemaphore_[currentFrame_], nullptr);
 		imageIndex = idx;
 		if (res == vk::Result::eSuboptimalKHR) {
 			framebufferResized = false;
@@ -55,6 +55,20 @@ bool Swapchain::draw(bool& framebufferResized, vk::raii::Queue& queue, vk::raii:
 		recreateSwapChain();
 		return true;
 	}
+
+	if (auto f = swapchainImageResources_[imageIndex].lastSubmitFence;
+		f != VK_NULL_HANDLE)
+	{
+		// vk-hpp는 ArrayProxy 오버로드라 단일 펜스도 이렇게 호출 가능
+		vk::Result r = device_.waitForFences(f, vk::True, UINT64_MAX);
+		// 보통 eSuccess 여야 함. (UINT64_MAX면 timeout 날 일이 사실상 없음)
+		if (r != vk::Result::eSuccess) {
+			// 필요시 로깅/예외/복구 로직
+			throw std::runtime_error("waitForFences failed: " + vk::to_string(r));
+		}
+	}
+	swapchainImageResources_[imageIndex].lastSubmitFence = inFlightFences_[currentFrame_];
+
 
 	updateUniformBuffer(currentFrame_);
 
@@ -96,7 +110,7 @@ bool Swapchain::draw(bool& framebufferResized, vk::raii::Queue& queue, vk::raii:
 		}
 		throw; // 다른 에러는 그대로 위로
 	}
-	semaphoreIndex_ = (semaphoreIndex_ + 1) % presentCompleteSemaphore_.size();
+
 	currentFrame_ = (currentFrame_ + 1) % MAX_FRAMES_IN_FLIGHT;
 
 	return false;
