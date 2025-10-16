@@ -28,6 +28,8 @@ public:
 	vk::raii::SwapchainKHR           swapchain_ = nullptr;
 	vk::SurfaceFormatKHR             swapchainSurfaceFormat_;
 	vk::Extent2D                     swapchainExtent_;
+	unsigned int minImageCount_ = 0;
+	unsigned int imageCount_ = 0;
 
 	void draw(bool& framebufferResized, vk::raii::Queue& queue, vk::raii::Pipeline& graphicsPipeline, vk::raii::PipelineLayout& pipelineLayout, Camera& camera);
 
@@ -89,9 +91,9 @@ private:
 		vk::PipelineStageFlags2 dst_stage_mask
 	);
 
-	static uint32_t chooseSwapMinImageCount(vk::SurfaceCapabilitiesKHR const& surfaceCapabilities);
-	static vk::SurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& availableFormats);
-	static vk::PresentModeKHR chooseSwapPresentMode(const std::vector<vk::PresentModeKHR>& availablePresentModes);
+	uint32_t chooseSwapMinImageCount(vk::SurfaceCapabilitiesKHR const& surfaceCapabilities);
+	vk::SurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& availableFormats);
+	vk::PresentModeKHR chooseSwapPresentMode(const std::vector<vk::PresentModeKHR>& availablePresentModes);
 	vk::Extent2D chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& capabilities);
 
 	void updateUniformBuffer(uint32_t currentImage, Camera& camera);

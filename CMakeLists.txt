@@ -7,6 +7,30 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 
+# --- ImGui ---
+set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/third_party/imgui)
+
+set(IMGUI_SOURCES
+  ${IMGUI_DIR}/imgui.cpp
+  ${IMGUI_DIR}/imgui_draw.cpp
+  ${IMGUI_DIR}/imgui_tables.cpp
+  ${IMGUI_DIR}/imgui_widgets.cpp
+  ${IMGUI_DIR}/imgui_demo.cpp
+  ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
+  ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
+)
+
+add_library(imgui STATIC ${IMGUI_SOURCES})
+target_include_directories(imgui PUBLIC
+  ${IMGUI_DIR}
+  ${IMGUI_DIR}/backends
+)
+
+# 네가 이미 find_package로 잡은 glfw / Vulkan 사용
+target_link_libraries(imgui PUBLIC glfw Vulkan::Vulkan)
+
+# (권장) PCH 충돌 피하려면 ImGui 소스만 PCH 스킵
+set_source_files_properties(${IMGUI_SOURCES} PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 # Vulkan / GLFW 찾기
 find_package(Vulkan REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
@@ -65,6 +89,7 @@ target_link_libraries(PowerEngine
   PRIVATE
     Vulkan::cppm      # ← 이걸 잊으면 import 해석 안 됨
     glfw
+    imgui
 )
 
 function (add_slang_shader_target TARGET)

@@ -7,10 +7,10 @@ struct Camera;
 class Context
 {
 public:
-	Context(GLFWwindow* glfwWindow);
+	Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height);
 	Context(const Context& rhs) = delete;
 	Context(Context&& rhs) = delete;
-	~Context() = default;
+	~Context();
 
 	Context& operator=(const Context& rhs) = delete;
 	Context& operator=(Context&& rhs) = delete;
@@ -30,6 +30,7 @@ public:
 	vk::raii::PipelineLayout		 pipelineLayout_ = nullptr;
 	vk::raii::Pipeline				 graphicsPipeline_ = nullptr;
 
+	//vk::raii::PipelineCache			 pipelineCache_ = VK_NULL_HANDLE;
 	vk::raii::DescriptorPool		 descriptorPool_ = nullptr;
 
 	bool framebufferResized_ = false;
@@ -42,6 +43,11 @@ public:
 	};
 
 	vk::raii::ShaderModule createShaderModule(const std::vector<char>& code) const;
+
+	// ImGUI
+	vk::raii::DescriptorPool imguiPool_ = nullptr;
+	void setupImgui(uint32_t width, uint32_t height);
+	void drawImgui();
 
 private:
 	GLFWwindow* glfwWindow_;

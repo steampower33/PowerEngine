@@ -31,6 +31,9 @@ private:
     std::unique_ptr<Context> ctx_;
     Camera camera_;
 
+    uint32_t width_ = 1400;
+    uint32_t height_ = 900;
+
     bool framebufferResized_ = false;
 
     // 마우스 상태는 인스턴스 멤버로

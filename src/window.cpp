@@ -7,7 +7,7 @@ Window::Window()
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-    glfwWindow_ = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
+    glfwWindow_ = glfwCreateWindow(width_, height_, "Vulkan", nullptr, nullptr);
 
     // 이 윈도우에 this를 매달아둔다
     glfwSetWindowUserPointer(glfwWindow_, this);
@@ -15,14 +15,14 @@ Window::Window()
     // 콜백 등록: static 트램펄린
     glfwSetFramebufferSizeCallback(glfwWindow_, &Window::FramebufferResizeCallback);
     glfwSetInputMode(glfwWindow_, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-    glfwSetCursorPosCallback(glfwWindow_, &Window::CursorPosCallback);
+    //glfwSetCursorPosCallback(glfwWindow_, &Window::CursorPosCallback);
 
     if (!glfwWindow_)
     {
         std::cerr << "Failure creating glfw window " << std::endl;
     }
 
-    ctx_ = std::make_unique<Context>(glfwWindow_);
+    ctx_ = std::make_unique<Context>(glfwWindow_, width_, height_);
 
 }
 

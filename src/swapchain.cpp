@@ -188,6 +188,11 @@ void Swapchain::recordCommandBuffer(uint32_t imageIndex, vk::raii::Queue& queue,
 	frames_[currentFrame_].cmd.bindIndexBuffer(indexBuffer_, 0, vk::IndexTypeValue<decltype(indices)::value_type>::value);
 	frames_[currentFrame_].cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, *frames_[currentFrame_].descriptorSet, nullptr);
 	frames_[currentFrame_].cmd.drawIndexed(indices.size(), 1, 0, 0, 0);
+
+	// Imgui Render
+	ImDrawData* draw_data = ImGui::GetDrawData();
+	ImGui_ImplVulkan_RenderDrawData(draw_data, *frames_[currentFrame_].cmd);
+
 	frames_[currentFrame_].cmd.endRendering();
 	// After rendering, transition the swapchain image to PRESENT_SRC
 	transition_image_layout(
@@ -199,6 +204,7 @@ void Swapchain::recordCommandBuffer(uint32_t imageIndex, vk::raii::Queue& queue,
 		vk::PipelineStageFlagBits2::eColorAttachmentOutput,        // srcStage
 		vk::PipelineStageFlagBits2::eBottomOfPipe                  // dstStage
 	);
+
 	frames_[currentFrame_].cmd.end();
 }
 
@@ -276,7 +282,8 @@ void Swapchain::createPerImages()
 {
 	auto images = swapchain_.getImages();
 	images_.clear();
-	images_.reserve(images.size());
+	imageCount_ = images.size();
+	images_.reserve(imageCount_);
 	for (auto img : images) {
 		PerImage i;
 		i.image_ = img;
@@ -308,11 +315,11 @@ void Swapchain::createPerFrames(
 }
 
 uint32_t Swapchain::chooseSwapMinImageCount(vk::SurfaceCapabilitiesKHR const& surfaceCapabilities) {
-	auto minImageCount = std::max(3u, surfaceCapabilities.minImageCount);
-	if ((0 < surfaceCapabilities.maxImageCount) && (surfaceCapabilities.maxImageCount < minImageCount)) {
-		minImageCount = surfaceCapabilities.maxImageCount;
+	minImageCount_ = std::max(3u, surfaceCapabilities.minImageCount);
+	if ((0 < surfaceCapabilities.maxImageCount) && (surfaceCapabilities.maxImageCount < minImageCount_)) {
+		minImageCount_ = surfaceCapabilities.maxImageCount;
 	}
-	return minImageCount;
+	return minImageCount_;
 }
 
 vk::SurfaceFormatKHR Swapchain::chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& availableFormats) {
