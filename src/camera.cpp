@@ -1,15 +1,5 @@
 #include "camera.hpp"
 
-Camera::Camera()
-{
-
-}
-
-Camera::~Camera()
-{
-
-}
-
 glm::vec3 Camera::front() const {
     float cy = cos(glm::radians(yaw));
     float sy = sin(glm::radians(yaw));

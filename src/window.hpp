@@ -1,8 +1,7 @@
 #pragma once
 
-#include "camera.hpp"
-
 class Context;
+#include "camera.hpp"
 
 class Window
 {
@@ -29,8 +28,8 @@ private:
 
 private:
     GLFWwindow* glfwWindow_{};
-    Context* ctx_{};
-    Camera* camera_{};
+    std::unique_ptr<Context> ctx_;
+    Camera camera_;
 
     bool framebufferResized_ = false;
 

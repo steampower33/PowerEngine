@@ -1,4 +1,5 @@
 #include "swapchain.hpp"
+#include "camera.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
@@ -15,6 +16,8 @@ Swapchain::Swapchain(
 	vk::raii::Queue& queue)
 	: glfwWindow_(glfwWindow), device_(device), physicalDevice_(physicalDevice), surface_(surface), commandPool_(commandPool), queue_(queue)
 {
+	stbi_set_flip_vertically_on_load(true);
+
 	createSwapchain(physicalDevice_, surface);
 	createPerImages();
 
@@ -32,7 +35,7 @@ Swapchain::~Swapchain()
 {
 }
 
-void Swapchain::draw(bool& framebufferResized, vk::raii::Queue& queue, vk::raii::Pipeline& graphicsPipeline, vk::raii::PipelineLayout& pipelineLayout)
+void Swapchain::draw(bool& framebufferResized, vk::raii::Queue& queue, vk::raii::Pipeline& graphicsPipeline, vk::raii::PipelineLayout& pipelineLayout, Camera& camera)
 {
 	while (vk::Result::eTimeout == device_.waitForFences(*frames_[currentFrame_].inFlight, vk::True, UINT64_MAX))
 		;
@@ -66,7 +69,7 @@ void Swapchain::draw(bool& framebufferResized, vk::raii::Queue& queue, vk::raii:
 	}
 	images_[imageIndex].lastSubmitFence = frames_[currentFrame_].inFlight;
 
-	updateUniformBuffer(currentFrame_);
+	updateUniformBuffer(currentFrame_, camera);
 
 	device_.resetFences(*frames_[currentFrame_].inFlight);
 
@@ -234,17 +237,17 @@ void Swapchain::transition_image_layout(
 	frames_[currentFrame_].cmd.pipelineBarrier2(dependency_info);
 }
 
-void Swapchain::updateUniformBuffer(uint32_t currentImage) {
+void Swapchain::updateUniformBuffer(uint32_t currentImage, Camera& camera) {
 	static auto startTime = std::chrono::high_resolution_clock::now();
 
 	auto currentTime = std::chrono::high_resolution_clock::now();
 	float time = std::chrono::duration<float>(currentTime - startTime).count();
 
 	UniformBufferObject ubo{};
-	ubo.model = rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	ubo.view = lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-	ubo.proj = glm::perspective(glm::radians(45.0f), static_cast<float>(swapchainExtent_.width) / static_cast<float>(swapchainExtent_.height), 0.1f, 10.0f);
-	ubo.proj[1][1] *= -1;
+	glm::vec3 pos = { 0.0f, 0.0f, 0.0f };      // 원하는 월드 위치
+	ubo.model = glm::translate(glm::mat4(1.0f), pos);
+	ubo.view = camera.view();
+	ubo.proj = camera.proj(static_cast<float>(swapchainExtent_.width), static_cast<float>(swapchainExtent_.height));
 
 	memcpy(frames_[currentImage].uboMapped, &ubo, sizeof(ubo));
 }

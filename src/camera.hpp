@@ -1,13 +1,12 @@
 
 struct Camera {
 
-    Camera();
-    Camera(const Camera& rhs) = delete;
-    Camera(Camera&& rhs) = delete;
-    ~Camera();
-
-    Camera& operator=(const Camera& rhs) = delete;
-    Camera& operator=(Camera&& rhs) = delete;
+    Camera() = default;
+    ~Camera() = default;
+    Camera(const Camera&) = delete;
+    Camera& operator=(const Camera&) = delete;
+    Camera(Camera&&) = delete;
+    Camera& operator=(Camera&&) = delete;
 
     glm::vec3 position{ 0.0f, 0.0f, 3.0f };
     float yaw = -90.0f;   // 오른쪽이 0°, -Z를 보고 시작하려면 -90°

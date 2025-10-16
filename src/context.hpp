@@ -1,6 +1,8 @@
 #pragma once
 
-class Swapchain;
+#include "swapchain.hpp"
+
+struct Camera;
 
 class Context
 {
@@ -8,12 +10,12 @@ public:
 	Context(GLFWwindow* glfwWindow);
 	Context(const Context& rhs) = delete;
 	Context(Context&& rhs) = delete;
-	~Context();
+	~Context() = default;
 
 	Context& operator=(const Context& rhs) = delete;
 	Context& operator=(Context&& rhs) = delete;
 
-	void draw();
+	void draw(Camera& camera);
 
 	vk::raii::Context                context_;
 	vk::raii::Instance               instance_ = nullptr;
@@ -43,7 +45,7 @@ public:
 
 private:
 	GLFWwindow* glfwWindow_;
-	Swapchain* swapchain_;
+	std::unique_ptr<Swapchain> swapchain_;
 
 	void createInstance();
 	std::vector<const char*> getRequiredExtensions();
@@ -53,7 +55,7 @@ private:
 	void pickPhysicalDevice();
 	void createLogicalDevice();
 	void createCommandPool();
-	
+
 	void createDescriptorSetLayout();
 	void createGraphicsPipeline();
 

@@ -3,6 +3,8 @@
 #include "perImage.hpp"
 #include "perFrame.hpp"
 
+struct Camera;
+
 class Swapchain
 {
 public:
@@ -27,9 +29,11 @@ public:
 	vk::SurfaceFormatKHR             swapchainSurfaceFormat_;
 	vk::Extent2D                     swapchainExtent_;
 
-	void draw(bool& framebufferResized, vk::raii::Queue& queue, vk::raii::Pipeline& graphicsPipeline, vk::raii::PipelineLayout& pipelineLayout);
+	void draw(bool& framebufferResized, vk::raii::Queue& queue, vk::raii::Pipeline& graphicsPipeline, vk::raii::PipelineLayout& pipelineLayout, Camera& camera);
 
 private:
+	void recordCommandBuffer(uint32_t imageIndex, vk::raii::Queue& queue, vk::raii::Pipeline& graphicsPipeline, vk::raii::PipelineLayout& pipelineLayout);
+
 	void createTextureImage();
 	void createTextureImageView();
 	void createTextureSampler();
@@ -68,14 +72,12 @@ private:
 		vk::raii::DescriptorSetLayout& descriptorSetLayout,
 		vk::raii::DescriptorPool& descriptorPool);
 
-	void createCommandBuffers(vk::raii::CommandPool& commandPool);
 	void createUniformBuffers();
 	void createDescriptorSets(vk::raii::DescriptorSetLayout& descriptorSetLayout, vk::raii::DescriptorPool& descriptorPool);
+	void createCommandBuffers(vk::raii::CommandPool& commandPool);
 
 	void cleanupSwapChain();
 	void recreateSwapChain();
-
-	void recordCommandBuffer(uint32_t imageIndex, vk::raii::Queue& queue, vk::raii::Pipeline& graphicsPipeline, vk::raii::PipelineLayout& pipelineLayout);
 
 	void transition_image_layout(
 		uint32_t imageIndex,
@@ -92,7 +94,7 @@ private:
 	static vk::PresentModeKHR chooseSwapPresentMode(const std::vector<vk::PresentModeKHR>& availablePresentModes);
 	vk::Extent2D chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& capabilities);
 
-	void updateUniformBuffer(uint32_t currentImage);
+	void updateUniformBuffer(uint32_t currentImage, Camera& camera);
 	vk::raii::ImageView createSwapchainImageView(vk::Image& image, vk::Format format, vk::raii::Device& device);
 
 	void createVertexBuffer();

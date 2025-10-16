@@ -22,8 +22,8 @@ Window::Window()
         std::cerr << "Failure creating glfw window " << std::endl;
     }
 
-    ctx_ = new Context(glfwWindow_);
-    camera_ = new Camera();
+    ctx_ = std::make_unique<Context>(glfwWindow_);
+
 }
 
 // --- static 트램펄린들 ---
@@ -49,9 +49,9 @@ void Window::OnCursorPos(double xpos, double ypos) {
     double yoffset = lastY_ - ypos; // 상하 반전
     lastX_ = xpos; lastY_ = ypos;
 
-    camera_->yaw += static_cast<float>(xoffset) * camera_->sensitivity;
-    camera_->pitch += static_cast<float>(yoffset) * camera_->sensitivity;
-    camera_->pitch = glm::clamp(camera_->pitch, -89.0f, 89.0f);
+    camera_.yaw += static_cast<float>(xoffset) * camera_.sensitivity;
+    camera_.pitch += static_cast<float>(yoffset) * camera_.sensitivity;
+    camera_.pitch = glm::clamp(camera_.pitch, -89.0f, 89.0f);
 }
 
 Window::~Window()
@@ -73,34 +73,42 @@ void Window::run()
         glfwPollEvents();
         processKeyboard(dt);
 
-        ctx_->draw();
+        ctx_->draw(camera_);
     }
 
     ctx_->device_.waitIdle();
 }
 
 void Window::processKeyboard(float dt) {
-    float v = camera_->moveSpeed * dt;
+    float v = camera_.moveSpeed * dt;
+    
+    // ASDW
     if (glfwGetKey(glfwWindow_, GLFW_KEY_W) == GLFW_PRESS)
-        camera_->position += camera_->front() * v;
+        camera_.position += camera_.front() * v;
     if (glfwGetKey(glfwWindow_, GLFW_KEY_S) == GLFW_PRESS) 
-        camera_->position -= camera_->front() * v;
+        camera_.position -= camera_.front() * v;
     if (glfwGetKey(glfwWindow_, GLFW_KEY_A) == GLFW_PRESS) 
-        camera_->position -= camera_->right() * v;
+        camera_.position -= camera_.right() * v;
     if (glfwGetKey(glfwWindow_, GLFW_KEY_D) == GLFW_PRESS) 
-        camera_->position += camera_->right() * v;
-    if (glfwGetKey(glfwWindow_, GLFW_KEY_SPACE) == GLFW_PRESS) 
-        camera_->position += glm::vec3(0, 1, 0) * v;
-    if (glfwGetKey(glfwWindow_, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) 
-        camera_->position -= glm::vec3(0, 1, 0) * v;
+        camera_.position += camera_.right() * v;
+    
+    // QE
+    if (glfwGetKey(glfwWindow_, GLFW_KEY_Q) == GLFW_PRESS)
+        camera_.position -= glm::vec3(0, 1, 0) * v;
+    if (glfwGetKey(glfwWindow_, GLFW_KEY_E) == GLFW_PRESS)
+        camera_.position += glm::vec3(0, 1, 0) * v;
+
+    // ← → 로 고개 좌/우 (yaw)
+    const float yawSpeed = 120.0f; // deg/sec. 취향대로 60~180 사이로
+    if (glfwGetKey(glfwWindow_, GLFW_KEY_LEFT) == GLFW_PRESS) camera_.yaw -= yawSpeed * dt;
+    if (glfwGetKey(glfwWindow_, GLFW_KEY_RIGHT) == GLFW_PRESS) camera_.yaw += yawSpeed * dt;
+
+    // ↑ ↓ 로 고개 위/아래 (pitch)도 원하면
+    const float pitchSpeed = 90.0f; // deg/sec
+    if (glfwGetKey(glfwWindow_, GLFW_KEY_UP) == GLFW_PRESS) camera_.pitch = glm::clamp(camera_.pitch + pitchSpeed * dt, -89.0f, 89.0f);
+    if (glfwGetKey(glfwWindow_, GLFW_KEY_DOWN) == GLFW_PRESS) camera_.pitch = glm::clamp(camera_.pitch - pitchSpeed * dt, -89.0f, 89.0f);
 
     if (glfwGetKey(glfwWindow_, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
         glfwSetWindowShouldClose(glfwWindow_, GLFW_TRUE);
     }
-
-    //// FOV 줌(선택)
-    //if (glfwGetKey(glfwWindow_, GLFW_KEY_Q) == GLFW_PRESS) 
-    //    camera_->fov = glm::max(20.0f, camera_->fov - 40.0f * dt);
-    //if (glfwGetKey(glfwWindow_, GLFW_KEY_E) == GLFW_PRESS) 
-    //    camera_->fov = glm::min(90.0f, camera_->fov + 40.0f * dt);
 }

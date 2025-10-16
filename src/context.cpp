@@ -1,5 +1,5 @@
 #include "context.hpp"
-#include "swapchain.hpp"
+#include "camera.hpp"
 
 Context::Context(GLFWwindow* glfwWindow)
     : glfwWindow_(glfwWindow)
@@ -14,14 +14,14 @@ Context::Context(GLFWwindow* glfwWindow)
     createDescriptorSetLayout();
     createDescriptorPool();
 
-    swapchain_ = new Swapchain(glfwWindow_, device_, physicalDevice_, surface_,  queueIndex_, commandPool_, descriptorSetLayout_, descriptorPool_, queue_);
+    swapchain_ = std::make_unique<Swapchain>(glfwWindow_, device_, physicalDevice_, surface_,  queueIndex_, commandPool_, descriptorSetLayout_, descriptorPool_, queue_);
 
     createGraphicsPipeline();
 }
 
-void Context::draw()
+void Context::draw(Camera& camera)
 {
-    swapchain_->draw(framebufferResized_, queue_, graphicsPipeline_, pipelineLayout_);
+    swapchain_->draw(framebufferResized_, queue_, graphicsPipeline_, pipelineLayout_, camera);
 }
 
 void Context::createInstance() {
