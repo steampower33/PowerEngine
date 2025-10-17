@@ -12,6 +12,7 @@
 #include <array>
 #include <cassert>
 #include <chrono>
+#include <unordered_map>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
@@ -26,6 +27,9 @@
 #define GLM_FORCE_RIGHT_HANDED
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/hash.hpp>
 
 constexpr int      MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -120,4 +124,65 @@ inline void copyBuffer(vk::raii::Device& device, vk::raii::CommandPool& commandP
 	commandCopyBuffer.end();
 	queue.submit(vk::SubmitInfo{ .commandBufferCount = 1, .pCommandBuffers = &*commandCopyBuffer }, nullptr);
 	queue.waitIdle();
+}
+
+template<class T>
+inline void createVertexBuffer(vk::raii::Device& device,
+	vk::raii::PhysicalDevice& physicalDevice,
+	vk::raii::CommandPool& commandPool,
+	vk::raii::Queue& queue,
+	const std::vector<T>& vertices,                 // ★ 인자로 받기
+	vk::raii::Buffer& vertexBuffer,
+	vk::raii::DeviceMemory& vertexBufferMemory)
+{
+	vk::DeviceSize bufferSize = sizeof(T) * vertices.size();
+
+	vk::raii::Buffer stagingBuffer(nullptr);
+	vk::raii::DeviceMemory stagingMemory(nullptr);
+	createBuffer(device, physicalDevice, bufferSize,
+		vk::BufferUsageFlagBits::eTransferSrc,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+		stagingBuffer, stagingMemory);
+
+	void* data = stagingMemory.mapMemory(0, bufferSize);
+	std::memcpy(data, vertices.data(), (size_t)bufferSize);
+	stagingMemory.unmapMemory();
+
+	createBuffer(device, physicalDevice, bufferSize,
+		vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer,
+		vk::MemoryPropertyFlagBits::eDeviceLocal,
+		vertexBuffer, vertexBufferMemory);
+
+	copyBuffer(device, commandPool, stagingBuffer, vertexBuffer, bufferSize, queue);
+}
+
+template<class IndexT>
+inline void createIndexBuffer(
+	vk::raii::Device& device,
+	vk::raii::PhysicalDevice& physicalDevice,
+	vk::raii::CommandPool& commandPool,
+	vk::raii::Queue& queue,
+	const std::vector<IndexT>& indices,             // ★ 인자로 받기
+	vk::raii::Buffer& indexBuffer,
+	vk::raii::DeviceMemory& indexBufferMemory)
+{
+	vk::DeviceSize bufferSize = sizeof(IndexT) * indices.size();
+
+	vk::raii::Buffer stagingBuffer(nullptr);
+	vk::raii::DeviceMemory stagingMemory(nullptr);
+	createBuffer(device, physicalDevice, bufferSize,
+		vk::BufferUsageFlagBits::eTransferSrc,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+		stagingBuffer, stagingMemory);
+
+	void* data = stagingMemory.mapMemory(0, bufferSize);
+	std::memcpy(data, indices.data(), (size_t)bufferSize);
+	stagingMemory.unmapMemory();
+
+	createBuffer(device, physicalDevice, bufferSize,
+		vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer,
+		vk::MemoryPropertyFlagBits::eDeviceLocal,
+		indexBuffer, indexBufferMemory);
+
+	copyBuffer(device, commandPool, stagingBuffer, indexBuffer, bufferSize, queue);
 }

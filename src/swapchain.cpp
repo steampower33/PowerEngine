@@ -25,8 +25,10 @@ Swapchain::Swapchain(
 	createTextureImageView();
 	createTextureSampler();
 
-	createVertexBuffer();
-	createIndexBuffer();
+	model = std::make_unique<Model>("models/viking_room.obj", device_, physicalDevice_, commandPool_, queue_);
+
+	//createVertexBuffer(device_, physicalDevice_, commandPool_, queue_, vertices, vertexBuffer_, vertexBufferMemory_);
+	//createIndexBuffer(device_, physicalDevice_, commandPool_, queue_, indices, indexBuffer_, indexBufferMemory_);
 
 	createPerFrames(descriptorSetLayout, descriptorPool);
 }
@@ -184,10 +186,16 @@ void Swapchain::recordCommandBuffer(uint32_t imageIndex, vk::raii::Queue& queue,
 	frames_[currentFrame_].cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline);
 	frames_[currentFrame_].cmd.setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapchainExtent_.width), static_cast<float>(swapchainExtent_.height), 0.0f, 1.0f));
 	frames_[currentFrame_].cmd.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchainExtent_));
-	frames_[currentFrame_].cmd.bindVertexBuffers(0, *vertexBuffer_, { 0 });
-	frames_[currentFrame_].cmd.bindIndexBuffer(indexBuffer_, 0, vk::IndexTypeValue<decltype(indices)::value_type>::value);
+	//frames_[currentFrame_].cmd.bindVertexBuffers(0, *vertexBuffer_, { 0 });
+	//frames_[currentFrame_].cmd.bindIndexBuffer(*indexBuffer_, 0, vk::IndexTypeValue<decltype(indices)::value_type>::value);
+	//frames_[currentFrame_].cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, *frames_[currentFrame_].descriptorSet, nullptr);
+	//frames_[currentFrame_].cmd.drawIndexed(indices.size(), 1, 0, 0, 0);
+
+	// model Render
+	frames_[currentFrame_].cmd.bindVertexBuffers(0, *model->vertexBuffer_, { 0 });
+	frames_[currentFrame_].cmd.bindIndexBuffer(*model->indexBuffer_, 0, vk::IndexType::eUint32);
 	frames_[currentFrame_].cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 0, *frames_[currentFrame_].descriptorSet, nullptr);
-	frames_[currentFrame_].cmd.drawIndexed(indices.size(), 1, 0, 0, 0);
+	frames_[currentFrame_].cmd.drawIndexed(model->indices_.size(), 1, 0, 0, 0);
 
 	// Imgui Render
 	ImDrawData* draw_data = ImGui::GetDrawData();
@@ -251,7 +259,19 @@ void Swapchain::updateUniformBuffer(uint32_t currentImage, Camera& camera) {
 
 	UniformBufferObject ubo{};
 	glm::vec3 pos = { 0.0f, 0.0f, 0.0f };      // 원하는 월드 위치
-	ubo.model = glm::translate(glm::mat4(1.0f), pos);
+	
+	// updateUniformBuffer(...)
+	glm::mat4 M = glm::mat4(1.0f);
+
+	// Z-up(OBJ) -> Y-up(엔진) 보정
+	M = glm::rotate(M, glm::radians(-90.0f), glm::vec3(1, 0, 0)); // 또는 +90.0f
+	M = glm::rotate(M, glm::radians(-90.0f), glm::vec3(0, 0, 1)); // 또는 +90.0f
+
+	M = glm::translate(M, glm::vec3(0, 0, 0));
+
+	ubo.model = M;
+
+	//ubo.model = glm::translate(glm::mat4(1.0f), pos);
 	ubo.view = camera.view();
 	ubo.proj = camera.proj(static_cast<float>(swapchainExtent_.width), static_cast<float>(swapchainExtent_.height));
 
@@ -428,41 +448,9 @@ void Swapchain::createDescriptorSets(vk::raii::DescriptorSetLayout& descriptorSe
 	}
 }
 
-void Swapchain::createVertexBuffer()
-{
-	vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
-	vk::raii::Buffer stagingBuffer({});
-	vk::raii::DeviceMemory stagingBufferMemory({});
-	createBuffer(device_, physicalDevice_, bufferSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBuffer, stagingBufferMemory);
-
-	void* dataStaging = stagingBufferMemory.mapMemory(0, bufferSize);
-	memcpy(dataStaging, vertices.data(), bufferSize);
-	stagingBufferMemory.unmapMemory();
-
-	createBuffer(device_, physicalDevice_, bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer, vk::MemoryPropertyFlagBits::eDeviceLocal, vertexBuffer_, vertexBufferMemory_);
-
-	copyBuffer(device_, commandPool_, stagingBuffer, vertexBuffer_, bufferSize, queue_);
-}
-
-void Swapchain::createIndexBuffer() {
-	vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
-
-	vk::raii::Buffer stagingBuffer({});
-	vk::raii::DeviceMemory stagingBufferMemory({});
-	createBuffer(device_, physicalDevice_, bufferSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBuffer, stagingBufferMemory);
-
-	void* data = stagingBufferMemory.mapMemory(0, bufferSize);
-	memcpy(data, indices.data(), (size_t)bufferSize);
-	stagingBufferMemory.unmapMemory();
-
-	createBuffer(device_, physicalDevice_, bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer, vk::MemoryPropertyFlagBits::eDeviceLocal, indexBuffer_, indexBufferMemory_);
-
-	copyBuffer(device_, commandPool_, stagingBuffer, indexBuffer_, bufferSize, queue_);
-}
-
 void Swapchain::createTextureImage() {
 	int texWidth, texHeight, texChannels;
-	stbi_uc* pixels = stbi_load("textures/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+	stbi_uc* pixels = stbi_load("models/viking_room.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 	vk::DeviceSize imageSize = texWidth * texHeight * 4;
 
 	if (!pixels) {

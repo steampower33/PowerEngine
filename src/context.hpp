@@ -30,7 +30,6 @@ public:
 	vk::raii::PipelineLayout		 pipelineLayout_ = nullptr;
 	vk::raii::Pipeline				 graphicsPipeline_ = nullptr;
 
-	//vk::raii::PipelineCache			 pipelineCache_ = VK_NULL_HANDLE;
 	vk::raii::DescriptorPool		 descriptorPool_ = nullptr;
 
 	bool framebufferResized_ = false;

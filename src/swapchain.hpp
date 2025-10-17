@@ -2,6 +2,7 @@
 
 #include "perImage.hpp"
 #include "perFrame.hpp"
+#include "model.hpp"
 
 struct Camera;
 
@@ -30,6 +31,8 @@ public:
 	vk::Extent2D                     swapchainExtent_;
 	unsigned int minImageCount_ = 0;
 	unsigned int imageCount_ = 0;
+
+	std::unique_ptr<Model> model;
 
 	void draw(bool& framebufferResized, vk::raii::Queue& queue, vk::raii::Pipeline& graphicsPipeline, vk::raii::PipelineLayout& pipelineLayout, Camera& camera);
 
@@ -99,6 +102,4 @@ private:
 	void updateUniformBuffer(uint32_t currentImage, Camera& camera);
 	vk::raii::ImageView createSwapchainImageView(vk::Image& image, vk::Format format, vk::raii::Device& device);
 
-	void createVertexBuffer();
-	void createIndexBuffer();
 };

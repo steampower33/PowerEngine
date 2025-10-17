@@ -34,6 +34,7 @@ set_source_files_properties(${IMGUI_SOURCES} PROPERTIES SKIP_PRECOMPILE_HEADERS 
 # Vulkan / GLFW 찾기
 find_package(Vulkan REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
+find_package(tinyobjloader CONFIG REQUIRED)
 
 # 실행 파일
 file(GLOB SRC CONFIGURE_DEPENDS
@@ -48,7 +49,12 @@ target_precompile_headers(PowerEngine PRIVATE
 
 # Additional Options
 if (MSVC)
-  target_compile_options(PowerEngine PRIVATE /bigobj)
+  target_compile_options(PowerEngine PRIVATE 
+    $<$<CONFIG:Debug>:/Od /RTC1>                         # Debug
+    $<$<CONFIG:Release>:/O2 /Ob2 /DNDEBUG>               # Release
+    $<$<CONFIG:RelWithDebInfo>:/O2 /Ob2 /DNDEBUG>        # RelWithDebInfo
+    $<$<CONFIG:MinSizeRel>:/O1 /DNDEBUG>                 # MinSizeRel
+  )
   add_custom_command(TARGET PowerEngine POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:PowerEngine>/textures"
   COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -58,6 +64,10 @@ if (MSVC)
   COMMAND ${CMAKE_COMMAND} -E copy_directory
           "${CMAKE_SOURCE_DIR}/shaders"
           "$<TARGET_FILE_DIR:PowerEngine>/shaders"
+          COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:PowerEngine>/models"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${CMAKE_SOURCE_DIR}/models"
+          "$<TARGET_FILE_DIR:PowerEngine>/models"
 )
 endif()
 
@@ -90,6 +100,7 @@ target_link_libraries(PowerEngine
     Vulkan::cppm      # ← 이걸 잊으면 import 해석 안 됨
     glfw
     imgui
+    tinyobjloader::tinyobjloader
 )
 
 function (add_slang_shader_target TARGET)
