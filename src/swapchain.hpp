@@ -44,7 +44,8 @@ private:
 	void createTextureSampler();
 
 	void copyBufferToImage(const vk::raii::Buffer& buffer, vk::raii::Image& image, uint32_t width, uint32_t height);
-	void transitionImageLayout(const vk::raii::Image& image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
+	void transitionImageLayout(const vk::raii::Image& image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
+		uint32_t mipLevels);
 	std::unique_ptr<vk::raii::CommandBuffer> beginSingleTimeCommands();
 	void endSingleTimeCommands(vk::raii::CommandBuffer& commandBuffer);
 
@@ -66,6 +67,7 @@ private:
 	vk::raii::Buffer indexBuffer_ = nullptr;
 	vk::raii::DeviceMemory indexBufferMemory_ = nullptr;
 
+	uint32_t mipLevels;
 	vk::raii::Image textureImage = nullptr;
 	vk::raii::DeviceMemory textureImageMemory = nullptr;
 	vk::raii::ImageView textureImageView = nullptr;
@@ -93,6 +95,7 @@ private:
 		vk::PipelineStageFlags2 src_stage_mask,
 		vk::PipelineStageFlags2 dst_stage_mask
 	);
+	void generateMipmaps(vk::raii::Image& image, vk::Format imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels);
 
 	uint32_t chooseSwapMinImageCount(vk::SurfaceCapabilitiesKHR const& surfaceCapabilities);
 	vk::SurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& availableFormats);

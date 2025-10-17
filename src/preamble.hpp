@@ -61,9 +61,9 @@ inline uint32_t findMemoryType(vk::raii::PhysicalDevice& physicalDevice, uint32_
 	throw std::runtime_error("failed to find suitable memory type!");
 }
 
-inline void createImage(vk::raii::Device& device, vk::raii::PhysicalDevice& physicalDevice, uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Image& image, vk::raii::DeviceMemory& imageMemory) {
+inline void createImage(vk::raii::Device& device, vk::raii::PhysicalDevice& physicalDevice, uint32_t width, uint32_t height, uint32_t mipLevels, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Image& image, vk::raii::DeviceMemory& imageMemory) {
 	vk::ImageCreateInfo imageInfo{ .imageType = vk::ImageType::e2D, .format = format,
-								  .extent = {width, height, 1}, .mipLevels = 1, .arrayLayers = 1,
+								  .extent = {width, height, 1}, .mipLevels = mipLevels, .arrayLayers = 1,
 								  .samples = vk::SampleCountFlagBits::e1, .tiling = tiling,
 								  .usage = usage, .sharingMode = vk::SharingMode::eExclusive };
 
@@ -76,12 +76,18 @@ inline void createImage(vk::raii::Device& device, vk::raii::PhysicalDevice& phys
 	image.bindMemory(imageMemory, 0);
 }
 
-inline vk::raii::ImageView createImageView(vk::raii::Device& device, vk::raii::Image& image, vk::Format format, vk::ImageAspectFlags aspectFlags) {
+inline vk::raii::ImageView createImageView(vk::raii::Device& device, vk::raii::Image& image, vk::Format format, vk::ImageAspectFlags aspectFlags, uint32_t mipLevels) {
 	vk::ImageViewCreateInfo viewInfo{
 		.image = image,
 		.viewType = vk::ImageViewType::e2D,
 		.format = format,
-		.subresourceRange = { aspectFlags, 0, 1, 0, 1 }
+		.subresourceRange = { 
+			.aspectMask = aspectFlags, 
+			.baseMipLevel = 0, 
+			.levelCount = mipLevels,
+			.baseArrayLayer = 0,
+			.layerCount = 1
+	}
 	};
 	return vk::raii::ImageView(device, viewInfo);
 }
