@@ -22,6 +22,7 @@ public:
 	vk::raii::DebugUtilsMessengerEXT debugMessenger_ = nullptr;
 	vk::raii::SurfaceKHR             surface_ = nullptr;
 	vk::raii::PhysicalDevice         physicalDevice_ = nullptr;
+	vk::SampleCountFlagBits msaaSamples_ = vk::SampleCountFlagBits::e1;
 	vk::raii::Device                 device_ = nullptr;
 	uint32_t                         queueIndex_ = ~0;
 	vk::raii::Queue                  queue_ = nullptr;
@@ -58,6 +59,7 @@ private:
 	static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type, const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void*);
 	void createSurface();
 	void pickPhysicalDevice();
+	vk::SampleCountFlagBits getMaxUsableSampleCount();
 	void createLogicalDevice();
 	void createCommandPool();
 

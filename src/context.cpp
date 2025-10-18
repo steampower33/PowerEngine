@@ -8,13 +8,16 @@ Context::Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height)
 	setupDebugMessenger();
 	createSurface();
 	pickPhysicalDevice();
+
+	msaaSamples_ = getMaxUsableSampleCount();
+
 	createLogicalDevice();
 	createCommandPool();
 
 	createDescriptorSetLayout();
 	createDescriptorPool();
 
-	swapchain_ = std::make_unique<Swapchain>(glfwWindow_, device_, physicalDevice_, surface_, queueIndex_, commandPool_, descriptorSetLayout_, descriptorPool_, queue_);
+	swapchain_ = std::make_unique<Swapchain>(glfwWindow_, device_, physicalDevice_, surface_, queueIndex_, commandPool_, descriptorSetLayout_, descriptorPool_, queue_, msaaSamples_);
 
 	setupImgui(width, height);
 	createGraphicsPipeline();
@@ -22,7 +25,6 @@ Context::Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height)
 
 Context::~Context()
 {
-
 	ImGui_ImplVulkan_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
@@ -184,6 +186,20 @@ void Context::pickPhysicalDevice() {
 	}
 }
 
+vk::SampleCountFlagBits Context::getMaxUsableSampleCount() {
+	vk::PhysicalDeviceProperties physicalDeviceProperties = physicalDevice_.getProperties();
+
+	vk::SampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts & physicalDeviceProperties.limits.framebufferDepthSampleCounts;
+	if (counts & vk::SampleCountFlagBits::e64) { return vk::SampleCountFlagBits::e64; }
+	if (counts & vk::SampleCountFlagBits::e32) { return vk::SampleCountFlagBits::e32; }
+	if (counts & vk::SampleCountFlagBits::e16) { return vk::SampleCountFlagBits::e16; }
+	if (counts & vk::SampleCountFlagBits::e8) { return vk::SampleCountFlagBits::e8; }
+	if (counts & vk::SampleCountFlagBits::e4) { return vk::SampleCountFlagBits::e4; }
+	if (counts & vk::SampleCountFlagBits::e2) { return vk::SampleCountFlagBits::e2; }
+
+	return vk::SampleCountFlagBits::e1;
+}
+
 void Context::createLogicalDevice() {
 	std::vector<vk::QueueFamilyProperties> queueFamilyProperties = physicalDevice_.getQueueFamilyProperties();
 
@@ -262,7 +278,7 @@ void Context::createGraphicsPipeline() {
 	};
 	rasterizer.lineWidth = 1.0f;
 	vk::PipelineMultisampleStateCreateInfo multisampling{
-		.rasterizationSamples = vk::SampleCountFlagBits::e1,
+		.rasterizationSamples = msaaSamples_,
 		.sampleShadingEnable = vk::False
 	};
 	vk::PipelineDepthStencilStateCreateInfo depthStencil{
@@ -421,7 +437,7 @@ void Context::setupImgui(uint32_t width, uint32_t height)
 		.PipelineInfoMain = {
 			.RenderPass = NULL,
 			.Subpass = 0,
-			.MSAASamples = VK_SAMPLE_COUNT_1_BIT,
+			.MSAASamples = static_cast<VkSampleCountFlagBits>(msaaSamples_),
 			.PipelineRenderingCreateInfo = {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR,
 				.pNext = NULL,
