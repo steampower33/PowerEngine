@@ -45,7 +45,7 @@ void Context::drawImgui()
 
 	{
 		ImGui::Begin("Main");
-		
+
 		ImGuiIO& io = ImGui::GetIO(); (void)io;
 		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 		ImGui::End();
@@ -221,9 +221,14 @@ void Context::createLogicalDevice() {
 
 	// query for Vulkan 1.3 features
 	vk::StructureChain<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan13Features, vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT> featureChain = {
-		{.features = {.samplerAnisotropy = true } },            // vk::PhysicalDeviceFeatures2
-		{.synchronization2 = true, .dynamicRendering = true },  // vk::PhysicalDeviceVulkan13Features
-		{.extendedDynamicState = true }                         // vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT
+		{
+			.features = {
+				.sampleRateShading = vk::True,
+				.samplerAnisotropy = vk::True
+			} 
+		},            // vk::PhysicalDeviceFeatures2
+		{.synchronization2 = vk::True, .dynamicRendering = vk::True },  // vk::PhysicalDeviceVulkan13Features
+		{.extendedDynamicState = vk::True }                         // vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT
 	};
 
 	// create a Device
@@ -279,7 +284,8 @@ void Context::createGraphicsPipeline() {
 	rasterizer.lineWidth = 1.0f;
 	vk::PipelineMultisampleStateCreateInfo multisampling{
 		.rasterizationSamples = msaaSamples_,
-		.sampleShadingEnable = vk::False
+		.sampleShadingEnable = vk::True, // enable sample shading in the pipeline
+		.minSampleShading = .2f // min fraction for sample shading; closer to one is smoother
 	};
 	vk::PipelineDepthStencilStateCreateInfo depthStencil{
 		.depthTestEnable = vk::True,
