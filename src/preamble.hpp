@@ -13,6 +13,7 @@
 #include <cassert>
 #include <chrono>
 #include <unordered_map>
+#include <random>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
@@ -32,6 +33,7 @@
 #include <glm/gtx/hash.hpp>
 
 constexpr int      MAX_FRAMES_IN_FLIGHT = 2;
+constexpr uint32_t PARTICLE_COUNT = 1000000;
 
 inline const std::vector<const char*> validationLayers = {
     "VK_LAYER_KHRONOS_validation"
@@ -48,6 +50,27 @@ constexpr bool enableValidationLayers = true;
 #include "imgui.h"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_vulkan.h"
+
+#include "particle.hpp"
+
+#include "ubos.hpp"
+
+struct Pipelines {
+
+	vk::raii::PipelineLayout		 modelPipelineLayout_ = nullptr;
+	vk::raii::Pipeline				 modelPipeline_ = nullptr;
+
+	vk::raii::PipelineLayout		 particleComputePipelineLayout_ = nullptr;
+	vk::raii::Pipeline				 particleComputePipeline_ = nullptr;
+
+	vk::raii::PipelineLayout		 particleGraphicsPipelineLayout_ = nullptr;
+	vk::raii::Pipeline				 particleGraphicsPipeline_ = nullptr;
+};
+
+struct DescriptorSetLayouts {
+	vk::raii::DescriptorSetLayout	 modelDescriptorSetLayout_ = nullptr;
+	vk::raii::DescriptorSetLayout	 particleComputeDescriptorSetLayout_ = nullptr;
+};
 
 inline uint32_t findMemoryType(vk::raii::PhysicalDevice& physicalDevice, uint32_t typeFilter, vk::MemoryPropertyFlags properties) {
 	vk::PhysicalDeviceMemoryProperties memProperties = physicalDevice.getMemoryProperties();

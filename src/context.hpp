@@ -15,23 +15,27 @@ public:
 	Context& operator=(const Context& rhs) = delete;
 	Context& operator=(Context&& rhs) = delete;
 
-	void draw(Camera& camera);
+	void draw(Camera& camera, float dt);
 
 	vk::raii::Context                context_;
 	vk::raii::Instance               instance_ = nullptr;
 	vk::raii::DebugUtilsMessengerEXT debugMessenger_ = nullptr;
 	vk::raii::SurfaceKHR             surface_ = nullptr;
 	vk::raii::PhysicalDevice         physicalDevice_ = nullptr;
-	vk::SampleCountFlagBits msaaSamples_ = vk::SampleCountFlagBits::e1;
+	vk::SampleCountFlagBits			 msaaSamples_ = vk::SampleCountFlagBits::e1;
 	vk::raii::Device                 device_ = nullptr;
 	uint32_t                         queueIndex_ = ~0;
 	vk::raii::Queue                  queue_ = nullptr;
 	vk::raii::CommandPool			 commandPool_ = nullptr;
-	vk::raii::DescriptorSetLayout	 descriptorSetLayout_ = nullptr;
-	vk::raii::PipelineLayout		 pipelineLayout_ = nullptr;
-	vk::raii::Pipeline				 graphicsPipeline_ = nullptr;
-
 	vk::raii::DescriptorPool		 descriptorPool_ = nullptr;
+
+	uint32_t					 	 uboCount_ = 0;
+	uint32_t					 	 sbCount_ = 0;
+	uint32_t						 samplerCount_ = 0;
+	uint32_t						 layoutCount_ = 0;
+
+	DescriptorSetLayouts			 descriptorSetLayouts_;
+	Pipelines						 pipelines_;
 
 	bool framebufferResized_ = false;
 
@@ -61,12 +65,17 @@ private:
 	void pickPhysicalDevice();
 	vk::SampleCountFlagBits getMaxUsableSampleCount();
 	void createLogicalDevice();
-	void createCommandPool();
 
-	void createDescriptorSetLayout();
-	void createGraphicsPipeline();
-
+	void createModelDescriptorSetLayout();
+	void createParticleDescriptorSetLayout();
 	void createDescriptorPool();
+	
+	void createModelPipeline();
+
+	void createParticleComputePipeline();
+	void createParticleGraphicsPipeline();
+
+	void createCommandPool();
 
 	static std::vector<char> readFile(const std::string& filename);
 };

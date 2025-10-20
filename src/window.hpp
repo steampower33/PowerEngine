@@ -20,19 +20,21 @@ private:
     // GLFW가 요구하는 정확한 시그니처(반환형 void, 첫 인자 GLFWwindow*)
     static void CursorPosCallback(GLFWwindow* w, double x, double y);
     static void FramebufferResizeCallback(GLFWwindow* w, int width, int height);
+    static void KeyCallback(GLFWwindow* w, int key, int scancode, int action, int mods);
 
-    // 실제 인스턴스 로직 (this 사용 가능)
-    void OnCursorPos(double x, double y);
     void OnFramebufferResize(int width, int height);
-
+    void OnCursorPos(double x, double y);
+    void OnKey(int key, int scancode, int action, int mods);
 
 private:
     GLFWwindow* glfwWindow_{};
     std::unique_ptr<Context> ctx_;
     Camera camera_;
 
-    uint32_t width_ = 1400;
-    uint32_t height_ = 900;
+    bool mouseEnabled_ = false;
+
+    uint32_t initWidth_ = 1400;
+    uint32_t initHeight_ = 900;
 
     bool framebufferResized_ = false;
 

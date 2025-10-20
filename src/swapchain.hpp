@@ -6,6 +6,7 @@
 
 struct Camera;
 
+
 class Swapchain
 {
 public:
@@ -13,27 +14,26 @@ public:
 		GLFWwindow* glfwWindow,
 		vk::raii::Device& device,
 		vk::raii::PhysicalDevice& physicalDevice,
+		vk::SampleCountFlagBits msaaSamples,
 		vk::raii::SurfaceKHR& surface,
-		uint32_t queueFamilyIndex,
-		vk::raii::CommandPool& commandPool,
-		vk::raii::DescriptorSetLayout& descriptorSetLayout,
-		vk::raii::DescriptorPool& descriptorPool,
 		vk::raii::Queue& queue,
-		vk::SampleCountFlagBits msaaSamples_);
+		vk::raii::DescriptorPool& descriptorPool,
+		vk::raii::CommandPool& commandPool,
+		DescriptorSetLayouts& descriptorSetLayouts
+	);
 	Swapchain(const Swapchain& rhs) = delete;
 	Swapchain(Swapchain&& rhs) = delete;
-	~Swapchain();
-
 	Swapchain& operator=(const Swapchain& rhs) = delete;
 	Swapchain& operator=(Swapchain&& rhs) = delete;
+	~Swapchain();
 
 	vk::raii::SwapchainKHR           swapchain_ = nullptr;
 	vk::SurfaceFormatKHR             swapchainSurfaceFormat_;
 	vk::Extent2D                     swapchainExtent_;
-	unsigned int minImageCount_ = 0;
-	unsigned int imageCount_ = 0;
+	unsigned int					 minImageCount_ = 0;
+	unsigned int					 imageCount_ = 0;
 
-	void draw(bool& framebufferResized, vk::raii::Queue& queue, vk::raii::Pipeline& graphicsPipeline, vk::raii::PipelineLayout& pipelineLayout, Camera& camera);
+	void draw(bool& framebufferResized, Camera& camera, Pipelines& pipelines, float dt);
 
 private:
 	void createSwapchain(vk::raii::PhysicalDevice& physicalDevice, vk::raii::SurfaceKHR& surface);
@@ -52,12 +52,15 @@ private:
 	void createTextureImageView();
 	void createTextureSampler();
 
+	void createTimelineSemaphore();
 	void createPerFrames(
-		vk::raii::DescriptorSetLayout& descriptorSetLayout,
-		vk::raii::DescriptorPool& descriptorPool);
-	void createUniformBuffers();
-	void createDescriptorSets(vk::raii::DescriptorSetLayout& descriptorSetLayout, vk::raii::DescriptorPool& descriptorPool);
+		vk::raii::DescriptorPool& descriptorPool,
+		DescriptorSetLayouts& descriptorSetLayouts);
+	void createUBOs();
+	void createSSBOs();
 	void createCommandBuffers(vk::raii::CommandPool& commandPool);
+	void createDescriptorSets(vk::raii::DescriptorPool& descriptorPool,
+		DescriptorSetLayouts& descriptorSetLayouts);
 
 	void transitionImageLayout(const vk::raii::Image& image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
 		uint32_t mipLevels);
@@ -81,13 +84,15 @@ private:
 	void recreateSwapChain();
 
 private:
-	GLFWwindow* glfwWindow_;
-	vk::raii::Device& device_;
-	vk::raii::PhysicalDevice& physicalDevice_;
-	vk::raii::SurfaceKHR& surface_;
-	vk::raii::CommandPool& commandPool_;
-	vk::raii::Queue& queue_;
-	vk::SampleCountFlagBits msaaSamples_;
+	GLFWwindow*					glfwWindow_;
+	vk::raii::Device&			device_;
+	vk::raii::PhysicalDevice&	physicalDevice_;
+	vk::SampleCountFlagBits		msaaSamples_;
+	vk::raii::SurfaceKHR&		surface_;
+	vk::raii::Queue&			queue_;
+	vk::raii::CommandPool&		commandPool_;
+	vk::raii::Semaphore			semaphore_ = nullptr;
+	uint64_t					timelineValue_ = 0;
 
 	uint32_t currentFrame_ = 0;
 
@@ -110,7 +115,8 @@ private:
 
 	std::unique_ptr<Model> model;
 
-	void recordCommandBuffer(uint32_t imageIndex, vk::raii::Queue& queue, vk::raii::Pipeline& graphicsPipeline, vk::raii::PipelineLayout& pipelineLayout);
+	void recordComputeCommandBuffer(Pipelines& pipelines);
+	void recordGraphicsCommandBuffer(uint32_t imageIndex, Pipelines& pipelines);
 	void transition_image_layout(
 		uint32_t imageIndex,
 		vk::ImageLayout old_layout,
@@ -120,5 +126,5 @@ private:
 		vk::PipelineStageFlags2 src_stage_mask,
 		vk::PipelineStageFlags2 dst_stage_mask
 	);
-	void updateUniformBuffer(uint32_t currentImage, Camera& camera);
+	void updateUniformBuffer(uint32_t currentImage, Camera& camera, float dt);
 };

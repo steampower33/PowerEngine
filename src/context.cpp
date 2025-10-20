@@ -8,19 +8,21 @@ Context::Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height)
 	setupDebugMessenger();
 	createSurface();
 	pickPhysicalDevice();
-
 	msaaSamples_ = getMaxUsableSampleCount();
-
 	createLogicalDevice();
-	createCommandPool();
 
-	createDescriptorSetLayout();
+	createModelDescriptorSetLayout();
+	createParticleDescriptorSetLayout();
 	createDescriptorPool();
 
-	swapchain_ = std::make_unique<Swapchain>(glfwWindow_, device_, physicalDevice_, surface_, queueIndex_, commandPool_, descriptorSetLayout_, descriptorPool_, queue_, msaaSamples_);
+	createCommandPool();
+
+	swapchain_ = std::make_unique<Swapchain>(glfwWindow_, device_, physicalDevice_, msaaSamples_, surface_, queue_, descriptorPool_, commandPool_, descriptorSetLayouts_);
 
 	setupImgui(width, height);
-	createGraphicsPipeline();
+	createModelPipeline();
+	createParticleComputePipeline();
+	createParticleGraphicsPipeline();
 }
 
 Context::~Context()
@@ -30,11 +32,11 @@ Context::~Context()
 	ImGui::DestroyContext();
 }
 
-void Context::draw(Camera& camera)
+void Context::draw(Camera& camera, float dt)
 {
 	drawImgui();
 
-	swapchain_->draw(framebufferResized_, queue_, graphicsPipeline_, pipelineLayout_, camera);
+	swapchain_->draw(framebufferResized_, camera, pipelines_, dt);
 }
 
 void Context::drawImgui()
@@ -170,9 +172,14 @@ void Context::pickPhysicalDevice() {
 							{ return strcmp(availableDeviceExtension.extensionName, requiredDeviceExtension) == 0; });
 					});
 
-			auto features = device.template getFeatures2<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan13Features, vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>();
-			bool supportsRequiredFeatures = features.template get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering &&
-				features.template get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>().extendedDynamicState;
+			auto features = device.template getFeatures2<vk::PhysicalDeviceFeatures2,
+				vk::PhysicalDeviceVulkan13Features,
+				vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT,
+				vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>();
+			bool supportsRequiredFeatures = features.template get<vk::PhysicalDeviceFeatures2>().features.samplerAnisotropy &&
+				features.template get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering &&
+				features.template get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>().extendedDynamicState &&
+				features.template get<vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>().timelineSemaphore;
 
 			return supportsVulkan1_3 && supportsGraphics && supportsAllRequiredExtensions && supportsRequiredFeatures;
 		});
@@ -207,6 +214,7 @@ void Context::createLogicalDevice() {
 	for (uint32_t qfpIndex = 0; qfpIndex < queueFamilyProperties.size(); qfpIndex++)
 	{
 		if ((queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eGraphics) &&
+			(queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eCompute) &&
 			physicalDevice_.getSurfaceSupportKHR(qfpIndex, *surface_))
 		{
 			// found a queue family that supports both graphics and present
@@ -220,15 +228,27 @@ void Context::createLogicalDevice() {
 	}
 
 	// query for Vulkan 1.3 features
-	vk::StructureChain<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan13Features, vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT> featureChain = {
-		{
-			.features = {
-				.sampleRateShading = vk::True,
-				.samplerAnisotropy = vk::True
-			} 
-		},            // vk::PhysicalDeviceFeatures2
-		{.synchronization2 = vk::True, .dynamicRendering = vk::True },  // vk::PhysicalDeviceVulkan13Features
-		{.extendedDynamicState = vk::True }                         // vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT
+	vk::StructureChain<vk::PhysicalDeviceFeatures2,
+		vk::PhysicalDeviceVulkan13Features,
+		vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT,
+		vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>
+		featureChain = {
+			{
+				.features = {
+					.sampleRateShading = vk::True,
+					.samplerAnisotropy = vk::True
+				}
+			},
+			{
+				.synchronization2 = vk::True,
+				.dynamicRendering = vk::True
+			},
+			 {
+				.extendedDynamicState = vk::True
+			},
+			{
+				.timelineSemaphore = true
+			}
 	};
 
 	// create a Device
@@ -244,14 +264,82 @@ void Context::createLogicalDevice() {
 	queue_ = vk::raii::Queue(device_, queueIndex_, 0);
 }
 
+void Context::createModelDescriptorSetLayout() {
+	std::array bindings = {
+		vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr),
+		vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr)
+	};
+	uboCount_ += 1;
+	samplerCount_ += 1;
+	layoutCount_ += 2;
+
+	vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(bindings.size()), .pBindings = bindings.data() };
+	descriptorSetLayouts_.modelDescriptorSetLayout_ = vk::raii::DescriptorSetLayout(device_, layoutInfo);
+}
+
+void Context::createParticleDescriptorSetLayout() {
+	std::array layoutBindings{
+		vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eCompute, nullptr),
+		vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute, nullptr),
+		vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute, nullptr)
+	};
+	uboCount_ += 1;
+	sbCount_ += 2;
+	layoutCount_ += 2;
+
+	vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
+	descriptorSetLayouts_.particleComputeDescriptorSetLayout_ = vk::raii::DescriptorSetLayout(device_, layoutInfo);
+}
+
+void Context::createDescriptorPool() {
+
+	std::array poolSize{
+		vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, MAX_FRAMES_IN_FLIGHT * uboCount_),
+		vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, MAX_FRAMES_IN_FLIGHT * samplerCount_),
+		vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, MAX_FRAMES_IN_FLIGHT * sbCount_)
+	};
+
+	vk::DescriptorPoolCreateInfo poolInfo{
+		.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+		.maxSets = layoutCount_,
+		.poolSizeCount = static_cast<uint32_t>(poolSize.size()),
+		.pPoolSizes = poolSize.data()
+	};
+
+	descriptorPool_ = vk::raii::DescriptorPool(device_, poolInfo);
+
+	// ImGUI DescriptorPool
+	std::array<vk::DescriptorPoolSize, 11> imguiPoolSizes{
+		vk::DescriptorPoolSize{vk::DescriptorType::eSampler, 1000},
+		vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, 1000},
+		vk::DescriptorPoolSize{vk::DescriptorType::eSampledImage, 1000},
+		vk::DescriptorPoolSize{vk::DescriptorType::eStorageImage, 1000},
+		vk::DescriptorPoolSize{vk::DescriptorType::eUniformTexelBuffer, 1000},
+		vk::DescriptorPoolSize{vk::DescriptorType::eStorageTexelBuffer, 1000},
+		vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, 1000},
+		vk::DescriptorPoolSize{vk::DescriptorType::eStorageBuffer, 1000},
+		vk::DescriptorPoolSize{vk::DescriptorType::eUniformBufferDynamic, 1000},
+		vk::DescriptorPoolSize{vk::DescriptorType::eStorageBufferDynamic, 1000},
+		vk::DescriptorPoolSize{vk::DescriptorType::eInputAttachment, 1000},
+	};
+
+	vk::DescriptorPoolCreateInfo imguiPoolInfo{
+		.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+		.maxSets = 1000,
+		.poolSizeCount = static_cast<uint32_t>(imguiPoolSizes.size()),
+		.pPoolSizes = imguiPoolSizes.data()
+	};
+	imguiPool_ = vk::raii::DescriptorPool(device_, imguiPoolInfo);
+}
+
 void Context::createCommandPool() {
 	vk::CommandPoolCreateInfo poolInfo{ .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
 										 .queueFamilyIndex = queueIndex_ };
 	commandPool_ = vk::raii::CommandPool(device_, poolInfo);
 }
 
-void Context::createGraphicsPipeline() {
-	vk::raii::ShaderModule shaderModule = createShaderModule(readFile("shaders/slang.spv"));
+void Context::createModelPipeline() {
+	vk::raii::ShaderModule shaderModule = createShaderModule(readFile("shaders/model.spv"));
 
 	vk::PipelineShaderStageCreateInfo vertShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eVertex, .module = shaderModule,  .pName = "vertMain" };
 	vk::PipelineShaderStageCreateInfo fragShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eFragment, .module = shaderModule, .pName = "fragMain" };
@@ -311,9 +399,9 @@ void Context::createGraphicsPipeline() {
 	};
 	vk::PipelineDynamicStateCreateInfo dynamicState{ .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()), .pDynamicStates = dynamicStates.data() };
 
-	vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = 1, .pSetLayouts = &*descriptorSetLayout_, .pushConstantRangeCount = 0 };
+	vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = 1, .pSetLayouts = &*descriptorSetLayouts_.modelDescriptorSetLayout_, .pushConstantRangeCount = 0 };
 
-	pipelineLayout_ = vk::raii::PipelineLayout(device_, pipelineLayoutInfo);
+	pipelines_.modelPipelineLayout_ = vk::raii::PipelineLayout(device_, pipelineLayoutInfo);
 
 	vk::Format depthFormat = findDepthFormat(physicalDevice_);
 	vk::PipelineRenderingCreateInfo pipelineRenderingCreateInfo{
@@ -332,10 +420,86 @@ void Context::createGraphicsPipeline() {
 		.pDepthStencilState = &depthStencil,
 		.pColorBlendState = &colorBlending,
 		.pDynamicState = &dynamicState,
-		.layout = pipelineLayout_,
+		.layout = pipelines_.modelPipelineLayout_,
 		.renderPass = nullptr
 	};
-	graphicsPipeline_ = vk::raii::Pipeline(device_, nullptr, pipelineInfo);
+	pipelines_.modelPipeline_ = vk::raii::Pipeline(device_, nullptr, pipelineInfo);
+}
+
+void Context::createParticleComputePipeline()
+{
+	vk::raii::ShaderModule shaderModule = createShaderModule(readFile("shaders/particle.spv"));
+
+	vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "compMain" };
+	vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = 1, .pSetLayouts = &*descriptorSetLayouts_.particleComputeDescriptorSetLayout_ };
+	pipelines_.particleComputePipelineLayout_ = vk::raii::PipelineLayout(device_, pipelineLayoutInfo);
+	vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipelines_.particleComputePipelineLayout_ };
+	pipelines_.particleComputePipeline_ = vk::raii::Pipeline(device_, nullptr, pipelineInfo);
+}
+
+void Context::createParticleGraphicsPipeline()
+{
+	vk::raii::ShaderModule shaderModule = createShaderModule(readFile("shaders/particle.spv"));
+
+	vk::PipelineShaderStageCreateInfo vertShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eVertex, .module = shaderModule, .pName = "vertMain" };
+	vk::PipelineShaderStageCreateInfo fragShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eFragment, .module = shaderModule, .pName = "fragMain" };
+	vk::PipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+
+	auto bindingDescription = Particle::getBindingDescription();
+	auto attributeDescriptions = Particle::getAttributeDescriptions();
+
+	vk::PipelineVertexInputStateCreateInfo vertexInputInfo{ .vertexBindingDescriptionCount = 1, .pVertexBindingDescriptions = &bindingDescription, .vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size()), .pVertexAttributeDescriptions = attributeDescriptions.data() };
+	vk::PipelineInputAssemblyStateCreateInfo inputAssembly{ .topology = vk::PrimitiveTopology::ePointList, .primitiveRestartEnable = vk::False };
+	vk::PipelineViewportStateCreateInfo viewportState{ .viewportCount = 1, .scissorCount = 1 };
+	vk::PipelineRasterizationStateCreateInfo rasterizer{
+		.depthClampEnable = vk::False,
+		.rasterizerDiscardEnable = vk::False,
+		.polygonMode = vk::PolygonMode::eFill,
+		.cullMode = vk::CullModeFlagBits::eBack,
+		.frontFace = vk::FrontFace::eCounterClockwise,
+		.depthBiasEnable = vk::False,
+		.lineWidth = 1.0f
+	};
+	vk::PipelineMultisampleStateCreateInfo multisampling{ .rasterizationSamples = vk::SampleCountFlagBits::e1, .sampleShadingEnable = vk::False };
+
+	vk::PipelineColorBlendAttachmentState colorBlendAttachment{
+		.blendEnable = vk::True,
+		.srcColorBlendFactor = vk::BlendFactor::eSrcAlpha,
+		.dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
+		.colorBlendOp = vk::BlendOp::eAdd,
+		.srcAlphaBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
+		.dstAlphaBlendFactor = vk::BlendFactor::eZero,
+		.alphaBlendOp = vk::BlendOp::eAdd,
+		.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
+	};
+
+	vk::PipelineColorBlendStateCreateInfo colorBlending{ .logicOpEnable = vk::False, .logicOp = vk::LogicOp::eCopy, .attachmentCount = 1, .pAttachments = &colorBlendAttachment };
+
+	std::vector dynamicStates = {
+		vk::DynamicState::eViewport,
+		vk::DynamicState::eScissor
+	};
+	vk::PipelineDynamicStateCreateInfo dynamicState{ .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()), .pDynamicStates = dynamicStates.data() };
+
+	vk::PipelineLayoutCreateInfo pipelineLayoutInfo;
+	pipelines_.particleGraphicsPipelineLayout_ = vk::raii::PipelineLayout(device_, pipelineLayoutInfo);
+
+	vk::PipelineRenderingCreateInfo pipelineRenderingCreateInfo{ .colorAttachmentCount = 1, .pColorAttachmentFormats = &swapchain_->swapchainSurfaceFormat_.format };
+	vk::GraphicsPipelineCreateInfo pipelineInfo{ .pNext = &pipelineRenderingCreateInfo,
+		.stageCount = 2,
+		.pStages = shaderStages,
+		.pVertexInputState = &vertexInputInfo,
+		.pInputAssemblyState = &inputAssembly,
+		.pViewportState = &viewportState,
+		.pRasterizationState = &rasterizer,
+		.pMultisampleState = &multisampling,
+		.pColorBlendState = &colorBlending,
+		.pDynamicState = &dynamicState,
+		.layout = *pipelines_.particleGraphicsPipelineLayout_,
+		.subpass = 0
+	};
+
+	pipelines_.particleGraphicsPipeline_ = vk::raii::Pipeline(device_, nullptr, pipelineInfo);
 }
 
 [[nodiscard]] vk::raii::ShaderModule Context::createShaderModule(const std::vector<char>& code) const {
@@ -355,56 +519,6 @@ std::vector<char> Context::readFile(const std::string& filename) {
 	file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
 	file.close();
 	return buffer;
-}
-
-void Context::createDescriptorSetLayout() {
-	std::array bindings = {
-		vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr),
-		vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr)
-	};
-
-	vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(bindings.size()), .pBindings = bindings.data() };
-	descriptorSetLayout_ = vk::raii::DescriptorSetLayout(device_, layoutInfo);
-}
-
-void Context::createDescriptorPool() {
-
-	std::array poolSize{
-		vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, MAX_FRAMES_IN_FLIGHT),
-		vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, MAX_FRAMES_IN_FLIGHT)
-	};
-
-	vk::DescriptorPoolCreateInfo poolInfo{
-		.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-		.maxSets = MAX_FRAMES_IN_FLIGHT,
-		.poolSizeCount = static_cast<uint32_t>(poolSize.size()),
-		.pPoolSizes = poolSize.data()
-	};
-
-	descriptorPool_ = vk::raii::DescriptorPool(device_, poolInfo);
-
-	// ImGUI DescriptorPool
-	std::array<vk::DescriptorPoolSize, 11> imguiPoolSizes{
-		vk::DescriptorPoolSize{vk::DescriptorType::eSampler, 1000},
-		vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, 1000},
-		vk::DescriptorPoolSize{vk::DescriptorType::eSampledImage, 1000},
-		vk::DescriptorPoolSize{vk::DescriptorType::eStorageImage, 1000},
-		vk::DescriptorPoolSize{vk::DescriptorType::eUniformTexelBuffer, 1000},
-		vk::DescriptorPoolSize{vk::DescriptorType::eStorageTexelBuffer, 1000},
-		vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, 1000},
-		vk::DescriptorPoolSize{vk::DescriptorType::eStorageBuffer, 1000},
-		vk::DescriptorPoolSize{vk::DescriptorType::eUniformBufferDynamic, 1000},
-		vk::DescriptorPoolSize{vk::DescriptorType::eStorageBufferDynamic, 1000},
-		vk::DescriptorPoolSize{vk::DescriptorType::eInputAttachment, 1000},
-	};
-
-	vk::DescriptorPoolCreateInfo imguiPoolInfo{
-		.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-		.maxSets = 1000,
-		.poolSizeCount = static_cast<uint32_t>(imguiPoolSizes.size()),
-		.pPoolSizes = imguiPoolSizes.data()
-	};
-	imguiPool_ = vk::raii::DescriptorPool(device_, imguiPoolInfo);
 }
 
 void Context::setupImgui(uint32_t width, uint32_t height)
@@ -443,7 +557,7 @@ void Context::setupImgui(uint32_t width, uint32_t height)
 		.PipelineInfoMain = {
 			.RenderPass = NULL,
 			.Subpass = 0,
-			.MSAASamples = static_cast<VkSampleCountFlagBits>(msaaSamples_),
+			.MSAASamples = static_cast<VkSampleCountFlagBits>(vk::SampleCountFlagBits::e1),
 			.PipelineRenderingCreateInfo = {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR,
 				.pNext = NULL,

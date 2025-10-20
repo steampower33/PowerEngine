@@ -103,28 +103,74 @@ target_link_libraries(PowerEngine
     tinyobjloader::tinyobjloader
 )
 
-function (add_slang_shader_target TARGET)
-  cmake_parse_arguments ("SHADER" "" "" "SOURCES" ${ARGN})
-  set (SHADERS_DIR ${CMAKE_CURRENT_LIST_DIR}/shaders)
-  set (ENTRY_POINTS -entry vertMain -entry fragMain)
-  add_custom_command (
-          OUTPUT ${SHADERS_DIR}
-          COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_DIR}
-  )
-  add_custom_command (
-          OUTPUT  ${SHADERS_DIR}/slang.spv
-          COMMAND ${SLANGC_EXECUTABLE} ${SHADER_SOURCES} -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name ${ENTRY_POINTS} -o slang.spv
-          WORKING_DIRECTORY ${SHADERS_DIR}
-          DEPENDS ${SHADERS_DIR} ${SHADER_SOURCES}
-          COMMENT "Compiling Slang Shaders"
-          VERBATIM
-  )
-  add_custom_target (${TARGET} DEPENDS ${SHADERS_DIR}/slang.spv)
+function(compile_slang_shaders TARGET)
+  # 함수에 전달된 키워드 인자들을 파싱합니다.
+  # SOURCES와 ENTRY_POINTS는 여러 개의 값을 가질 수 있는 리스트입니다.
+  cmake_parse_arguments(ARG "" "" "SOURCES;ENTRY_POINTS" ${ARGN})
+
+  # --- 설정 ---
+  set(SHADERS_OUTPUT_DIR ${CMAKE_BINARY_DIR}/shaders)
+  file(MAKE_DIRECTORY ${SHADERS_OUTPUT_DIR})
+
+  # --- Slangc에 전달할 -entry 플래그 목록 생성 ---
+  set(SLANG_ENTRY_FLAGS "")
+  # 사용자가 넘겨준 ENTRY_POINTS 목록을 순회합니다.
+  foreach(ENTRY_POINT IN LISTS ARG_ENTRY_POINTS)
+    # 각 엔트리 포인트 이름 앞에 "-entry"를 붙여서 리스트에 추가합니다.
+    # 예: "vertMain" -> "-entry" "vertMain"
+    list(APPEND SLANG_ENTRY_FLAGS "-entry" ${ENTRY_POINT})
+  endforeach()
+
+  # 생성된 모든 .spv 파일의 경로를 저장할 리스트입니다.
+  set(SPIRV_OUTPUTS "")
+
+  # 모든 셰이더 소스 파일을 순회하는 루프
+  foreach(SLANG_SOURCE IN LISTS ARG_SOURCES)
+    get_filename_component(BASENAME ${SLANG_SOURCE} NAME_WE)
+    set(SPIRV_OUTPUT ${SHADERS_OUTPUT_DIR}/${BASENAME}.spv)
+
+    add_custom_command(
+            OUTPUT ${SPIRV_OUTPUT}
+            COMMAND ${SLANGC_EXECUTABLE}
+                    ${SLANG_SOURCE}
+                    -target spirv
+                    -profile spirv_1_4
+                    -emit-spirv-directly
+                    -fvk-use-entrypoint-name
+                    ${SLANG_ENTRY_FLAGS}   #<-- 여기서 동적으로 생성된 플래그 목록을 사용합니다.
+                    -o ${SPIRV_OUTPUT}
+            DEPENDS ${SLANG_SOURCE}
+            COMMENT "Compiling [${ARG_ENTRY_POINTS}] -> ${BASENAME}.spv"
+            VERBATIM
+    )
+    list(APPEND SPIRV_OUTPUTS ${SPIRV_OUTPUT})
+  endforeach()
+
+  # 모든 .spv 파일 생성에 의존하는 메타 타겟을 생성합니다.
+  add_custom_target(${TARGET} DEPENDS ${SPIRV_OUTPUTS})
 endfunction()
 
 set(SLANGC_EXECUTABLE "F:/VulkanSDK/1.4.321.1/Bin/slangc.exe")
-set(SHADER_SLANG_SOURCES
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/shader.slang
+
+set(GRAPHICS_SHADERS
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/model.slang
 )
-add_slang_shader_target( foo SOURCES ${SHADER_SLANG_SOURCES})
-add_dependencies(PowerEngine foo)
+
+compile_slang_shaders(graphics_shaders_target
+  SOURCES       ${GRAPHICS_SHADERS}
+  ENTRY_POINTS  vertMain fragMain
+)
+
+set(GRAPHICS_AND_COMPUTE_SHADERS
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/particle.slang
+)
+# 모든 엔트리 포인트를 지정합니다.
+compile_slang_shaders(particle_shader_target
+    SOURCES       ${GRAPHICS_AND_COMPUTE_SHADERS}
+    ENTRY_POINTS  vertMain fragMain compMain
+)
+
+add_dependencies(PowerEngine 
+    graphics_shaders_target
+    particle_shader_target
+)
