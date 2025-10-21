@@ -1,3 +1,4 @@
+#pragma once
 
 struct Camera {
 
@@ -12,12 +13,12 @@ struct Camera {
     float yaw = -90.0f;   // 오른쪽이 0°, -Z를 보고 시작하려면 -90°
     float pitch = 0.0f;
     float fov = 60.0f;    // 줌
-    float moveSpeed = 4.0f; // m/s
+    float move_speed = 4.0f; // m/s
     float sensitivity = 0.1f;
 
-    glm::vec3 front() const;
-    glm::vec3 right() const;
-    glm::vec3 up() const;
-    glm::mat4 view() const;
-    glm::mat4 proj(float width, float height) const;
+    glm::vec3 Front() const;
+    glm::vec3 Right() const;
+    glm::vec3 Up() const;
+    glm::mat4 View() const;
+    glm::mat4 Proj(float width, float height) const;
 };

@@ -1,7 +1,9 @@
-#include "model.hpp"
+#include "model.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
+
+#include "vulkan_utils.h"
 
 Model::Model(const std::string modelPath, vk::raii::Device& device, vk::raii::PhysicalDevice& physicalDevice, vk::raii::CommandPool& commandPool, vk::raii::Queue& queue)
 {
@@ -26,7 +28,7 @@ Model::Model(const std::string modelPath, vk::raii::Device& device, vk::raii::Ph
                 attrib.vertices[3 * index.vertex_index + 2]
             };
 
-            vertex.texCoord = {
+            vertex.texcoord = {
                 attrib.texcoords[2 * index.texcoord_index + 0],
                 attrib.texcoords[2 * index.texcoord_index + 1]
             };
@@ -42,8 +44,8 @@ Model::Model(const std::string modelPath, vk::raii::Device& device, vk::raii::Ph
         }
     }
 
-    createVertexBuffer(device, physicalDevice, commandPool, queue, vertices_, vertexBuffer_, vertexBufferMemory_);
-    createIndexBuffer(device, physicalDevice, commandPool, queue, indices_, indexBuffer_, indexBufferMemory_);
+    vku::CreateVertexBuffer(physicalDevice, device, queue, commandPool, vertices_, vertex_buffer_, vertex_buffer_memory_);
+    vku::CreateIndexBuffer(physicalDevice, device, queue, commandPool, indices_, index_buffer_, index_buffer_memory_);
 }
 
 Model::~Model()

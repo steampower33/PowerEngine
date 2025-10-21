@@ -1,3 +1,6 @@
+#pragma once
+
+#include "vertex.h"
 
 class Model
 {
@@ -12,9 +15,9 @@ public:
 
 	std::vector<Vertex> vertices_;
 	std::vector<uint32_t> indices_;
-	vk::raii::Buffer vertexBuffer_ = nullptr;
-	vk::raii::DeviceMemory vertexBufferMemory_ = nullptr;
-	vk::raii::Buffer indexBuffer_ = nullptr;
-	vk::raii::DeviceMemory indexBufferMemory_ = nullptr;
+	vk::raii::Buffer vertex_buffer_ = nullptr;
+	vk::raii::DeviceMemory vertex_buffer_memory_ = nullptr;
+	vk::raii::Buffer index_buffer_ = nullptr;
+	vk::raii::DeviceMemory index_buffer_memory_ = nullptr;
 
 };

@@ -1,7 +1,8 @@
 #pragma once
 
+#include "camera.h"
+
 class Context;
-#include "camera.hpp"
 
 class Window
 {
@@ -27,20 +28,20 @@ private:
     void OnKey(int key, int scancode, int action, int mods);
 
 private:
-    GLFWwindow* glfwWindow_{};
+    GLFWwindow* glfw_window_{};
     std::unique_ptr<Context> ctx_;
     Camera camera_;
 
-    bool mouseEnabled_ = false;
+    bool mouse_enabled_ = false;
 
-    uint32_t initWidth_ = 1400;
-    uint32_t initHeight_ = 900;
+    uint32_t init_width_ = 1400;
+    uint32_t init_height_ = 900;
 
-    bool framebufferResized_ = false;
+    bool framebuffer_resized_ = false;
 
     // 마우스 상태는 인스턴스 멤버로
-    bool   firstMouse_ = true;
-    double lastX_ = 0.0, lastY_ = 0.0;
+    bool   first_mouse_ = true;
+    double last_x_ = 0.0, last_y_ = 0.0;
 
-    void processKeyboard(float dt);
+    void ProcessKeyboard(float dt);
 };

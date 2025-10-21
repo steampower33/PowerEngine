@@ -1,28 +1,41 @@
-#include "context.hpp"
-#include "camera.hpp"
+#include "context.h"
+#include "camera.h"
+#include "vulkan_utils.h"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
 
 Context::Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height)
-	: glfwWindow_(glfwWindow)
+	: glfw_window_(glfwWindow)
 {
-	createInstance();
-	setupDebugMessenger();
-	createSurface();
-	pickPhysicalDevice();
-	msaaSamples_ = getMaxUsableSampleCount();
-	createLogicalDevice();
+	stbi_set_flip_vertically_on_load(true);
 
-	createModelDescriptorSetLayout();
-	createParticleDescriptorSetLayout();
-	createDescriptorPool();
+	CreateInstance();
+	SetupDebugMessenger();
+	CreateSurface();
+	PickPhysicalDevice();
+	msaa_samples_ = GetMaxUsableSampleCount();
+	CreateLogicalDevice();
 
-	createCommandPool();
+	swapchain_ = std::make_unique<Swapchain>(glfw_window_, device_, physical_device_, msaa_samples_, surface_);
+	CreateCommandPool();
+	CreateCommandBuffers();
 
-	swapchain_ = std::make_unique<Swapchain>(glfwWindow_, device_, physicalDevice_, msaaSamples_, surface_, queue_, descriptorPool_, commandPool_, descriptorSetLayouts_);
+	compute_pass_ = std::make_unique<ComputePass>(physical_device_, device_, queue_, command_pool_, counts_);
+	graphics_pass_ = std::make_unique<GraphicsPass>(physical_device_, device_, queue_, command_pool_, counts_, swapchain_->swapchain_surface_format_);
 
-	setupImgui(width, height);
-	createModelPipeline();
-	createParticleComputePipeline();
-	createParticleGraphicsPipeline();
+	CreateDescriptorPool();
+	
+	compute_pass_->CreateComputeDescriptorSets(device_, descriptor_pool_);
+
+	CreateSyncObjects();
+	
+	SetupImgui(swapchain_->swapchain_extent_.width, swapchain_->swapchain_extent_.height);
+}
+
+void Context::WaitIdle()
+{
+	device_.waitIdle();
 }
 
 Context::~Context()
@@ -32,14 +45,119 @@ Context::~Context()
 	ImGui::DestroyContext();
 }
 
-void Context::draw(Camera& camera, float dt)
+void Context::Draw(Camera& camera, float dt)
 {
-	drawImgui();
+	DrawImgui();
 
-	swapchain_->draw(framebufferResized_, camera, pipelines_, dt);
+	auto [result, imageIndex] = swapchain_->swapchain_.acquireNextImage(UINT64_MAX, nullptr, *in_flight_fences_[current_frame_]);
+	while (vk::Result::eTimeout == device_.waitForFences(*in_flight_fences_[current_frame_], vk::True, UINT64_MAX))
+		;
+	device_.resetFences(*in_flight_fences_[current_frame_]);
+
+	// Update timeline value for this frame
+	uint64_t computeWaitValue = timeline_value_;
+	uint64_t computeSignalValue = ++timeline_value_;
+	uint64_t graphicsWaitValue = computeSignalValue;
+	uint64_t graphicsSignalValue = ++timeline_value_;
+
+	{
+		compute_pass_->UpdateUniformBuffer(current_frame_, dt);
+	}
+
+	{
+		compute_pass_->RecordCommands(compute_command_buffers_[current_frame_], current_frame_);
+		// Submit compute work
+		vk::TimelineSemaphoreSubmitInfo computeTimelineInfo{
+			.waitSemaphoreValueCount = 1,
+			.pWaitSemaphoreValues = &computeWaitValue,
+			.signalSemaphoreValueCount = 1,
+			.pSignalSemaphoreValues = &computeSignalValue
+		};
+
+		vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eComputeShader };
+
+		vk::SubmitInfo computeSubmitInfo{
+			.pNext = &computeTimelineInfo,
+			.waitSemaphoreCount = 1,
+			.pWaitSemaphores = &*semaphore_,
+			.pWaitDstStageMask = waitStages,
+			.commandBufferCount = 1,
+			.pCommandBuffers = &*compute_command_buffers_[current_frame_],
+			.signalSemaphoreCount = 1,
+			.pSignalSemaphores = &*semaphore_
+		};
+
+		queue_.submit(computeSubmitInfo, nullptr);
+	}
+	{
+		// Record graphics command buffer
+		graphics_pass_->RecordCommands(command_buffers_[current_frame_], current_frame_, imageIndex, swapchain_->swapchain_images_[imageIndex], swapchain_->swapchain_image_views_[imageIndex], swapchain_->swapchain_extent_, compute_pass_->shader_storage_buffers_[current_frame_]);
+
+		// Submit graphics work (waits for compute to finish)
+		vk::PipelineStageFlags waitStage = vk::PipelineStageFlagBits::eVertexInput;
+		vk::TimelineSemaphoreSubmitInfo graphicsTimelineInfo{
+			.waitSemaphoreValueCount = 1,
+			.pWaitSemaphoreValues = &graphicsWaitValue,
+			.signalSemaphoreValueCount = 1,
+			.pSignalSemaphoreValues = &graphicsSignalValue
+		};
+
+		vk::SubmitInfo graphicsSubmitInfo{
+			.pNext = &graphicsTimelineInfo,
+			.waitSemaphoreCount = 1,
+			.pWaitSemaphores = &*semaphore_,
+			.pWaitDstStageMask = &waitStage,
+			.commandBufferCount = 1,
+			.pCommandBuffers = &*command_buffers_[current_frame_],
+			.signalSemaphoreCount = 1,
+			.pSignalSemaphores = &*semaphore_
+		};
+
+		queue_.submit(graphicsSubmitInfo, nullptr);
+
+		// Present the image (wait for graphics to finish)
+		vk::SemaphoreWaitInfo waitInfo{
+			.semaphoreCount = 1,
+			.pSemaphores = &*semaphore_,
+			.pValues = &graphicsSignalValue
+		};
+
+		// Wait for graphics to complete before presenting
+		while (vk::Result::eTimeout == device_.waitSemaphores(waitInfo, UINT64_MAX))
+			;
+
+		vk::PresentInfoKHR presentInfo{
+			.waitSemaphoreCount = 0, // No binary semaphores needed
+			.pWaitSemaphores = nullptr,
+			.swapchainCount = 1,
+			.pSwapchains = &*swapchain_->swapchain_,
+			.pImageIndices = &imageIndex
+		};
+
+		try {
+			result = queue_.presentKHR(presentInfo);
+			if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR || framebuffer_resized_) {
+				framebuffer_resized_ = false;
+				swapchain_->RecreateSwapChain(physical_device_, device_, surface_);
+			}
+			else if (result != vk::Result::eSuccess) {
+				throw std::runtime_error("failed to present swap chain image!");
+			}
+		}
+		catch (const vk::SystemError& e) {
+			if (e.code().value() == static_cast<int>(vk::Result::eErrorOutOfDateKHR)) {
+				swapchain_->RecreateSwapChain(physical_device_, device_, surface_);
+				return;
+			}
+			else {
+				throw;
+			}
+		}
+	}
+	current_frame_ = (current_frame_ + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-void Context::drawImgui()
+void Context::DrawImgui()
 {
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
@@ -56,7 +174,7 @@ void Context::drawImgui()
 	ImGui::Render();
 }
 
-void Context::createInstance() {
+void Context::CreateInstance() {
 	constexpr vk::ApplicationInfo appInfo{ .pApplicationName = "Power Engine",
 				.applicationVersion = VK_MAKE_VERSION(1, 0, 0),
 				.pEngineName = "Power Engine",
@@ -66,7 +184,7 @@ void Context::createInstance() {
 	// Get the required layers
 	std::vector<char const*> requiredLayers;
 	if (enableValidationLayers) {
-		requiredLayers.assign(validationLayers.begin(), validationLayers.end());
+		requiredLayers.assign(validation_layers.begin(), validation_layers.end());
 	}
 
 	// Check if the required layers are supported by the Vulkan implementation.
@@ -82,7 +200,7 @@ void Context::createInstance() {
 	}
 
 	// Get the required extensions.
-	auto requiredExtensions = getRequiredExtensions();
+	auto requiredExtensions = GetRequiredExtensions();
 
 	// Check if the required extensions are supported by the Vulkan implementation.
 	auto extensionProperties = context_.enumerateInstanceExtensionProperties();
@@ -105,7 +223,7 @@ void Context::createInstance() {
 	instance_ = vk::raii::Instance(context_, createInfo);
 }
 
-std::vector<const char*> Context::getRequiredExtensions() {
+std::vector<const char*> Context::GetRequiredExtensions() {
 	uint32_t glfwExtensionCount = 0;
 	auto glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
@@ -117,7 +235,7 @@ std::vector<const char*> Context::getRequiredExtensions() {
 	return extensions;
 }
 
-void Context::setupDebugMessenger() {
+void Context::SetupDebugMessenger() {
 	if (!enableValidationLayers) return;
 
 	vk::DebugUtilsMessageSeverityFlagsEXT severityFlags(vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
@@ -125,12 +243,12 @@ void Context::setupDebugMessenger() {
 	vk::DebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfoEXT{
 		.messageSeverity = severityFlags,
 		.messageType = messageTypeFlags,
-		.pfnUserCallback = &debugCallback
+		.pfnUserCallback = &DebugCallback
 	};
-	debugMessenger_ = instance_.createDebugUtilsMessengerEXT(debugUtilsMessengerCreateInfoEXT);
+	debug_messenger_ = instance_.createDebugUtilsMessengerEXT(debugUtilsMessengerCreateInfoEXT);
 }
 
-VKAPI_ATTR vk::Bool32 VKAPI_CALL Context::debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type, const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void*) {
+VKAPI_ATTR vk::Bool32 VKAPI_CALL Context::DebugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type, const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void*) {
 	if (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eError || severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning) {
 		std::cerr << "validation layer: type " << to_string(type) << " msg: " << pCallbackData->pMessage << std::endl;
 	}
@@ -138,16 +256,16 @@ VKAPI_ATTR vk::Bool32 VKAPI_CALL Context::debugCallback(vk::DebugUtilsMessageSev
 	return vk::False;
 }
 
-void Context::createSurface() {
+void Context::CreateSurface() {
 	VkSurfaceKHR       _surface;
-	if (glfwCreateWindowSurface(*instance_, glfwWindow_, nullptr, &_surface) != 0) {
+	if (glfwCreateWindowSurface(*instance_, glfw_window_, nullptr, &_surface) != 0) {
 		throw std::runtime_error("failed to create window surface!");
 	}
 	surface_ = vk::raii::SurfaceKHR(instance_, _surface);
 
 }
 
-void Context::pickPhysicalDevice() {
+void Context::PickPhysicalDevice() {
 	std::vector<vk::raii::PhysicalDevice> devices = instance_.enumeratePhysicalDevices();
 	const auto                            devIter = std::ranges::find_if(
 		devices,
@@ -164,7 +282,7 @@ void Context::pickPhysicalDevice() {
 			// Check if all required device extensions are available
 			auto availableDeviceExtensions = device.enumerateDeviceExtensionProperties();
 			bool supportsAllRequiredExtensions =
-				std::ranges::all_of(requiredDeviceExtension_,
+				std::ranges::all_of(required_device_extension_,
 					[&availableDeviceExtensions](auto const& requiredDeviceExtension)
 					{
 						return std::ranges::any_of(availableDeviceExtensions,
@@ -185,7 +303,7 @@ void Context::pickPhysicalDevice() {
 		});
 	if (devIter != devices.end())
 	{
-		physicalDevice_ = *devIter;
+		physical_device_ = *devIter;
 	}
 	else
 	{
@@ -193,8 +311,8 @@ void Context::pickPhysicalDevice() {
 	}
 }
 
-vk::SampleCountFlagBits Context::getMaxUsableSampleCount() {
-	vk::PhysicalDeviceProperties physicalDeviceProperties = physicalDevice_.getProperties();
+vk::SampleCountFlagBits Context::GetMaxUsableSampleCount() {
+	vk::PhysicalDeviceProperties physicalDeviceProperties = physical_device_.getProperties();
 
 	vk::SampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts & physicalDeviceProperties.limits.framebufferDepthSampleCounts;
 	if (counts & vk::SampleCountFlagBits::e64) { return vk::SampleCountFlagBits::e64; }
@@ -207,22 +325,22 @@ vk::SampleCountFlagBits Context::getMaxUsableSampleCount() {
 	return vk::SampleCountFlagBits::e1;
 }
 
-void Context::createLogicalDevice() {
-	std::vector<vk::QueueFamilyProperties> queueFamilyProperties = physicalDevice_.getQueueFamilyProperties();
+void Context::CreateLogicalDevice() {
+	std::vector<vk::QueueFamilyProperties> queueFamilyProperties = physical_device_.getQueueFamilyProperties();
 
 	// get the first index into queueFamilyProperties which supports both graphics and present
 	for (uint32_t qfpIndex = 0; qfpIndex < queueFamilyProperties.size(); qfpIndex++)
 	{
 		if ((queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eGraphics) &&
 			(queueFamilyProperties[qfpIndex].queueFlags & vk::QueueFlagBits::eCompute) &&
-			physicalDevice_.getSurfaceSupportKHR(qfpIndex, *surface_))
+			physical_device_.getSurfaceSupportKHR(qfpIndex, *surface_))
 		{
 			// found a queue family that supports both graphics and present
-			queueIndex_ = qfpIndex;
+			queue_index_ = qfpIndex;
 			break;
 		}
 	}
-	if (queueIndex_ == ~0)
+	if (queue_index_ == ~0)
 	{
 		throw std::runtime_error("Could not find a queue for graphics and present -> terminating");
 	}
@@ -253,60 +371,72 @@ void Context::createLogicalDevice() {
 
 	// create a Device
 	float                     queuePriority = 0.0f;
-	vk::DeviceQueueCreateInfo deviceQueueCreateInfo{ .queueFamilyIndex = queueIndex_, .queueCount = 1, .pQueuePriorities = &queuePriority };
+	vk::DeviceQueueCreateInfo deviceQueueCreateInfo{ .queueFamilyIndex = queue_index_, .queueCount = 1, .pQueuePriorities = &queuePriority };
 	vk::DeviceCreateInfo      deviceCreateInfo{ .pNext = &featureChain.get<vk::PhysicalDeviceFeatures2>(),
 												.queueCreateInfoCount = 1,
 												.pQueueCreateInfos = &deviceQueueCreateInfo,
-												.enabledExtensionCount = static_cast<uint32_t>(requiredDeviceExtension_.size()),
-												.ppEnabledExtensionNames = requiredDeviceExtension_.data() };
+												.enabledExtensionCount = static_cast<uint32_t>(required_device_extension_.size()),
+												.ppEnabledExtensionNames = required_device_extension_.data() };
 
-	device_ = vk::raii::Device(physicalDevice_, deviceCreateInfo);
-	queue_ = vk::raii::Queue(device_, queueIndex_, 0);
+	device_ = vk::raii::Device(physical_device_, deviceCreateInfo);
+	queue_ = vk::raii::Queue(device_, queue_index_, 0);
 }
 
-void Context::createModelDescriptorSetLayout() {
-	std::array bindings = {
-		vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr),
-		vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr)
-	};
-	uboCount_ += 1;
-	samplerCount_ += 1;
-	layoutCount_ += 2;
 
-	vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(bindings.size()), .pBindings = bindings.data() };
-	descriptorSetLayouts_.modelDescriptorSetLayout_ = vk::raii::DescriptorSetLayout(device_, layoutInfo);
+void Context::CreateCommandPool() {
+	vk::CommandPoolCreateInfo poolInfo{ .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+										 .queueFamilyIndex = queue_index_ };
+	command_pool_ = vk::raii::CommandPool(device_, poolInfo);
 }
 
-void Context::createParticleDescriptorSetLayout() {
-	std::array layoutBindings{
-		vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eCompute, nullptr),
-		vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute, nullptr),
-		vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute, nullptr)
-	};
-	uboCount_ += 1;
-	sbCount_ += 2;
-	layoutCount_ += 2;
 
-	vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
-	descriptorSetLayouts_.particleComputeDescriptorSetLayout_ = vk::raii::DescriptorSetLayout(device_, layoutInfo);
+void Context::CreateCommandBuffers()
+{
+	// graphics
+	{
+		command_buffers_.clear();
+		vk::CommandBufferAllocateInfo allocInfo{};
+		allocInfo.commandPool = *command_pool_;
+		allocInfo.level = vk::CommandBufferLevel::ePrimary;
+		allocInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
+		command_buffers_ = vk::raii::CommandBuffers(device_, allocInfo);
+	}
+
+	// compute
+	{
+		compute_command_buffers_.clear();
+		vk::CommandBufferAllocateInfo allocInfo{};
+		allocInfo.commandPool = *command_pool_;
+		allocInfo.level = vk::CommandBufferLevel::ePrimary;
+		allocInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
+		compute_command_buffers_ = vk::raii::CommandBuffers(device_, allocInfo);
+	}
+
 }
 
-void Context::createDescriptorPool() {
 
-	std::array poolSize{
-		vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, MAX_FRAMES_IN_FLIGHT * uboCount_),
-		vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, MAX_FRAMES_IN_FLIGHT * samplerCount_),
-		vk::DescriptorPoolSize(vk::DescriptorType::eStorageBuffer, MAX_FRAMES_IN_FLIGHT * sbCount_)
-	};
+void Context::CreateDescriptorPool() {
+
+	std::vector<vk::DescriptorPoolSize> poolSizes;
+
+	if (counts_.ubo > 0) {
+		poolSizes.emplace_back(vk::DescriptorType::eUniformBuffer, MAX_FRAMES_IN_FLIGHT * counts_.ubo);
+	}
+	if (counts_.sampler > 0) {
+		poolSizes.emplace_back(vk::DescriptorType::eCombinedImageSampler, MAX_FRAMES_IN_FLIGHT * counts_.sampler);
+	}
+	if (counts_.sb > 0) {
+		poolSizes.emplace_back(vk::DescriptorType::eStorageBuffer, MAX_FRAMES_IN_FLIGHT * counts_.sb);
+	}
 
 	vk::DescriptorPoolCreateInfo poolInfo{
 		.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-		.maxSets = layoutCount_,
-		.poolSizeCount = static_cast<uint32_t>(poolSize.size()),
-		.pPoolSizes = poolSize.data()
+		.maxSets = counts_.layout * MAX_FRAMES_IN_FLIGHT,
+		.poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
+		.pPoolSizes = poolSizes.data()
 	};
 
-	descriptorPool_ = vk::raii::DescriptorPool(device_, poolInfo);
+	descriptor_pool_ = vk::raii::DescriptorPool(device_, poolInfo);
 
 	// ImGUI DescriptorPool
 	std::array<vk::DescriptorPoolSize, 11> imguiPoolSizes{
@@ -329,199 +459,25 @@ void Context::createDescriptorPool() {
 		.poolSizeCount = static_cast<uint32_t>(imguiPoolSizes.size()),
 		.pPoolSizes = imguiPoolSizes.data()
 	};
-	imguiPool_ = vk::raii::DescriptorPool(device_, imguiPoolInfo);
+	imgui_pool_ = vk::raii::DescriptorPool(device_, imguiPoolInfo);
 }
 
-void Context::createCommandPool() {
-	vk::CommandPoolCreateInfo poolInfo{ .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
-										 .queueFamilyIndex = queueIndex_ };
-	commandPool_ = vk::raii::CommandPool(device_, poolInfo);
-}
-
-void Context::createModelPipeline() {
-	vk::raii::ShaderModule shaderModule = createShaderModule(readFile("shaders/model.spv"));
-
-	vk::PipelineShaderStageCreateInfo vertShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eVertex, .module = shaderModule,  .pName = "vertMain" };
-	vk::PipelineShaderStageCreateInfo fragShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eFragment, .module = shaderModule, .pName = "fragMain" };
-	vk::PipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
-
-	auto bindingDescription = Vertex::getBindingDescription();
-	auto attributeDescriptions = Vertex::getAttributeDescriptions();
-	vk::PipelineVertexInputStateCreateInfo vertexInputInfo{
-		.vertexBindingDescriptionCount = 1,
-		.pVertexBindingDescriptions = &bindingDescription,
-		.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size()),
-		.pVertexAttributeDescriptions = attributeDescriptions.data()
-	};
-	vk::PipelineInputAssemblyStateCreateInfo inputAssembly{
-		.topology = vk::PrimitiveTopology::eTriangleList,
-		.primitiveRestartEnable = vk::False
-	};
-	vk::PipelineViewportStateCreateInfo viewportState{
-		.viewportCount = 1,
-		.scissorCount = 1
-	};
-	vk::PipelineRasterizationStateCreateInfo rasterizer{
-		.depthClampEnable = vk::False,
-		.rasterizerDiscardEnable = vk::False,
-		.polygonMode = vk::PolygonMode::eFill,
-		.cullMode = vk::CullModeFlagBits::eBack,
-		.frontFace = vk::FrontFace::eCounterClockwise,
-		.depthBiasEnable = vk::False
-	};
-	rasterizer.lineWidth = 1.0f;
-	vk::PipelineMultisampleStateCreateInfo multisampling{
-		.rasterizationSamples = msaaSamples_,
-		.sampleShadingEnable = vk::True, // enable sample shading in the pipeline
-		.minSampleShading = .2f // min fraction for sample shading; closer to one is smoother
-	};
-	vk::PipelineDepthStencilStateCreateInfo depthStencil{
-		.depthTestEnable = vk::True,
-		.depthWriteEnable = vk::True,
-		.depthCompareOp = vk::CompareOp::eLess,
-		.depthBoundsTestEnable = vk::False,
-		.stencilTestEnable = vk::False
-	};
-	vk::PipelineColorBlendAttachmentState colorBlendAttachment;
-	colorBlendAttachment.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
-	colorBlendAttachment.blendEnable = vk::False;
-
-	vk::PipelineColorBlendStateCreateInfo colorBlending{
-		.logicOpEnable = vk::False,
-		.logicOp = vk::LogicOp::eCopy,
-		.attachmentCount = 1,
-		.pAttachments = &colorBlendAttachment
-	};
-
-	std::vector dynamicStates = {
-		vk::DynamicState::eViewport,
-		vk::DynamicState::eScissor
-	};
-	vk::PipelineDynamicStateCreateInfo dynamicState{ .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()), .pDynamicStates = dynamicStates.data() };
-
-	vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = 1, .pSetLayouts = &*descriptorSetLayouts_.modelDescriptorSetLayout_, .pushConstantRangeCount = 0 };
-
-	pipelines_.modelPipelineLayout_ = vk::raii::PipelineLayout(device_, pipelineLayoutInfo);
-
-	vk::Format depthFormat = findDepthFormat(physicalDevice_);
-	vk::PipelineRenderingCreateInfo pipelineRenderingCreateInfo{
-		.colorAttachmentCount = 1,
-		.pColorAttachmentFormats = &swapchain_->swapchainSurfaceFormat_.format,
-		.depthAttachmentFormat = depthFormat
-	};
-	vk::GraphicsPipelineCreateInfo pipelineInfo{ .pNext = &pipelineRenderingCreateInfo,
-		.stageCount = 2,
-		.pStages = shaderStages,
-		.pVertexInputState = &vertexInputInfo,
-		.pInputAssemblyState = &inputAssembly,
-		.pViewportState = &viewportState,
-		.pRasterizationState = &rasterizer,
-		.pMultisampleState = &multisampling,
-		.pDepthStencilState = &depthStencil,
-		.pColorBlendState = &colorBlending,
-		.pDynamicState = &dynamicState,
-		.layout = pipelines_.modelPipelineLayout_,
-		.renderPass = nullptr
-	};
-	pipelines_.modelPipeline_ = vk::raii::Pipeline(device_, nullptr, pipelineInfo);
-}
-
-void Context::createParticleComputePipeline()
+void Context::CreateSyncObjects()
 {
-	vk::raii::ShaderModule shaderModule = createShaderModule(readFile("shaders/particle.spv"));
+	in_flight_fences_.clear();
 
-	vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "compMain" };
-	vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = 1, .pSetLayouts = &*descriptorSetLayouts_.particleComputeDescriptorSetLayout_ };
-	pipelines_.particleComputePipelineLayout_ = vk::raii::PipelineLayout(device_, pipelineLayoutInfo);
-	vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipelines_.particleComputePipelineLayout_ };
-	pipelines_.particleComputePipeline_ = vk::raii::Pipeline(device_, nullptr, pipelineInfo);
-}
+	vk::SemaphoreTypeCreateInfo semaphoreType{ .semaphoreType = vk::SemaphoreType::eTimeline, .initialValue = 0 };
+	semaphore_ = vk::raii::Semaphore(device_, { .pNext = &semaphoreType });
+	timeline_value_ = 0;
 
-void Context::createParticleGraphicsPipeline()
-{
-	vk::raii::ShaderModule shaderModule = createShaderModule(readFile("shaders/particle.spv"));
-
-	vk::PipelineShaderStageCreateInfo vertShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eVertex, .module = shaderModule, .pName = "vertMain" };
-	vk::PipelineShaderStageCreateInfo fragShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eFragment, .module = shaderModule, .pName = "fragMain" };
-	vk::PipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
-
-	auto bindingDescription = Particle::getBindingDescription();
-	auto attributeDescriptions = Particle::getAttributeDescriptions();
-
-	vk::PipelineVertexInputStateCreateInfo vertexInputInfo{ .vertexBindingDescriptionCount = 1, .pVertexBindingDescriptions = &bindingDescription, .vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size()), .pVertexAttributeDescriptions = attributeDescriptions.data() };
-	vk::PipelineInputAssemblyStateCreateInfo inputAssembly{ .topology = vk::PrimitiveTopology::ePointList, .primitiveRestartEnable = vk::False };
-	vk::PipelineViewportStateCreateInfo viewportState{ .viewportCount = 1, .scissorCount = 1 };
-	vk::PipelineRasterizationStateCreateInfo rasterizer{
-		.depthClampEnable = vk::False,
-		.rasterizerDiscardEnable = vk::False,
-		.polygonMode = vk::PolygonMode::eFill,
-		.cullMode = vk::CullModeFlagBits::eBack,
-		.frontFace = vk::FrontFace::eCounterClockwise,
-		.depthBiasEnable = vk::False,
-		.lineWidth = 1.0f
-	};
-	vk::PipelineMultisampleStateCreateInfo multisampling{ .rasterizationSamples = vk::SampleCountFlagBits::e1, .sampleShadingEnable = vk::False };
-
-	vk::PipelineColorBlendAttachmentState colorBlendAttachment{
-		.blendEnable = vk::True,
-		.srcColorBlendFactor = vk::BlendFactor::eSrcAlpha,
-		.dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
-		.colorBlendOp = vk::BlendOp::eAdd,
-		.srcAlphaBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
-		.dstAlphaBlendFactor = vk::BlendFactor::eZero,
-		.alphaBlendOp = vk::BlendOp::eAdd,
-		.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
-	};
-
-	vk::PipelineColorBlendStateCreateInfo colorBlending{ .logicOpEnable = vk::False, .logicOp = vk::LogicOp::eCopy, .attachmentCount = 1, .pAttachments = &colorBlendAttachment };
-
-	std::vector dynamicStates = {
-		vk::DynamicState::eViewport,
-		vk::DynamicState::eScissor
-	};
-	vk::PipelineDynamicStateCreateInfo dynamicState{ .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()), .pDynamicStates = dynamicStates.data() };
-
-	vk::PipelineLayoutCreateInfo pipelineLayoutInfo;
-	pipelines_.particleGraphicsPipelineLayout_ = vk::raii::PipelineLayout(device_, pipelineLayoutInfo);
-
-	vk::PipelineRenderingCreateInfo pipelineRenderingCreateInfo{ .colorAttachmentCount = 1, .pColorAttachmentFormats = &swapchain_->swapchainSurfaceFormat_.format };
-	vk::GraphicsPipelineCreateInfo pipelineInfo{ .pNext = &pipelineRenderingCreateInfo,
-		.stageCount = 2,
-		.pStages = shaderStages,
-		.pVertexInputState = &vertexInputInfo,
-		.pInputAssemblyState = &inputAssembly,
-		.pViewportState = &viewportState,
-		.pRasterizationState = &rasterizer,
-		.pMultisampleState = &multisampling,
-		.pColorBlendState = &colorBlending,
-		.pDynamicState = &dynamicState,
-		.layout = *pipelines_.particleGraphicsPipelineLayout_,
-		.subpass = 0
-	};
-
-	pipelines_.particleGraphicsPipeline_ = vk::raii::Pipeline(device_, nullptr, pipelineInfo);
-}
-
-[[nodiscard]] vk::raii::ShaderModule Context::createShaderModule(const std::vector<char>& code) const {
-	vk::ShaderModuleCreateInfo createInfo{ .codeSize = code.size(), .pCode = reinterpret_cast<const uint32_t*>(code.data()) };
-	vk::raii::ShaderModule shaderModule{ device_, createInfo };
-
-	return shaderModule;
-}
-
-std::vector<char> Context::readFile(const std::string& filename) {
-	std::ifstream file(filename, std::ios::ate | std::ios::binary);
-	if (!file.is_open()) {
-		throw std::runtime_error("failed to open file!");
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		vk::FenceCreateInfo fenceInfo{};
+		in_flight_fences_.emplace_back(device_, fenceInfo);
 	}
-	std::vector<char> buffer(file.tellg());
-	file.seekg(0, std::ios::beg);
-	file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
-	file.close();
-	return buffer;
+
 }
 
-void Context::setupImgui(uint32_t width, uint32_t height)
+void Context::SetupImgui(uint32_t width, uint32_t height)
 {
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
@@ -539,20 +495,20 @@ void Context::setupImgui(uint32_t width, uint32_t height)
 	//ImGui::StyleColorsLight();
 
 	// Setup Platform/Renderer backends
-	VkFormat depthFmt = static_cast<VkFormat>(findDepthFormat(physicalDevice_));
-	VkFormat colorFmt = static_cast<VkFormat>(swapchain_->swapchainSurfaceFormat_.format);
+	VkFormat depthFmt = static_cast<VkFormat>(vku::FindDepthFormat(physical_device_));
+	VkFormat colorFmt = static_cast<VkFormat>(swapchain_->swapchain_surface_format_.format);
 	static VkFormat colorFormats[] = { colorFmt };
-	ImGui_ImplGlfw_InitForVulkan(glfwWindow_, true);
+	ImGui_ImplGlfw_InitForVulkan(glfw_window_, true);
 	ImGui_ImplVulkan_InitInfo init_info = {
 		.ApiVersion = vk::ApiVersion14,
 		.Instance = *instance_,
-		.PhysicalDevice = *physicalDevice_,
+		.PhysicalDevice = *physical_device_,
 		.Device = *device_,
-		.QueueFamily = queueIndex_,
+		.QueueFamily = queue_index_,
 		.Queue = *queue_,
-		.DescriptorPool = *imguiPool_,
-		.MinImageCount = swapchain_->minImageCount_,
-		.ImageCount = swapchain_->imageCount_,
+		.DescriptorPool = *imgui_pool_,
+		.MinImageCount = swapchain_->min_image_count_,
+		.ImageCount = swapchain_->image_count_,
 		.PipelineCache = NULL,
 		.PipelineInfoMain = {
 			.RenderPass = NULL,

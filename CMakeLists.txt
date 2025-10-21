@@ -44,7 +44,7 @@ add_executable(PowerEngine ${SRC})
 # preamble.hpp를 PCH로 지정
 target_precompile_headers(PowerEngine PRIVATE
     # 컴파일러가 C++일 때만 적용 (C/ObjC와 구분)
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/src/preamble.hpp>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/src/preamble.h>"
 )
 
 # Additional Options
@@ -138,6 +138,7 @@ function(compile_slang_shaders TARGET)
                     -emit-spirv-directly
                     -fvk-use-entrypoint-name
                     ${SLANG_ENTRY_FLAGS}   #<-- 여기서 동적으로 생성된 플래그 목록을 사용합니다.
+                    -g3
                     -o ${SPIRV_OUTPUT}
             DEPENDS ${SLANG_SOURCE}
             COMMENT "Compiling [${ARG_ENTRY_POINTS}] -> ${BASENAME}.spv"

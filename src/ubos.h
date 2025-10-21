@@ -1,3 +1,4 @@
+#pragma once
 
 struct ModelUBO {
     alignas(16) glm::mat4 model;
@@ -6,5 +7,5 @@ struct ModelUBO {
 };
 
 struct ParticleUBO {
-    float deltaTime = 1.0f;
+    float delta_time = 1.0f;
 };
