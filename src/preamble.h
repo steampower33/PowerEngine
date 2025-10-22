@@ -33,7 +33,6 @@
 #include <glm/gtx/hash.hpp>
 
 constexpr int      MAX_FRAMES_IN_FLIGHT = 2;
-constexpr uint32_t PARTICLE_COUNT = 1000000;
 
 inline const std::vector<const char*> validation_layers = {
     "VK_LAYER_KHRONOS_validation"
@@ -48,3 +47,7 @@ constexpr bool enableValidationLayers = true;
 #include "imgui.h"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_vulkan.h"
+
+#include <tiny_gltf.h>
+
+#include <ktx.h>

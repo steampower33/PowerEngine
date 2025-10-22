@@ -1,7 +1,5 @@
 #pragma once
 
-#include "model.h"
-
 struct Camera;
 
 class Swapchain

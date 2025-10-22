@@ -34,7 +34,7 @@ set_source_files_properties(${IMGUI_SOURCES} PROPERTIES SKIP_PRECOMPILE_HEADERS 
 # Vulkan / GLFW 찾기
 find_package(Vulkan REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
-find_package(tinyobjloader CONFIG REQUIRED)
+find_package(KTX CONFIG REQUIRED)
 
 # 실행 파일
 file(GLOB SRC CONFIGURE_DEPENDS
@@ -56,18 +56,18 @@ if (MSVC)
     $<$<CONFIG:MinSizeRel>:/O1 /DNDEBUG>                 # MinSizeRel
   )
   add_custom_command(TARGET PowerEngine POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:PowerEngine>/textures"
+  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:PowerEngine>/assets/textures"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory 
+  "${CMAKE_SOURCE_DIR}/assets/textures"
+  "$<TARGET_FILE_DIR:PowerEngine>/assets/textures"
+  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:PowerEngine>/assets/models"
   COMMAND ${CMAKE_COMMAND} -E copy_directory
-          "${CMAKE_SOURCE_DIR}/textures"
-          "$<TARGET_FILE_DIR:PowerEngine>/textures"  
+  "${CMAKE_SOURCE_DIR}/assets/models"
+  "$<TARGET_FILE_DIR:PowerEngine>/assets/models"
   COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:PowerEngine>/shaders"
   COMMAND ${CMAKE_COMMAND} -E copy_directory
-          "${CMAKE_SOURCE_DIR}/shaders"
-          "$<TARGET_FILE_DIR:PowerEngine>/shaders"
-          COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:PowerEngine>/models"
-  COMMAND ${CMAKE_COMMAND} -E copy_directory
-          "${CMAKE_SOURCE_DIR}/models"
-          "$<TARGET_FILE_DIR:PowerEngine>/models"
+  "${CMAKE_SOURCE_DIR}/shaders"
+  "$<TARGET_FILE_DIR:PowerEngine>/shaders"
 )
 endif()
 
@@ -97,10 +97,10 @@ target_sources(VulkanCppModule
 # ---- 실행 파일이 모듈을 실제로 사용하도록 링크 ----
 target_link_libraries(PowerEngine
   PRIVATE
-    Vulkan::cppm      # ← 이걸 잊으면 import 해석 안 됨
+    Vulkan::cppm
     glfw
     imgui
-    tinyobjloader::tinyobjloader
+    KTX::ktx
 )
 
 function(compile_slang_shaders TARGET)

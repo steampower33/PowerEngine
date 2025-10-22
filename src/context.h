@@ -1,11 +1,10 @@
 #pragma once
 
-#include "swapchain.h"
-#include "project_types.h"
-#include "compute_pass.h"
-#include "graphics_pass.h"
-
+class Swapchain;
+struct Vertex;
 struct Camera;
+class Model;
+class Texture2D;
 
 class Context
 {
@@ -35,17 +34,59 @@ private:
 	vk::raii::Queue                  queue_ = nullptr;
 
 	vk::raii::CommandPool			 command_pool_ = nullptr;
-	std::vector<vk::raii::CommandBuffer> command_buffers_;
-	std::vector<vk::raii::CommandBuffer> compute_command_buffers_;
 
 	vk::raii::DescriptorPool		 descriptor_pool_ = nullptr;
 	vk::raii::DescriptorPool		 imgui_pool_ = nullptr;
 
-	std::unique_ptr<ComputePass> compute_pass_;
-	std::unique_ptr<GraphicsPass> graphics_pass_;
-	std::unique_ptr<Swapchain> swapchain_;
+	std::unique_ptr<Swapchain>       swapchain_;
 
-	Counts counts_;
+	// Resources for the graphics part of the example
+	struct Graphics {
+		struct UniformData {
+			glm::mat4 model;
+			glm::mat4 view;
+			glm::mat4 proj;
+		} uniformData;
+		std::vector<vk::raii::Buffer> uniform_buffers_;
+		std::vector<vk::raii::DeviceMemory> uniform_buffers_memory_;
+		std::vector<void*> uniform_buffers_mapped_;
+
+		vk::raii::DescriptorSetLayout descriptor_set_layout_ = nullptr;
+		std::vector<vk::raii::DescriptorSet> descriptor_sets_;
+
+		vk::raii::PipelineLayout pipeline_layout_ = nullptr;
+		vk::raii::Pipeline pipeline_ = nullptr;
+
+		std::vector<vk::raii::CommandBuffer> command_buffers_;
+	} graphics_;
+
+	//struct Compute {
+	//	struct UniformData {
+	//		float dt{ 0.0f };
+	//	} uniformData;
+
+	//	std::vector<vk::raii::Buffer> uniform_buffers_;
+	//	std::vector<vk::raii::DeviceMemory> uniform_buffers_memory_;
+	//	std::vector<void*> uniform_buffers_mapped_;
+
+	//	std::vector<vk::raii::Buffer> shader_storage_buffers_;
+	//	std::vector<vk::raii::DeviceMemory> shader_storage_buffers_memory_;
+
+	//	vk::raii::DescriptorSetLayout descriptor_set_layout_ = nullptr;
+	//	std::vector<vk::raii::DescriptorSet> descriptor_sets_;
+
+	//	vk::raii::PipelineLayout pipeline_layout_ = nullptr;
+	//	vk::raii::Pipeline pipeline_ = nullptr;
+
+	//	std::vector<vk::raii::CommandBuffer> command_buffers_;
+	//} compute_;
+
+	struct Counts {
+		uint32_t ubo = 0;
+		uint32_t sb = 0;
+		uint32_t sampler = 0;
+		uint32_t layout = 0;
+	} counts_;
 
 	vk::raii::Semaphore semaphore_ = nullptr;
 	uint64_t timeline_value_ = 0;
@@ -61,8 +102,25 @@ private:
 		vk::KHRCreateRenderpass2ExtensionName
 	};
 
+	uint32_t particle_count = 256;
+	std::unique_ptr<Model> sphere_;
+	std::unique_ptr<Texture2D> texture_;
+
 private:
 	void DrawImgui();
+	void UpdateUniformBuffer(Camera& camera);
+	void Transition_image_layout(
+		vk::Image& image,
+		const vk::raii::CommandBuffer& cmd,
+		vk::ImageLayout old_layout,
+		vk::ImageLayout new_layout,
+		vk::AccessFlags2 src_access_mask,
+		vk::AccessFlags2 dst_access_mask,
+		vk::PipelineStageFlags2 src_stage_mask,
+		vk::PipelineStageFlags2 dst_stage_mask
+	);
+
+private:
 
 	void CreateInstance();
 	std::vector<const char*> GetRequiredExtensions();
@@ -75,9 +133,11 @@ private:
 
 	void CreateCommandPool();
 	void CreateCommandBuffers();
-
-	void CreateDescriptorPool();
-
+	void CreateDescriptorSetLayout();
+	void CreateUniformBuffers();
+	void CreateDescriptorPools();
+	void CreateDescriptorSets();
+	void CreateGraphicsPipelines();
 	void CreateSyncObjects();
 
 	void SetupImgui(uint32_t width, uint32_t height);

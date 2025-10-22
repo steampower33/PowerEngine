@@ -23,7 +23,7 @@ VSOutput vertMain(VSInput input) {
     VSOutput output;
     output.pos = mul(ubo.proj, mul(ubo.view, mul(ubo.model, float4(input.inPosition, 1.0))));
     output.fragColor = input.inColor;
-    output.fragTexCoord = input.inTexCoord;
+    output.fragTexCoord = float2(input.inTexCoord.x, 1.0 - input.inTexCoord.y);
     return output;
 }
 

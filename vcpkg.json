@@ -5,6 +5,7 @@
     "glfw3",
     "glm",
     "stb",
-    "tinyobjloader"
+    "tinygltf",
+    "ktx"
   ]
 }
