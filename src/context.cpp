@@ -14,7 +14,7 @@ Context::Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height)
 	SetupDebugMessenger();
 	CreateSurface();
 	PickPhysicalDevice();
-	msaa_samples_ = GetMaxUsableSampleCount();
+	//msaa_samples_ = GetMaxUsableSampleCount();
 	CreateLogicalDevice();
 	swapchain_ = std::make_unique<Swapchain>(glfw_window_, device_, physical_device_, msaa_samples_, surface_);
 	CreateCommandPool();
@@ -35,6 +35,8 @@ Context::Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height)
 	CreateDescriptorSets();
 	CreateGraphicsPipelines();
 	CreateSyncObjects();
+
+	CreateDepthResources();
 
 	SetupImgui(swapchain_->swapchain_extent_.width, swapchain_->swapchain_extent_.height);
 }
@@ -71,33 +73,58 @@ void Context::Draw(Camera& camera, float dt)
 	}
 
 	{
-
 		graphics_.command_buffers[current_frame_].reset();
 		graphics_.command_buffers[current_frame_].begin({});
-		// Before starting rendering, transition the swapchain image to COLOR_ATTACHMENT_OPTIMAL
-		Transition_image_layout(
+
+		TransitionImageLayout(
 			swapchain_->swapchain_images_[imageIndex],
 			graphics_.command_buffers[current_frame_],
 			vk::ImageLayout::eUndefined,
 			vk::ImageLayout::eColorAttachmentOptimal,
-			{},                                                     // srcAccessMask (no need to wait for previous operations)
-			vk::AccessFlagBits2::eColorAttachmentWrite,                // dstAccessMask
-			vk::PipelineStageFlagBits2::eTopOfPipe,                   // srcStage
-			vk::PipelineStageFlagBits2::eColorAttachmentOutput        // dstStage
+			{},
+			vk::AccessFlagBits2::eColorAttachmentWrite,
+			vk::PipelineStageFlagBits2::eTopOfPipe,
+			vk::PipelineStageFlagBits2::eColorAttachmentOutput
 		);
+
+		// Transition the depth image to DEPTH_ATTACHMENT_OPTIMAL
+		TransitionImageLayoutCustom(
+			depth_image_,
+			graphics_.command_buffers[current_frame_],
+			vk::ImageLayout::eUndefined,
+			vk::ImageLayout::eDepthAttachmentOptimal,
+			{},
+			vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+			vk::PipelineStageFlagBits2::eTopOfPipe,
+			vk::PipelineStageFlagBits2::eEarlyFragmentTests,
+			vk::ImageAspectFlagBits::eDepth
+		);
+
 		vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
-		vk::RenderingAttachmentInfo attachmentInfo = {
+		vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
+
+		vk::RenderingAttachmentInfo colorAttachmentInfo = {
 			.imageView = swapchain_->swapchain_image_views_[imageIndex],
 			.imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
 			.loadOp = vk::AttachmentLoadOp::eClear,
 			.storeOp = vk::AttachmentStoreOp::eStore,
 			.clearValue = clearColor
 		};
+		// Depth attachment
+		vk::RenderingAttachmentInfo depthAttachmentInfo = {
+			.imageView = depth_image_view_,
+			.imageLayout = vk::ImageLayout::eDepthAttachmentOptimal,
+			.loadOp = vk::AttachmentLoadOp::eClear,
+			.storeOp = vk::AttachmentStoreOp::eDontCare,
+			.clearValue = clearDepth
+		};
 		vk::RenderingInfo renderingInfo = {
-			.renderArea = {.offset = { 0, 0 }, .extent = swapchain_->swapchain_extent_ },
+			.renderArea = {.offset = { 0, 0 },
+			.extent = swapchain_->swapchain_extent_ },
 			.layerCount = 1,
 			.colorAttachmentCount = 1,
-			.pColorAttachments = &attachmentInfo
+			.pColorAttachments = &colorAttachmentInfo,
+			.pDepthAttachment = &depthAttachmentInfo
 		};
 		graphics_.command_buffers[current_frame_].beginRendering(renderingInfo);
 		graphics_.command_buffers[current_frame_].setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapchain_->swapchain_extent_.width), static_cast<float>(swapchain_->swapchain_extent_.height), 0.0f, 1.0f));
@@ -127,15 +154,15 @@ void Context::Draw(Camera& camera, float dt)
 		graphics_.command_buffers[current_frame_].endRendering();
 
 		// After rendering, transition the swapchain image to PRESENT_SRC
-		Transition_image_layout(
+		TransitionImageLayout(
 			swapchain_->swapchain_images_[imageIndex],
 			graphics_.command_buffers[current_frame_],
 			vk::ImageLayout::eColorAttachmentOptimal,
 			vk::ImageLayout::ePresentSrcKHR,
-			vk::AccessFlagBits2::eColorAttachmentWrite,                 // srcAccessMask
-			{},                                                      // dstAccessMask
-			vk::PipelineStageFlagBits2::eColorAttachmentOutput,        // srcStage
-			vk::PipelineStageFlagBits2::eBottomOfPipe                  // dstStage
+			vk::AccessFlagBits2::eColorAttachmentWrite,
+			{},
+			vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+			vk::PipelineStageFlagBits2::eBottomOfPipe
 		);
 		graphics_.command_buffers[current_frame_].end();
 
@@ -203,7 +230,8 @@ void Context::Draw(Camera& camera, float dt)
 	current_frame_ = (current_frame_ + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-void Context::Transition_image_layout(
+// vk::Image Transition
+void Context::TransitionImageLayout(
 	vk::Image& image,
 	const vk::raii::CommandBuffer& cmd,
 	vk::ImageLayout old_layout,
@@ -239,6 +267,44 @@ void Context::Transition_image_layout(
 	cmd.pipelineBarrier2(dependency_info);
 }
 
+// vk::raii:Image Transition
+void Context::TransitionImageLayoutCustom(
+	vk::raii::Image& image,
+	const vk::raii::CommandBuffer& cmd,
+	vk::ImageLayout old_layout,
+	vk::ImageLayout new_layout,
+	vk::AccessFlags2 src_access_mask,
+	vk::AccessFlags2 dst_access_mask,
+	vk::PipelineStageFlags2 src_stage_mask,
+	vk::PipelineStageFlags2 dst_stage_mask,
+	vk::ImageAspectFlags aspect_mask
+)
+{
+	vk::ImageMemoryBarrier2 barrier = {
+		.srcStageMask = src_stage_mask,
+		.srcAccessMask = src_access_mask,
+		.dstStageMask = dst_stage_mask,
+		.dstAccessMask = dst_access_mask,
+		.oldLayout = old_layout,
+		.newLayout = new_layout,
+		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		.image = *image,
+		.subresourceRange = {
+			.aspectMask = aspect_mask,
+			.baseMipLevel = 0,
+			.levelCount = 1,
+			.baseArrayLayer = 0,
+			.layerCount = 1
+		}
+	};
+	vk::DependencyInfo dependency_info = {
+		.dependencyFlags = {},
+		.imageMemoryBarrierCount = 1,
+		.pImageMemoryBarriers = &barrier
+	};
+	cmd.pipelineBarrier2(dependency_info);
+}
 
 void Context::DrawImgui()
 {
@@ -733,7 +799,7 @@ void Context::CreateGraphicsPipelines()
 		};
 		rasterizer.lineWidth = 1.0f;
 		vk::PipelineMultisampleStateCreateInfo multisampling{
-			.rasterizationSamples = vk::SampleCountFlagBits::e1,
+			.rasterizationSamples = msaa_samples_,
 			.sampleShadingEnable = vk::False
 		};
 		vk::PipelineDepthStencilStateCreateInfo depthStencil{
@@ -819,7 +885,7 @@ void Context::CreateGraphicsPipelines()
 		};
 		rasterizer.lineWidth = 1.0f;
 		vk::PipelineMultisampleStateCreateInfo multisampling{
-			.rasterizationSamples = vk::SampleCountFlagBits::e1,
+			.rasterizationSamples = msaa_samples_,
 			.sampleShadingEnable = vk::False
 		};
 		vk::PipelineDepthStencilStateCreateInfo depthStencil{
@@ -888,6 +954,13 @@ void Context::CreateSyncObjects()
 
 }
 
+void Context::CreateDepthResources() {
+	vk::Format depthFormat = vku::FindDepthFormat(physical_device_);
+
+	vku::CreateImage(physical_device_, device_, swapchain_->swapchain_extent_.width, swapchain_->swapchain_extent_.height, 1, msaa_samples_, depthFormat, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment, vk::MemoryPropertyFlagBits::eDeviceLocal, depth_image_, depth_image_memory_);
+	depth_image_view_ = vku::CreateImageView(device_, depth_image_, depthFormat, vk::ImageAspectFlagBits::eDepth, 1);
+}
+
 void Context::SetupImgui(uint32_t width, uint32_t height)
 {
 	// Setup Dear ImGui context
@@ -924,7 +997,7 @@ void Context::SetupImgui(uint32_t width, uint32_t height)
 		.PipelineInfoMain = {
 			.RenderPass = NULL,
 			.Subpass = 0,
-			.MSAASamples = static_cast<VkSampleCountFlagBits>(vk::SampleCountFlagBits::e1),
+			.MSAASamples = static_cast<VkSampleCountFlagBits>(msaa_samples_),
 			.PipelineRenderingCreateInfo = {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR,
 				.pNext = NULL,

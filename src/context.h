@@ -40,6 +40,28 @@ private:
 
 	std::unique_ptr<Swapchain>       swapchain_{ nullptr };
 
+	vk::raii::Semaphore semaphore_{ nullptr };
+	uint64_t timeline_value_{ 0 };
+	std::vector<vk::raii::Fence> in_flight_fences_;
+	uint32_t current_frame_{ 0 };
+
+	bool framebuffer_resized_{ false };
+
+	std::vector<const char*> required_device_extension_ = {
+		vk::KHRSwapchainExtensionName,
+		vk::KHRSpirv14ExtensionName,
+		vk::KHRSynchronization2ExtensionName,
+		vk::KHRCreateRenderpass2ExtensionName
+	};
+
+private:
+	struct Counts {
+		uint32_t ubo = 0;
+		uint32_t sb = 0;
+		uint32_t sampler = 0;
+		uint32_t layout = 0;
+	} counts_;
+
 	// The cloth is made from a grid of particles
 	struct Particle {
 		glm::vec4 pos;
@@ -130,35 +152,19 @@ private:
 		std::vector<vk::raii::CommandBuffer> command_buffers;
 	} compute_;
 
-	struct Counts {
-		uint32_t ubo = 0;
-		uint32_t sb = 0;
-		uint32_t sampler = 0;
-		uint32_t layout = 0;
-	} counts_;
-
-	vk::raii::Semaphore semaphore_{ nullptr };
-	uint64_t timeline_value_{ 0 };
-	std::vector<vk::raii::Fence> in_flight_fences_;
-	uint32_t current_frame_{ 0 };
-
-	bool framebuffer_resized_{ false };
-
-	std::vector<const char*> required_device_extension_ = {
-		vk::KHRSwapchainExtensionName,
-		vk::KHRSpirv14ExtensionName,
-		vk::KHRSynchronization2ExtensionName,
-		vk::KHRCreateRenderpass2ExtensionName
-	};
-
 	uint32_t particle_count{ 256 };
 	std::unique_ptr<Model> sphere_{ nullptr };
 	std::unique_ptr<Texture2D> texture_{ nullptr };
 
 private:
+	vk::raii::Image depth_image_ = nullptr;
+	vk::raii::DeviceMemory depth_image_memory_ = nullptr;
+	vk::raii::ImageView depth_image_view_ = nullptr;
+
+private:
 	void DrawImgui();
 	void UpdateUniformBuffer(Camera& camera);
-	void Transition_image_layout(
+	void TransitionImageLayout(
 		vk::Image& image,
 		const vk::raii::CommandBuffer& cmd,
 		vk::ImageLayout old_layout,
@@ -167,6 +173,17 @@ private:
 		vk::AccessFlags2 dst_access_mask,
 		vk::PipelineStageFlags2 src_stage_mask,
 		vk::PipelineStageFlags2 dst_stage_mask
+	);
+	void TransitionImageLayoutCustom(
+		vk::raii::Image& image,
+		const vk::raii::CommandBuffer& cmd,
+		vk::ImageLayout old_layout,
+		vk::ImageLayout new_layout,
+		vk::AccessFlags2 src_access_mask,
+		vk::AccessFlags2 dst_access_mask,
+		vk::PipelineStageFlags2 src_stage_mask,
+		vk::PipelineStageFlags2 dst_stage_mask,
+		vk::ImageAspectFlags aspect_mask
 	);
 
 private:
@@ -190,6 +207,8 @@ private:
 	void CreateDescriptorSets();
 	void CreateGraphicsPipelines();
 	void CreateSyncObjects();
+
+	void CreateDepthResources();
 
 	void SetupImgui(uint32_t width, uint32_t height);
 
