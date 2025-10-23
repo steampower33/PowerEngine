@@ -58,6 +58,18 @@ void Model::LoadModel(const std::string& modelPath) {
                 texCoordBuffer = &model.buffers[texCoordBufferView->buffer];
             }
 
+            //// Get normals if available
+            //bool hasNormals = primitive.attributes.find("NORMAL") != primitive.attributes.end();
+            //const tinygltf::Accessor* normalAccessor = nullptr;
+            //const tinygltf::BufferView* normalBufferView = nullptr;
+            //const tinygltf::Buffer* normalBuffer = nullptr;
+
+            //if (hasNormals) {
+            //    normalAccessor = &model.accessors[primitive.attributes.at("NORMAL")];
+            //    normalBufferView = &model.bufferViews[normalAccessor->bufferView];
+            //    normalBuffer = &model.buffers[normalBufferView->buffer];
+            //}
+
             // Process vertices
             for (size_t i = 0; i < posAccessor.count; i++) {
                 Vertex vertex{};
@@ -75,8 +87,16 @@ void Model::LoadModel(const std::string& modelPath) {
                     vertex.texcoord = { 0.0f, 0.0f };
                 }
 
-                // Set default color
-                vertex.color = { 1.0f, 1.0f, 1.0f };
+                //// Get normal if available
+                //if (hasNormals) {
+                //    // 법선 벡터는 float 3개 (12바이트)
+                //    const float* n = reinterpret_cast<const float*>(&normalBuffer->data[normalBufferView->byteOffset + normalAccessor->byteOffset + i * sizeof(glm::vec3)]);
+                //    vertex.normal = { n[0], n[1], n[2] };
+                //}
+                //else {
+                //    // 모델에 법선 데이터가 없을 경우, 기본값(또는 나중에 계산)
+                //    vertex.normal = { 0.0f, 0.0f, 0.0f };
+                //}
 
                 // Add vertex if unique
                 if (!uniqueVertices.contains(vertex)) {

@@ -159,16 +159,16 @@ set(GRAPHICS_SHADERS
 
 compile_slang_shaders(graphics_shaders_target
   SOURCES       ${GRAPHICS_SHADERS}
-  ENTRY_POINTS  vertMain fragMain
+  ENTRY_POINTS  vertexMain fragmentMain
 )
 
 set(GRAPHICS_AND_COMPUTE_SHADERS
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/particle.slang
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/cloth.slang
 )
 # 모든 엔트리 포인트를 지정합니다.
 compile_slang_shaders(particle_shader_target
     SOURCES       ${GRAPHICS_AND_COMPUTE_SHADERS}
-    ENTRY_POINTS  vertMain fragMain compMain
+    ENTRY_POINTS  vertexMain fragmentMain computeMain
 )
 
 add_dependencies(PowerEngine 
