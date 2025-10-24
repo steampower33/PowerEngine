@@ -128,7 +128,7 @@ private:
 			float deltaT{ 0.0f };
 			// These arguments define the spring setup for the cloth piece
 			// Changing these changes how the cloth reacts
-			float particleMass{ 0.5f };
+			float particleMass{ 0.1f };
 			float springStiffness{ 1000.0f };
 			float damping{ 0.25f };
 			float restDistH{ 0 };
@@ -136,7 +136,7 @@ private:
 			float restDistD{ 0 };
 			float sphereRadius{ 1.0f };
 			glm::vec4 spherePos{ 0.0f, 0.0f, 0.0f, 0.0f };
-			glm::vec4 gravity{ 0.0f, 0.0f, 0.0f, 0.0f };
+			glm::vec4 gravity{ 0.0f, -9.8f, 0.0f, 0.0f };
 			glm::ivec2 particleCount{ 0 };
 		} uniform_data;
 

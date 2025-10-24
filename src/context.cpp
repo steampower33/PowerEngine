@@ -254,26 +254,8 @@ void Context::DrawImgui()
 
 void Context::UpdateComputeUBO()
 {
+	compute_.uniform_data.deltaT = 0.000005f;
 
-	// --- 1. 시간 간격(deltaT)을 매우 작게 설정 ---
-	// 이것이 폭주를 막는 가장 중요하고 확실한 방법입니다.
-	compute_.uniform_data.deltaT = 0.00005f; // <<-- 매우 작은 값으로 시작!
-
-	// --- 2. 힘을 가하는 모든 요소를 약하게 설정 ---
-
-	// 중력을 일단 약하게 주거나, 0으로 시작해도 좋습니다.
-	compute_.uniform_data.gravity = glm::vec4(0.0f, -0.5f, 0.0f, 0.0f);
-
-	// 감쇠는 안정화에 도움이 됩니다. 약간의 값을 줍니다.
-	compute_.uniform_data.damping = 0.1f;
-
-	// 스프링 강성을 매우 낮게 설정합니다.
-	compute_.uniform_data.springStiffness = 500.0f;
-
-	// 질량이 0이 아닌지 확인합니다.
-	if (compute_.uniform_data.particleMass == 0.0f) {
-		compute_.uniform_data.particleMass = 0.1f;
-	}
 	memcpy(compute_.uniform_buffers_mapped[current_frame_], &compute_.uniform_data, sizeof(Compute::UniformData));
 }
 
@@ -453,9 +435,10 @@ void Context::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 	}
 
 	{
+		vk::Buffer finalResultBuffer = (read_set_ == 0) ? *particle_datas_.input : *particle_datas_.output;
 		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphics_.pipelines.cloth);
 		cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, graphics_.pipeline_layouts.cloth, 0, *graphics_.descriptor_sets[current_frame_], nullptr);
-		cmd.bindVertexBuffers(0, { particle_datas_.input }, { 0 });
+		cmd.bindVertexBuffers(0, { finalResultBuffer }, { 0 });
 		cmd.bindIndexBuffer(*particle_datas_.index_buffer, 0, vk::IndexType::eUint32);
 		cmd.drawIndexed(particle_datas_.index_count, 1, 0, 0, 0);
 	}
@@ -859,9 +842,11 @@ void Context::CreateParticleDatas()
 	glm::mat4 transM = glm::translate(glm::mat4(1.0f), glm::vec3(-cloth_.size.x / 2.0f, 2.0f, -cloth_.size.y / 2.0f));
 	for (uint32_t i = 0; i < cloth_.gridsize.y; i++) {
 		for (uint32_t j = 0; j < cloth_.gridsize.x; j++) {
-			particleBuffer[i + j * cloth_.gridsize.y].pos = transM * glm::vec4(dx * j, 0.0f, dy * i, 1.0f);
-			particleBuffer[i + j * cloth_.gridsize.y].vel = glm::vec4(0.0f);
-			particleBuffer[i + j * cloth_.gridsize.y].uv = glm::vec4(1.0f - du * i, dv * j, 0.0f, 0.0f);
+			uint32_t index = i * cloth_.gridsize.x + j;
+			particleBuffer[index].pos = transM * glm::vec4(dx * j, 0.0f, dy * i, 1.0f);
+			particleBuffer[index].vel = glm::vec4(0.0f);
+			particleBuffer[index].uv = glm::vec4(du * j, dv * i, 0.0f, 0.0f);
+			particleBuffer[index].normal = glm::vec4(0.0f);
 		}
 	}
 
@@ -915,7 +900,7 @@ void Context::CreateParticleDatas()
 
 	vku::CreateIndexBuffer(physical_device_, device_, queue_, command_pool_, indices, particle_datas_.index_buffer, particle_datas_.index_buffer_memory);
 }
-
+ 
 void Context::CreateDescriptorSets()
 {
 	// Graphics
@@ -1175,7 +1160,7 @@ void Context::CreateGraphicsPipelines()
 			.depthClampEnable = vk::False,
 			.rasterizerDiscardEnable = vk::False,
 			.polygonMode = vk::PolygonMode::eFill,
-			.cullMode = vk::CullModeFlagBits::eBack,
+			.cullMode = vk::CullModeFlagBits::eNone,
 			.frontFace = vk::FrontFace::eCounterClockwise,
 			.depthBiasEnable = vk::False
 		};
