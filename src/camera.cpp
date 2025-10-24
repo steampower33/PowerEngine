@@ -5,6 +5,9 @@ glm::vec3 Camera::Front() const {
     float sy = sin(glm::radians(yaw));
     float cp = cos(glm::radians(pitch));
     float sp = sin(glm::radians(pitch));
+
+    //std::cout << position.x << " " << position.y << " " << position.z << std::endl;
+    //std::cout << yaw << " " << pitch << " " << std::endl;
     return glm::normalize(glm::vec3(cy * cp, sp, sy * cp));
 }
 glm::vec3 Camera::Right() const {

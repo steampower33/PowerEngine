@@ -30,7 +30,7 @@ private:
 private:
     GLFWwindow* glfw_window_{};
     std::unique_ptr<Context> ctx_;
-    Camera camera_;
+    std::unique_ptr<Camera> camera_;
 
     bool mouse_enabled_ = false;
 

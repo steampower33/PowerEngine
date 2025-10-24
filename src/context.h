@@ -44,6 +44,7 @@ private:
 	uint64_t timeline_value_{ 0 };
 	std::vector<vk::raii::Fence> in_flight_fences_;
 	uint32_t current_frame_{ 0 };
+	uint32_t read_set_{ 0 };
 
 	bool framebuffer_resized_{ false };
 
@@ -67,16 +68,16 @@ private:
 		glm::vec4 pos;
 		glm::vec4 vel;
 		glm::vec4 uv;
+		glm::vec4 normal;
 
 		static vk::VertexInputBindingDescription GetBindingDescription() {
 			return { 0, sizeof(Particle), vk::VertexInputRate::eVertex };
 		}
 
-		static std::array<vk::VertexInputAttributeDescription, 3> GetAttributeDescriptions() {
+		static std::array<vk::VertexInputAttributeDescription, 2> GetAttributeDescriptions() {
 			return {
 				vk::VertexInputAttributeDescription(0, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Particle, pos)),
-				vk::VertexInputAttributeDescription(1, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Particle, vel)),
-				vk::VertexInputAttributeDescription(2, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Particle, uv))
+				vk::VertexInputAttributeDescription(1, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Particle, uv))
 			};
 		}
 	};
@@ -127,15 +128,15 @@ private:
 			float deltaT{ 0.0f };
 			// These arguments define the spring setup for the cloth piece
 			// Changing these changes how the cloth reacts
-			float particleMass{ 0.1f };
-			float springStiffness{ 2000.0f };
+			float particleMass{ 0.5f };
+			float springStiffness{ 1000.0f };
 			float damping{ 0.25f };
 			float restDistH{ 0 };
 			float restDistV{ 0 };
 			float restDistD{ 0 };
 			float sphereRadius{ 1.0f };
 			glm::vec4 spherePos{ 0.0f, 0.0f, 0.0f, 0.0f };
-			glm::vec4 gravity{ 0.0f, 9.8f, 0.0f, 0.0f };
+			glm::vec4 gravity{ 0.0f, 0.0f, 0.0f, 0.0f };
 			glm::ivec2 particleCount{ 0 };
 		} uniform_data;
 
@@ -163,7 +164,15 @@ private:
 
 private:
 	void DrawImgui();
-	void UpdateUniformBuffer(Camera& camera);
+
+	void UpdateComputeUBO();
+	void RecordComputeCommandBuffer();
+	void AddComputeToComputeBarrier(const vk::raii::CommandBuffer& cmd, vk::Buffer buffer);
+	void AddGraphicsToComputeBarrier(const vk::raii::CommandBuffer& cmd, vk::Buffer buffer);
+	void AddComputeToGraphicsBarrier(const vk::raii::CommandBuffer& cmd, vk::Buffer buffer);
+
+	void UpdateGraphicsUBO(Camera& camera);
+	void RecordGraphicsCommandBuffer(uint32_t imageIndex);
 	void TransitionImageLayout(
 		vk::Image& image,
 		const vk::raii::CommandBuffer& cmd,
@@ -206,6 +215,7 @@ private:
 
 	void CreateDescriptorSets();
 	void CreateGraphicsPipelines();
+	void CreateComputePipelines();
 	void CreateSyncObjects();
 
 	void CreateDepthResources();
