@@ -129,10 +129,10 @@ void Context::Draw()
 	}
 
 	{
-		vk::SemaphoreWaitInfo waitInfo{ 
-			.semaphoreCount = 1, 
-			.pSemaphores = &*semaphore_, 
-			.pValues = &graphicsSignalValue 
+		vk::SemaphoreWaitInfo waitInfo{
+			.semaphoreCount = 1,
+			.pSemaphores = &*semaphore_,
+			.pValues = &graphicsSignalValue
 		};
 		while (vk::Result::eTimeout == device_.waitSemaphores(waitInfo, UINT64_MAX));
 		vk::PresentInfoKHR presentInfo{
@@ -275,8 +275,8 @@ void Context::UpdateMouseInteractor(Camera& camera, MouseInteractor& mouse_inter
 
 void Context::UpdateComputeUBO()
 {
-	compute_.uniform_data.deltaT = 0.000005f;
-	compute_.uniform_data.springStiffness = 10000.0f;
+	compute_.uniform_data.deltaT = 0.00001f;
+	compute_.uniform_data.springStiffness = 1000.0f;
 	compute_.uniform_data.spherePos = glm::vec4(sphere_->position_, 0.0f);
 
 	memcpy(compute_.uniform_buffers_mapped[current_frame_], &compute_.uniform_data, sizeof(Compute::UniformData));
@@ -956,7 +956,7 @@ void Context::CreateParticleDatas()
 
 	vku::CreateIndexBuffer(physical_device_, device_, queue_, command_pool_, indices, particle_datas_.index_buffer, particle_datas_.index_buffer_memory);
 }
- 
+
 void Context::CreateDescriptorSets()
 {
 	// Models
@@ -1148,11 +1148,23 @@ void Context::CreateGraphicsPipelines()
 {
 	// Sphere
 	{
-		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(device_, vku::ReadFile("shaders/model.spv"));
+		auto vertCode = vku::ReadFile("shaders/model.vert.spv");
+		auto fragCode = vku::ReadFile("shaders/model.frag.spv");
 
-		vk::PipelineShaderStageCreateInfo vertShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eVertex, .module = shaderModule, .pName = "vertexMain" };
-		vk::PipelineShaderStageCreateInfo fragShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eFragment, .module = shaderModule, .pName = "fragmentMain" };
-		vk::PipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+		vk::raii::ShaderModule vertModule = vku::CreateShaderModule(device_, vertCode);
+		vk::raii::ShaderModule fragModule = vku::CreateShaderModule(device_, fragCode);
+
+		vk::PipelineShaderStageCreateInfo vertStage{
+			.stage = vk::ShaderStageFlagBits::eVertex,
+			.module = *vertModule,
+			.pName = "main"              // GLSL 기본 엔트리
+		};
+		vk::PipelineShaderStageCreateInfo fragStage{
+			.stage = vk::ShaderStageFlagBits::eFragment,
+			.module = *fragModule,
+			.pName = "main"
+		};
+		std::array<vk::PipelineShaderStageCreateInfo, 2> stages{ vertStage, fragStage };
 
 		auto bindingDescription = Vertex::GetBindingDescription();
 		auto attributeDescriptions = Vertex::GetAttributeDescriptions();
@@ -1215,7 +1227,7 @@ void Context::CreateGraphicsPipelines()
 
 		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
 		  {.stageCount = 2,
-			.pStages = shaderStages,
+			.pStages = stages.data(),
 			.pVertexInputState = &vertexInputInfo,
 			.pInputAssemblyState = &inputAssembly,
 			.pViewportState = &viewportState,
@@ -1234,11 +1246,23 @@ void Context::CreateGraphicsPipelines()
 
 	// Cloth
 	{
-		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(device_, vku::ReadFile("shaders/cloth.spv"));
+		auto vertCode = vku::ReadFile("shaders/cloth.vert.spv");
+		auto fragCode = vku::ReadFile("shaders/cloth.frag.spv");
 
-		vk::PipelineShaderStageCreateInfo vertShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eVertex, .module = shaderModule, .pName = "vertexMain" };
-		vk::PipelineShaderStageCreateInfo fragShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eFragment, .module = shaderModule, .pName = "fragmentMain" };
-		vk::PipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+		vk::raii::ShaderModule vertModule = vku::CreateShaderModule(device_, vertCode);
+		vk::raii::ShaderModule fragModule = vku::CreateShaderModule(device_, fragCode);
+
+		vk::PipelineShaderStageCreateInfo vertStage{
+			.stage = vk::ShaderStageFlagBits::eVertex,
+			.module = *vertModule,
+			.pName = "main"              // GLSL 기본 엔트리
+		};
+		vk::PipelineShaderStageCreateInfo fragStage{
+			.stage = vk::ShaderStageFlagBits::eFragment,
+			.module = *fragModule,
+			.pName = "main"
+		};
+		std::array<vk::PipelineShaderStageCreateInfo, 2> stages{ vertStage, fragStage };
 
 		auto bindingDescription = Particle::GetBindingDescription();
 		auto attributeDescriptions = Particle::GetAttributeDescriptions();
@@ -1301,7 +1325,7 @@ void Context::CreateGraphicsPipelines()
 
 		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
 		  {.stageCount = 2,
-			.pStages = shaderStages,
+			.pStages = stages.data(),
 			.pVertexInputState = &vertexInputInfo,
 			.pInputAssemblyState = &inputAssembly,
 			.pViewportState = &viewportState,
@@ -1322,9 +1346,9 @@ void Context::CreateGraphicsPipelines()
 
 void Context::CreateComputePipelines()
 {
-	vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(device_, vku::ReadFile("shaders/cloth.spv"));
+	auto compCode = vku::ReadFile("shaders/cloth.comp.spv");
+	vk::raii::ShaderModule compModule = vku::CreateShaderModule(device_, compCode);
 
-	vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "computeMain" };
 	vk::PushConstantRange pushConstantRange{
 		.stageFlags = vk::ShaderStageFlagBits::eCompute,
 		.offset = 0,
@@ -1337,7 +1361,13 @@ void Context::CreateComputePipelines()
 		.pPushConstantRanges = &pushConstantRange
 	};
 	compute_.pipeline_layout = vk::raii::PipelineLayout(device_, pipelineLayoutInfo);
-	vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *compute_.pipeline_layout };
+	vk::ComputePipelineCreateInfo pipelineInfo{ 
+		.stage = vk::PipelineShaderStageCreateInfo{
+			.stage = vk::ShaderStageFlagBits::eCompute,
+			.module = *compModule,
+			.pName = "main"          // GLSL compute 엔트리
+		}, 
+		.layout = *compute_.pipeline_layout };
 	compute_.pipeline = vk::raii::Pipeline(device_, nullptr, pipelineInfo);
 }
 

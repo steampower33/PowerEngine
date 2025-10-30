@@ -101,76 +101,80 @@ target_link_libraries(PowerEngine
     imgui
     KTX::ktx
 )
+# ---- GLSL -> SPIR-V 컴파일러 선택 ----
+# Vulkan SDK 설치 시 보통 GLSLC_EXECUTABLE 변수 제공됨. 없으면 glslc 이름으로 탐색.
+if (NOT GLSLC_EXECUTABLE)
+  find_program(GLSLC_EXECUTABLE NAMES glslc HINTS "${Vulkan_GLSLC_EXECUTABLE}")
+endif()
 
-function(compile_slang_shaders TARGET)
-  # 함수에 전달된 키워드 인자들을 파싱합니다.
-  # SOURCES와 ENTRY_POINTS는 여러 개의 값을 가질 수 있는 리스트입니다.
-  cmake_parse_arguments(ARG "" "" "SOURCES;ENTRY_POINTS" ${ARGN})
+# glslc가 없으면 glslangValidator로 대체 (둘 중 하나만 쓰면 됨)
+if (NOT GLSLC_EXECUTABLE)
+  find_program(GLSLANG_VALIDATOR NAMES glslangValidator)
+  if (NOT GLSLANG_VALIDATOR)
+    message(FATAL_ERROR "glslc 또는 glslangValidator를 찾을 수 없습니다.")
+  endif()
+endif()
 
-  # --- 설정 ---
+function(compile_glsl_shaders TARGET)
+  # 사용법: compile_glsl_shaders(my_target SOURCES a.vert b.frag c.comp)
+  cmake_parse_arguments(ARG "" "" "SOURCES" ${ARGN})
+
   set(SHADERS_OUTPUT_DIR ${CMAKE_BINARY_DIR}/shaders)
   file(MAKE_DIRECTORY ${SHADERS_OUTPUT_DIR})
 
-  # --- Slangc에 전달할 -entry 플래그 목록 생성 ---
-  set(SLANG_ENTRY_FLAGS "")
-  # 사용자가 넘겨준 ENTRY_POINTS 목록을 순회합니다.
-  foreach(ENTRY_POINT IN LISTS ARG_ENTRY_POINTS)
-    # 각 엔트리 포인트 이름 앞에 "-entry"를 붙여서 리스트에 추가합니다.
-    # 예: "vertMain" -> "-entry" "vertMain"
-    list(APPEND SLANG_ENTRY_FLAGS "-entry" ${ENTRY_POINT})
-  endforeach()
-
-  # 생성된 모든 .spv 파일의 경로를 저장할 리스트입니다.
   set(SPIRV_OUTPUTS "")
 
-  # 모든 셰이더 소스 파일을 순회하는 루프
-  foreach(SLANG_SOURCE IN LISTS ARG_SOURCES)
-    get_filename_component(BASENAME ${SLANG_SOURCE} NAME_WE)
-    set(SPIRV_OUTPUT ${SHADERS_OUTPUT_DIR}/${BASENAME}.spv)
+  foreach(SRC IN LISTS ARG_SOURCES)
+    get_filename_component(BASENAME ${SRC} NAME)       # 파일명.ext
+    set(OUT ${SHADERS_OUTPUT_DIR}/${BASENAME}.spv)
 
-    add_custom_command(
-            OUTPUT ${SPIRV_OUTPUT}
-            COMMAND ${SLANGC_EXECUTABLE}
-                    ${SLANG_SOURCE}
-                    -target spirv
-                    -profile spirv_1_4
-                    -emit-spirv-directly
-                    -fvk-use-entrypoint-name
-                    ${SLANG_ENTRY_FLAGS}   #<-- 여기서 동적으로 생성된 플래그 목록을 사용합니다.
-                    -g3
-                    -o ${SPIRV_OUTPUT}
-            DEPENDS ${SLANG_SOURCE}
-            COMMENT "Compiling [${ARG_ENTRY_POINTS}] -> ${BASENAME}.spv"
-            VERBATIM
-    )
-    list(APPEND SPIRV_OUTPUTS ${SPIRV_OUTPUT})
+    # 확장자로 스테이지 자동 인식 (glslc는 확장자 인식함)
+    get_filename_component(EXT ${SRC} EXT)
+    string(TOLOWER ${EXT} EXT)
+
+    if (GLSLC_EXECUTABLE)
+      add_custom_command(
+        OUTPUT ${OUT}
+        COMMAND ${GLSLC_EXECUTABLE}
+                --target-env=vulkan1.3
+                -O -g
+                ${SRC}
+                -o ${OUT}
+        DEPENDS ${SRC}
+        COMMENT "Compiling GLSL ${BASENAME} -> ${OUT}"
+        VERBATIM
+      )
+    else()
+      # glslangValidator 경로 (확장자 기반으로 자동 스테이지 인식)
+      add_custom_command(
+        OUTPUT ${OUT}
+        COMMAND ${GLSLANG_VALIDATOR}
+                -V --target-env vulkan1.3
+                -g
+                -o ${OUT} ${SRC}
+        DEPENDS ${SRC}
+        COMMENT "Compiling GLSL ${BASENAME} -> ${OUT}"
+        VERBATIM
+      )
+    endif()
+
+    list(APPEND SPIRV_OUTPUTS ${OUT})
   endforeach()
 
-  # 모든 .spv 파일 생성에 의존하는 메타 타겟을 생성합니다.
   add_custom_target(${TARGET} DEPENDS ${SPIRV_OUTPUTS})
 endfunction()
 
-set(SLANGC_EXECUTABLE "F:/VulkanSDK/1.4.321.1/Bin/slangc.exe")
-
-set(GRAPHICS_SHADERS
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/model.slang
+# GLSL 소스 나열
+set(GLSL_SHADERS
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/model.vert
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/model.frag
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/cloth.vert
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/cloth.frag
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/cloth.comp
 )
 
-compile_slang_shaders(graphics_shaders_target
-  SOURCES       ${GRAPHICS_SHADERS}
-  ENTRY_POINTS  vertexMain fragmentMain
-)
+# 컴파일 타깃 생성
+compile_glsl_shaders(glsl_shaders_target SOURCES ${GLSL_SHADERS})
 
-set(GRAPHICS_AND_COMPUTE_SHADERS
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/cloth.slang
-)
-# 모든 엔트리 포인트를 지정합니다.
-compile_slang_shaders(particle_shader_target
-    SOURCES       ${GRAPHICS_AND_COMPUTE_SHADERS}
-    ENTRY_POINTS  vertexMain fragmentMain computeMain
-)
-
-add_dependencies(PowerEngine 
-    graphics_shaders_target
-    particle_shader_target
-)
+# 실행 파일이 셰이더 빌드 결과에 의존하도록
+add_dependencies(PowerEngine glsl_shaders_target)
