@@ -5,6 +5,9 @@ struct Vertex;
 struct Camera;
 class Model;
 class Texture2D;
+class MouseInteractor;
+
+#include "vulkan_utils.h"
 
 class Context
 {
@@ -16,7 +19,8 @@ public:
 	Context& operator=(Context&& rhs) = delete;
 	~Context();
 
-	void Draw(Camera& camera, float dt);
+	void Update(Camera& camera, MouseInteractor& mouse_interactor, float dt);
+	void Draw();
 	void WaitIdle();
 
 private:
@@ -56,12 +60,7 @@ private:
 	};
 
 private:
-	struct Counts {
-		uint32_t ubo = 0;
-		uint32_t sb = 0;
-		uint32_t sampler = 0;
-		uint32_t layout = 0;
-	} counts_;
+	vku::Counts counts_;
 
 	// The cloth is made from a grid of particles
 	struct Particle {
@@ -84,7 +83,7 @@ private:
 
 	// Cloth definition parameters
 	struct Cloth {
-		glm::uvec2 gridsize{ 60, 60 };
+		glm::uvec2 gridsize{ 100, 100 };
 		glm::vec2 size{ 5.0f, 5.0f };
 	} cloth_;
 
@@ -165,8 +164,9 @@ private:
 private:
 	void DrawImgui();
 
+	void UpdateMouseInteractor(Camera& camera, MouseInteractor& mouse_interactor);
 	void UpdateComputeUBO();
-	void RecordComputeCommandBuffer();
+	void RecordMassSpringComputeCommandBuffer();
 	void AddComputeToComputeBarrier(const vk::raii::CommandBuffer& cmd, vk::Buffer buffer);
 	void AddGraphicsToComputeBarrier(const vk::raii::CommandBuffer& cmd, vk::Buffer buffer);
 	void AddComputeToGraphicsBarrier(const vk::raii::CommandBuffer& cmd, vk::Buffer buffer);

@@ -3,6 +3,8 @@
 #include "camera.h"
 
 class Context;
+struct Camera;
+class MouseInteractor;
 
 class Window
 {
@@ -22,15 +24,18 @@ private:
     static void CursorPosCallback(GLFWwindow* w, double x, double y);
     static void FramebufferResizeCallback(GLFWwindow* w, int width, int height);
     static void KeyCallback(GLFWwindow* w, int key, int scancode, int action, int mods);
+    static void MouseButtonCallback(GLFWwindow* w, int button, int action, int mods);
 
     void OnFramebufferResize(int width, int height);
     void OnCursorPos(double x, double y);
     void OnKey(int key, int scancode, int action, int mods);
+    void OnMouseClick(int button, int action, int mods);
 
 private:
     GLFWwindow* glfw_window_{};
     std::unique_ptr<Context> ctx_;
     std::unique_ptr<Camera> camera_;
+    std::unique_ptr<MouseInteractor> mouse_interactor_{ nullptr };
 
     bool mouse_enabled_ = false;
 
@@ -39,9 +44,7 @@ private:
 
     bool framebuffer_resized_ = false;
 
-    // 마우스 상태는 인스턴스 멤버로
-    bool   first_mouse_ = true;
-    double last_x_ = 0.0, last_y_ = 0.0;
+    bool first_mouse_ = true;
 
     void ProcessKeyboard(float dt);
 };

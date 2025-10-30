@@ -9,12 +9,14 @@ struct Camera {
     Camera(Camera&&) = delete;
     Camera& operator=(Camera&&) = delete;
 
-    glm::vec3 position{ 4.0f, 4.0f, 4.0f };
-    float yaw = 224.3f;   // 오른쪽이 0°, -Z를 보고 시작하려면 -90°
+    glm::vec3 position{ 0.0f, 4.0f, 4.0f };
+    float yaw = -90.0f;   // 오른쪽이 0°, -Z를 보고 시작하려면 -90°
     float pitch = -38.2f;
     float fov = 60.0f;    // 줌
     float move_speed = 4.0f; // m/s
     float sensitivity = 0.1f;
+    float width = 0.0f;
+    float height = 0.0f;
 
     glm::vec3 Front() const;
     glm::vec3 Right() const;

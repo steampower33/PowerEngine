@@ -2,6 +2,13 @@
 
 namespace vku
 {
+	struct Counts {
+		uint32_t ubo = 0;
+		uint32_t sb = 0;
+		uint32_t sampler = 0;
+		uint32_t layout = 0;
+	};
+
 	inline [[nodiscard]] vk::raii::ShaderModule CreateShaderModule(vk::raii::Device& device, const std::vector<char>& code) {
 		vk::ShaderModuleCreateInfo createInfo{ .codeSize = code.size(), .pCode = reinterpret_cast<const uint32_t*>(code.data()) };
 		vk::raii::ShaderModule shaderModule{ device, createInfo };
@@ -114,7 +121,7 @@ namespace vku
 		vk::raii::Device& device,
 		vk::raii::Queue& queue,
 		vk::raii::CommandPool& commandPool,
-		const std::vector<T>& vertices,                 // ★ 인자로 받기
+		const std::vector<T>& vertices,
 		vk::raii::Buffer& vertexBuffer,
 		vk::raii::DeviceMemory& vertexBufferMemory)
 	{
@@ -145,7 +152,7 @@ namespace vku
 		vk::raii::Device& device,
 		vk::raii::Queue& queue,
 		vk::raii::CommandPool& commandPool,
-		const std::vector<IndexT>& indices,             // ★ 인자로 받기
+		const std::vector<IndexT>& indices,
 		vk::raii::Buffer& indexBuffer,
 		vk::raii::DeviceMemory& indexBufferMemory)
 	{

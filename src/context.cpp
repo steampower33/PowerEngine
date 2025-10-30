@@ -3,7 +3,8 @@
 #include "vertex.h"
 #include "camera.h"
 #include "model.h"
-#include "texture_2d.hpp"
+#include "texture_2d.h"
+#include "mouse_interactor.h"
 
 #include "context.h"
 
@@ -54,7 +55,17 @@ Context::~Context()
 	ImGui::DestroyContext();
 }
 
-void Context::Draw(Camera& camera, float dt)
+void Context::Update(Camera& camera, MouseInteractor& mouse_interactor, float dt)
+{
+	UpdateMouseInteractor(camera, mouse_interactor);
+
+	sphere_->UpdateUBO(camera, glm::vec2(swapchain_->swapchain_extent_.width, swapchain_->swapchain_extent_.height), current_frame_);
+
+	UpdateComputeUBO();
+	UpdateGraphicsUBO(camera);
+}
+
+void Context::Draw()
 {
 	DrawImgui();
 
@@ -68,10 +79,7 @@ void Context::Draw(Camera& camera, float dt)
 	uint64_t graphicsWaitValue = computeSignalValue;
 	uint64_t graphicsSignalValue = ++timeline_value_;
 
-	UpdateComputeUBO();
-	UpdateGraphicsUBO(camera);
-
-	RecordComputeCommandBuffer();
+	RecordMassSpringComputeCommandBuffer();
 	{
 		// Submit compute work
 		vk::TimelineSemaphoreSubmitInfo computeTimelineInfo{
@@ -140,6 +148,10 @@ void Context::Draw(Camera& camera, float dt)
 			if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR || framebuffer_resized_) {
 				framebuffer_resized_ = false;
 				swapchain_->RecreateSwapChain(physical_device_, device_, surface_);
+				depth_image_ = nullptr;
+				depth_image_memory_ = nullptr;
+				depth_image_view_ = nullptr;
+				CreateDepthResources();
 			}
 			else if (result != vk::Result::eSuccess) {
 				throw std::runtime_error("failed to present swap chain image!");
@@ -148,6 +160,10 @@ void Context::Draw(Camera& camera, float dt)
 		catch (const vk::SystemError& e) {
 			if (e.code().value() == static_cast<int>(vk::Result::eErrorOutOfDateKHR)) {
 				swapchain_->RecreateSwapChain(physical_device_, device_, surface_);
+				depth_image_ = nullptr;
+				depth_image_memory_ = nullptr;
+				depth_image_view_ = nullptr;
+				CreateDepthResources();
 				return;
 			}
 			else {
@@ -252,14 +268,21 @@ void Context::DrawImgui()
 	ImGui::Render();
 }
 
+void Context::UpdateMouseInteractor(Camera& camera, MouseInteractor& mouse_interactor)
+{
+	mouse_interactor.Update(camera, glm::vec2(swapchain_->swapchain_extent_.width, swapchain_->swapchain_extent_.height), *sphere_);
+}
+
 void Context::UpdateComputeUBO()
 {
 	compute_.uniform_data.deltaT = 0.000005f;
+	compute_.uniform_data.springStiffness = 10000.0f;
+	compute_.uniform_data.spherePos = glm::vec4(sphere_->position_, 0.0f);
 
 	memcpy(compute_.uniform_buffers_mapped[current_frame_], &compute_.uniform_data, sizeof(Compute::UniformData));
 }
 
-void Context::RecordComputeCommandBuffer()
+void Context::RecordMassSpringComputeCommandBuffer()
 {
 	const auto& cmd = compute_.command_buffers[current_frame_];
 
@@ -428,7 +451,7 @@ void Context::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 
 	{
 		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphics_.pipelines.sphere);
-		cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, graphics_.pipeline_layouts.sphere, 0, *graphics_.descriptor_sets[current_frame_], nullptr);
+		cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, graphics_.pipeline_layouts.sphere, 0, *sphere_->descriptor_sets[current_frame_], nullptr);
 		cmd.bindVertexBuffers(0, { sphere_->vertex_buffer_ }, { 0 });
 		cmd.bindIndexBuffer(*sphere_->index_buffer_, 0, vk::IndexType::eUint32);
 		cmd.drawIndexed(sphere_->indices_.size(), 1, 0, 0, 0);
@@ -706,6 +729,21 @@ void Context::CreateCommandBuffers()
 
 void Context::CreateDescriptorSetLayout()
 {
+	// Model
+	{
+		std::array layoutBindings{
+		vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr),
+			vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr)
+		};
+		counts_.ubo += 1;
+		counts_.sampler += 1;
+		counts_.layout += 1;
+
+		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
+		sphere_->descriptor_set_layout = vk::raii::DescriptorSetLayout(device_, layoutInfo);
+
+	}
+
 	// Graphics
 	{
 		std::array layoutBindings{
@@ -785,6 +823,24 @@ void Context::CreateDescriptorPools() {
 
 void Context::CreateUniformBuffers()
 {
+	//Models
+	{
+		sphere_->uniform_buffers.clear();
+		sphere_->uniform_buffers_memory.clear();
+		sphere_->uniform_buffers_mapped.clear();
+
+		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+			vk::DeviceSize bufferSize = sizeof(Graphics::UniformData);
+			vk::raii::Buffer buffer({});
+			vk::raii::DeviceMemory bufferMem({});
+			vku::CreateBuffer(physical_device_, device_, bufferSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
+			sphere_->uniform_buffers.emplace_back(std::move(buffer));
+			sphere_->uniform_buffers_memory.emplace_back(std::move(bufferMem));
+			sphere_->uniform_buffers_mapped.emplace_back(sphere_->uniform_buffers_memory[i].mapMemory(0, bufferSize));
+		}
+
+	}
+
 	// Graphics
 	{
 		graphics_.uniform_buffers.clear();
@@ -903,6 +959,50 @@ void Context::CreateParticleDatas()
  
 void Context::CreateDescriptorSets()
 {
+	// Models
+	{
+		std::vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, sphere_->descriptor_set_layout);
+		vk::DescriptorSetAllocateInfo allocInfo{};
+		allocInfo.descriptorPool = *descriptor_pool_;
+		allocInfo.descriptorSetCount = MAX_FRAMES_IN_FLIGHT;
+		allocInfo.pSetLayouts = layouts.data();
+		sphere_->descriptor_sets.clear();
+		sphere_->descriptor_sets = device_.allocateDescriptorSets(allocInfo);
+
+		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+			vk::DescriptorBufferInfo bufferInfo(
+				sphere_->uniform_buffers[i],
+				0,
+				sizeof(Graphics::UniformData)
+			);
+			vk::DescriptorImageInfo imageInfo{
+				.sampler = texture_->texture_sampler_,
+				.imageView = texture_->texture_image_view_,
+				.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
+			};
+			std::array descriptorWrites{
+					vk::WriteDescriptorSet{
+						.dstSet = sphere_->descriptor_sets[i],
+						.dstBinding = 0,
+						.dstArrayElement = 0,
+						.descriptorCount = 1,
+						.descriptorType = vk::DescriptorType::eUniformBuffer,
+						.pBufferInfo = &bufferInfo
+					},
+					vk::WriteDescriptorSet{
+						.dstSet = sphere_->descriptor_sets[i],
+						.dstBinding = 1,
+						.dstArrayElement = 0,
+						.descriptorCount = 1,
+						.descriptorType = vk::DescriptorType::eCombinedImageSampler,
+						.pImageInfo = &imageInfo
+					}
+			};
+			device_.updateDescriptorSets(descriptorWrites, {});
+		}
+
+	}
+
 	// Graphics
 	{
 		std::vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, graphics_.descriptor_set_layout);

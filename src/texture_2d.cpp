@@ -1,4 +1,4 @@
-#include "texture_2d.hpp"
+#include "texture_2d.h"
 #include "vulkan_utils.h"
 
 Texture2D::Texture2D(const std::string texturePath, vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool)

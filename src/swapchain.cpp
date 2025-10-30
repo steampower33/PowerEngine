@@ -91,7 +91,6 @@ void Swapchain::CleanupSwapChain() {
 	swapchain_ = nullptr;
 }
 
-
 void Swapchain::RecreateSwapChain(vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device, vk::raii::SurfaceKHR& surface) {
 	int width = 0, height = 0;
 	glfwGetFramebufferSize(glfw_window_, &width, &height);

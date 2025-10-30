@@ -1,6 +1,7 @@
-#include "model.h"
 #include "vertex.h"
-#include "vulkan_utils.h"
+#include "camera.h"
+
+#include "model.h"
 
 Model::Model(const std::string modelPath, vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool)
 {
@@ -132,4 +133,36 @@ void Model::LoadModel(const std::string& modelPath) {
             }
         }
     }
+}
+
+void Model::ApplyTransform(const glm::quat& rotationDelta, const glm::vec3& translationDelta)
+{   // 1. 컴포넌트를 직접 업데이트한다.
+
+    // 기존 위치에 이동량을 더한다.
+    position_ += translationDelta;
+
+    // 기존 회전에 새로운 회전을 '앞에' 곱해준다.
+    // (q_new * q_old 는 old 회전 후 new 회전을 적용하는 것과 같음)
+    rotation_ = rotationDelta * rotation_;
+
+    // 쿼터니언은 부동소수점 오차로 길이가 1이 아니게 될 수 있으므로,
+    // 주기적으로 정규화해주는 것이 좋다.
+    rotation_ = glm::normalize(rotation_);
+
+    glm::mat4 scaleMatrix = glm::scale(glm::mat4(1.0f), scale_);
+    glm::mat4 rotationMatrix = glm::mat4_cast(rotation_); // 쿼터니언 -> 회전 행렬
+    glm::mat4 translationMatrix = glm::translate(glm::mat4(1.0f), position_);
+
+    // 2. SRT (Scale -> Rotate -> Translate) 순서로 조합하여 최종 월드 행렬을 계산한다.
+    world_ = translationMatrix * rotationMatrix * scaleMatrix;
+}
+
+void Model::UpdateUBO(Camera& camera, glm::vec2 viewportSize, uint32_t currentFrame)
+{
+    uniform_data.model = world_;
+    uniform_data.view = camera.View();
+    uniform_data.proj = camera.Proj(viewportSize.x, viewportSize.y);
+
+    memcpy(uniform_buffers_mapped[currentFrame], &uniform_data, sizeof(uniform_data));
+
 }

@@ -1,6 +1,9 @@
 #pragma once
 
 struct Vertex;
+struct Camera;
+
+#include "vulkan_utils.h"
 
 class Model
 {
@@ -13,11 +16,26 @@ public:
 	Model& operator=(const Model& rhs) = delete;
 	Model& operator=(Model&& rhs) = delete;
 
+	struct UniformData {
+		glm::mat4 model;
+		glm::mat4 view;
+		glm::mat4 proj;
+	} uniform_data;
+
 	void LoadModel(const std::string& modelPath);
 
-	glm::vec3 position_ = { 0.0f, 0.0f, 0.0f };
-	glm::vec3 rotation_ = { 0.0f, 0.0f, 0.0f };
-	glm::vec3 scale_ = { 1.0f, 1.0f, 1.0f };
+	vk::raii::DescriptorSetLayout descriptor_set_layout{ nullptr };
+	std::vector<vk::raii::DescriptorSet> descriptor_sets;
+
+	std::vector<vk::raii::Buffer> uniform_buffers;
+	std::vector<vk::raii::DeviceMemory> uniform_buffers_memory;
+	std::vector<void*> uniform_buffers_mapped;
+
+	glm::mat4 world_{ 1.0f };
+	glm::vec3 position_{ 0.0f, 0.0f, 0.0f };
+	glm::quat rotation_{ 1.0f, 0.0f, 0.0f, 0.0f };
+	glm::vec3 scale_{ 1.0f, 1.0f, 1.0f };
+	float radius_ = 1.0f;
 
 	std::vector<Vertex> vertices_;
 	std::vector<uint32_t> indices_;
@@ -25,4 +43,8 @@ public:
 	vk::raii::DeviceMemory vertex_buffer_memory_ = nullptr;
 	vk::raii::Buffer index_buffer_ = nullptr;
 	vk::raii::DeviceMemory index_buffer_memory_ = nullptr;
+
+	void ApplyTransform(const glm::quat& rotationDelta, const glm::vec3& translationDelta);
+	void UpdateUBO(Camera& camera, glm::vec2 viewportSize, uint32_t currentFrame);
+
 };
