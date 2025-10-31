@@ -36,6 +36,7 @@ Context::Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height)
 	CreateUniformBuffers();
 
 	CreateDescriptorSets();
+	//CreateComputePipelines();
 	CreateGraphicsPipelines();
 	CreateSyncObjects();
 
@@ -422,20 +423,30 @@ void Context::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 	cmd.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchain_->swapchain_extent_));
 
 	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphics_.pipelines.sphere);
-
+	
 	const uint32_t baseObjectOffset = static_cast<uint32_t>(current_frame_ * graphics_.object_slot_size * kMaxObjects);
 	uint32_t globalOffset = static_cast<uint32_t>(current_frame_ * graphics_.global_slot_size);
+
+	// Global Set
+	cmd.bindDescriptorSets(
+		vk::PipelineBindPoint::eGraphics,
+		graphics_.pipeline_layouts.model,
+		0,
+		{ *graphics_.global_set },
+		{ globalOffset }
+	);
 	for (uint32_t i = 0; i < model_count_; ++i) {
 		uint32_t objectOffset = baseObjectOffset + i * static_cast<uint32_t>(graphics_.object_slot_size);
 
 		std::array<uint32_t, 2> dynOffsets{ globalOffset, objectOffset };
 
+		// Object set
 		cmd.bindDescriptorSets(
 			vk::PipelineBindPoint::eGraphics,
 			graphics_.pipeline_layouts.model,
-			0,
-			*graphics_.descriptor_set,
-			dynOffsets
+			1,
+			{ *graphics_.object_set },
+			{ objectOffset }   // ← Set 1에도 동적 바인딩 1개 → 오프셋 1개만
 		);
 
 		cmd.bindVertexBuffers(0, { models[i]->vertex_buffer_ }, { 0 });
@@ -697,19 +708,47 @@ void Context::CreateDescriptorSetLayout()
 {
 	// Model
 	{
+		// Global UBO
+		{
+			std::array layoutBindings{
+				vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eVertex, nullptr),
+			};
+			counts_.ubo_dynamic += 1;
+			counts_.layout += 1;
+
+			vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
+			graphics_.global_set_layout = vk::raii::DescriptorSetLayout(device_, layoutInfo);
+		}
+
+		// Object UBO + Sampler
+		{
+			std::array layoutBindings{
+				vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eVertex, nullptr),
+				vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr)
+			};
+			counts_.ubo_dynamic += 1;
+			counts_.sampler += 1;
+			counts_.layout += 1;
+
+			vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
+			graphics_.object_set_layout = vk::raii::DescriptorSetLayout(device_, layoutInfo);
+		}
+	}
+
+	// Cloth Compute
+	{
 		std::array layoutBindings{
 			vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eVertex, nullptr),
-			vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eVertex, nullptr),
-			vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr)
+			vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr)
 		};
-		counts_.ubo_dynamic += 2;
-		counts_.sampler += 1;
+		counts_.ubo_dynamic += 1;
+		counts_.sb += 1;
 		counts_.layout += 1;
 
 		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
-		graphics_.descriptor_set_layout = vk::raii::DescriptorSetLayout(device_, layoutInfo);
-	}
+		compute_.descriptor_set_layout = vk::raii::DescriptorSetLayout(device_, layoutInfo);
 
+	}
 }
 
 void Context::CreateDescriptorPools() {
@@ -807,48 +846,81 @@ void Context::CreateDescriptorSets()
 {
 	// Models
 	{
-		vk::DescriptorSetAllocateInfo allocInfo{};
-		allocInfo.descriptorPool = *descriptor_pool_;
-		allocInfo.descriptorSetCount = 1;
-		allocInfo.pSetLayouts = &*graphics_.descriptor_set_layout;
+		// Global UBO
+		{
+			vk::DescriptorSetAllocateInfo allocInfo{};
+			allocInfo.descriptorPool = *descriptor_pool_;
+			allocInfo.descriptorSetCount = 1;
+			allocInfo.pSetLayouts = &*graphics_.global_set_layout;
 
-		auto sets = vk::raii::DescriptorSets{ device_, allocInfo };
-		graphics_.descriptor_set = std::move(sets.front());
+			auto sets = vk::raii::DescriptorSets{ device_, allocInfo };
+			graphics_.global_set = std::move(sets.front());
 
-		vk::DescriptorBufferInfo globalUboBufferInfo{ *graphics_.global_ubo, 0, sizeof(Graphics::GlobalUboData) };
-		vk::DescriptorBufferInfo objectUboBufferInfo{ *graphics_.object_ubo, 0, sizeof(Graphics::ObjectUboData) };
-		vk::DescriptorImageInfo imageInfo{
-			.sampler = texture_->texture_sampler_,
-			.imageView = texture_->texture_image_view_,
-			.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
-		};
-		std::array descriptorWrites{
-			 vk::WriteDescriptorSet{
-				.dstSet = graphics_.descriptor_set,
-				.dstBinding = 0,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
-				.pBufferInfo = &globalUboBufferInfo
-			},
-			vk::WriteDescriptorSet{
-				.dstSet = graphics_.descriptor_set,
-				.dstBinding = 1,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
-				.pBufferInfo = &objectUboBufferInfo
-			},
-			vk::WriteDescriptorSet{
-				.dstSet = graphics_.descriptor_set,
-				.dstBinding = 2,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = vk::DescriptorType::eCombinedImageSampler,
-				.pImageInfo = &imageInfo
-			},
-		};
-		device_.updateDescriptorSets(descriptorWrites, {});
+			vk::DescriptorBufferInfo globalUboBufferInfo{ *graphics_.global_ubo, 0, sizeof(Graphics::GlobalUboData) };
+
+			std::array descriptorWrites{
+				 vk::WriteDescriptorSet{
+					.dstSet = graphics_.global_set,
+					.dstBinding = 0,
+					.dstArrayElement = 0,
+					.descriptorCount = 1,
+					.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
+					.pBufferInfo = &globalUboBufferInfo
+				}
+			};
+			device_.updateDescriptorSets(descriptorWrites, {});
+		}
+
+		// Object UBO + Sampler
+		{
+			vk::DescriptorSetAllocateInfo allocInfo{};
+			allocInfo.descriptorPool = *descriptor_pool_;
+			allocInfo.descriptorSetCount = 1;
+			allocInfo.pSetLayouts = &*graphics_.object_set_layout;
+
+			auto sets = vk::raii::DescriptorSets{ device_, allocInfo };
+			graphics_.object_set = std::move(sets.front());
+
+			vk::DescriptorBufferInfo objectUboBufferInfo{ *graphics_.object_ubo, 0, sizeof(Graphics::ObjectUboData) };
+			vk::DescriptorImageInfo imageInfo{
+				.sampler = texture_->texture_sampler_,
+				.imageView = texture_->texture_image_view_,
+				.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
+			};
+			std::array descriptorWrites{
+				vk::WriteDescriptorSet{
+					.dstSet = graphics_.object_set,
+					.dstBinding = 0,
+					.dstArrayElement = 0,
+					.descriptorCount = 1,
+					.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
+					.pBufferInfo = &objectUboBufferInfo
+				},
+				vk::WriteDescriptorSet{
+					.dstSet = graphics_.object_set,
+					.dstBinding = 1,
+					.dstArrayElement = 0,
+					.descriptorCount = 1,
+					.descriptorType = vk::DescriptorType::eCombinedImageSampler,
+					.pImageInfo = &imageInfo
+				}
+			};
+			device_.updateDescriptorSets(descriptorWrites, {});
+		}
+	}
+
+}
+
+void Context::CreateComputePipelines()
+{
+	{
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(device_, vku::ReadFile("shaders/integrate.comp.spv"));
+
+		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "compMain" };
+		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = 1, .pSetLayouts = &*compute_.descriptor_set_layout };
+		compute_.pipeline_layouts.integrate = vk::raii::PipelineLayout(device_, pipelineLayoutInfo);
+		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *compute_.pipeline_layouts.integrate };
+		compute_.pipelines.integrate = vk::raii::Pipeline(device_, nullptr, pipelineInfo);
 	}
 
 }
@@ -928,7 +1000,12 @@ void Context::CreateGraphicsPipelines()
 		};
 		vk::PipelineDynamicStateCreateInfo dynamicState{ .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()), .pDynamicStates = dynamicStates.data() };
 
-		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = 1, .pSetLayouts = &*graphics_.descriptor_set_layout, .pushConstantRangeCount = 0 };
+		std::array<vk::DescriptorSetLayout, 2> setLayouts(*graphics_.global_set_layout, *graphics_.object_set_layout);
+
+		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
+			.setLayoutCount = 2,
+			.pSetLayouts = setLayouts.data(),
+			.pushConstantRangeCount = 0 };
 
 		graphics_.pipeline_layouts.model = vk::raii::PipelineLayout(device_, pipelineLayoutInfo);
 

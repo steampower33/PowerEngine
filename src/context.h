@@ -61,6 +61,43 @@ private:
 private:
 	vku::Counts counts_;
 
+	struct Compute {
+		struct SimParams {
+			float dt;
+			float gravityY;
+			uint32_t numIters;
+			float stretchCompliance; // α_stretch
+			float restitution;       // 충돌 반발
+		} sim_params;
+		vk::raii::Buffer sim_params_ubo{ nullptr };
+		vk::raii::DeviceMemory sim_params_ubo_memory{ nullptr };
+		void* sim_params_ubo_mapped{ nullptr };
+
+		struct Particle {
+			glm::vec4 x;      // xyz=pos, w=invMass
+			glm::vec4 v;      // xyz=vel
+			glm::vec4 xp;     // xyz=predicted pos (x + dt*v), w=reserved
+		};
+
+		struct Edge {
+			uint32_t i, j;
+			float restLen;
+			float compliance; // per-constraint alpha override (0이면 SimParams 사용)
+			float lambda;     // XPBD 누적 라그랑주 승수
+		};
+
+		vk::raii::DescriptorSetLayout descriptor_set_layout{ nullptr };
+		vk::raii::DescriptorSet descriptor_set{ nullptr };
+
+		struct PipelineLayouts {
+			vk::raii::PipelineLayout integrate{ nullptr };
+		} pipeline_layouts;
+
+		struct Pipelines {
+			vk::raii::Pipeline integrate{ nullptr };
+		} pipelines;
+	} compute_;
+
 	struct Graphics {
 		struct GlobalUboData {
 			glm::mat4 view;
@@ -79,8 +116,10 @@ private:
 		void* object_ubo_mapped{ nullptr };
 		vk::DeviceSize object_slot_size;
 
-		vk::raii::DescriptorSetLayout descriptor_set_layout{ nullptr };
-		vk::raii::DescriptorSet descriptor_set{ nullptr };
+		vk::raii::DescriptorSetLayout global_set_layout{ nullptr };
+		vk::raii::DescriptorSet global_set{ nullptr };
+		vk::raii::DescriptorSetLayout object_set_layout{ nullptr };
+		vk::raii::DescriptorSet object_set{ nullptr };
 
 		struct PipelineLayouts {
 			vk::raii::PipelineLayout model{ nullptr };
@@ -98,7 +137,6 @@ private:
 	std::vector<std::unique_ptr<Model>> models;
 
 	std::unique_ptr<Texture2D> texture_{ nullptr };
-
 private:
 	vk::raii::Image depth_image_ = nullptr;
 	vk::raii::DeviceMemory depth_image_memory_ = nullptr;
@@ -156,6 +194,7 @@ private:
 	void CreateUniformBuffers();
 
 	void CreateDescriptorSets();
+	void CreateComputePipelines();
 	void CreateGraphicsPipelines();
 	void CreateSyncObjects();
 

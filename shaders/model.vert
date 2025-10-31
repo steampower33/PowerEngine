@@ -1,7 +1,7 @@
 #version 450
 
 layout(set=0, binding=0) uniform GlobalUBO { mat4 view; mat4 proj; } global;
-layout(set=0, binding=1) uniform ObjectUBO { mat4 model; } object;
+layout(set=1, binding=0) uniform ObjectUBO { mat4 model; } object;
 
 layout(location = 0) in vec4 inPos;   // VSInput.pos
 layout(location = 1) in vec4 inUV;    // VSInput.uv (float4였으니 vec4로 받되 .xy만 사용)
