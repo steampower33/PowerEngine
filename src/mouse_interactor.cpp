@@ -9,19 +9,46 @@ MouseInteractor::MouseInteractor()
 
 }
 
-void MouseInteractor::Update(const Camera& camera, const glm::vec2& viewportSize, Model& model)
+std::pair<int, float> MouseInteractor::PickClosestModel(
+    const Ray& ray, const std::vector<std::unique_ptr<Model>>& models) const
+{
+    int picked = -1;
+    float minDist = std::numeric_limits<float>::max();
+
+    for (int i = 0; i < static_cast<int>(models.size()); ++i) {
+        float dist = 0.0f;
+        if (ray.Intersects(*models[i], dist)) {
+            if (dist < minDist) {
+                minDist = dist;
+                picked = i;
+            }
+        }
+    }
+    return { picked, minDist };
+}
+
+void MouseInteractor::Update(const Camera& camera,
+    const glm::vec2& viewportSize,
+    std::vector<std::unique_ptr<Model>>& models)
 {
     const float EPS = 1e-6f;
+
+    // (옵션) 선택 인덱스 안전화: 모델이 삭제되었을 수도 있음
+    if (selected_ >= static_cast<int>(models.size()))
+        selected_ = -1;
 
     // ===== 좌클릭: 회전 시작 =====
     if (is_left_button_down_event && !is_dragging_ && !is_translating_) {
         Ray ray = CalculateMouseRay(camera, viewportSize);
-        float dist = 0.0f;
-        if (ray.Intersects(model, dist)) {
+        auto [idx, dist] = PickClosestModel(ray, models);
+
+        if (idx >= 0) {
+            selected_ = idx;
             is_dragging_ = true;
             has_prev_ = true;
 
-            glm::vec3 center = model.position_;
+            const Model& m = *models[selected_];
+            glm::vec3 center = m.position_;
             glm::vec3 pickPoint = ray.origin + ray.direction * dist;
             glm::vec3 v = pickPoint - center;
             float len = glm::length(v);
@@ -33,15 +60,20 @@ void MouseInteractor::Update(const Camera& camera, const glm::vec2& viewportSize
                 prevVector_ = v / len;
             }
         }
+        else {
+            // 아무 것도 안 맞았으면 선택 해제
+            selected_ = -1;
+        }
     }
 
     // ===== 우클릭: 이동 시작 (깊이 비율 고정) =====
     if (is_right_button_down_event && !is_translating_ && !is_dragging_) {
-        // 먼저 피킹해서 dist 얻기
         Ray ray = CalculateMouseRay(camera, viewportSize);
-        float dist = 0.0f;
-        if (ray.Intersects(model, dist)) {
-            // near/far로 비율 계산
+        auto [idx, dist] = PickClosestModel(ray, models);
+
+        if (idx >= 0) {
+            selected_ = idx;
+
             glm::vec3 wNear, wFar;
             CalculateMouseNearFar(camera, viewportSize, wNear, wFar);
             glm::vec3 nf = wFar - wNear;
@@ -50,16 +82,21 @@ void MouseInteractor::Update(const Camera& camera, const glm::vec2& viewportSize
                 is_translating_ = true;
                 has_grab_point_ = true;
 
-                prevRatio_ = dist / nfLen;                      // DX12 코드의 nearToFar 비율
-                prevPos_ = wNear + nf * prevRatio_;           // 시작 교점 저장
+                prevRatio_ = dist / nfLen;          // near→far 비율
+                prevPos_ = wNear + nf * prevRatio_; // 시작 교점
             }
+        }
+        else {
+            selected_ = -1;
         }
     }
 
     // ===== 좌 드래그: 회전 진행 =====
-    if (is_dragging_ && has_prev_) {
+    if (is_dragging_ && has_prev_ && selected_ >= 0) {
         Ray ray = CalculateMouseRay(camera, viewportSize);
         float dist = 0.0f;
+        Model& model = *models[selected_];
+
         if (ray.Intersects(model, dist)) {
             glm::vec3 center = model.position_;
             glm::vec3 pickPoint = ray.origin + ray.direction * dist;
@@ -86,7 +123,7 @@ void MouseInteractor::Update(const Camera& camera, const glm::vec2& viewportSize
                     }
                     if (angle > 0.0f) {
                         glm::quat dq = glm::angleAxis(angle, axis);
-                        model.ApplyTransform(dq, glm::vec3(0.0f)); // 회전만
+                        model.ApplyTransform(dq, glm::vec3(0.0f)); // 회전
                     }
                 }
                 prevVector_ = curr;
@@ -95,7 +132,7 @@ void MouseInteractor::Update(const Camera& camera, const glm::vec2& viewportSize
     }
 
     // ===== 우 드래그: 이동 진행 (깊이 비율 유지) =====
-    if (is_translating_ && has_grab_point_) {
+    if (is_translating_ && has_grab_point_ && selected_ >= 0) {
         glm::vec3 wNear, wFar;
         CalculateMouseNearFar(camera, viewportSize, wNear, wFar);
         glm::vec3 nf = wFar - wNear;
@@ -104,9 +141,8 @@ void MouseInteractor::Update(const Camera& camera, const glm::vec2& viewportSize
             glm::vec3 newPos = wNear + nf * prevRatio_;
             glm::vec3 delta = newPos - prevPos_;
 
-            // 너무 작은 이동은 무시 (디바운스)
             if (glm::length(delta) > 1e-8f) {
-                model.ApplyTransform(glm::quat(1, 0, 0, 0), delta);
+                models[selected_]->ApplyTransform(glm::quat(1, 0, 0, 0), delta); // 이동
                 prevPos_ = newPos;
             }
         }

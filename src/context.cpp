@@ -22,7 +22,10 @@ Context::Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height)
 	CreateCommandBuffers();
 
 	{
-		sphere_ = std::make_unique<Model>("assets/models/sphere.gltf", physical_device_, device_, queue_, command_pool_);
+		models.reserve(kMaxObjects);
+
+		models.emplace_back(std::make_unique<Model>("assets/models/sphere.gltf", physical_device_, device_, queue_, command_pool_, model_count_, glm::vec3(0.0f, 0.0f, 0.0f)));
+		models.emplace_back(std::make_unique<Model>("assets/models/sphere.gltf", physical_device_, device_, queue_, command_pool_, model_count_, glm::vec3(2.0f, 0.0f, 0.0f)));
 
 		texture_ = std::make_unique<Texture2D>("assets/textures/vulkan_cloth_rgba.ktx", physical_device_, device_, queue_, command_pool_);
 	}
@@ -31,11 +34,9 @@ Context::Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height)
 	CreateDescriptorPools();
 
 	CreateUniformBuffers();
-	CreateParticleDatas();
 
 	CreateDescriptorSets();
 	CreateGraphicsPipelines();
-	CreateComputePipelines();
 	CreateSyncObjects();
 
 	CreateDepthResources();
@@ -58,10 +59,6 @@ Context::~Context()
 void Context::Update(Camera& camera, MouseInteractor& mouse_interactor, float dt)
 {
 	UpdateMouseInteractor(camera, mouse_interactor);
-
-	sphere_->UpdateUBO(camera, glm::vec2(swapchain_->swapchain_extent_.width, swapchain_->swapchain_extent_.height), current_frame_);
-
-	UpdateComputeUBO();
 	UpdateGraphicsUBO(camera);
 }
 
@@ -74,36 +71,39 @@ void Context::Draw()
 	while (vk::Result::eTimeout == device_.waitForFences(*in_flight_fences_[current_frame_], vk::True, UINT64_MAX));
 	device_.resetFences(*in_flight_fences_[current_frame_]);
 
-	uint64_t computeWaitValue = timeline_value_;
-	uint64_t computeSignalValue = ++timeline_value_;
-	uint64_t graphicsWaitValue = computeSignalValue;
+	//uint64_t computeWaitValue = timeline_value_;
+	//uint64_t computeSignalValue = ++timeline_value_;
+	//uint64_t graphicsWaitValue = computeSignalValue;
+	//uint64_t graphicsSignalValue = ++timeline_value_;
+
+	//RecordXPBDComputeCommandBuffer();
+	//{
+	//	// Submit compute work
+	//	vk::TimelineSemaphoreSubmitInfo computeTimelineInfo{
+	//		.waitSemaphoreValueCount = 1,
+	//		.pWaitSemaphoreValues = &computeWaitValue,
+	//		.signalSemaphoreValueCount = 1,
+	//		.pSignalSemaphoreValues = &computeSignalValue
+	//	};
+
+	//	vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eComputeShader };
+
+	//	vk::SubmitInfo computeSubmitInfo{
+	//		.pNext = &computeTimelineInfo,
+	//		.waitSemaphoreCount = 1,
+	//		.pWaitSemaphores = &*semaphore_,
+	//		.pWaitDstStageMask = waitStages,
+	//		.commandBufferCount = 1,
+	//		.pCommandBuffers = &*compute_.command_buffers[current_frame_],
+	//		.signalSemaphoreCount = 1,
+	//		.pSignalSemaphores = &*semaphore_
+	//	};
+
+	//	queue_.submit(computeSubmitInfo, nullptr);
+	//}
+
+	uint64_t graphicsWaitValue = timeline_value_;
 	uint64_t graphicsSignalValue = ++timeline_value_;
-
-	RecordMassSpringComputeCommandBuffer();
-	{
-		// Submit compute work
-		vk::TimelineSemaphoreSubmitInfo computeTimelineInfo{
-			.waitSemaphoreValueCount = 1,
-			.pWaitSemaphoreValues = &computeWaitValue,
-			.signalSemaphoreValueCount = 1,
-			.pSignalSemaphoreValues = &computeSignalValue
-		};
-
-		vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eComputeShader };
-
-		vk::SubmitInfo computeSubmitInfo{
-			.pNext = &computeTimelineInfo,
-			.waitSemaphoreCount = 1,
-			.pWaitSemaphores = &*semaphore_,
-			.pWaitDstStageMask = waitStages,
-			.commandBufferCount = 1,
-			.pCommandBuffers = &*compute_.command_buffers[current_frame_],
-			.signalSemaphoreCount = 1,
-			.pSignalSemaphores = &*semaphore_
-		};
-
-		queue_.submit(computeSubmitInfo, nullptr);
-	}
 
 	RecordGraphicsCommandBuffer(imageIndex);
 	{
@@ -262,6 +262,7 @@ void Context::DrawImgui()
 
 		ImGuiIO& io = ImGui::GetIO(); (void)io;
 		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+
 		ImGui::End();
 	}
 
@@ -270,60 +271,11 @@ void Context::DrawImgui()
 
 void Context::UpdateMouseInteractor(Camera& camera, MouseInteractor& mouse_interactor)
 {
-	mouse_interactor.Update(camera, glm::vec2(swapchain_->swapchain_extent_.width, swapchain_->swapchain_extent_.height), *sphere_);
+	mouse_interactor.Update(camera, glm::vec2(swapchain_->swapchain_extent_.width, swapchain_->swapchain_extent_.height), models);
 }
 
 void Context::UpdateComputeUBO()
 {
-	compute_.uniform_data.deltaT = 0.00001f;
-	compute_.uniform_data.springStiffness = 1000.0f;
-	compute_.uniform_data.spherePos = glm::vec4(sphere_->position_, 0.0f);
-
-	memcpy(compute_.uniform_buffers_mapped[current_frame_], &compute_.uniform_data, sizeof(Compute::UniformData));
-}
-
-void Context::RecordMassSpringComputeCommandBuffer()
-{
-	const auto& cmd = compute_.command_buffers[current_frame_];
-
-	cmd.begin({});
-
-	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, *compute_.pipeline);
-
-	// Dispatch the compute job
-	const uint32_t iterations = 64;
-	for (uint32_t j = 0; j < iterations; j++) {
-		// 핑퐁: 디스크립터 셋을 번갈아 바인딩
-		read_set_ = 1 - read_set_; // read_set_은 Context 클래스의 멤버 변수여야 합니다.
-		cmd.bindDescriptorSets(
-			vk::PipelineBindPoint::eCompute,
-			*compute_.pipeline_layout,
-			0, // firstSet
-			{ *compute_.descriptor_sets[read_set_] }, // 바인딩할 셋
-			nullptr // dynamicOffsets
-		);
-
-		// 마지막 반복에서만 법선을 계산하라는 신호를 푸시 콘스턴트로 보냄
-		uint32_t calculateNormals = (j == iterations - 1) ? 1 : 0;
-		cmd.pushConstants<uint32_t>(
-			*compute_.pipeline_layout,
-			vk::ShaderStageFlagBits::eCompute,
-			0, // offset
-			calculateNormals
-		);
-
-		// 컴퓨트 작업 실행
-		cmd.dispatch(cloth_.gridsize.x / 10, cloth_.gridsize.y / 10, 1);
-
-		// Don't add a barrier on the last iteration
-		if (j != iterations - 1) {
-			// 이번 Dispatch에서 쓴 버퍼를 다음 Dispatch에서 읽기 전에 동기화
-			vk::Buffer bufferToBarrier = (read_set_ == 0) ? *particle_datas_.input : *particle_datas_.output;
-			AddComputeToComputeBarrier(cmd, bufferToBarrier);
-		}
-	}
-
-	cmd.end();
 }
 
 void Context::AddComputeToComputeBarrier(const vk::raii::CommandBuffer& cmd, vk::Buffer buffer)
@@ -381,11 +333,31 @@ void Context::AddComputeToGraphicsBarrier(const vk::raii::CommandBuffer& cmd, vk
 
 void Context::UpdateGraphicsUBO(Camera& camera)
 {
-	graphics_.uniform_data.model = glm::mat4(1.0f);
-	graphics_.uniform_data.view = camera.View();
-	graphics_.uniform_data.proj = camera.Proj(swapchain_->swapchain_extent_.width, swapchain_->swapchain_extent_.height);
+	// Global UBO 쓰기
+	{
+		const uint32_t globalOffset = static_cast<uint32_t>(current_frame_ * graphics_.global_slot_size);
+		auto* dst = static_cast<std::byte*>(graphics_.global_ubo_mapped) + globalOffset;
 
-	memcpy(graphics_.uniform_buffers_mapped[current_frame_], &graphics_.uniform_data, sizeof(graphics_.uniform_data));
+		graphics_.global_ubo_data.view = camera.View();
+		graphics_.global_ubo_data.proj = camera.Proj(swapchain_->swapchain_extent_.width, swapchain_->swapchain_extent_.height);
+
+		std::memcpy(dst, &graphics_.global_ubo_data, sizeof(Graphics::GlobalUboData));
+		// HostCoherent라 flush 생략, 비-coherent면 flush 필요
+	}
+
+	// Object UBO 쓰기
+	{
+		const uint32_t baseObjectOffset = static_cast<uint32_t>(current_frame_ * graphics_.object_slot_size * kMaxObjects);
+		for (uint32_t i = 0; i < model_count_; i++)
+		{
+			const uint32_t objOff = baseObjectOffset + i * static_cast<uint32_t>(graphics_.object_slot_size);
+			auto* dst = static_cast<std::byte*>(graphics_.object_ubo_mapped) + objOff;
+
+			graphics_.object_ubo_data.model = models[i]->world_;
+
+			std::memcpy(dst, &graphics_.object_ubo_data, sizeof(Graphics::ObjectUboData));
+		}
+	}
 }
 
 void Context::RecordGraphicsCommandBuffer(uint32_t imageIndex)
@@ -449,21 +421,26 @@ void Context::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 	cmd.setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapchain_->swapchain_extent_.width), static_cast<float>(swapchain_->swapchain_extent_.height), 0.0f, 1.0f));
 	cmd.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchain_->swapchain_extent_));
 
-	{
-		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphics_.pipelines.sphere);
-		cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, graphics_.pipeline_layouts.sphere, 0, *sphere_->descriptor_sets[current_frame_], nullptr);
-		cmd.bindVertexBuffers(0, { sphere_->vertex_buffer_ }, { 0 });
-		cmd.bindIndexBuffer(*sphere_->index_buffer_, 0, vk::IndexType::eUint32);
-		cmd.drawIndexed(sphere_->indices_.size(), 1, 0, 0, 0);
-	}
+	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphics_.pipelines.sphere);
 
-	{
-		vk::Buffer finalResultBuffer = (read_set_ == 0) ? *particle_datas_.input : *particle_datas_.output;
-		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphics_.pipelines.cloth);
-		cmd.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, graphics_.pipeline_layouts.cloth, 0, *graphics_.descriptor_sets[current_frame_], nullptr);
-		cmd.bindVertexBuffers(0, { finalResultBuffer }, { 0 });
-		cmd.bindIndexBuffer(*particle_datas_.index_buffer, 0, vk::IndexType::eUint32);
-		cmd.drawIndexed(particle_datas_.index_count, 1, 0, 0, 0);
+	const uint32_t baseObjectOffset = static_cast<uint32_t>(current_frame_ * graphics_.object_slot_size * kMaxObjects);
+	uint32_t globalOffset = static_cast<uint32_t>(current_frame_ * graphics_.global_slot_size);
+	for (uint32_t i = 0; i < model_count_; ++i) {
+		uint32_t objectOffset = baseObjectOffset + i * static_cast<uint32_t>(graphics_.object_slot_size);
+
+		std::array<uint32_t, 2> dynOffsets{ globalOffset, objectOffset };
+
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			graphics_.pipeline_layouts.model,
+			0,
+			*graphics_.descriptor_set,
+			dynOffsets
+		);
+
+		cmd.bindVertexBuffers(0, { models[i]->vertex_buffer_ }, { 0 });
+		cmd.bindIndexBuffer(*models[i]->index_buffer_, 0, vk::IndexType::eUint32);
+		cmd.drawIndexed(models[i]->indices_.size(), 1, 0, 0, 0);
 	}
 
 	// Imgui Render
@@ -500,8 +477,9 @@ void Context::CreateInstance() {
 		requiredLayers.assign(validation_layers.begin(), validation_layers.end());
 	}
 
+	vk::raii::Context context;
 	// Check if the required layers are supported by the Vulkan implementation.
-	auto layerProperties = context_.enumerateInstanceLayerProperties();
+	auto layerProperties = context.enumerateInstanceLayerProperties();
 	for (auto const& requiredLayer : requiredLayers)
 	{
 		if (std::ranges::none_of(layerProperties,
@@ -516,7 +494,7 @@ void Context::CreateInstance() {
 	auto requiredExtensions = GetRequiredExtensions();
 
 	// Check if the required extensions are supported by the Vulkan implementation.
-	auto extensionProperties = context_.enumerateInstanceExtensionProperties();
+	auto extensionProperties = context.enumerateInstanceExtensionProperties();
 	for (auto const& requiredExtension : requiredExtensions)
 	{
 		if (std::ranges::none_of(extensionProperties,
@@ -533,7 +511,7 @@ void Context::CreateInstance() {
 		.ppEnabledLayerNames = requiredLayers.data(),
 		.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size()),
 		.ppEnabledExtensionNames = requiredExtensions.data() };
-	instance_ = vk::raii::Instance(context_, createInfo);
+	instance_ = vk::raii::Instance(context, createInfo);
 }
 
 std::vector<const char*> Context::GetRequiredExtensions() {
@@ -702,7 +680,6 @@ void Context::CreateCommandPool() {
 	command_pool_ = vk::raii::CommandPool(device_, poolInfo);
 }
 
-
 void Context::CreateCommandBuffers()
 {
 	// Graphics
@@ -714,17 +691,6 @@ void Context::CreateCommandBuffers()
 		allocInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
 		graphics_.command_buffers = vk::raii::CommandBuffers(device_, allocInfo);
 	}
-
-	// Compute
-	{
-		compute_.command_buffers.clear();
-		vk::CommandBufferAllocateInfo allocInfo{};
-		allocInfo.commandPool = *command_pool_;
-		allocInfo.level = vk::CommandBufferLevel::ePrimary;
-		allocInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
-		compute_.command_buffers = vk::raii::CommandBuffers(device_, allocInfo);
-	}
-
 }
 
 void Context::CreateDescriptorSetLayout()
@@ -732,25 +698,11 @@ void Context::CreateDescriptorSetLayout()
 	// Model
 	{
 		std::array layoutBindings{
-		vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr),
-			vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr)
+			vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eVertex, nullptr),
+			vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eVertex, nullptr),
+			vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr)
 		};
-		counts_.ubo += 1;
-		counts_.sampler += 1;
-		counts_.layout += 1;
-
-		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
-		sphere_->descriptor_set_layout = vk::raii::DescriptorSetLayout(device_, layoutInfo);
-
-	}
-
-	// Graphics
-	{
-		std::array layoutBindings{
-			vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr),
-			vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr)
-		};
-		counts_.ubo += 1;
+		counts_.ubo_dynamic += 2;
 		counts_.sampler += 1;
 		counts_.layout += 1;
 
@@ -758,20 +710,6 @@ void Context::CreateDescriptorSetLayout()
 		graphics_.descriptor_set_layout = vk::raii::DescriptorSetLayout(device_, layoutInfo);
 	}
 
-	// Compute
-	{
-		std::array layoutBindings{
-			vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute, nullptr),
-			vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute, nullptr),
-			vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eCompute, nullptr),
-		};
-		counts_.ubo += 1 * 2;
-		counts_.sb += 2 * 2;
-		counts_.layout += 2;
-
-		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
-		compute_.descriptor_set_layout = vk::raii::DescriptorSetLayout(device_, layoutInfo);
-	}
 }
 
 void Context::CreateDescriptorPools() {
@@ -779,18 +717,21 @@ void Context::CreateDescriptorPools() {
 	std::vector<vk::DescriptorPoolSize> poolSizes;
 
 	if (counts_.ubo > 0) {
-		poolSizes.emplace_back(vk::DescriptorType::eUniformBuffer, MAX_FRAMES_IN_FLIGHT * counts_.ubo);
+		poolSizes.emplace_back(vk::DescriptorType::eUniformBuffer, counts_.ubo);
+	}
+	if (counts_.ubo_dynamic > 0) {
+		poolSizes.emplace_back(vk::DescriptorType::eUniformBufferDynamic, counts_.ubo_dynamic);
 	}
 	if (counts_.sampler > 0) {
-		poolSizes.emplace_back(vk::DescriptorType::eCombinedImageSampler, MAX_FRAMES_IN_FLIGHT * counts_.sampler);
+		poolSizes.emplace_back(vk::DescriptorType::eCombinedImageSampler, counts_.sampler);
 	}
 	if (counts_.sb > 0) {
-		poolSizes.emplace_back(vk::DescriptorType::eStorageBuffer, MAX_FRAMES_IN_FLIGHT * counts_.sb);
+		poolSizes.emplace_back(vk::DescriptorType::eStorageBuffer, counts_.sb);
 	}
 
 	vk::DescriptorPoolCreateInfo poolInfo{
 		.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-		.maxSets = counts_.layout * MAX_FRAMES_IN_FLIGHT,
+		.maxSets = counts_.layout,
 		.poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
 		.pPoolSizes = poolSizes.data()
 	};
@@ -823,325 +764,93 @@ void Context::CreateDescriptorPools() {
 
 void Context::CreateUniformBuffers()
 {
-	//Models
+	// Global
 	{
-		sphere_->uniform_buffers.clear();
-		sphere_->uniform_buffers_memory.clear();
-		sphere_->uniform_buffers_mapped.clear();
+		graphics_.global_ubo.clear();
+		graphics_.global_ubo_memory.clear();
+		graphics_.global_ubo_mapped = nullptr;
 
-		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-			vk::DeviceSize bufferSize = sizeof(Graphics::UniformData);
-			vk::raii::Buffer buffer({});
-			vk::raii::DeviceMemory bufferMem({});
-			vku::CreateBuffer(physical_device_, device_, bufferSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
-			sphere_->uniform_buffers.emplace_back(std::move(buffer));
-			sphere_->uniform_buffers_memory.emplace_back(std::move(bufferMem));
-			sphere_->uniform_buffers_mapped.emplace_back(sphere_->uniform_buffers_memory[i].mapMemory(0, bufferSize));
-		}
+		auto limits = physical_device_.getProperties().limits;
+		graphics_.global_slot_size = (sizeof(Graphics::GlobalUboData) + limits.minUniformBufferOffsetAlignment - 1)
+			& ~(limits.minUniformBufferOffsetAlignment - 1);
+		vk::DeviceSize totalSize = graphics_.global_slot_size * MAX_FRAMES_IN_FLIGHT;
 
+		vk::raii::Buffer buffer({});
+		vk::raii::DeviceMemory bufferMem({});
+		vku::CreateBuffer(physical_device_, device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
+		graphics_.global_ubo = std::move(buffer);
+		graphics_.global_ubo_memory = std::move(bufferMem);
+		graphics_.global_ubo_mapped = graphics_.global_ubo_memory.mapMemory(0, totalSize);
 	}
 
-	// Graphics
+	// Object
 	{
-		graphics_.uniform_buffers.clear();
-		graphics_.uniform_buffers_memory.clear();
-		graphics_.uniform_buffers_mapped.clear();
+		graphics_.object_ubo.clear();
+		graphics_.object_ubo_memory.clear();
+		graphics_.object_ubo_mapped = nullptr;
 
-		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-			vk::DeviceSize bufferSize = sizeof(Graphics::UniformData);
-			vk::raii::Buffer buffer({});
-			vk::raii::DeviceMemory bufferMem({});
-			vku::CreateBuffer(physical_device_, device_, bufferSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
-			graphics_.uniform_buffers.emplace_back(std::move(buffer));
-			graphics_.uniform_buffers_memory.emplace_back(std::move(bufferMem));
-			graphics_.uniform_buffers_mapped.emplace_back(graphics_.uniform_buffers_memory[i].mapMemory(0, bufferSize));
-		}
+		auto limits = physical_device_.getProperties().limits;
+		graphics_.object_slot_size = (sizeof(Graphics::ObjectUboData) + limits.minUniformBufferOffsetAlignment - 1)
+			& ~(limits.minUniformBufferOffsetAlignment - 1);
+		vk::DeviceSize totalSize = graphics_.object_slot_size * MAX_FRAMES_IN_FLIGHT * kMaxObjects;
+
+		vk::raii::Buffer buffer({});
+		vk::raii::DeviceMemory bufferMem({});
+		vku::CreateBuffer(physical_device_, device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
+		graphics_.object_ubo = std::move(buffer);
+		graphics_.object_ubo_memory = std::move(bufferMem);
+		graphics_.object_ubo_mapped = graphics_.object_ubo_memory.mapMemory(0, totalSize);
 	}
-
-	// Compute
-	{
-		// Set some initial values
-		float dx = cloth_.size.x / (cloth_.gridsize.x - 1);
-		float dy = cloth_.size.y / (cloth_.gridsize.y - 1);
-
-		compute_.uniform_data.restDistH = dx;
-		compute_.uniform_data.restDistV = dy;
-		compute_.uniform_data.restDistD = sqrtf(dx * dx + dy * dy);
-		compute_.uniform_data.particleCount = cloth_.gridsize;
-
-		compute_.uniform_buffers.clear();
-		compute_.uniform_buffers_memory.clear();
-		compute_.uniform_buffers_mapped.clear();
-
-		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-			vk::DeviceSize bufferSize = sizeof(Compute::UniformData);
-			vk::raii::Buffer buffer({});
-			vk::raii::DeviceMemory bufferMem({});
-			vku::CreateBuffer(physical_device_, device_, bufferSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
-			compute_.uniform_buffers.emplace_back(std::move(buffer));
-			compute_.uniform_buffers_memory.emplace_back(std::move(bufferMem));
-			compute_.uniform_buffers_mapped.emplace_back(compute_.uniform_buffers_memory[i].mapMemory(0, bufferSize));
-		}
-	}
-}
-
-void Context::CreateParticleDatas()
-{
-	std::vector<Particle> particleBuffer(cloth_.gridsize.x * cloth_.gridsize.y);
-
-	float dx = cloth_.size.x / (cloth_.gridsize.x - 1);
-	float dy = cloth_.size.y / (cloth_.gridsize.y - 1);
-	float du = 1.0f / (cloth_.gridsize.x - 1);
-	float dv = 1.0f / (cloth_.gridsize.y - 1);
-
-	// Set up a flat cloth_ that falls onto sphere
-	glm::mat4 transM = glm::translate(glm::mat4(1.0f), glm::vec3(-cloth_.size.x / 2.0f, 2.0f, -cloth_.size.y / 2.0f));
-	for (uint32_t i = 0; i < cloth_.gridsize.y; i++) {
-		for (uint32_t j = 0; j < cloth_.gridsize.x; j++) {
-			uint32_t index = i * cloth_.gridsize.x + j;
-			particleBuffer[index].pos = transM * glm::vec4(dx * j, 0.0f, dy * i, 1.0f);
-			particleBuffer[index].vel = glm::vec4(0.0f);
-			particleBuffer[index].uv = glm::vec4(du * j, dv * i, 0.0f, 0.0f);
-			particleBuffer[index].normal = glm::vec4(0.0f);
-		}
-	}
-
-	vk::DeviceSize bufferSize = sizeof(Particle) * particleBuffer.size();
-
-	// Create a staging buffer used to upload data to the gpu
-	vk::raii::Buffer stagingBuffer({});
-	vk::raii::DeviceMemory stagingBufferMemory({});
-	vku::CreateBuffer(physical_device_, device_, bufferSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBuffer, stagingBufferMemory);
-
-	void* dataStaging = stagingBufferMemory.mapMemory(0, bufferSize);
-	memcpy(dataStaging, particleBuffer.data(), (size_t)bufferSize);
-	stagingBufferMemory.unmapMemory();
-
-	{
-		particle_datas_.input.clear();
-		particle_datas_.input_memory.clear();
-
-		vk::raii::Buffer shaderStorageBufferTemp({});
-		vk::raii::DeviceMemory shaderStorageBufferTempMemory({});
-		vku::CreateBuffer(physical_device_, device_, bufferSize, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst, vk::MemoryPropertyFlagBits::eDeviceLocal, shaderStorageBufferTemp, shaderStorageBufferTempMemory);
-		vku::CopyBuffer(device_, queue_, command_pool_, stagingBuffer, shaderStorageBufferTemp, bufferSize);
-		particle_datas_.input = std::move(shaderStorageBufferTemp);
-		particle_datas_.input_memory = std::move(shaderStorageBufferTempMemory);
-	}
-
-	{
-		particle_datas_.output.clear();
-		particle_datas_.output_memory.clear();
-
-		vk::raii::Buffer shaderStorageBufferTemp({});
-		vk::raii::DeviceMemory shaderStorageBufferTempMemory({});
-		vku::CreateBuffer(physical_device_, device_, bufferSize, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst, vk::MemoryPropertyFlagBits::eDeviceLocal, shaderStorageBufferTemp, shaderStorageBufferTempMemory);
-		vku::CopyBuffer(device_, queue_, command_pool_, stagingBuffer, shaderStorageBufferTemp, bufferSize);
-		particle_datas_.output = std::move(shaderStorageBufferTemp);
-		particle_datas_.output_memory = std::move(shaderStorageBufferTempMemory);
-	}
-
-	// Indices
-	std::vector<uint32_t> indices;
-	for (uint32_t y = 0; y < cloth_.gridsize.y - 1; y++) {
-		for (uint32_t x = 0; x < cloth_.gridsize.x; x++) {
-			indices.push_back((y + 1) * cloth_.gridsize.x + x);
-			indices.push_back((y)*cloth_.gridsize.x + x);
-		}
-		// Primitive restart (signaled by special value 0xFFFFFFFF)
-		indices.push_back(0xFFFFFFFF);
-	}
-	uint32_t indexBufferSize = static_cast<uint32_t>(indices.size()) * sizeof(uint32_t);
-	particle_datas_.index_count = static_cast<uint32_t>(indices.size());
-
-	vku::CreateIndexBuffer(physical_device_, device_, queue_, command_pool_, indices, particle_datas_.index_buffer, particle_datas_.index_buffer_memory);
 }
 
 void Context::CreateDescriptorSets()
 {
 	// Models
 	{
-		std::vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, sphere_->descriptor_set_layout);
 		vk::DescriptorSetAllocateInfo allocInfo{};
 		allocInfo.descriptorPool = *descriptor_pool_;
-		allocInfo.descriptorSetCount = MAX_FRAMES_IN_FLIGHT;
-		allocInfo.pSetLayouts = layouts.data();
-		sphere_->descriptor_sets.clear();
-		sphere_->descriptor_sets = device_.allocateDescriptorSets(allocInfo);
+		allocInfo.descriptorSetCount = 1;
+		allocInfo.pSetLayouts = &*graphics_.descriptor_set_layout;
 
-		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-			vk::DescriptorBufferInfo bufferInfo(
-				sphere_->uniform_buffers[i],
-				0,
-				sizeof(Graphics::UniformData)
-			);
-			vk::DescriptorImageInfo imageInfo{
-				.sampler = texture_->texture_sampler_,
-				.imageView = texture_->texture_image_view_,
-				.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
-			};
-			std::array descriptorWrites{
-					vk::WriteDescriptorSet{
-						.dstSet = sphere_->descriptor_sets[i],
-						.dstBinding = 0,
-						.dstArrayElement = 0,
-						.descriptorCount = 1,
-						.descriptorType = vk::DescriptorType::eUniformBuffer,
-						.pBufferInfo = &bufferInfo
-					},
-					vk::WriteDescriptorSet{
-						.dstSet = sphere_->descriptor_sets[i],
-						.dstBinding = 1,
-						.dstArrayElement = 0,
-						.descriptorCount = 1,
-						.descriptorType = vk::DescriptorType::eCombinedImageSampler,
-						.pImageInfo = &imageInfo
-					}
-			};
-			device_.updateDescriptorSets(descriptorWrites, {});
-		}
+		auto sets = vk::raii::DescriptorSets{ device_, allocInfo };
+		graphics_.descriptor_set = std::move(sets.front());
 
+		vk::DescriptorBufferInfo globalUboBufferInfo{ *graphics_.global_ubo, 0, sizeof(Graphics::GlobalUboData) };
+		vk::DescriptorBufferInfo objectUboBufferInfo{ *graphics_.object_ubo, 0, sizeof(Graphics::ObjectUboData) };
+		vk::DescriptorImageInfo imageInfo{
+			.sampler = texture_->texture_sampler_,
+			.imageView = texture_->texture_image_view_,
+			.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
+		};
+		std::array descriptorWrites{
+			 vk::WriteDescriptorSet{
+				.dstSet = graphics_.descriptor_set,
+				.dstBinding = 0,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
+				.pBufferInfo = &globalUboBufferInfo
+			},
+			vk::WriteDescriptorSet{
+				.dstSet = graphics_.descriptor_set,
+				.dstBinding = 1,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
+				.pBufferInfo = &objectUboBufferInfo
+			},
+			vk::WriteDescriptorSet{
+				.dstSet = graphics_.descriptor_set,
+				.dstBinding = 2,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eCombinedImageSampler,
+				.pImageInfo = &imageInfo
+			},
+		};
+		device_.updateDescriptorSets(descriptorWrites, {});
 	}
 
-	// Graphics
-	{
-		std::vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, graphics_.descriptor_set_layout);
-		vk::DescriptorSetAllocateInfo allocInfo{};
-		allocInfo.descriptorPool = *descriptor_pool_;
-		allocInfo.descriptorSetCount = MAX_FRAMES_IN_FLIGHT;
-		allocInfo.pSetLayouts = layouts.data();
-		graphics_.descriptor_sets.clear();
-		graphics_.descriptor_sets = device_.allocateDescriptorSets(allocInfo);
-
-		for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-			vk::DescriptorBufferInfo bufferInfo(
-				graphics_.uniform_buffers[i],
-				0,
-				sizeof(Graphics::UniformData)
-			);
-			vk::DescriptorImageInfo imageInfo{
-				.sampler = texture_->texture_sampler_,
-				.imageView = texture_->texture_image_view_,
-				.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
-			};
-			std::array descriptorWrites{
-					vk::WriteDescriptorSet{
-						.dstSet = graphics_.descriptor_sets[i],
-						.dstBinding = 0,
-						.dstArrayElement = 0,
-						.descriptorCount = 1,
-						.descriptorType = vk::DescriptorType::eUniformBuffer,
-						.pBufferInfo = &bufferInfo
-					},
-					vk::WriteDescriptorSet{
-						.dstSet = graphics_.descriptor_sets[i],
-						.dstBinding = 1,
-						.dstArrayElement = 0,
-						.descriptorCount = 1,
-						.descriptorType = vk::DescriptorType::eCombinedImageSampler,
-						.pImageInfo = &imageInfo
-					}
-			};
-			device_.updateDescriptorSets(descriptorWrites, {});
-		}
-	}
-
-	// Compute
-	{
-		std::vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, compute_.descriptor_set_layout);
-		vk::DescriptorSetAllocateInfo allocInfo{};
-		allocInfo.descriptorPool = *descriptor_pool_;
-		allocInfo.descriptorSetCount = MAX_FRAMES_IN_FLIGHT;
-		allocInfo.pSetLayouts = layouts.data();
-		compute_.descriptor_sets.clear();
-		compute_.descriptor_sets = device_.allocateDescriptorSets(allocInfo);
-
-		{
-			vk::DescriptorBufferInfo inputInfo(particle_datas_.input, 0, sizeof(Particle) * cloth_.gridsize.x * cloth_.gridsize.y);
-			vk::DescriptorBufferInfo outputInfo(particle_datas_.output, 0, sizeof(Particle) * cloth_.gridsize.x * cloth_.gridsize.y);
-			vk::DescriptorBufferInfo bufferInfo(
-				compute_.uniform_buffers[0],
-				0,
-				sizeof(Compute::UniformData)
-			);
-			std::array descriptorWrites{
-				vk::WriteDescriptorSet{
-					.dstSet = *compute_.descriptor_sets[0],
-					.dstBinding = 0,
-					.dstArrayElement = 0,
-					.descriptorCount = 1,
-					.descriptorType = vk::DescriptorType::eStorageBuffer,
-					.pImageInfo = nullptr,
-					.pBufferInfo = &inputInfo,
-					.pTexelBufferView = nullptr
-				},
-				vk::WriteDescriptorSet{
-					.dstSet = *compute_.descriptor_sets[0],
-					.dstBinding = 1,
-					.dstArrayElement = 0,
-					.descriptorCount = 1,
-					.descriptorType = vk::DescriptorType::eStorageBuffer,
-					.pImageInfo = nullptr,
-					.pBufferInfo = &outputInfo,
-					.pTexelBufferView = nullptr
-				},
-				vk::WriteDescriptorSet{
-					.dstSet = *compute_.descriptor_sets[0],
-					.dstBinding = 2,
-					.dstArrayElement = 0,
-					.descriptorCount = 1,
-					.descriptorType = vk::DescriptorType::eUniformBuffer,
-					.pImageInfo = nullptr,
-					.pBufferInfo = &bufferInfo,
-					.pTexelBufferView = nullptr
-				}
-			};
-			device_.updateDescriptorSets(descriptorWrites, {});
-		}
-
-		{
-			vk::DescriptorBufferInfo inputInfo(particle_datas_.output, 0, sizeof(Particle) * cloth_.gridsize.x * cloth_.gridsize.y);
-			vk::DescriptorBufferInfo outputInfo(particle_datas_.input, 0, sizeof(Particle) * cloth_.gridsize.x * cloth_.gridsize.y);
-			vk::DescriptorBufferInfo bufferInfo(
-				compute_.uniform_buffers[1],
-				0,
-				sizeof(Compute::UniformData)
-			);
-			std::array descriptorWrites{
-				vk::WriteDescriptorSet{
-					.dstSet = *compute_.descriptor_sets[1],
-					.dstBinding = 0,
-					.dstArrayElement = 0,
-					.descriptorCount = 1,
-					.descriptorType = vk::DescriptorType::eStorageBuffer,
-					.pImageInfo = nullptr,
-					.pBufferInfo = &inputInfo,
-					.pTexelBufferView = nullptr
-				},
-				vk::WriteDescriptorSet{
-					.dstSet = *compute_.descriptor_sets[1],
-					.dstBinding = 1,
-					.dstArrayElement = 0,
-					.descriptorCount = 1,
-					.descriptorType = vk::DescriptorType::eStorageBuffer,
-					.pImageInfo = nullptr,
-					.pBufferInfo = &outputInfo,
-					.pTexelBufferView = nullptr
-				},
-				vk::WriteDescriptorSet{
-					.dstSet = *compute_.descriptor_sets[1],
-					.dstBinding = 2,
-					.dstArrayElement = 0,
-					.descriptorCount = 1,
-					.descriptorType = vk::DescriptorType::eUniformBuffer,
-					.pImageInfo = nullptr,
-					.pBufferInfo = &bufferInfo,
-					.pTexelBufferView = nullptr
-				}
-			};
-			device_.updateDescriptorSets(descriptorWrites, {});
-		}
-	}
 }
 
 void Context::CreateGraphicsPipelines()
@@ -1221,7 +930,7 @@ void Context::CreateGraphicsPipelines()
 
 		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = 1, .pSetLayouts = &*graphics_.descriptor_set_layout, .pushConstantRangeCount = 0 };
 
-		graphics_.pipeline_layouts.sphere = vk::raii::PipelineLayout(device_, pipelineLayoutInfo);
+		graphics_.pipeline_layouts.model = vk::raii::PipelineLayout(device_, pipelineLayoutInfo);
 
 		vk::Format depthFormat = vku::FindDepthFormat(physical_device_);
 
@@ -1236,7 +945,7 @@ void Context::CreateGraphicsPipelines()
 			.pDepthStencilState = &depthStencil,
 			.pColorBlendState = &colorBlending,
 			.pDynamicState = &dynamicState,
-			.layout = graphics_.pipeline_layouts.sphere,
+			.layout = graphics_.pipeline_layouts.model,
 			.renderPass = nullptr },
 		  {.colorAttachmentCount = 1, .pColorAttachmentFormats = &swapchain_->swapchain_surface_format_.format, .depthAttachmentFormat = depthFormat }
 		};
@@ -1244,131 +953,6 @@ void Context::CreateGraphicsPipelines()
 		graphics_.pipelines.sphere = vk::raii::Pipeline(device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 	}
 
-	// Cloth
-	{
-		auto vertCode = vku::ReadFile("shaders/cloth.vert.spv");
-		auto fragCode = vku::ReadFile("shaders/cloth.frag.spv");
-
-		vk::raii::ShaderModule vertModule = vku::CreateShaderModule(device_, vertCode);
-		vk::raii::ShaderModule fragModule = vku::CreateShaderModule(device_, fragCode);
-
-		vk::PipelineShaderStageCreateInfo vertStage{
-			.stage = vk::ShaderStageFlagBits::eVertex,
-			.module = *vertModule,
-			.pName = "main"              // GLSL 기본 엔트리
-		};
-		vk::PipelineShaderStageCreateInfo fragStage{
-			.stage = vk::ShaderStageFlagBits::eFragment,
-			.module = *fragModule,
-			.pName = "main"
-		};
-		std::array<vk::PipelineShaderStageCreateInfo, 2> stages{ vertStage, fragStage };
-
-		auto bindingDescription = Particle::GetBindingDescription();
-		auto attributeDescriptions = Particle::GetAttributeDescriptions();
-		vk::PipelineVertexInputStateCreateInfo vertexInputInfo{
-			.vertexBindingDescriptionCount = 1,
-			.pVertexBindingDescriptions = &bindingDescription,
-			.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size()),
-			.pVertexAttributeDescriptions = attributeDescriptions.data()
-		};
-		vk::PipelineInputAssemblyStateCreateInfo inputAssembly{
-			.topology = vk::PrimitiveTopology::eTriangleStrip,
-			.primitiveRestartEnable = vk::True
-		};
-		vk::PipelineViewportStateCreateInfo viewportState{
-			.viewportCount = 1,
-			.scissorCount = 1
-		};
-		vk::PipelineRasterizationStateCreateInfo rasterizer{
-			.depthClampEnable = vk::False,
-			.rasterizerDiscardEnable = vk::False,
-			.polygonMode = vk::PolygonMode::eFill,
-			.cullMode = vk::CullModeFlagBits::eNone,
-			.frontFace = vk::FrontFace::eCounterClockwise,
-			.depthBiasEnable = vk::False
-		};
-		rasterizer.lineWidth = 1.0f;
-		vk::PipelineMultisampleStateCreateInfo multisampling{
-			.rasterizationSamples = msaa_samples_,
-			.sampleShadingEnable = vk::False
-		};
-		vk::PipelineDepthStencilStateCreateInfo depthStencil{
-			.depthTestEnable = vk::True,
-			.depthWriteEnable = vk::True,
-			.depthCompareOp = vk::CompareOp::eLess,
-			.depthBoundsTestEnable = vk::False,
-			.stencilTestEnable = vk::False
-		};
-		vk::PipelineColorBlendAttachmentState colorBlendAttachment;
-		colorBlendAttachment.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
-		colorBlendAttachment.blendEnable = vk::False;
-
-		vk::PipelineColorBlendStateCreateInfo colorBlending{
-			.logicOpEnable = vk::False,
-			.logicOp = vk::LogicOp::eCopy,
-			.attachmentCount = 1,
-			.pAttachments = &colorBlendAttachment
-		};
-
-		std::vector dynamicStates = {
-			vk::DynamicState::eViewport,
-			vk::DynamicState::eScissor
-		};
-		vk::PipelineDynamicStateCreateInfo dynamicState{ .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()), .pDynamicStates = dynamicStates.data() };
-
-		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = 1, .pSetLayouts = &*graphics_.descriptor_set_layout, .pushConstantRangeCount = 0 };
-
-		graphics_.pipeline_layouts.cloth = vk::raii::PipelineLayout(device_, pipelineLayoutInfo);
-
-		vk::Format depthFormat = vku::FindDepthFormat(physical_device_);
-
-		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
-		  {.stageCount = 2,
-			.pStages = stages.data(),
-			.pVertexInputState = &vertexInputInfo,
-			.pInputAssemblyState = &inputAssembly,
-			.pViewportState = &viewportState,
-			.pRasterizationState = &rasterizer,
-			.pMultisampleState = &multisampling,
-			.pDepthStencilState = &depthStencil,
-			.pColorBlendState = &colorBlending,
-			.pDynamicState = &dynamicState,
-			.layout = graphics_.pipeline_layouts.cloth,
-			.renderPass = nullptr },
-		  {.colorAttachmentCount = 1, .pColorAttachmentFormats = &swapchain_->swapchain_surface_format_.format, .depthAttachmentFormat = depthFormat }
-		};
-
-		graphics_.pipelines.cloth = vk::raii::Pipeline(device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
-	}
-
-}
-
-void Context::CreateComputePipelines()
-{
-	auto compCode = vku::ReadFile("shaders/cloth.comp.spv");
-	vk::raii::ShaderModule compModule = vku::CreateShaderModule(device_, compCode);
-
-	vk::PushConstantRange pushConstantRange{
-		.stageFlags = vk::ShaderStageFlagBits::eCompute,
-		.offset = 0,
-		.size = sizeof(uint32_t)
-	};
-	vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
-		.setLayoutCount = 1,
-		.pSetLayouts = &*compute_.descriptor_set_layout,
-		.pushConstantRangeCount = 1,
-		.pPushConstantRanges = &pushConstantRange
-	};
-	compute_.pipeline_layout = vk::raii::PipelineLayout(device_, pipelineLayoutInfo);
-	vk::ComputePipelineCreateInfo pipelineInfo{ 
-		.stage = vk::PipelineShaderStageCreateInfo{
-			.stage = vk::ShaderStageFlagBits::eCompute,
-			.module = *compModule,
-			.pName = "main"          // GLSL compute 엔트리
-		}, 
-		.layout = *compute_.pipeline_layout };
-	compute_.pipeline = vk::raii::Pipeline(device_, nullptr, pipelineInfo);
 }
 
 void Context::CreateSyncObjects()

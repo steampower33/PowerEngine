@@ -8,7 +8,7 @@ struct Camera;
 class Model
 {
 public:
-	Model(const std::string modelPath, vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool);
+	Model(const std::string modelPath, vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool, uint32_t& model_count, glm::vec3 initPos);
 	Model(const Model& rhs) = delete;
 	Model(Model&& rhs) = delete;
 	~Model() = default;
@@ -24,13 +24,6 @@ public:
 
 	void LoadModel(const std::string& modelPath);
 
-	vk::raii::DescriptorSetLayout descriptor_set_layout{ nullptr };
-	std::vector<vk::raii::DescriptorSet> descriptor_sets;
-
-	std::vector<vk::raii::Buffer> uniform_buffers;
-	std::vector<vk::raii::DeviceMemory> uniform_buffers_memory;
-	std::vector<void*> uniform_buffers_mapped;
-
 	glm::mat4 world_{ 1.0f };
 	glm::vec3 position_{ 0.0f, 0.0f, 0.0f };
 	glm::quat rotation_{ 1.0f, 0.0f, 0.0f, 0.0f };
@@ -45,6 +38,5 @@ public:
 	vk::raii::DeviceMemory index_buffer_memory_ = nullptr;
 
 	void ApplyTransform(const glm::quat& rotationDelta, const glm::vec3& translationDelta);
-	void UpdateUBO(Camera& camera, glm::vec2 viewportSize, uint32_t currentFrame);
 
 };

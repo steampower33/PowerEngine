@@ -13,7 +13,7 @@ public:
 	MouseInteractor& operator=(MouseInteractor&& rhs) = delete;
 	~MouseInteractor() = default;
 
-	void Update(const Camera& camera, const glm::vec2& viewportSize, Model& model);
+	void Update(const Camera& camera, const glm::vec2& viewportSize, std::vector<std::unique_ptr<Model>>& models);
 
 	bool is_left_button_down_event = false;
 	bool is_left_button_up_event = false;
@@ -24,19 +24,20 @@ public:
 
 private:
 	Ray CalculateMouseRay(const Camera& camera, const glm::vec2& viewportSize);
-	// 우클릭 방식이 near/far를 쓰므로 보조 함수 하나 더:
 	void CalculateMouseNearFar(const Camera& camera, const glm::vec2& vp, glm::vec3& outNear, glm::vec3& outFar);
 
-
-	// 회전 상태
 	bool is_dragging_ = false;
+	bool is_translating_ = false;
+
 	bool has_prev_ = false;
 	glm::vec3 prevVector_{ 0.0f };
 
-	// 우클릭 이동 상태
-	bool is_translating_ = false;
 	bool has_grab_point_ = false;
-	float prevRatio_ = 0.0f;   // dist / |far-near|
-	glm::vec3 prevPos_{ 0.0f };      // 지난 프레임의 월드 교점
-};
+	float prevRatio_ = 0.0f;
+	glm::vec3 prevPos_{ 0.0f };
 
+	int selected_ = -1;
+
+	std::pair<int, float> PickClosestModel(const Ray& ray,
+		const std::vector<std::unique_ptr<Model>>& models) const;
+};

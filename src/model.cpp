@@ -3,12 +3,19 @@
 
 #include "model.h"
 
-Model::Model(const std::string modelPath, vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool)
+Model::Model(const std::string modelPath, vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool, uint32_t& model_count, glm::vec3 initPos)
 {
     LoadModel(modelPath);
 
     vku::CreateVertexBuffer(physicalDevice, device, queue, commandPool, vertices_, vertex_buffer_, vertex_buffer_memory_);
     vku::CreateIndexBuffer(physicalDevice, device, queue, commandPool, indices_, index_buffer_, index_buffer_memory_);
+
+    model_count++;
+
+    position_ = initPos;
+    glm::mat4 translationMatrix = glm::translate(glm::mat4(1.0f), position_);
+    world_ = translationMatrix;
+
 }
 
 void Model::LoadModel(const std::string& modelPath) {
@@ -155,14 +162,4 @@ void Model::ApplyTransform(const glm::quat& rotationDelta, const glm::vec3& tran
 
     // 2. SRT (Scale -> Rotate -> Translate) 순서로 조합하여 최종 월드 행렬을 계산한다.
     world_ = translationMatrix * rotationMatrix * scaleMatrix;
-}
-
-void Model::UpdateUBO(Camera& camera, glm::vec2 viewportSize, uint32_t currentFrame)
-{
-    uniform_data.model = world_;
-    uniform_data.view = camera.View();
-    uniform_data.proj = camera.Proj(viewportSize.x, viewportSize.y);
-
-    memcpy(uniform_buffers_mapped[currentFrame], &uniform_data, sizeof(uniform_data));
-
 }

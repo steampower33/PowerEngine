@@ -4,6 +4,7 @@ namespace vku
 {
 	struct Counts {
 		uint32_t ubo = 0;
+		uint32_t ubo_dynamic = 0;
 		uint32_t sb = 0;
 		uint32_t sampler = 0;
 		uint32_t layout = 0;
@@ -96,7 +97,8 @@ namespace vku
 		);
 	}
 
-	inline void CreateBuffer(vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device,  vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Buffer& buffer, vk::raii::DeviceMemory& bufferMemory) {
+	inline void CreateBuffer(vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device,  vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Buffer& buffer, vk::raii::DeviceMemory& bufferMemory) 
+	{
 		vk::BufferCreateInfo bufferInfo{ .size = size, .usage = usage, .sharingMode = vk::SharingMode::eExclusive };
 		buffer = vk::raii::Buffer(device, bufferInfo);
 		vk::MemoryRequirements memRequirements = buffer.getMemoryRequirements();
