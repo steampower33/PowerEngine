@@ -117,7 +117,7 @@ namespace vku
 		queue.waitIdle();
 	}
 
-	template<class T>
+	template<typename T>
 	inline void CreateVertexBuffer(
 		vk::raii::PhysicalDevice& physicalDevice, 
 		vk::raii::Device& device,
@@ -148,17 +148,17 @@ namespace vku
 		CopyBuffer(device, queue, commandPool, stagingBuffer, vertexBuffer, bufferSize);
 	}
 
-	template<class IndexT>
+	template<typename T>
 	inline void CreateIndexBuffer(
 		vk::raii::PhysicalDevice& physicalDevice,
 		vk::raii::Device& device,
 		vk::raii::Queue& queue,
 		vk::raii::CommandPool& commandPool,
-		const std::vector<IndexT>& indices,
+		const std::vector<T>& indices,
 		vk::raii::Buffer& indexBuffer,
 		vk::raii::DeviceMemory& indexBufferMemory)
 	{
-		vk::DeviceSize bufferSize = sizeof(IndexT) * indices.size();
+		vk::DeviceSize bufferSize = sizeof(T) * indices.size();
 
 		vk::raii::Buffer stagingBuffer(nullptr);
 		vk::raii::DeviceMemory stagingMemory(nullptr);
@@ -177,5 +177,40 @@ namespace vku
 			indexBuffer, indexBufferMemory);
 
 		CopyBuffer(device, queue, commandPool, stagingBuffer, indexBuffer, bufferSize);
+	}
+
+	template <typename T>
+	inline void CreateSSBO(
+		vk::raii::PhysicalDevice& physicalDevice,
+		vk::raii::Device& device,
+		vk::raii::Queue& queue,
+		vk::raii::CommandPool& commandPool,
+		vk::DeviceSize bufferSize,
+		vk::BufferUsageFlags stagingUsage, 
+		vk::MemoryPropertyFlags stagingProperties,
+		std::vector<T>& data,
+		vk::BufferUsageFlags ssboUsage,
+		vk::MemoryPropertyFlags ssboProperties,
+		vk::raii::Buffer& ssbo, 
+		vk::raii::DeviceMemory& ssboMem
+	)
+	{
+		vk::raii::Buffer stagingBuffer({});
+		vk::raii::DeviceMemory stagingBufferMemory({});
+		vku::CreateBuffer(physicalDevice, device, bufferSize, stagingUsage, stagingProperties, stagingBuffer, stagingBufferMemory);
+
+		void* dataStaging = stagingBufferMemory.mapMemory(0, bufferSize);
+		memcpy(dataStaging, data.data(), (size_t)bufferSize);
+		stagingBufferMemory.unmapMemory();
+
+		ssbo.clear();
+		ssboMem.clear();
+
+		vk::raii::Buffer shaderStorageBufferTemp({});
+		vk::raii::DeviceMemory shaderStorageBufferTempMemory({});
+		vku::CreateBuffer(physicalDevice, device, bufferSize, ssboUsage, ssboProperties, shaderStorageBufferTemp, shaderStorageBufferTempMemory);
+		vku::CopyBuffer(device, queue, commandPool, stagingBuffer, shaderStorageBufferTemp, bufferSize);
+		ssbo = std::move(shaderStorageBufferTemp);
+		ssboMem = std::move(shaderStorageBufferTempMemory);
 	}
 }

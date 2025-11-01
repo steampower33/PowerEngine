@@ -32,10 +32,10 @@ public:
 
 	std::vector<Vertex> vertices_;
 	std::vector<uint32_t> indices_;
-	vk::raii::Buffer vertex_buffer_ = nullptr;
-	vk::raii::DeviceMemory vertex_buffer_memory_ = nullptr;
-	vk::raii::Buffer index_buffer_ = nullptr;
-	vk::raii::DeviceMemory index_buffer_memory_ = nullptr;
+	vk::raii::Buffer vertex_buffer_{ nullptr };
+	vk::raii::DeviceMemory vertex_buffer_memory_{ nullptr };
+	vk::raii::Buffer index_buffer_{ nullptr };
+	vk::raii::DeviceMemory index_buffer_memory_{ nullptr };
 
 	void ApplyTransform(const glm::quat& rotationDelta, const glm::vec3& translationDelta);
 

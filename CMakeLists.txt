@@ -170,7 +170,7 @@ set(GLSL_SHADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/model.frag
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/cloth.vert
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/cloth.frag
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/math_spring.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/integrate.comp
 )
 
 # 컴파일 타깃 생성

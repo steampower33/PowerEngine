@@ -24,8 +24,9 @@ Context::Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height)
 	{
 		models.reserve(kMaxObjects);
 
-		models.emplace_back(std::make_unique<Model>("assets/models/sphere.gltf", physical_device_, device_, queue_, command_pool_, model_count_, glm::vec3(0.0f, 0.0f, 0.0f)));
-		models.emplace_back(std::make_unique<Model>("assets/models/sphere.gltf", physical_device_, device_, queue_, command_pool_, model_count_, glm::vec3(2.0f, 0.0f, 0.0f)));
+		models.emplace_back(std::make_unique<Model>("assets/models/sphere.gltf", physical_device_, device_, queue_, command_pool_, model_count_, glm::vec3(-2.0f, 2.0f, 0.0f)));
+		models.emplace_back(std::make_unique<Model>("assets/models/sphere.gltf", physical_device_, device_, queue_, command_pool_, model_count_, glm::vec3(0.0f, 2.0f, 0.0f)));
+		models.emplace_back(std::make_unique<Model>("assets/models/sphere.gltf", physical_device_, device_, queue_, command_pool_, model_count_, glm::vec3(2.0f, 2.0f, 0.0f)));
 
 		texture_ = std::make_unique<Texture2D>("assets/textures/vulkan_cloth_rgba.ktx", physical_device_, device_, queue_, command_pool_);
 	}
@@ -34,6 +35,7 @@ Context::Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height)
 	CreateDescriptorPools();
 
 	CreateUniformBuffers();
+	CreateSSBOs();
 
 	CreateDescriptorSets();
 	//CreateComputePipelines();
@@ -419,39 +421,75 @@ void Context::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 		.pDepthAttachment = &depthAttachmentInfo
 	};
 	cmd.beginRendering(renderingInfo);
-	cmd.setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapchain_->swapchain_extent_.width), static_cast<float>(swapchain_->swapchain_extent_.height), 0.0f, 1.0f));
+
+	vk::Viewport vp(
+		0.0f,
+		static_cast<float>(swapchain_->swapchain_extent_.height), // y = H
+		static_cast<float>(swapchain_->swapchain_extent_.width),
+		-static_cast<float>(swapchain_->swapchain_extent_.height), // height = -H
+		0.0f, 1.0f
+	);
+	cmd.setViewport(0, vp);
 	cmd.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchain_->swapchain_extent_));
 
-	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphics_.pipelines.sphere);
-	
-	const uint32_t baseObjectOffset = static_cast<uint32_t>(current_frame_ * graphics_.object_slot_size * kMaxObjects);
 	uint32_t globalOffset = static_cast<uint32_t>(current_frame_ * graphics_.global_slot_size);
+	const uint32_t baseObjectOffset = static_cast<uint32_t>(current_frame_ * graphics_.object_slot_size * kMaxObjects);
 
-	// Global Set
-	cmd.bindDescriptorSets(
-		vk::PipelineBindPoint::eGraphics,
-		graphics_.pipeline_layouts.model,
-		0,
-		{ *graphics_.global_set },
-		{ globalOffset }
-	);
-	for (uint32_t i = 0; i < model_count_; ++i) {
-		uint32_t objectOffset = baseObjectOffset + i * static_cast<uint32_t>(graphics_.object_slot_size);
+	// Cloth
+	{
+		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphics_.pipelines.cloth);
 
-		std::array<uint32_t, 2> dynOffsets{ globalOffset, objectOffset };
+		// Global Set
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			graphics_.pipeline_layouts.cloth,
+			0,
+			{ *graphics_.global_set },
+			{ globalOffset }
+		);
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			graphics_.pipeline_layouts.cloth,
+			1,
+			{ *graphics_.cloth_set },
+			{ 0 }
+		);
 
-		// Object set
+		cmd.bindIndexBuffer(*particle_index_buffer_, 0, vk::IndexType::eUint32);
+		cmd.drawIndexed(indices_size, 1, 0, 0, 0);
+	}
+
+	// Model
+	{
+		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphics_.pipelines.model);
+
+		// Global Set
 		cmd.bindDescriptorSets(
 			vk::PipelineBindPoint::eGraphics,
 			graphics_.pipeline_layouts.model,
-			1,
-			{ *graphics_.object_set },
-			{ objectOffset }   // ← Set 1에도 동적 바인딩 1개 → 오프셋 1개만
+			0,
+			{ *graphics_.global_set },
+			{ globalOffset }
 		);
 
-		cmd.bindVertexBuffers(0, { models[i]->vertex_buffer_ }, { 0 });
-		cmd.bindIndexBuffer(*models[i]->index_buffer_, 0, vk::IndexType::eUint32);
-		cmd.drawIndexed(models[i]->indices_.size(), 1, 0, 0, 0);
+		for (uint32_t i = 0; i < model_count_; ++i) {
+			uint32_t objectOffset = baseObjectOffset + i * static_cast<uint32_t>(graphics_.object_slot_size);
+
+			std::array<uint32_t, 2> dynOffsets{ globalOffset, objectOffset };
+
+			// Object set
+			cmd.bindDescriptorSets(
+				vk::PipelineBindPoint::eGraphics,
+				graphics_.pipeline_layouts.model,
+				1,
+				{ *graphics_.object_set },
+				{ objectOffset }   // ← Set 1에도 동적 바인딩 1개 → 오프셋 1개만
+			);
+
+			cmd.bindVertexBuffers(0, { models[i]->vertex_buffer_ }, { 0 });
+			cmd.bindIndexBuffer(*models[i]->index_buffer_, 0, vk::IndexType::eUint32);
+			cmd.drawIndexed(models[i]->indices_.size(), 1, 0, 0, 0);
+		}
 	}
 
 	// Imgui Render
@@ -706,48 +744,75 @@ void Context::CreateCommandBuffers()
 
 void Context::CreateDescriptorSetLayout()
 {
-	// Model
-	{
-		// Global UBO
-		{
-			std::array layoutBindings{
-				vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eVertex, nullptr),
-			};
-			counts_.ubo_dynamic += 1;
-			counts_.layout += 1;
-
-			vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
-			graphics_.global_set_layout = vk::raii::DescriptorSetLayout(device_, layoutInfo);
-		}
-
-		// Object UBO + Sampler
-		{
-			std::array layoutBindings{
-				vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eVertex, nullptr),
-				vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr)
-			};
-			counts_.ubo_dynamic += 1;
-			counts_.sampler += 1;
-			counts_.layout += 1;
-
-			vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
-			graphics_.object_set_layout = vk::raii::DescriptorSetLayout(device_, layoutInfo);
-		}
-	}
-
-	// Cloth Compute
+	// Global UBO - Graphics
 	{
 		std::array layoutBindings{
 			vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eVertex, nullptr),
-			vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr)
 		};
 		counts_.ubo_dynamic += 1;
-		counts_.sb += 1;
 		counts_.layout += 1;
 
 		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
-		compute_.descriptor_set_layout = vk::raii::DescriptorSetLayout(device_, layoutInfo);
+		graphics_.global_set_layout = vk::raii::DescriptorSetLayout(device_, layoutInfo);
+	}
 
+	// Object UBO + Sampler - Graphics
+	{
+		std::array layoutBindings{
+			vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eVertex, nullptr),
+			vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr)
+		};
+		counts_.ubo_dynamic += 1;
+		counts_.sampler += 1;
+		counts_.layout += 1;
+
+		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
+		graphics_.object_set_layout = vk::raii::DescriptorSetLayout(device_, layoutInfo);
+	}
+
+	// Cloth
+	{
+		// Sim Params UBO - Compute
+		{
+			std::array layoutBindings{
+				vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eCompute, nullptr)
+			};
+			counts_.ubo_dynamic += 1;
+			counts_.layout += 1;
+
+			vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
+			compute_.sim_params_set_layout = vk::raii::DescriptorSetLayout(device_, layoutInfo);
+		}
+
+		// Cloth Compute - Compute
+		{
+			std::array layoutBindings{
+				vk::DescriptorSetLayoutBinding{ 0, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
+				vk::DescriptorSetLayoutBinding{ 1, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
+				vk::DescriptorSetLayoutBinding{ 2, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute }
+			};
+			counts_.sb += 3;
+			counts_.layout += 1;
+
+			vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
+			compute_.cloth_compute_set_layout = vk::raii::DescriptorSetLayout(device_, layoutInfo);
+		}
+
+		// Cloth Rendering - Graphics
+		{
+			std::array<vk::DescriptorSetLayoutBinding, 3> layoutBindings{
+				vk::DescriptorSetLayoutBinding{ 0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eVertex },
+				vk::DescriptorSetLayoutBinding{ 1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment },
+				vk::DescriptorSetLayoutBinding{ 2, vk::DescriptorType::eStorageBuffer,        1, vk::ShaderStageFlagBits::eVertex }
+			};
+			counts_.ubo_dynamic += 1;
+			counts_.sampler += 1;
+			counts_.sb += 1;
+			counts_.layout += 1;
+
+			vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
+			graphics_.cloth_set_layout = vk::raii::DescriptorSetLayout(device_, layoutInfo);
+		}
 	}
 }
 
@@ -840,75 +905,302 @@ void Context::CreateUniformBuffers()
 		graphics_.object_ubo_memory = std::move(bufferMem);
 		graphics_.object_ubo_mapped = graphics_.object_ubo_memory.mapMemory(0, totalSize);
 	}
+
+	// Sim Params
+	{
+		compute_.sim_params_ubo.clear();
+		compute_.sim_params_ubo_memory.clear();
+		compute_.sim_params_ubo_mapped = nullptr;
+
+		auto limits = physical_device_.getProperties().limits;
+		compute_.sim_params_slot_size = (sizeof(Compute::SimParams) + limits.minUniformBufferOffsetAlignment - 1)
+			& ~(limits.minUniformBufferOffsetAlignment - 1);
+		vk::DeviceSize totalSize = compute_.sim_params_slot_size * MAX_FRAMES_IN_FLIGHT;
+
+		vk::raii::Buffer buffer({});
+		vk::raii::DeviceMemory bufferMem({});
+		vku::CreateBuffer(physical_device_, device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
+		compute_.sim_params_ubo = std::move(buffer);
+		compute_.sim_params_ubo_memory = std::move(bufferMem);
+		compute_.sim_params_ubo_mapped = compute_.sim_params_ubo_memory.mapMemory(0, totalSize);
+	}
+}
+
+void Context::CreateSSBOs()
+{
+	// Particle
+	{
+		{
+			// 천의 실제 크기
+			const float width = spacing * (Nx - 1);
+			const float height = spacing * (Ny - 1);
+
+			// 카메라가 (0,0,4) 에 있고 -Z를 보니, 천을 z=0 평면에 두면 정면으로 보임.
+			// 배치 방식 2가지 중 택1:
+
+			// (A) 화면 중심에 천 중심이 오도록 (가운데 정렬)
+			const float originX = -width * 0.5f;
+			const float originY = -height * 0.5f;
+			const float zPlane = 0.0f;
+
+			auto idx = [&](int x, int y) { return y * Nx + x; };
+
+			positions_.resize(Nx * Ny);
+			velocities_.resize(Nx * Ny);
+			predicted_.resize(Nx * Ny);
+			for (int y = 0; y < Ny; ++y)
+				for (int x = 0; x < Nx; ++x) {
+					const int id = idx(x, y);
+
+					// XY 평면(z=0), 카메라 정면(-Z)에서 보임
+					float px = originX + x * spacing;
+					float py = originY + y * spacing;
+					float pz = zPlane;
+
+					positions_[id] = { originX + x * spacing, originY + y * spacing, 0.0f, 1.0f };
+					velocities_[id] = { 0,0,0,0 };
+					predicted_[id] = { 0,0,0,0 };
+				}
+
+			indices_size = (Nx - 1) * (Ny - 1) * 6;
+			indices_.reserve(indices_size);
+
+			for (int y = 0; y < Ny - 1; ++y) {
+				for (int x = 0; x < Nx - 1; ++x) {
+					uint32_t i0 = idx(x, y);
+					uint32_t i1 = idx(x + 1, y);
+					uint32_t i2 = idx(x, y + 1);
+					uint32_t i3 = idx(x + 1, y + 1);
+
+					indices_.push_back(i0); indices_.push_back(i2); indices_.push_back(i1);
+					indices_.push_back(i1); indices_.push_back(i2); indices_.push_back(i3);
+				}
+			}
+
+			vku::CreateIndexBuffer(physical_device_, device_, queue_, command_pool_, indices_, particle_index_buffer_, particle_index_buffer_memory_);
+		}
+
+		// SSBO
+		{
+			vk::DeviceSize bufferSize = sizeof(glm::vec4) * max_particle_size;
+
+			// Position
+			vku::CreateSSBO(physical_device_, device_, queue_, command_pool_,
+				bufferSize,
+				vk::BufferUsageFlagBits::eTransferSrc,
+				vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+				positions_,
+				vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+				vk::MemoryPropertyFlagBits::eDeviceLocal,
+				positions_ssbo_, positions_ssbo_memory_);
+
+			// Velocity
+			vku::CreateSSBO(physical_device_, device_, queue_, command_pool_,
+				bufferSize,
+				vk::BufferUsageFlagBits::eTransferSrc,
+				vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+				velocities_,
+				vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+				vk::MemoryPropertyFlagBits::eDeviceLocal,
+				velocities_ssbo_, velocities_ssbo_memory_);
+
+			// Predicted position
+			vku::CreateSSBO(physical_device_, device_, queue_, command_pool_,
+				bufferSize,
+				vk::BufferUsageFlagBits::eTransferSrc,
+				vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+				predicted_,
+				vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+				vk::MemoryPropertyFlagBits::eDeviceLocal,
+				predicted_ssbo_, predicted_ssbo_memory_);
+
+		}
+
+	}
 }
 
 void Context::CreateDescriptorSets()
 {
-	// Models
+	// Global UBO
 	{
-		// Global UBO
-		{
-			vk::DescriptorSetAllocateInfo allocInfo{};
-			allocInfo.descriptorPool = *descriptor_pool_;
-			allocInfo.descriptorSetCount = 1;
-			allocInfo.pSetLayouts = &*graphics_.global_set_layout;
+		vk::DescriptorSetAllocateInfo allocInfo{
+			.descriptorPool = *descriptor_pool_,
+			.descriptorSetCount = 1,
+			.pSetLayouts = &*graphics_.global_set_layout
+		};
 
-			auto sets = vk::raii::DescriptorSets{ device_, allocInfo };
-			graphics_.global_set = std::move(sets.front());
+		auto sets = vk::raii::DescriptorSets{ device_, allocInfo };
+		graphics_.global_set = std::move(sets.front());
 
-			vk::DescriptorBufferInfo globalUboBufferInfo{ *graphics_.global_ubo, 0, sizeof(Graphics::GlobalUboData) };
+		vk::DescriptorBufferInfo globalUboBufferInfo{ *graphics_.global_ubo, 0, sizeof(Graphics::GlobalUboData) };
 
-			std::array descriptorWrites{
-				 vk::WriteDescriptorSet{
-					.dstSet = graphics_.global_set,
-					.dstBinding = 0,
-					.dstArrayElement = 0,
-					.descriptorCount = 1,
-					.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
-					.pBufferInfo = &globalUboBufferInfo
-				}
-			};
-			device_.updateDescriptorSets(descriptorWrites, {});
-		}
+		std::array descriptorWrites{
+			 vk::WriteDescriptorSet{
+				.dstSet = *graphics_.global_set,
+				.dstBinding = 0,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
+				.pBufferInfo = &globalUboBufferInfo
+			}
+		};
+		device_.updateDescriptorSets(descriptorWrites, {});
+	}
+	
+	// Object UBO + Sampler
+	{
+		vk::DescriptorSetAllocateInfo allocInfo{
+			.descriptorPool = *descriptor_pool_,
+			.descriptorSetCount = 1,
+			.pSetLayouts = &*graphics_.object_set_layout
+		};
 
-		// Object UBO + Sampler
-		{
-			vk::DescriptorSetAllocateInfo allocInfo{};
-			allocInfo.descriptorPool = *descriptor_pool_;
-			allocInfo.descriptorSetCount = 1;
-			allocInfo.pSetLayouts = &*graphics_.object_set_layout;
+		auto sets = vk::raii::DescriptorSets{ device_, allocInfo };
+		graphics_.object_set = std::move(sets.front());
 
-			auto sets = vk::raii::DescriptorSets{ device_, allocInfo };
-			graphics_.object_set = std::move(sets.front());
-
-			vk::DescriptorBufferInfo objectUboBufferInfo{ *graphics_.object_ubo, 0, sizeof(Graphics::ObjectUboData) };
-			vk::DescriptorImageInfo imageInfo{
-				.sampler = texture_->texture_sampler_,
-				.imageView = texture_->texture_image_view_,
-				.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
-			};
-			std::array descriptorWrites{
-				vk::WriteDescriptorSet{
-					.dstSet = graphics_.object_set,
-					.dstBinding = 0,
-					.dstArrayElement = 0,
-					.descriptorCount = 1,
-					.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
-					.pBufferInfo = &objectUboBufferInfo
-				},
-				vk::WriteDescriptorSet{
-					.dstSet = graphics_.object_set,
-					.dstBinding = 1,
-					.dstArrayElement = 0,
-					.descriptorCount = 1,
-					.descriptorType = vk::DescriptorType::eCombinedImageSampler,
-					.pImageInfo = &imageInfo
-				}
-			};
-			device_.updateDescriptorSets(descriptorWrites, {});
-		}
+		vk::DescriptorBufferInfo objectUboBufferInfo{ *graphics_.object_ubo, 0, sizeof(Graphics::ObjectUboData) };
+		vk::DescriptorImageInfo imageInfo{
+			.sampler = *texture_->texture_sampler_,
+			.imageView = *texture_->texture_image_view_,
+			.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
+		};
+		std::array descriptorWrites{
+			vk::WriteDescriptorSet{
+				.dstSet = *graphics_.object_set,
+				.dstBinding = 0,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
+				.pBufferInfo = &objectUboBufferInfo
+			},
+			vk::WriteDescriptorSet{
+				.dstSet = *graphics_.object_set,
+				.dstBinding = 1,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eCombinedImageSampler,
+				.pImageInfo = &imageInfo
+			}
+		};
+		device_.updateDescriptorSets(descriptorWrites, {});
 	}
 
+	// Sim Params
+	{
+		vk::DescriptorSetAllocateInfo allocInfo{
+			.descriptorPool = *descriptor_pool_,
+			.descriptorSetCount = 1,
+			.pSetLayouts = &*compute_.sim_params_set_layout
+		};
+
+		auto sets = vk::raii::DescriptorSets{ device_, allocInfo };
+		compute_.sim_params_set = std::move(sets.front());
+
+		vk::DescriptorBufferInfo simParamsUboInfo{ *compute_.sim_params_ubo, 0, sizeof(Compute::SimParams) };
+		std::array descriptorWrites{
+			vk::WriteDescriptorSet{
+				.dstSet = *compute_.sim_params_set,
+				.dstBinding = 0,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
+				.pBufferInfo = &simParamsUboInfo
+			}
+		};
+		device_.updateDescriptorSets(descriptorWrites, {});
+	}
+
+	// Cloth Compute
+	{
+		vk::DescriptorSetAllocateInfo allocInfo{
+			.descriptorPool = *descriptor_pool_,
+			.descriptorSetCount = 1,
+			.pSetLayouts = &*compute_.cloth_compute_set_layout
+		};
+
+		auto sets = vk::raii::DescriptorSets{ device_, allocInfo };
+		compute_.cloth_compute_set = std::move(sets.front());
+
+		vk::DescriptorBufferInfo positions(*positions_ssbo_, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo velocities(*velocities_ssbo_, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo predictedPositions(*predicted_ssbo_, 0, VK_WHOLE_SIZE);
+		std::array descriptorWrites{
+			vk::WriteDescriptorSet{
+				.dstSet = *compute_.cloth_compute_set,
+				.dstBinding = 0,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &positions
+			},
+			vk::WriteDescriptorSet{
+				.dstSet = *compute_.cloth_compute_set,
+				.dstBinding = 1,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &velocities
+			},
+			vk::WriteDescriptorSet{
+				.dstSet = *compute_.cloth_compute_set,
+				.dstBinding = 2,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &predictedPositions
+			}
+		};
+		device_.updateDescriptorSets(descriptorWrites, {});
+	}
+
+	// Cloth Graphics
+	{
+		vk::DescriptorSetAllocateInfo allocInfo{
+			.descriptorPool = *descriptor_pool_,
+			.descriptorSetCount = 1,
+			.pSetLayouts = &*graphics_.cloth_set_layout
+		};
+
+		auto sets = vk::raii::DescriptorSets{ device_, allocInfo };
+		graphics_.cloth_set = std::move(sets.front());
+
+		vk::DescriptorBufferInfo objectUboBufferInfo{ *graphics_.object_ubo, 0, sizeof(Graphics::ObjectUboData) };
+		vk::DescriptorImageInfo imageInfo{
+			.sampler = *texture_->texture_sampler_,
+			.imageView = *texture_->texture_image_view_,
+			.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
+		};
+		vk::DescriptorBufferInfo positions(positions_ssbo_, 0, VK_WHOLE_SIZE);
+		std::array descriptorWrites{
+			vk::WriteDescriptorSet{
+				.dstSet = *graphics_.cloth_set,
+				.dstBinding = 0,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
+				.pBufferInfo = &objectUboBufferInfo
+			},
+			vk::WriteDescriptorSet{
+				.dstSet = *graphics_.cloth_set,
+				.dstBinding = 1,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eCombinedImageSampler,
+				.pImageInfo = &imageInfo
+			},
+			vk::WriteDescriptorSet{
+				.dstSet = *graphics_.cloth_set,
+				.dstBinding = 2,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &positions
+			}
+
+		};
+		device_.updateDescriptorSets(descriptorWrites, {});
+
+	}
 }
 
 void Context::CreateComputePipelines()
@@ -916,8 +1208,11 @@ void Context::CreateComputePipelines()
 	{
 		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(device_, vku::ReadFile("shaders/integrate.comp.spv"));
 
-		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "compMain" };
-		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = 1, .pSetLayouts = &*compute_.descriptor_set_layout };
+		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
+
+		std::array<vk::DescriptorSetLayout, 2> setLayouts(*compute_.sim_params_set_layout, *compute_.cloth_compute_set_layout);
+
+		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = 2, .pSetLayouts = setLayouts.data(), .pushConstantRangeCount = 0 };
 		compute_.pipeline_layouts.integrate = vk::raii::PipelineLayout(device_, pipelineLayoutInfo);
 		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *compute_.pipeline_layouts.integrate };
 		compute_.pipelines.integrate = vk::raii::Pipeline(device_, nullptr, pipelineInfo);
@@ -927,8 +1222,57 @@ void Context::CreateComputePipelines()
 
 void Context::CreateGraphicsPipelines()
 {
-	// Sphere
+	vk::PipelineInputAssemblyStateCreateInfo inputAssembly{
+		.topology = vk::PrimitiveTopology::eTriangleList,
+		.primitiveRestartEnable = vk::False
+	};
+	vk::PipelineViewportStateCreateInfo viewportState{
+		.viewportCount = 1,
+		.scissorCount = 1
+	};
+	vk::PipelineRasterizationStateCreateInfo rasterizer{
+		.depthClampEnable = vk::False,
+		.rasterizerDiscardEnable = vk::False,
+		.polygonMode = vk::PolygonMode::eFill,
+		.cullMode = vk::CullModeFlagBits::eBack,
+		.frontFace = vk::FrontFace::eCounterClockwise,
+		.depthBiasEnable = vk::False
+	};
+	rasterizer.lineWidth = 1.0f;
+	vk::PipelineMultisampleStateCreateInfo multisampling{
+		.rasterizationSamples = msaa_samples_,
+		.sampleShadingEnable = vk::False
+	};
+	vk::PipelineDepthStencilStateCreateInfo depthStencil{
+		.depthTestEnable = vk::True,
+		.depthWriteEnable = vk::True,
+		.depthCompareOp = vk::CompareOp::eLess,
+		.depthBoundsTestEnable = vk::False,
+		.stencilTestEnable = vk::False
+	};
+	vk::PipelineColorBlendAttachmentState colorBlendAttachment;
+	colorBlendAttachment.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
+	colorBlendAttachment.blendEnable = vk::False;
+
+	vk::PipelineColorBlendStateCreateInfo colorBlending{
+		.logicOpEnable = vk::False,
+		.logicOp = vk::LogicOp::eCopy,
+		.attachmentCount = 1,
+		.pAttachments = &colorBlendAttachment
+	};
+
+	std::vector dynamicStates = {
+		vk::DynamicState::eViewport,
+		vk::DynamicState::eScissor
+	};
+	vk::PipelineDynamicStateCreateInfo dynamicState{ .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()), .pDynamicStates = dynamicStates.data() };
+
+	vk::Format depthFormat = vku::FindDepthFormat(physical_device_);
+
+
+	// Model
 	{
+		// Shader
 		auto vertCode = vku::ReadFile("shaders/model.vert.spv");
 		auto fragCode = vku::ReadFile("shaders/model.frag.spv");
 
@@ -938,7 +1282,7 @@ void Context::CreateGraphicsPipelines()
 		vk::PipelineShaderStageCreateInfo vertStage{
 			.stage = vk::ShaderStageFlagBits::eVertex,
 			.module = *vertModule,
-			.pName = "main"              // GLSL 기본 엔트리
+			.pName = "main"
 		};
 		vk::PipelineShaderStageCreateInfo fragStage{
 			.stage = vk::ShaderStageFlagBits::eFragment,
@@ -947,6 +1291,7 @@ void Context::CreateGraphicsPipelines()
 		};
 		std::array<vk::PipelineShaderStageCreateInfo, 2> stages{ vertStage, fragStage };
 
+		// Vectex Input
 		auto bindingDescription = Vertex::GetBindingDescription();
 		auto attributeDescriptions = Vertex::GetAttributeDescriptions();
 		vk::PipelineVertexInputStateCreateInfo vertexInputInfo{
@@ -955,62 +1300,13 @@ void Context::CreateGraphicsPipelines()
 			.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size()),
 			.pVertexAttributeDescriptions = attributeDescriptions.data()
 		};
-		vk::PipelineInputAssemblyStateCreateInfo inputAssembly{
-			.topology = vk::PrimitiveTopology::eTriangleList,
-			.primitiveRestartEnable = vk::False
-		};
-		vk::PipelineViewportStateCreateInfo viewportState{
-			.viewportCount = 1,
-			.scissorCount = 1
-		};
-		vk::PipelineRasterizationStateCreateInfo rasterizer{
-			.depthClampEnable = vk::False,
-			.rasterizerDiscardEnable = vk::False,
-			.polygonMode = vk::PolygonMode::eFill,
-			.cullMode = vk::CullModeFlagBits::eBack,
-			.frontFace = vk::FrontFace::eCounterClockwise,
-			.depthBiasEnable = vk::False
-		};
-		rasterizer.lineWidth = 1.0f;
-		vk::PipelineMultisampleStateCreateInfo multisampling{
-			.rasterizationSamples = msaa_samples_,
-			.sampleShadingEnable = vk::False
-		};
-		vk::PipelineDepthStencilStateCreateInfo depthStencil{
-			.depthTestEnable = vk::True,
-			.depthWriteEnable = vk::True,
-			.depthCompareOp = vk::CompareOp::eLess,
-			.depthBoundsTestEnable = vk::False,
-			.stencilTestEnable = vk::False
-		};
-		vk::PipelineColorBlendAttachmentState colorBlendAttachment;
-		colorBlendAttachment.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
-		colorBlendAttachment.blendEnable = vk::False;
 
-		vk::PipelineColorBlendStateCreateInfo colorBlending{
-			.logicOpEnable = vk::False,
-			.logicOp = vk::LogicOp::eCopy,
-			.attachmentCount = 1,
-			.pAttachments = &colorBlendAttachment
-		};
-
-		std::vector dynamicStates = {
-			vk::DynamicState::eViewport,
-			vk::DynamicState::eScissor
-		};
-		vk::PipelineDynamicStateCreateInfo dynamicState{ .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()), .pDynamicStates = dynamicStates.data() };
-
+		// Pipeline Layout
 		std::array<vk::DescriptorSetLayout, 2> setLayouts(*graphics_.global_set_layout, *graphics_.object_set_layout);
-
-		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
-			.setLayoutCount = 2,
-			.pSetLayouts = setLayouts.data(),
-			.pushConstantRangeCount = 0 };
-
+		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = 2, .pSetLayouts = setLayouts.data(), .pushConstantRangeCount = 0 };
 		graphics_.pipeline_layouts.model = vk::raii::PipelineLayout(device_, pipelineLayoutInfo);
 
-		vk::Format depthFormat = vku::FindDepthFormat(physical_device_);
-
+		// Pipeline
 		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
 		  {.stageCount = 2,
 			.pStages = stages.data(),
@@ -1026,8 +1322,63 @@ void Context::CreateGraphicsPipelines()
 			.renderPass = nullptr },
 		  {.colorAttachmentCount = 1, .pColorAttachmentFormats = &swapchain_->swapchain_surface_format_.format, .depthAttachmentFormat = depthFormat }
 		};
+		graphics_.pipelines.model = vk::raii::Pipeline(device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+	}
 
-		graphics_.pipelines.sphere = vk::raii::Pipeline(device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+	// Cloth
+	{
+		// Shader
+		auto vertCode = vku::ReadFile("shaders/cloth.vert.spv");
+		auto fragCode = vku::ReadFile("shaders/cloth.frag.spv");
+
+		vk::raii::ShaderModule vertModule = vku::CreateShaderModule(device_, vertCode);
+		vk::raii::ShaderModule fragModule = vku::CreateShaderModule(device_, fragCode);
+
+		vk::PipelineShaderStageCreateInfo vertStage{
+			.stage = vk::ShaderStageFlagBits::eVertex,
+			.module = *vertModule,
+			.pName = "main"
+		};
+		vk::PipelineShaderStageCreateInfo fragStage{
+			.stage = vk::ShaderStageFlagBits::eFragment,
+			.module = *fragModule,
+			.pName = "main"
+		};
+		std::array<vk::PipelineShaderStageCreateInfo, 2> stages{ vertStage, fragStage };
+
+		// SSBO Vertex Pulling
+		vk::PipelineVertexInputStateCreateInfo vertexInputInfo{
+			.vertexBindingDescriptionCount = 0,
+			.pVertexBindingDescriptions = nullptr,
+			.vertexAttributeDescriptionCount = 0,
+			.pVertexAttributeDescriptions = nullptr
+		};
+
+		// Pipeline Layout
+		std::array<vk::DescriptorSetLayout, 2> setLayouts(*graphics_.global_set_layout, *graphics_.cloth_set_layout);
+		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = 2, .pSetLayouts = setLayouts.data(), .pushConstantRangeCount = 0 };
+		graphics_.pipeline_layouts.cloth = vk::raii::PipelineLayout(device_, pipelineLayoutInfo);
+
+		rasterizer.frontFace = vk::FrontFace::eClockwise;
+
+		// Pipeline
+		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
+		  {
+			.stageCount = 2,
+			.pStages = stages.data(),
+			.pVertexInputState = &vertexInputInfo,
+			.pInputAssemblyState = &inputAssembly,
+			.pViewportState = &viewportState,
+			.pRasterizationState = &rasterizer,
+			.pMultisampleState = &multisampling,
+			.pDepthStencilState = &depthStencil,
+			.pColorBlendState = &colorBlending,
+			.pDynamicState = &dynamicState,
+			.layout = graphics_.pipeline_layouts.cloth,
+			.renderPass = nullptr },
+		  {.colorAttachmentCount = 1, .pColorAttachmentFormats = &swapchain_->swapchain_surface_format_.format, .depthAttachmentFormat = depthFormat }
+		};
+		graphics_.pipelines.cloth = vk::raii::Pipeline(device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 	}
 
 }

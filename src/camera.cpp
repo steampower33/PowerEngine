@@ -21,8 +21,7 @@ glm::mat4 Camera::View() const {
     return glm::lookAt(position, position + Front(), glm::vec3(0, 1, 0));
 }
 glm::mat4 Camera::Proj(float width, float height) const {
-    glm::mat4 p = glm::perspective(glm::radians(fov), width / height, 0.1f, 1000.0f);
-    // GLM은 OpenGL 기준으로 Y를 뒤집지 않지만, Vulkan 스크린 좌표계에 맞추려면 보통 아래 한 줄 추가
-    p[1][1] *= -1; // Vulkan NDC 보정 (글꼴/좌표계 설정에 따라 제거 가능)
+    glm::mat4 p = glm::perspective(glm::radians(fov), width / height, 0.1f, 20.0f);
+    //p[1][1] *= -1;
     return p;
 }
