@@ -61,13 +61,20 @@ private:
 private:
 	vku::Counts counts_;
 
-	// |===== Particle Info =====|
-	const int Nx = 30;
-	const int Ny = 30;
-	const float spacing = 0.1f;
+	// |===== Push Constant =====|
+	struct ClothPC {
+		uint32_t Nx;
+		uint32_t Ny;
+	} cloth_pc_;
+	static_assert(sizeof(ClothPC) % 4 == 0, "push constant must be multiple of 4 bytes");
 
-	int max_particle_size = Nx * Ny;
-	int indices_size = 0;
+	// |===== Particle Info =====|
+	const int Nx_ = 30;
+	const int Ny_ = 30;
+	const float spacing_ = 0.1f;
+
+	int max_particle_size_ = Nx_ * Ny_;
+	int indices_size_ = 0;
 
 	std::vector<glm::vec4> positions_;
 	vk::raii::Buffer positions_ssbo_{ nullptr };
@@ -168,6 +175,7 @@ private:
 	void DrawImgui();
 
 	void UpdateMouseInteractor(Camera& camera, MouseInteractor& mouse_interactor);
+	void UpdatePushContants();
 	void UpdateComputeUBO();
 	void UpdateGraphicsUBO(Camera& camera);
 

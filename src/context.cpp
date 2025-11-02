@@ -24,9 +24,7 @@ Context::Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height)
 	{
 		models.reserve(kMaxObjects);
 
-		models.emplace_back(std::make_unique<Model>("assets/models/sphere.gltf", physical_device_, device_, queue_, command_pool_, model_count_, glm::vec3(-2.0f, 2.0f, 0.0f)));
 		models.emplace_back(std::make_unique<Model>("assets/models/sphere.gltf", physical_device_, device_, queue_, command_pool_, model_count_, glm::vec3(0.0f, 2.0f, 0.0f)));
-		models.emplace_back(std::make_unique<Model>("assets/models/sphere.gltf", physical_device_, device_, queue_, command_pool_, model_count_, glm::vec3(2.0f, 2.0f, 0.0f)));
 
 		texture_ = std::make_unique<Texture2D>("assets/textures/vulkan_cloth_rgba.ktx", physical_device_, device_, queue_, command_pool_);
 	}
@@ -62,6 +60,9 @@ Context::~Context()
 void Context::Update(Camera& camera, MouseInteractor& mouse_interactor, float dt)
 {
 	UpdateMouseInteractor(camera, mouse_interactor);
+
+	UpdatePushContants();
+
 	UpdateComputeUBO();
 	UpdateGraphicsUBO(camera);
 }
@@ -278,6 +279,12 @@ void Context::UpdateMouseInteractor(Camera& camera, MouseInteractor& mouse_inter
 	mouse_interactor.Update(camera, glm::vec2(swapchain_->swapchain_extent_.width, swapchain_->swapchain_extent_.height), models);
 }
 
+void Context::UpdatePushContants()
+{
+	cloth_pc_.Nx = Nx_;
+	cloth_pc_.Ny = Ny_;
+}
+
 void Context::UpdateComputeUBO()
 {
 	const uint32_t baseOffset = static_cast<uint32_t>(current_frame_ * compute_.sim_params_slot_size);
@@ -330,7 +337,7 @@ void Context::RecordComputeCommandBuffer()
 	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.integrate);
 	cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute, compute_.pipeline_layouts.integrate, 0, { compute_.sim_params_set, compute_.cloth_compute_set }, { simparamOffset });
 	auto ceil_div = [](uint32_t n, uint32_t d) { return (n + d - 1) / d; };
-	uint32_t groups = ceil_div(max_particle_size, 128u);
+	uint32_t groups = ceil_div(max_particle_size_, 128u);
 	cmd.dispatch(groups, 1, 1);
 
 	vk::MemoryBarrier2 mem{
@@ -437,8 +444,15 @@ void Context::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 			{ 0 }
 		);
 
+		cmd.pushConstants<ClothPC>(
+			*graphics_.pipeline_layouts.cloth,
+			vk::ShaderStageFlagBits::eVertex,
+			/*offset=*/0,
+			cloth_pc_
+		);
+
 		cmd.bindIndexBuffer(*particle_index_buffer_, 0, vk::IndexType::eUint32);
-		cmd.drawIndexed(indices_size, 1, 0, 0, 0);
+		cmd.drawIndexed(indices_size_, 1, 0, 0, 0);
 	}
 
 	// Model
@@ -924,8 +938,8 @@ void Context::CreateSSBOs()
 	{
 		{
 			// 천의 실제 크기
-			const float width = spacing * (Nx - 1);
-			const float height = spacing * (Ny - 1);
+			const float width = spacing_ * (Nx_ - 1);
+			const float height = spacing_ * (Ny_ - 1);
 
 			// 카메라가 (0,0,4) 에 있고 -Z를 보니, 천을 z=0 평면에 두면 정면으로 보임.
 			// 배치 방식 2가지 중 택1:
@@ -935,30 +949,30 @@ void Context::CreateSSBOs()
 			const float originY = -height * 0.5f;
 			const float zPlane = 0.0f;
 
-			auto idx = [&](int x, int y) { return y * Nx + x; };
+			auto idx = [&](int x, int y) { return y * Nx_ + x; };
 
-			positions_.resize(Nx * Ny);
-			velocities_.resize(Nx * Ny);
-			predicted_.resize(Nx * Ny);
-			for (int y = 0; y < Ny; ++y)
-				for (int x = 0; x < Nx; ++x) {
+			positions_.resize(Nx_ * Ny_);
+			velocities_.resize(Nx_ * Ny_);
+			predicted_.resize(Nx_ * Ny_);
+			for (int y = 0; y < Ny_; ++y)
+				for (int x = 0; x < Nx_; ++x) {
 					const int id = idx(x, y);
 
 					// XY 평면(z=0), 카메라 정면(-Z)에서 보임
-					float px = originX + x * spacing;
-					float py = originY + y * spacing;
+					float px = originX + x * spacing_;
+					float py = originY + y * spacing_;
 					float pz = zPlane;
 
-					positions_[id] = { originX + x * spacing, originY + y * spacing, 0.0f, 1.0f };
+					positions_[id] = { originX + x * spacing_, originY + y * spacing_, 0.0f, 1.0f };
 					velocities_[id] = { 0,0,0,0 };
 					predicted_[id] = { 0,0,0,0 };
 				}
 
-			indices_size = (Nx - 1) * (Ny - 1) * 6;
-			indices_.reserve(indices_size);
+			indices_size_ = (Nx_ - 1) * (Ny_ - 1) * 6;
+			indices_.reserve(indices_size_);
 
-			for (int y = 0; y < Ny - 1; ++y) {
-				for (int x = 0; x < Nx - 1; ++x) {
+			for (int y = 0; y < Ny_ - 1; ++y) {
+				for (int x = 0; x < Nx_ - 1; ++x) {
 					uint32_t i0 = idx(x, y);
 					uint32_t i1 = idx(x + 1, y);
 					uint32_t i2 = idx(x, y + 1);
@@ -974,7 +988,7 @@ void Context::CreateSSBOs()
 
 		// SSBO
 		{
-			vk::DeviceSize bufferSize = sizeof(glm::vec4) * max_particle_size;
+			vk::DeviceSize bufferSize = sizeof(glm::vec4) * max_particle_size_;
 
 			// Position
 			vku::CreateSSBO(physical_device_, device_, queue_, command_pool_,
@@ -1346,9 +1360,21 @@ void Context::CreateGraphicsPipelines()
 			.pVertexAttributeDescriptions = nullptr
 		};
 
+		// push constant 범위: VS에서만 사용(필요하면 FS도 추가)
+		vk::PushConstantRange pcRange{
+			.stageFlags = vk::ShaderStageFlagBits::eVertex,
+			.offset = 0,
+			.size = static_cast<uint32_t>(sizeof(ClothPC))
+		};
+
 		// Pipeline Layout
 		std::array<vk::DescriptorSetLayout, 2> setLayouts(*graphics_.global_set_layout, *graphics_.cloth_set_layout);
-		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = 2, .pSetLayouts = setLayouts.data(), .pushConstantRangeCount = 0 };
+		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ 
+			.setLayoutCount = 2, 
+			.pSetLayouts = setLayouts.data(), 
+			.pushConstantRangeCount = 1, 
+			.pPushConstantRanges = &pcRange 
+		};
 		graphics_.pipeline_layouts.cloth = vk::raii::PipelineLayout(device_, pipelineLayoutInfo);
 
 		rasterizer.frontFace = vk::FrontFace::eClockwise;
