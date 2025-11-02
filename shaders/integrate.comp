@@ -2,25 +2,23 @@
 #version 460
 layout(local_size_x = 128) in;
 
-struct Particle { vec4 x; vec4 v; vec4 xp; };
-layout(std430, binding=0) buffer Particles { Particle P[]; };
-
-layout(std140, binding=0) uniform Sim {
-    float dt, gravityY; uint numIters; float stretchCompliance;
-    float restitution, friction; // not used here
+layout(std140, set=0, binding=0) uniform Sim {
+    float dt, gravity;
 } U;
+layout(set=1, binding=0, std430) buffer Positions { vec4 P[];  };
+layout(set=1, binding=1, std430) buffer Velocities { vec4 V[];  };
+
 
 void main(){
     uint id = gl_GlobalInvocationID.x;
     if (id >= P.length()) return;
-    float invM = P[id].x.w;
-    if (invM == 0.0) { // fixed
-        P[id].xp.xyz = P[id].x.xyz;
-        return;
-    }
-    vec3 v = P[id].v.xyz;
-    v += vec3(0.0, U.gravityY, 0.0) * U.dt;
-    vec3 xp = P[id].x.xyz + v * U.dt;
-    P[id].xp = vec4(xp, 0.0);
-    P[id].v  = vec4(v, 0.0);
+    
+    vec3 v = V[id].xyz;
+    v += vec3(0.0, U.gravity, 0.0) * U.dt;
+
+    vec3 p = P[id].xyz;
+    p += v;
+
+    P[id] = vec4(p, 0.0);
+    V[id] = vec4(v, 0.0);
 }

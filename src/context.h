@@ -89,10 +89,7 @@ private:
 	struct Compute {
 		struct SimParams {
 			float dt;
-			float gravityY;
-			uint32_t numIters;
-			float stretchCompliance; // α_stretch
-			float restitution;       // 충돌 반발
+			float gravity;
 		} sim_params;
 		vk::raii::Buffer sim_params_ubo{ nullptr };
 		vk::raii::DeviceMemory sim_params_ubo_memory{ nullptr };
@@ -112,6 +109,8 @@ private:
 		struct Pipelines {
 			vk::raii::Pipeline integrate{ nullptr };
 		} pipelines;
+
+		std::vector<vk::raii::CommandBuffer> command_buffers;
 	} compute_;
 
 
@@ -172,9 +171,7 @@ private:
 	void UpdateComputeUBO();
 	void UpdateGraphicsUBO(Camera& camera);
 
-	void AddComputeToComputeBarrier(const vk::raii::CommandBuffer& cmd, vk::Buffer buffer);
-	void AddGraphicsToComputeBarrier(const vk::raii::CommandBuffer& cmd, vk::Buffer buffer);
-	void AddComputeToGraphicsBarrier(const vk::raii::CommandBuffer& cmd, vk::Buffer buffer);
+	void RecordComputeCommandBuffer();
 
 	void RecordGraphicsCommandBuffer(uint32_t imageIndex);
 	void TransitionImageLayout(

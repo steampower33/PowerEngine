@@ -38,7 +38,7 @@ Context::Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height)
 	CreateSSBOs();
 
 	CreateDescriptorSets();
-	//CreateComputePipelines();
+	CreateComputePipelines();
 	CreateGraphicsPipelines();
 	CreateSyncObjects();
 
@@ -62,6 +62,7 @@ Context::~Context()
 void Context::Update(Camera& camera, MouseInteractor& mouse_interactor, float dt)
 {
 	UpdateMouseInteractor(camera, mouse_interactor);
+	UpdateComputeUBO();
 	UpdateGraphicsUBO(camera);
 }
 
@@ -74,39 +75,39 @@ void Context::Draw()
 	while (vk::Result::eTimeout == device_.waitForFences(*in_flight_fences_[current_frame_], vk::True, UINT64_MAX));
 	device_.resetFences(*in_flight_fences_[current_frame_]);
 
-	//uint64_t computeWaitValue = timeline_value_;
-	//uint64_t computeSignalValue = ++timeline_value_;
-	//uint64_t graphicsWaitValue = computeSignalValue;
-	//uint64_t graphicsSignalValue = ++timeline_value_;
-
-	//RecordXPBDComputeCommandBuffer();
-	//{
-	//	// Submit compute work
-	//	vk::TimelineSemaphoreSubmitInfo computeTimelineInfo{
-	//		.waitSemaphoreValueCount = 1,
-	//		.pWaitSemaphoreValues = &computeWaitValue,
-	//		.signalSemaphoreValueCount = 1,
-	//		.pSignalSemaphoreValues = &computeSignalValue
-	//	};
-
-	//	vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eComputeShader };
-
-	//	vk::SubmitInfo computeSubmitInfo{
-	//		.pNext = &computeTimelineInfo,
-	//		.waitSemaphoreCount = 1,
-	//		.pWaitSemaphores = &*semaphore_,
-	//		.pWaitDstStageMask = waitStages,
-	//		.commandBufferCount = 1,
-	//		.pCommandBuffers = &*compute_.command_buffers[current_frame_],
-	//		.signalSemaphoreCount = 1,
-	//		.pSignalSemaphores = &*semaphore_
-	//	};
-
-	//	queue_.submit(computeSubmitInfo, nullptr);
-	//}
-
-	uint64_t graphicsWaitValue = timeline_value_;
+	uint64_t computeWaitValue = timeline_value_;
+	uint64_t computeSignalValue = ++timeline_value_;
+	uint64_t graphicsWaitValue = computeSignalValue;
 	uint64_t graphicsSignalValue = ++timeline_value_;
+
+	RecordComputeCommandBuffer();
+	{
+		// Submit compute work
+		vk::TimelineSemaphoreSubmitInfo computeTimelineInfo{
+			.waitSemaphoreValueCount = 1,
+			.pWaitSemaphoreValues = &computeWaitValue,
+			.signalSemaphoreValueCount = 1,
+			.pSignalSemaphoreValues = &computeSignalValue
+		};
+
+		vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eComputeShader };
+
+		vk::SubmitInfo computeSubmitInfo{
+			.pNext = &computeTimelineInfo,
+			.waitSemaphoreCount = 1,
+			.pWaitSemaphores = &*semaphore_,
+			.pWaitDstStageMask = waitStages,
+			.commandBufferCount = 1,
+			.pCommandBuffers = &*compute_.command_buffers[current_frame_],
+			.signalSemaphoreCount = 1,
+			.pSignalSemaphores = &*semaphore_
+		};
+
+		queue_.submit(computeSubmitInfo, nullptr);
+	}
+
+	//uint64_t graphicsWaitValue = timeline_value_;
+	//uint64_t graphicsSignalValue = ++timeline_value_;
 
 	RecordGraphicsCommandBuffer(imageIndex);
 	{
@@ -279,59 +280,13 @@ void Context::UpdateMouseInteractor(Camera& camera, MouseInteractor& mouse_inter
 
 void Context::UpdateComputeUBO()
 {
-}
+	const uint32_t baseOffset = static_cast<uint32_t>(current_frame_ * compute_.sim_params_slot_size);
+	auto* dst = static_cast<std::byte*>(compute_.sim_params_ubo_mapped) + baseOffset;
 
-void Context::AddComputeToComputeBarrier(const vk::raii::CommandBuffer& cmd, vk::Buffer buffer)
-{
-	vk::BufferMemoryBarrier2 bufferBarrier{
-		.srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-		.srcAccessMask = vk::AccessFlagBits2::eShaderWrite, // 이전 작업: 셰이더 쓰기
-		.dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-		.dstAccessMask = vk::AccessFlagBits2::eShaderRead,  // 다음 작업: 셰이더 읽기
-		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.buffer = buffer,
-		.offset = 0,
-		.size = VK_WHOLE_SIZE
-	};
-	vk::DependencyInfo dependencyInfo{ .bufferMemoryBarrierCount = 1, .pBufferMemoryBarriers = &bufferBarrier };
-	cmd.pipelineBarrier2(dependencyInfo);
-}
+	compute_.sim_params.dt = 0.000001;
+	compute_.sim_params.gravity = -9.8f;
 
-// 그래픽스 -> 컴퓨트 큐로 자원 소유권 이전 (Acquire)
-void Context::AddGraphicsToComputeBarrier(const vk::raii::CommandBuffer& cmd, vk::Buffer buffer)
-{
-	vk::BufferMemoryBarrier2 bufferBarrier{
-		.srcStageMask = vk::PipelineStageFlagBits2::eTopOfPipe,
-		.srcAccessMask = {}, // 이전 접근 정보 필요 없음 (소유권만 이전)
-		.dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-		.dstAccessMask = vk::AccessFlagBits2::eShaderRead,
-		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, // 그래픽스 큐에서
-		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, // 컴퓨트 큐로
-		.buffer = buffer,
-		.offset = 0,
-		.size = VK_WHOLE_SIZE
-	};
-	vk::DependencyInfo dependencyInfo{ .bufferMemoryBarrierCount = 1, .pBufferMemoryBarriers = &bufferBarrier };
-	cmd.pipelineBarrier2(dependencyInfo);
-}
-
-// 컴퓨트 -> 그래픽스 큐로 자원 소유권 이전 (Release)
-void Context::AddComputeToGraphicsBarrier(const vk::raii::CommandBuffer& cmd, vk::Buffer buffer)
-{
-	vk::BufferMemoryBarrier2 bufferBarrier{
-		.srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-		.srcAccessMask = vk::AccessFlagBits2::eShaderWrite,
-		.dstStageMask = vk::PipelineStageFlagBits2::eBottomOfPipe,
-		.dstAccessMask = {}, // 다음 접근 정보 필요 없음 (소유권만 이전)
-		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, // 컴퓨트 큐에서
-		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, // 그래픽스 큐로
-		.buffer = buffer,
-		.offset = 0,
-		.size = VK_WHOLE_SIZE
-	};
-	vk::DependencyInfo dependencyInfo{ .bufferMemoryBarrierCount = 1, .pBufferMemoryBarriers = &bufferBarrier };
-	cmd.pipelineBarrier2(dependencyInfo);
+	std::memcpy(dst, &compute_.sim_params, sizeof(Compute::SimParams));
 }
 
 void Context::UpdateGraphicsUBO(Camera& camera)
@@ -361,6 +316,32 @@ void Context::UpdateGraphicsUBO(Camera& camera)
 			std::memcpy(dst, &graphics_.object_ubo_data, sizeof(Graphics::ObjectUboData));
 		}
 	}
+}
+
+void Context::RecordComputeCommandBuffer()
+{
+	const auto& cmd = compute_.command_buffers[current_frame_];
+
+	cmd.reset();
+	cmd.begin({});
+
+	uint32_t simparamOffset = current_frame_ * static_cast<uint32_t>(compute_.sim_params_slot_size);
+
+	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.integrate);
+	cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute, compute_.pipeline_layouts.integrate, 0, { compute_.sim_params_set, compute_.cloth_compute_set }, { simparamOffset });
+	auto ceil_div = [](uint32_t n, uint32_t d) { return (n + d - 1) / d; };
+	uint32_t groups = ceil_div(max_particle_size, 128u);
+	cmd.dispatch(groups, 1, 1);
+
+	vk::MemoryBarrier2 mem{
+	  .srcStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+	  .srcAccessMask = vk::AccessFlagBits2::eShaderStorageWrite,
+	  .dstStageMask = vk::PipelineStageFlagBits2::eVertexShader | vk::PipelineStageFlagBits2::eFragmentShader,
+	  .dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead
+	};
+	cmd.pipelineBarrier2({ .memoryBarrierCount = 1, .pMemoryBarriers = &mem });
+
+	cmd.end();
 }
 
 void Context::RecordGraphicsCommandBuffer(uint32_t imageIndex)
@@ -420,6 +401,7 @@ void Context::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 		.pColorAttachments = &colorAttachmentInfo,
 		.pDepthAttachment = &depthAttachmentInfo
 	};
+
 	cmd.beginRendering(renderingInfo);
 
 	vk::Viewport vp(
@@ -731,6 +713,16 @@ void Context::CreateCommandPool() {
 
 void Context::CreateCommandBuffers()
 {
+	// Compute
+	{
+		compute_.command_buffers.clear();
+		vk::CommandBufferAllocateInfo allocInfo{};
+		allocInfo.commandPool = *command_pool_;
+		allocInfo.level = vk::CommandBufferLevel::ePrimary;
+		allocInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
+		compute_.command_buffers = vk::raii::CommandBuffers(device_, allocInfo);
+	}
+
 	// Graphics
 	{
 		graphics_.command_buffers.clear();
