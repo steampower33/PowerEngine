@@ -1,0 +1,77 @@
+#version 460
+layout(local_size_x = 256) in;
+
+#include "common/params.glsl"
+
+// uint 기반 CAS로 float 누적 (x,y,z만 사용)
+uint atomicAddFloat_at(uint linearIndex, float val) {
+    uint oldBits = deltaU32[linearIndex];
+    for(;;){
+        uint  assumed = oldBits;
+        float baseF   = uintBitsToFloat(assumed);
+        float newF    = baseF + val;
+
+        // 안전장치: NaN/Inf 유입 차단
+        if (isnan(newF) || isinf(newF)) {
+            newF = 0.0;
+        }
+        oldBits = atomicCompSwap(deltaU32[linearIndex],
+                                 assumed,
+                                 floatBitsToUint(newF));
+        if (oldBits == assumed) break;
+    }
+    return oldBits;
+}
+
+void atomicAddDelta(uint idx, vec3 a){
+    uint base = idx * 4u;
+    atomicAddFloat_at(base + 0u, a.x);
+    atomicAddFloat_at(base + 1u, a.y);
+    atomicAddFloat_at(base + 2u, a.z);
+}
+
+void main(){
+    uint k = gl_GlobalInvocationID.x;
+    if (k >= params.numEdges) return;
+    
+    uvec2 e = edges[k];
+    uint i = e.x, j = e.y;
+    float wi = w[i], wj = w[j];
+
+    // 양끝 핀(혹은 사실상 0) → 제약 무의미
+    if (wi + wj < 1e-8) return;
+
+    vec3 n = xp[i].xyz - xp[j].xyz;
+    float len = length(n);
+    if (!(len > 1e-8)) return;         // NaN도 같이 걸러짐
+    n /= len;
+
+    float C = len - restL[k];
+    if (abs(C) < 1e-7) return;         // 너무 미세한 건 스킵(노이즈 컷)
+
+    // α = comp / dt^2  (NaN/Inf 방어)
+    float alpha = compS[k] / (params.dt * params.dt);
+    if (isnan(alpha) || isinf(alpha)) alpha = 0.0;
+
+    // 분모 방어(= NaN·0 모두 컷)
+    float denom = wi + wj + alpha;
+    if (!(denom > 1e-8)) return;
+
+    // lamOld 방어
+    float lamOld = lambdaS[k];
+    if (isnan(lamOld) || isinf(lamOld)) lamOld = 0.0;
+
+    // dλ 계산 + 가드 + 클램프
+    float dLambda = -(C + alpha * lamOld) / denom;
+    if (isnan(dLambda) || isinf(dLambda)) dLambda = 0.0;
+    dLambda = clamp(dLambda, -1e3, 1e3);    // 장면 스케일 따라 1e2~1e4 사이 탐색
+
+    lambdaS[k] = lamOld + dLambda;
+
+    vec3 dxi = -wi * dLambda * n;
+    vec3 dxj =  wj * dLambda * n;
+    atomicAddDelta(i, dxi);
+    atomicAddDelta(j, dxj);
+    atomicAdd(dcount[i], 1u);
+    atomicAdd(dcount[j], 1u);
+}

@@ -171,6 +171,14 @@ set(GLSL_SHADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/cloth.vert
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/cloth.frag
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/integrate.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/clear_lambdas.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/clear_deltas.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/solve_stretch_xpbd.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/apply_deltas.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/collide_sphere.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/vel_update.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/cpu_cloth.vert
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/cpu_cloth.frag
 )
 
 # 컴파일 타깃 생성

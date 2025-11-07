@@ -1,0 +1,45 @@
+#version 460
+layout(local_size_x = 256) in;
+
+#include "common/params.glsl"
+
+void main(){
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= params.numParticles) return;
+
+    if (w[i] == 0.0) {
+        // 핀 고정: 예측 위치를 원래 x로 고정, 속도 0
+        xp[i] = x[i];
+        v[i]  = vec4(0.0);
+        return;
+    }
+
+    vec3 newV = (xp[i].xyz - x[i].xyz) * params.invDt;
+
+// 접촉 근처면 속도 보정
+vec3 c = vec3(0.0); float R = 1.0;
+vec3 dc = xp[i].xyz - c;
+float dist = length(dc);
+if (dist <= R + 1e-4) {
+    vec3 n = dist > 1e-8 ? dc / dist : vec3(0,1,0);
+
+    // 법선 성분: 관통 쪽 속도 제거(비탄성; 튕김 원하면 (1+e)*vn)
+    float vn = dot(newV, n);
+    if (vn < 0.0) newV -= vn * n;
+
+    // 접선 성분: 마찰/감쇠
+    vec3 vt = newV - dot(newV, n) * n;
+    newV = dot(newV, n) * n + 0.7 * vt;   // 0.6~0.9
+}
+
+// 전역 감쇠
+newV *= (1.0 - params.damping);
+
+// 속도 클램프 (장면 스케일 기준)
+float vmax = 5.0;
+float spd = length(newV);
+if (spd > vmax) newV *= vmax / spd;
+
+v[i].xyz = newV;
+x[i].xyz = xp[i].xyz;
+}

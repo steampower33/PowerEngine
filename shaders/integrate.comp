@@ -1,24 +1,25 @@
 
 #version 460
-layout(local_size_x = 128) in;
+layout(local_size_x = 256) in;
 
-layout(std140, set=0, binding=0) uniform Sim {
-    float dt, gravity;
-} U;
-layout(set=1, binding=0, std430) buffer Positions { vec4 P[];  };
-layout(set=1, binding=1, std430) buffer Velocities { vec4 V[];  };
-
+#include "common/params.glsl"
 
 void main(){
-    uint id = gl_GlobalInvocationID.x;
-    if (id >= P.length()) return;
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= params.numParticles) return;
     
-    vec3 v = V[id].xyz;
-    v += vec3(0.0, U.gravity, 0.0) * U.dt;
+    // 고정점은 예측 위치 = 현재 위치
+    if (w[i] == 0.0) {
+        xp[i] = x[i];
+        return;
+    }
 
-    vec3 p = P[id].xyz;
-    p += v;
+    vec3 xi = x[i].xyz;
+    vec3 vi = v[i].xyz;
 
-    P[id] = vec4(p, 0.0);
-    V[id] = vec4(v, 0.0);
+    // 반-스텝 중력(선형 가속)
+    vi += params.gravity.xyz * params.dt;
+
+    // 예측 위치
+    xp[i].xyz = xi + vi * params.dt;
 }
