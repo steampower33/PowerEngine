@@ -6,6 +6,7 @@ struct Camera;
 class Model;
 class Texture2D;
 class MouseInteractor;
+class CpuSim;
 
 #include "vulkan_utils.h"
 
@@ -59,58 +60,11 @@ private:
 		vk::KHRCreateRenderpass2ExtensionName
 	};
 
-// Simulation CPU
-private:
-
-	struct Edge {
-		uint32_t i, j;
-		float rest;
-		float lambda;
-	};
-
-	std::vector<glm::vec4> positions, velocities;
-	std::vector<vk::raii::Buffer>      pos_ssbo_;            // per-frame
-	std::vector<vk::raii::DeviceMemory> pos_ssbo_mem_;
-	std::vector<vk::raii::Buffer>      pos_staging_;         // per-frame
-	std::vector<vk::raii::DeviceMemory> pos_staging_mem_;
-	std::vector<void*>                  pos_staging_map_;     // per-frame
-	std::vector<float> invMass;
-	std::vector<Edge> edges;
-
-	vk::raii::DescriptorSetLayout sim_cpu_descriptor_set_layout_{ nullptr };
-	std::vector<vk::raii::DescriptorSet> sim_cpu_descriptor_set_;
-
-	vk::raii::PipelineLayout sim_cpu_pipeline_layout_{ nullptr };
-	vk::raii::Pipeline sim_cpu_pipeline_{ nullptr };
-
-	std::vector<uint32_t> indices_cpu;
-	vk::raii::Buffer ib{ nullptr };
-	vk::raii::DeviceMemory ibm{ nullptr };
-
-	void CreateClothData_CPU(
-		int Nx, int Ny, float spacing,
-		std::vector<glm::vec4>& x,
-		std::vector<glm::vec4>& v,
-		std::vector<float>& w,
-		std::vector<Edge>& edges
-	);
-	void SimulateClothXPBD_CPU(
-		std::vector<glm::vec4>& x,       // 현재 위치 (GPU로 보낼 position)
-		std::vector<glm::vec4>& v,       // 속도
-		std::vector<float>& w,           // inverse mass (0이면 고정)
-		std::vector<Edge>& edges,        // 거리 제약
-		float dt,
-		const glm::vec3& gravity,
-		int iterations,
-		float compliance,
-		float damping,
-		const glm::vec3& sphereCenter,
-		float sphereRadius
-	);
-
 private:
 
 	vku::Counts counts_;
+
+	std::unique_ptr<CpuSim> cpu_sim_;
 
 	// |===== Push Constant =====|
 	struct ClothPC {

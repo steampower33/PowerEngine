@@ -5,6 +5,7 @@
 #include "model.h"
 #include "texture_2d.h"
 #include "mouse_interactor.h"
+#include "cpu_sim.h"
 
 #include "context.h"
 
@@ -28,13 +29,12 @@ Context::Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height)
 
 		texture_ = std::make_unique<Texture2D>("assets/textures/vulkan_cloth_rgba.ktx", physical_device_, device_, queue_, command_pool_);
 	}
-	 
+
 	CreateDescriptorSetLayout();
 	CreateDescriptorPools();
 
 	CreateUniformBuffers();
 	CreateSSBOs();
-	CreateClothData_CPU(Nx_, Ny_, spacing_, positions, velocities, invMass, edges);
 
 	CreateDescriptorSets();
 	CreateComputePipelines();
@@ -44,6 +44,8 @@ Context::Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height)
 	CreateDepthResources();
 
 	SetupImgui(swapchain_->swapchain_extent_.width, swapchain_->swapchain_extent_.height);
+
+	cpu_sim_ = std::make_unique<CpuSim>(physical_device_, device_, queue_, command_pool_, swapchain_, Nx_, Ny_, spacing_, texture_, graphics_.global_set_layout);
 }
 
 void Context::WaitIdle()
@@ -58,223 +60,15 @@ Context::~Context()
 	ImGui::DestroyContext();
 }
 
-void Context::CreateClothData_CPU(
-	int Nx, int Ny, float spacing,
-	std::vector<glm::vec4>& x,
-	std::vector<glm::vec4>& v,
-	std::vector<float>& w,
-	std::vector<Edge>& edges
-) {
-	const int N = Nx * Ny;
-	x.resize(N);
-	v.resize(N, glm::vec4(0.0f));
-	w.resize(N, 1.0f);
-
-	const float width = spacing * (Nx - 1);
-	const float height = spacing * (Ny - 1);
-
-	const float originX = -width * 0.5f;
-	const float originY = -height * 0.5f;
-	const float zPlane = 0.0f;
-
-	// 입력
-	std::vector<glm::vec3> positions(particles_size_);
-
-	for (int y = 0; y < Ny; ++y)
-		for (int x0 = 0; x0 < Nx; ++x0) {
-			int id = y * Nx + x0;
-
-			float px = originX + x0 * spacing_;
-			float py = originY + y * spacing_;
-			float pz = zPlane;
-			glm::vec3 pos(originX + x0 * spacing_, 2.0f, -originY - y * spacing_);
-			x[id] = glm::vec4(pos, 1.0f);
-		}
-
-
-	auto idx = [&](int x, int y) { return y * Nx_ + x; };
-
-	indices_size_ = (Nx_ - 1) * (Ny_ - 1) * 6;
-
-	for (int y = 0; y < Ny_ - 1; ++y) {
-		for (int x = 0; x < Nx_ - 1; ++x) {
-			uint32_t i0 = idx(x, y);
-			uint32_t i1 = idx(x + 1, y);
-			uint32_t i2 = idx(x, y + 1);
-			uint32_t i3 = idx(x + 1, y + 1);
-
-			indices_cpu.push_back(i1); indices_cpu.push_back(i2); indices_cpu.push_back(i0);
-			indices_cpu.push_back(i1); indices_cpu.push_back(i3); indices_cpu.push_back(i2);
-		}
-	}
-	vku::CreateIndexBuffer(physical_device_, device_, queue_, command_pool_, indices_cpu, ib, ibm);
-
-	VkDeviceSize posSize = sizeof(glm::vec4) * particles_size_;
-	pos_ssbo_.reserve(MAX_FRAMES_IN_FLIGHT);
-	pos_ssbo_mem_.reserve(MAX_FRAMES_IN_FLIGHT);
-	pos_staging_.reserve(MAX_FRAMES_IN_FLIGHT);
-	pos_staging_mem_.reserve(MAX_FRAMES_IN_FLIGHT);
-	pos_staging_map_.resize(MAX_FRAMES_IN_FLIGHT);
-
-	for (uint32_t k = 0; k < MAX_FRAMES_IN_FLIGHT; ++k) {
-		// Staging (HOST_VISIBLE | HOST_COHERENT, TRANSFER_SRC)
-		vk::raii::Buffer stagingBuf{ nullptr };
-		vk::raii::DeviceMemory stagingMem{ nullptr };
-		vk::raii::Buffer devBuf{ nullptr };
-		vk::raii::DeviceMemory devMem{ nullptr };
-
-		vku::CreateBuffer(
-			physical_device_, device_, posSize,
-			vk::BufferUsageFlagBits::eTransferSrc,
-			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-			stagingBuf, stagingMem
-		);
-
-		// Device-local target (STORAGE | TRANSFER_DST)
-		vku::CreateBuffer(
-			physical_device_, device_, posSize,
-			vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
-			vk::MemoryPropertyFlagBits::eDeviceLocal,
-			devBuf, devMem
-		);
-
-		pos_staging_.push_back(std::move(stagingBuf));
-		pos_staging_mem_.push_back(std::move(stagingMem));
-		pos_ssbo_.push_back(std::move(devBuf));
-		pos_ssbo_mem_.push_back(std::move(devMem));
-
-		pos_staging_map_[k] = pos_staging_mem_[k].mapMemory(0, posSize);
-	}
-
-	// 2) 초기 값 업로드(한 번)
-	std::memcpy(pos_staging_map_[0], x.data(), (size_t)posSize);
-	// 초기 카피는 임의 프레임 k로 실행해도 됨
-	vku::CopyBuffer(device_, queue_, command_pool_, pos_staging_[0], pos_ssbo_[0], posSize);
-
-	// --- top row pin ---
-	for (int x0 = 0; x0 < Nx; ++x0)
-		w[(Ny - 1) * Nx + x0] = 0.0f;
-
-	// --- edges (structural only) ---
-	edges.clear();
-
-	for (int y = 0; y < Ny; ++y) {
-		for (int x0 = 0; x0 < Nx; ++x0) {
-			uint32_t i = idx(x0, y);
-			if (x0 < Nx - 1) { // horizontal
-				uint32_t j = idx(x0 + 1, y);
-				edges.push_back({ i, j, spacing, 0.0f });
-			}
-			if (y < Ny - 1) { // vertical
-				uint32_t j = idx(x0, y + 1);
-				edges.push_back({ i, j, spacing, 0.0f });
-			}
-		}
-	}
-
-	// --- optional shear / bend edges (for realism) ---
-	for (uint32_t y = 0; y < Ny - 1; ++y) {
-		for (uint32_t x0 = 0; x0 < Nx - 1; ++x0) {
-			uint32_t i = idx(x0, y);
-			edges.push_back({ i, idx(x0 + 1, y + 1), spacing * 1.414f, 0.0f });
-			edges.push_back({ idx(x0 + 1, y), idx(x0, y + 1), spacing * 1.414f, 0.0f });
-		}
-	}
-}
-
-void Context::SimulateClothXPBD_CPU(
-	std::vector<glm::vec4>& x,       // 현재 위치 (GPU로 보낼 position)
-	std::vector<glm::vec4>& v,       // 속도
-	std::vector<float>& w,           // inverse mass (0이면 고정)
-	std::vector<Edge>& edges,        // 거리 제약
-	float dt,
-	const glm::vec3& gravity,
-	int iterations,
-	float compliance,
-	float damping,
-	const glm::vec3& sphereCenter,
-	float sphereRadius
-) {
-	const size_t N = x.size();
-	std::vector<glm::vec4> xp(N);
-
-	// 1. integrate
-	for (size_t i = 0; i < N; ++i) {
-		if (w[i] == 0.0f) { xp[i] = x[i]; continue; }
-		glm::vec3 xi = glm::vec3(x[i]);
-		glm::vec3 vi = glm::vec3(v[i]);
-		vi += gravity * dt;
-		xi += vi * dt;
-		xp[i] = glm::vec4(xi, 1.0f);
-		v[i] = glm::vec4(vi, 0.0f);
-	}
-
-	// 2. XPBD 반복
-	for (int iter = 0; iter < iterations; ++iter) {
-		// 거리 제약
-		for (auto& e : edges) {
-			e.lambda = 0.0f;
-			uint32_t i = e.i, j = e.j;
-			float wi = w[i], wj = w[j];
-			if (wi + wj < 1e-8f) continue;
-
-			glm::vec3 xi = glm::vec3(xp[i]);
-			glm::vec3 xj = glm::vec3(xp[j]);
-			glm::vec3 n = xi - xj;
-			float L = glm::length(n);
-			if (L < 1e-8f) continue;
-			n /= L;
-
-			float C = L - e.rest;
-			float alpha = compliance / (dt * dt);
-			float denom = wi + wj + alpha;
-			float dl = -(C + alpha * e.lambda) / denom;
-			e.lambda += dl;
-
-			glm::vec3 corr = n * dl;
-			if (wi > 0.0f) xp[i] += glm::vec4(wi * corr, 0.0f);
-			if (wj > 0.0f) xp[j] -= glm::vec4(wj * corr, 0.0f);
-		}
-
-		// 구 충돌 (투영)
-		for (size_t i = 0; i < N; ++i) {
-			if (w[i] == 0.0f) continue;
-			glm::vec3 p = glm::vec3(xp[i]);
-			glm::vec3 d = p - sphereCenter;
-			float dist = glm::length(d);
-			if (dist < sphereRadius) {
-				glm::vec3 n = (dist > 1e-8f) ? (d / dist) : glm::vec3(0, 1, 0);
-				float beta = 0.3f; // 부분 보정
-				p += (sphereRadius - dist) * beta * n;
-				xp[i] = glm::vec4(p, 1.0f);
-			}
-		}
-	}
-
-	// 3. 속도 업데이트
-	for (size_t i = 0; i < N; ++i) {
-		if (w[i] == 0.0f) continue;
-		glm::vec3 newV = (glm::vec3(xp[i]) - glm::vec3(x[i])) / dt;
-		newV *= (1.0f - damping);
-		v[i] = glm::vec4(newV, 0.0f);
-		x[i] = xp[i];
-	}
-}
-
 void Context::Update(Camera& camera, MouseInteractor& mouse_interactor, float dt)
 {
 	UpdateMouseInteractor(camera, mouse_interactor);
 	//UpdateComputeUBO();
 	
-	SimulateClothXPBD_CPU(
-		positions, velocities, invMass, edges,
-		1.0f / 240.0f,
-		glm::vec3(0, -9.8f, 0),
-		10, 1e-5f, 0.03f,
+	cpu_sim_->SimulateClothXPBD_CPU(
 		models[0]->position_, models[0]->radius_
 	);
 
-	UpdatePushContants();
 	UpdateGraphicsUBO(camera);
 }
 
@@ -491,12 +285,6 @@ void Context::UpdateMouseInteractor(Camera& camera, MouseInteractor& mouse_inter
 	mouse_interactor.Update(camera, glm::vec2(swapchain_->swapchain_extent_.width, swapchain_->swapchain_extent_.height), models);
 }
 
-void Context::UpdatePushContants()
-{
-	cloth_pc_.Nx = Nx_;
-	cloth_pc_.Ny = Ny_;
-}
-
 void Context::UpdateComputeUBO()
 {
 	float frameDt = 1.0f / 240.0f;
@@ -701,32 +489,8 @@ void Context::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 
 	cmd.reset();
 	cmd.begin({});
-	VkDeviceSize size = sizeof(glm::vec4) * particles_size_;
 
-	// 1) staging memcpy
-	std::memcpy(pos_staging_map_[current_frame_], positions.data(), (size_t)size);
-	// HostCoherent가 아니면 vkFlushMappedMemoryRanges 호출
-
-	// 2) copy staging -> device
-	vk::BufferCopy region{ 0, 0, size };
-	cmd.copyBuffer(*pos_staging_[current_frame_], *pos_ssbo_[current_frame_], { region });
-
-	// 3) barrier: TRANSFER_WRITE -> VERTEX/SSBO read
-	vk::BufferMemoryBarrier2 b{
-		.srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
-		.srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
-		// SSBO를 VS에서 읽는다면:
-		.dstStageMask = vk::PipelineStageFlagBits2::eVertexShader,
-		.dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
-		.buffer = *pos_ssbo_[current_frame_],
-		.offset = 0,
-		.size = size
-	};
-	vk::DependencyInfo dep{
-		.bufferMemoryBarrierCount = 1,
-		.pBufferMemoryBarriers = &b
-	};
-	cmd.pipelineBarrier2(dep);
+	cpu_sim_->CopyPositions(current_frame_, cmd);
 
 	TransitionImageLayout(
 		swapchain_->swapchain_images_[imageIndex],
@@ -794,37 +558,6 @@ void Context::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 	uint32_t globalOffset = static_cast<uint32_t>(current_frame_ * graphics_.global_slot_size);
 	const uint32_t baseObjectOffset = static_cast<uint32_t>(current_frame_ * graphics_.object_slot_size * kMaxObjects);
 
-	// Cpu
-	{
-		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *sim_cpu_pipeline_);
-
-		// Global Set
-		cmd.bindDescriptorSets(
-			vk::PipelineBindPoint::eGraphics,
-			sim_cpu_pipeline_layout_,
-			0,
-			{ *graphics_.global_set },
-			{ globalOffset }
-		);
-		cmd.bindDescriptorSets(
-			vk::PipelineBindPoint::eGraphics,
-			sim_cpu_pipeline_layout_,
-			1,
-			{ *sim_cpu_descriptor_set_[current_frame_]},
-			{}
-		);
-
-		cmd.pushConstants<ClothPC>(
-			*sim_cpu_pipeline_layout_,
-			vk::ShaderStageFlagBits::eVertex,
-			/*offset=*/0,
-			cloth_pc_
-		);
-
-		cmd.bindIndexBuffer(*ib, 0, vk::IndexType::eUint32);
-		cmd.drawIndexed(indices_size_, 1, 0, 0, 0);
-	}
-
 	//// Cloth
 	//{
 	//	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphics_.pipelines.cloth);
@@ -855,6 +588,10 @@ void Context::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 	//	cmd.bindIndexBuffer(*particle_index_buffer_, 0, vk::IndexType::eUint32);
 	//	cmd.drawIndexed(indices_size_, 1, 0, 0, 0);
 	//}
+
+	{
+		cpu_sim_->Record(current_frame_, cmd, graphics_.global_set, globalOffset);
+	}
 
 	// Model
 	{
@@ -1229,19 +966,6 @@ void Context::CreateDescriptorSetLayout()
 		}
 	}
 
-	// cpu sim
-	{
-		std::array<vk::DescriptorSetLayoutBinding, 2> layoutBindings{
-			vk::DescriptorSetLayoutBinding{ 0, vk::DescriptorType::eStorageBuffer,        1, vk::ShaderStageFlagBits::eVertex },
-			vk::DescriptorSetLayoutBinding{ 1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment },
-		};
-		counts_.sb += 1 * MAX_FRAMES_IN_FLIGHT;
-		counts_.sampler += 1 * MAX_FRAMES_IN_FLIGHT;
-		counts_.layout += 1 * MAX_FRAMES_IN_FLIGHT;
-
-		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
-		sim_cpu_descriptor_set_layout_ = vk::raii::DescriptorSetLayout(device_, layoutInfo);
-	}
 }
 
 void Context::CreateDescriptorPools() {
@@ -1823,48 +1547,7 @@ void Context::CreateDescriptorSets()
 		device_.updateDescriptorSets(descriptorWrites, {});
 	}
 
-	// cpu
-	{
-		std::vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, sim_cpu_descriptor_set_layout_);
-		vk::DescriptorSetAllocateInfo allocInfo{
-			.descriptorPool = *descriptor_pool_,
-			.descriptorSetCount = static_cast<uint32_t>(layouts.size()),
-			.pSetLayouts = layouts.data()
-		};
 
-		sim_cpu_descriptor_set_.clear();
-		sim_cpu_descriptor_set_ = vk::raii::DescriptorSets{ device_, allocInfo };
-
-		for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-		{
-			vk::DescriptorBufferInfo positions(pos_ssbo_[i], 0, VK_WHOLE_SIZE);
-			vk::DescriptorImageInfo imageInfo{
-				.sampler = *texture_->texture_sampler_,
-				.imageView = *texture_->texture_image_view_,
-				.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
-			};
-			std::array descriptorWrites{
-				vk::WriteDescriptorSet{
-					.dstSet = *sim_cpu_descriptor_set_[i],
-					.dstBinding = 0,
-					.dstArrayElement = 0,
-					.descriptorCount = 1,
-					.descriptorType = vk::DescriptorType::eStorageBuffer,
-					.pBufferInfo = &positions
-				},
-				vk::WriteDescriptorSet{
-					.dstSet = *sim_cpu_descriptor_set_[i],
-					.dstBinding = 1,
-					.dstArrayElement = 0,
-					.descriptorCount = 1,
-					.descriptorType = vk::DescriptorType::eCombinedImageSampler,
-					.pImageInfo = &imageInfo
-				}
-			};
-
-			device_.updateDescriptorSets(descriptorWrites, {});
-		}
-	}
 }
 
 void Context::CreateComputePipelines()
@@ -1997,7 +1680,6 @@ void Context::CreateGraphicsPipelines()
 
 	vk::Format depthFormat = vku::FindDepthFormat(physical_device_);
 
-
 	// Model
 	{
 		// Shader
@@ -2117,74 +1799,6 @@ void Context::CreateGraphicsPipelines()
 		  {.colorAttachmentCount = 1, .pColorAttachmentFormats = &swapchain_->swapchain_surface_format_.format, .depthAttachmentFormat = depthFormat }
 		};
 		graphics_.pipelines.cloth = vk::raii::Pipeline(device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
-	}
-
-	// cpu
-	{
-		// Shader
-		auto vertCode = vku::ReadFile("shaders/cpu_cloth.vert.spv");
-		auto fragCode = vku::ReadFile("shaders/cpu_cloth.frag.spv");
-
-		vk::raii::ShaderModule vertModule = vku::CreateShaderModule(device_, vertCode);
-		vk::raii::ShaderModule fragModule = vku::CreateShaderModule(device_, fragCode);
-
-		vk::PipelineShaderStageCreateInfo vertStage{
-			.stage = vk::ShaderStageFlagBits::eVertex,
-			.module = *vertModule,
-			.pName = "main"
-		};
-		vk::PipelineShaderStageCreateInfo fragStage{
-			.stage = vk::ShaderStageFlagBits::eFragment,
-			.module = *fragModule,
-			.pName = "main"
-		};
-		std::array<vk::PipelineShaderStageCreateInfo, 2> stages{ vertStage, fragStage };
-
-		// SSBO Vertex Pulling
-		vk::PipelineVertexInputStateCreateInfo vertexInputInfo{
-			.vertexBindingDescriptionCount = 0,
-			.pVertexBindingDescriptions = nullptr,
-			.vertexAttributeDescriptionCount = 0,
-			.pVertexAttributeDescriptions = nullptr
-		};
-
-		// push constant 범위: VS에서만 사용(필요하면 FS도 추가)
-		vk::PushConstantRange pcRange{
-			.stageFlags = vk::ShaderStageFlagBits::eVertex,
-			.offset = 0,
-			.size = static_cast<uint32_t>(sizeof(ClothPC))
-		};
-
-		// Pipeline Layout
-		std::array<vk::DescriptorSetLayout, 2> setLayouts(*graphics_.global_set_layout, *sim_cpu_descriptor_set_layout_);
-		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
-			.setLayoutCount = 2,
-			.pSetLayouts = setLayouts.data(),
-			.pushConstantRangeCount = 1,
-			.pPushConstantRanges = &pcRange
-		};
-		sim_cpu_pipeline_layout_ = vk::raii::PipelineLayout(device_, pipelineLayoutInfo);
-
-		rasterizer.cullMode = vk::CullModeFlagBits::eNone;
-
-		// Pipeline
-		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
-		  {
-			.stageCount = 2,
-			.pStages = stages.data(),
-			.pVertexInputState = &vertexInputInfo,
-			.pInputAssemblyState = &inputAssembly,
-			.pViewportState = &viewportState,
-			.pRasterizationState = &rasterizer,
-			.pMultisampleState = &multisampling,
-			.pDepthStencilState = &depthStencil,
-			.pColorBlendState = &colorBlending,
-			.pDynamicState = &dynamicState,
-			.layout = sim_cpu_pipeline_layout_,
-			.renderPass = nullptr },
-		  {.colorAttachmentCount = 1, .pColorAttachmentFormats = &swapchain_->swapchain_surface_format_.format, .depthAttachmentFormat = depthFormat }
-		};
-		sim_cpu_pipeline_ = vk::raii::Pipeline(device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 	}
 }
 
