@@ -1,0 +1,49 @@
+#version 460
+#extension GL_EXT_shader_atomic_float : require
+
+#include "../common/params.glsl"
+
+layout(local_size_x = 256) in;
+void main() {
+    uint eidx = gl_GlobalInvocationID.x;
+    if (eidx >= uint(sim.numEdges)) return;
+
+    Edge e = edges[eidx];
+    uint i = e.i;
+    uint j = e.j;
+
+    float wi = w[i];
+    float wj = w[j];
+    if (wi + wj < 1e-8) return;
+
+    vec3 xi = x[i].xyz;
+    vec3 xj = x[j].xyz;
+    vec3 n  = xi - xj;
+    float L = length(n);
+    if (L < 1e-8) return;
+    n /= L;
+
+    float C = L - e.rest;
+    float alpha = sim.compliance / (sim.dt * sim.dt);
+
+    float denom = wi + wj + alpha;
+    float dl = -(C + alpha * e.lambda) / denom;
+    float newLambda = e.lambda + dl;
+    edges[eidx].lambda = newLambda;
+
+    vec3 corr = n * dl;
+
+    if (wi > 0.0) {
+        atomicAdd(deltaX[i], wi * corr.x);
+        atomicAdd(deltaY[i], wi * corr.y);
+        atomicAdd(deltaZ[i], wi * corr.z);
+        atomicAdd(dcount[i], 1u);
+    }
+
+    if (wj > 0.0) {
+        atomicAdd(deltaX[j], -wj * corr.x);
+        atomicAdd(deltaY[j], -wj * corr.y);
+        atomicAdd(deltaZ[j], -wj * corr.z);
+        atomicAdd(dcount[j], 1u);
+    }
+}

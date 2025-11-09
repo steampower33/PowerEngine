@@ -1,0 +1,20 @@
+#version 460
+#include "../common/params.glsl"
+
+layout(local_size_x = 256) in;
+void main(){
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= sim.numVerts) return;
+
+    float wi = w[i];
+    if (wi == 0.0) return;
+
+    vec3 xi = x[i].xyz;
+    vec3 vi = v[i].xyz;
+
+    vi += sim.gravity.xyz * sim.dt;
+    xi += vi * sim.dt;
+
+    x[i] = vec4(xi, 1.0);
+    v[i] = vec4(vi, 0.0);
+}

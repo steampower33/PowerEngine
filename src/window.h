@@ -46,5 +46,8 @@ private:
 
     bool first_mouse_ = true;
 
+    bool print_timestamp_ = false;
+    float key_timeout_ = 0.2f;
+
     void ProcessKeyboard(float dt);
 };

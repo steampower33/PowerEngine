@@ -1,6 +1,7 @@
 
 class Texture2D;
 class Swapchain;
+class Model;
 
 class GpuSim
 {
@@ -19,10 +20,11 @@ public:
 	GpuSim& operator=(GpuSim&& rhs) = delete;
 	~GpuSim() = default;
 
-	void UpdateComputeUBO(uint32_t currentFrame);
-	void Record(uint32_t currentFrame);
+	void UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& model);
+	void ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& steps);
+	void UpdatePushContants();
+	void GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset);
 
-private:
 	vku::Counts counts_;
 	vk::raii::DescriptorPool descriptor_pool_{ nullptr };
 
@@ -34,6 +36,8 @@ private:
 	uint32_t indices_size_ = 0;
 	uint32_t edges_size_ = 0;
 
+	uint32_t iterations_ = 8;
+
 	// |===== Push Constant =====|
 	struct ClothPC {
 		uint32_t Nx;
@@ -44,18 +48,18 @@ private:
 	// |===== Compute =====|
 	struct Compute {
 		struct SimParams {
-			float dt;
-			float inv_dt;
-			float substeps;   // 정수여도 float로
-			float iterations; // 정수여도 float로
-			glm::vec4  gravity;    // (0,-9.81,0,0)
-			uint32_t  num_particles;
-			uint32_t  num_edges;
-			uint32_t  _pad0;
-			uint32_t  _pad1;
-			float damping;            // 0~1, 예: 0.02
-			float collision_friction;  // 지면 충돌시 감쇠
-			float _pad2; float _pad3;
+			alignas(4)  float dt = 1 / 480.0f;
+			alignas(4)  float compliance = 1e-6f;
+			alignas(4)  float damping = 0.01f;
+			alignas(4)  int   numVerts;
+			alignas(4)  int   numEdges;
+			alignas(16) glm::vec4 gravity = glm::vec4(0.0f, -9.8f, 0.0f, 0.0f);
+			alignas(16) glm::vec4 sphereCenter;
+			alignas(4)  float sphereRadius;
+			alignas(4)  float collisionBeta = 0.3f;
+			alignas(4)  float pad0;
+			alignas(4)  float pad1;
+			alignas(4)  float pad2;
 		} sim_params;
 
 		static_assert(sizeof(SimParams) % 16 == 0, "std140 must be 16-byte aligned.");
@@ -76,16 +80,16 @@ private:
 		} pipeline_layouts;
 
 		struct Pipelines {
-			vk::raii::Pipeline integrate{ nullptr };
 			vk::raii::Pipeline clear_lambdas{ nullptr };
+			vk::raii::Pipeline copy_xprev{ nullptr };
+			vk::raii::Pipeline integrate{ nullptr };
 			vk::raii::Pipeline clear_deltas{ nullptr };
 			vk::raii::Pipeline solve_stretch{ nullptr };
 			vk::raii::Pipeline apply_deltas{ nullptr };
 			vk::raii::Pipeline collide_sphere{ nullptr };
-			vk::raii::Pipeline vel_update{ nullptr };
+			vk::raii::Pipeline update_velocity{ nullptr };
 		} pipelines;
 
-		std::vector<vk::raii::CommandBuffer> command_buffers;
 	} compute_;
 
 	// |===== Graphics Info =====|
@@ -101,7 +105,6 @@ private:
 			vk::raii::Pipeline cloth{ nullptr };
 		} pipelines;
 
-		std::vector<vk::raii::CommandBuffer> command_buffers;
 	} graphics_;
 
 	vk::raii::Buffer positions_ssbo_{ nullptr };
@@ -136,6 +139,10 @@ private:
 	vk::raii::Buffer edges_ssbo_{ nullptr };
 	vk::raii::DeviceMemory edges_ssbo_memory_{ nullptr };
 	uint32_t edges_ssbo_size_ = 0;
+
+	vk::raii::Buffer prev_positions_ssbo_{ nullptr };
+	vk::raii::DeviceMemory prev_positions_ssbo_memory_{ nullptr };
+	uint32_t prev_positions_ssbo_size_ = 0;
 
 	vk::raii::Buffer index_buffer_{ nullptr };
 	vk::raii::DeviceMemory index_buffer_memory_{ nullptr };

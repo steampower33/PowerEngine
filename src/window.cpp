@@ -145,8 +145,10 @@ void Window::run()
 		glfwPollEvents();
 		ProcessKeyboard(dt);
 
+		key_timeout_ -= dt;
+
 		ctx_->Update(*camera_, *mouse_interactor_, dt);
-		ctx_->Draw();
+		ctx_->Draw(print_timestamp_);
 	}
 
 	ctx_->WaitIdle();
@@ -164,6 +166,16 @@ void Window::ProcessKeyboard(float dt) {
 		camera_->position -= camera_->Right() * v;
 	if (glfwGetKey(glfw_window_, GLFW_KEY_D) == GLFW_PRESS)
 		camera_->position += camera_->Right() * v;
+
+	// Space
+	if (glfwGetKey(glfw_window_, GLFW_KEY_SPACE) == GLFW_PRESS)
+	{
+		if (key_timeout_ < 0.0f)
+		{
+			print_timestamp_ = true;
+			key_timeout_ = 0.1f;
+		}
+	}
 
 	// QE
 	if (glfwGetKey(glfw_window_, GLFW_KEY_Q) == GLFW_PRESS)

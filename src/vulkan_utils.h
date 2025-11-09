@@ -213,4 +213,26 @@ namespace vku
 		ssbo = std::move(shaderStorageBufferTemp);
 		ssboMem = std::move(shaderStorageBufferTempMemory);
 	}
+
+	inline void barrier2(
+		const vk::raii::CommandBuffer& cmd,
+		vk::PipelineStageFlags2 srcStage,
+		vk::AccessFlags2        srcAccess,
+		vk::PipelineStageFlags2 dstStage,
+		vk::AccessFlags2        dstAccess)
+	{
+		vk::MemoryBarrier2 mem{};
+		mem.srcStageMask = srcStage;
+		mem.srcAccessMask = srcAccess;
+		mem.dstStageMask = dstStage;
+		mem.dstAccessMask = dstAccess;
+
+		// ArrayProxyNoTemporaries 회피: 로컬 배열에 담아서 전달
+		std::array<vk::MemoryBarrier2, 1> mems{ mem };
+
+		vk::DependencyInfo dep{};
+		dep.setMemoryBarriers(mems); // ArrayProxy로 안전하게 복사됨
+
+		cmd.pipelineBarrier2(dep);
+	}
 }

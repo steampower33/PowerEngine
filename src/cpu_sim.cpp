@@ -158,8 +158,8 @@ CpuSim::CpuSim(
 			vk::Format depthFormat = vku::FindDepthFormat(physicalDevice);
 
 			// Shader
-			auto vertCode = vku::ReadFile("shaders/cpu_cloth.vert.spv");
-			auto fragCode = vku::ReadFile("shaders/cpu_cloth.frag.spv");
+			auto vertCode = vku::ReadFile("shaders/spv/cloth.vert.spv");
+			auto fragCode = vku::ReadFile("shaders/spv/cloth.frag.spv");
 
 			vk::raii::ShaderModule vertModule = vku::CreateShaderModule(device, vertCode);
 			vk::raii::ShaderModule fragModule = vku::CreateShaderModule(device, fragCode);

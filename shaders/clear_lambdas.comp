@@ -1,9 +1,0 @@
-#version 460
-layout(local_size_x = 256) in;
-#include "common/params.glsl"
-
-void main(){
-  uint k = gl_GlobalInvocationID.x;
-  if (k >= params.numEdges) return;
-  lambdaS[k] = 0.0;
-}

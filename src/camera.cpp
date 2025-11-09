@@ -21,7 +21,7 @@ glm::mat4 Camera::View() const {
     return glm::lookAt(position, position + Front(), glm::vec3(0, 1, 0));
 }
 glm::mat4 Camera::Proj(float width, float height) const {
-    glm::mat4 p = glm::perspective(glm::radians(fov), width / height, 0.1f, 20.0f);
+    glm::mat4 p = glm::perspective(glm::radians(fov), width / height, 0.1f, 1000.0f);
     p[1][1] *= -1;
     return p;
 }

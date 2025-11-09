@@ -7,6 +7,7 @@ class Model;
 class Texture2D;
 class MouseInteractor;
 class CpuSim;
+class GpuSim;
 
 #include "vulkan_utils.h"
 
@@ -21,10 +22,12 @@ public:
 	~Context();
 
 	void Update(Camera& camera, MouseInteractor& mouse_interactor, float dt);
-	void Draw();
+	void Draw(bool& printTimestamp);
 	void WaitIdle();
 
 private:
+	uint32_t steps = 0;
+
 	GLFWwindow* glfw_window_;
 
 	vk::raii::Instance               instance_{ nullptr };
@@ -45,6 +48,8 @@ private:
 
 	std::unique_ptr<Swapchain>       swapchain_{ nullptr };
 
+	vk::raii::QueryPool				 timestamp_pool_{ nullptr };
+
 	vk::raii::Semaphore semaphore_{ nullptr };
 	uint64_t timeline_value_{ 0 };
 	std::vector<vk::raii::Fence> in_flight_fences_;
@@ -62,12 +67,19 @@ private:
 	};
 
 private:
+	enum CpuOrGpu {
+		CPU,
+		GPU
+	};
+	CpuOrGpu cpu_or_gpu_ = CpuOrGpu::GPU;
+
 	std::unique_ptr<CpuSim> cpu_sim_;
+	std::unique_ptr<GpuSim> gpu_sim_;
 
 	// |===== Particle Info =====|
-	const uint32_t Nx_ = 32;
-	const uint32_t Ny_ = 32;
-	const float spacing_ = 0.2;
+	const uint32_t Nx_ = 256;
+	const uint32_t Ny_ = 256;
+	const float spacing_ = 0.02;
 
 	uint32_t particles_size_ = Nx_ * Ny_;
 	uint32_t indices_size_ = 0;
@@ -82,6 +94,11 @@ private:
 
 	vku::Counts counts_;
 	uint32_t sim_count = 0;
+
+	struct CommandBuffers {
+		std::vector<vk::raii::CommandBuffer> compute;
+		std::vector<vk::raii::CommandBuffer> graphics;
+	} cmds_;
 
 	// |===== Graphics Info =====|
 	struct Graphics {
@@ -115,7 +132,6 @@ private:
 			vk::raii::Pipeline model{ nullptr };
 		} pipelines;
 
-		std::vector<vk::raii::CommandBuffer> command_buffers;
 	} graphics_;
 
 	// |===== Model & Texture =====|
@@ -170,6 +186,7 @@ private:
 	void CreateLogicalDevice();
 	void CreateCommandPool();
 	void CreateCommandBuffers();
+	void CreateQueryPool();
 
 	void CreateDescriptorSetLayout();
 	void CreateDescriptorPools();

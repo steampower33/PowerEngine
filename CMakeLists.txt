@@ -119,7 +119,7 @@ function(compile_glsl_shaders TARGET)
   # 사용법: compile_glsl_shaders(my_target SOURCES a.vert b.frag c.comp)
   cmake_parse_arguments(ARG "" "" "SOURCES" ${ARGN})
 
-  set(SHADERS_OUTPUT_DIR ${CMAKE_BINARY_DIR}/shaders)
+  set(SHADERS_OUTPUT_DIR ${CMAKE_BINARY_DIR}/shaders/spv)
   file(MAKE_DIRECTORY ${SHADERS_OUTPUT_DIR})
 
   set(SPIRV_OUTPUTS "")
@@ -166,19 +166,18 @@ endfunction()
 
 # GLSL 소스 나열
 set(GLSL_SHADERS
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/model.vert
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/model.frag
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/cloth.vert
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/cloth.frag
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/integrate.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/clear_lambdas.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/clear_deltas.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/solve_stretch_xpbd.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/apply_deltas.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/collide_sphere.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/vel_update.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/cpu_cloth.vert
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/cpu_cloth.frag
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/model.vert
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/model.frag
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/cloth.vert
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/cloth.frag
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/clear_lambdas.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/copy_xprev.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/integrate.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/clear_deltas.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_stretch_xpbd.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/apply_deltas.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/collide_sphere.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/update_velocity.comp
 )
 
 # 컴파일 타깃 생성

@@ -6,6 +6,7 @@
 #include "texture_2d.h"
 #include "mouse_interactor.h"
 #include "cpu_sim.h"
+#include "gpu_sim.h"
 
 #include "context.h"
 
@@ -21,6 +22,7 @@ Context::Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height)
 	swapchain_ = std::make_unique<Swapchain>(glfw_window_, device_, physical_device_, msaa_samples_, surface_);
 	CreateCommandPool();
 	CreateCommandBuffers();
+	CreateQueryPool();
 
 	{
 		models.reserve(kMaxObjects);
@@ -44,6 +46,7 @@ Context::Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height)
 	SetupImgui(swapchain_->swapchain_extent_.width, swapchain_->swapchain_extent_.height);
 
 	cpu_sim_ = std::make_unique<CpuSim>(physical_device_, device_, queue_, command_pool_, swapchain_, Nx_, Ny_, spacing_, texture_, graphics_.global_set_layout);
+	gpu_sim_ = std::make_unique<GpuSim>(physical_device_, device_, queue_, command_pool_, swapchain_, Nx_, Ny_, spacing_, texture_, graphics_.global_set_layout);
 }
 
 void Context::WaitIdle()
@@ -61,17 +64,22 @@ Context::~Context()
 void Context::Update(Camera& camera, MouseInteractor& mouse_interactor, float dt)
 {
 	UpdateMouseInteractor(camera, mouse_interactor);
-	//UpdateComputeUBO();
 	
-	cpu_sim_->SimulateClothXPBD_CPU(
-		models[0]->position_, models[0]->radius_
-	);
+	if (cpu_or_gpu_ == CpuOrGpu::CPU)
+	{
+		cpu_sim_->SimulateClothXPBD_CPU(
+			models[0]->position_, models[0]->radius_
+		);
+	}
+	else if (cpu_or_gpu_ == CpuOrGpu::GPU)
+	{
+		gpu_sim_->UpdateComputeUBO(current_frame_, models[0]);
+	}
 
 	UpdateGraphicsUBO(camera);
 }
 
-
-void Context::Draw()
+void Context::Draw(bool& printTimestamp)
 {
 	DrawImgui();
 
@@ -80,39 +88,86 @@ void Context::Draw()
 	while (vk::Result::eTimeout == device_.waitForFences(*in_flight_fences_[current_frame_], vk::True, UINT64_MAX));
 	device_.resetFences(*in_flight_fences_[current_frame_]);
 
-	//uint64_t computeWaitValue = timeline_value_;
-	//uint64_t computeSignalValue = ++timeline_value_;
-	//uint64_t graphicsWaitValue = computeSignalValue;
-	//uint64_t graphicsSignalValue = ++timeline_value_;
-
-	//RecordComputeCommandBuffer();
-	//{
-	//	// Submit compute work
-	//	vk::TimelineSemaphoreSubmitInfo computeTimelineInfo{
-	//		.waitSemaphoreValueCount = 1,
-	//		.pWaitSemaphoreValues = &computeWaitValue,
-	//		.signalSemaphoreValueCount = 1,
-	//		.pSignalSemaphoreValues = &computeSignalValue
-	//	};
-
-	//	vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eComputeShader };
-
-	//	vk::SubmitInfo computeSubmitInfo{
-	//		.pNext = &computeTimelineInfo,
-	//		.waitSemaphoreCount = 1,
-	//		.pWaitSemaphores = &*semaphore_,
-	//		.pWaitDstStageMask = waitStages,
-	//		.commandBufferCount = 1,
-	//		.pCommandBuffers = &*compute_.command_buffers[current_frame_],
-	//		.signalSemaphoreCount = 1,
-	//		.pSignalSemaphores = &*semaphore_
-	//	};
-
-	//	queue_.submit(computeSubmitInfo, nullptr);
-	//}
-
-	uint64_t graphicsWaitValue = timeline_value_;
+	uint64_t computeWaitValue = timeline_value_;
+	uint64_t computeSignalValue = ++timeline_value_;
+	uint64_t graphicsWaitValue = computeSignalValue;
 	uint64_t graphicsSignalValue = ++timeline_value_;
+	
+	gpu_sim_->ComputeRecord(current_frame_, cmds_.compute[current_frame_], timestamp_pool_, steps);
+	{
+		// Submit compute work
+		vk::TimelineSemaphoreSubmitInfo computeTimelineInfo{
+			.waitSemaphoreValueCount = 1,
+			.pWaitSemaphoreValues = &computeWaitValue,
+			.signalSemaphoreValueCount = 1,
+			.pSignalSemaphoreValues = &computeSignalValue
+		};
+
+		vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eComputeShader };
+
+		vk::SubmitInfo computeSubmitInfo{
+			.pNext = &computeTimelineInfo,
+			.waitSemaphoreCount = 1,
+			.pWaitSemaphores = &*semaphore_,
+			.pWaitDstStageMask = waitStages,
+			.commandBufferCount = 1,
+			.pCommandBuffers = &*cmds_.compute[current_frame_],
+			.signalSemaphoreCount = 1,
+			.pSignalSemaphores = &*semaphore_
+		};
+
+		queue_.submit(computeSubmitInfo, nullptr);
+	}
+
+	if (printTimestamp)
+	{
+		printTimestamp = false;
+		uint32_t prev = (current_frame_ + MAX_FRAMES_IN_FLIGHT - 1) % MAX_FRAMES_IN_FLIGHT;
+
+		vk::SemaphoreWaitInfo waitInfo{
+			.semaphoreCount = 1,
+			.pSemaphores = &*semaphore_,
+			.pValues = &computeSignalValue // ¶Ç´Â computeSignalValue
+		};
+		while (vk::Result::eTimeout == device_.waitSemaphores(waitInfo, UINT64_MAX));
+
+		std::array<uint64_t, 8> ts;
+
+		VkResult res = vkGetQueryPoolResults(
+			static_cast<VkDevice>(*device_),
+			static_cast<VkQueryPool>(*timestamp_pool_),
+			0, 8,
+			sizeof(ts), ts.data(), sizeof(uint64_t),
+			VK_QUERY_RESULT_64_BIT
+		);
+		float nsPerTick = physical_device_.getProperties().limits.timestampPeriod;
+
+		std::cout << "===============================" << std::endl;
+		for (int i = 0; i < 8; i += 2) {
+			double dt_ms = (ts[i + 1] - ts[i]) * nsPerTick / 1e6;
+
+			switch (i)
+			{
+				case 0:
+					std::cout << "Clear Deltas \t: ";
+					break;
+				case 2:
+					std::cout << "Solve XPBD \t: ";
+					break;
+				case 4:
+					std::cout << "Apply Deltas \t: ";
+					break;
+				case 6:
+					std::cout << "Collide Sphere \t: ";
+					break;
+			}
+
+			std::cout << std::format("{:.3f} ms\n", dt_ms);
+		}
+	}
+
+	//uint64_t graphicsWaitValue = timeline_value_;
+	//uint64_t graphicsSignalValue = ++timeline_value_;
 
 	RecordGraphicsCommandBuffer(imageIndex);
 	{
@@ -130,7 +185,7 @@ void Context::Draw()
 			.pWaitSemaphores = &*semaphore_,
 			.pWaitDstStageMask = &graphicsWaitStage,
 			.commandBufferCount = 1,
-			.pCommandBuffers = &*graphics_.command_buffers[current_frame_],
+			.pCommandBuffers = &*cmds_.graphics[current_frame_],
 			.signalSemaphoreCount = 1,
 			.pSignalSemaphores = &*semaphore_
 		};
@@ -151,7 +206,6 @@ void Context::Draw()
 				.pSwapchains = &*swapchain_->swapchain_,
 				.pImageIndices = &imageIndex
 		};
-
 		try {
 			result = queue_.presentKHR(presentInfo);
 			if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR || framebuffer_resized_) {
@@ -184,7 +238,6 @@ void Context::Draw()
 	current_frame_ = (current_frame_ + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-// vk::Image Transition
 void Context::TransitionImageLayout(
 	vk::Image& image,
 	const vk::raii::CommandBuffer& cmd,
@@ -221,7 +274,6 @@ void Context::TransitionImageLayout(
 	cmd.pipelineBarrier2(dependency_info);
 }
 
-// vk::raii:Image Transition
 void Context::TransitionImageLayoutCustom(
 	vk::raii::Image& image,
 	const vk::raii::CommandBuffer& cmd,
@@ -272,6 +324,11 @@ void Context::DrawImgui()
 		ImGuiIO& io = ImGui::GetIO(); (void)io;
 		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
+		ImGui::SliderFloat("dt", &gpu_sim_->compute_.sim_params.dt, 0.001f, 0.008f, "%.4f");
+		ImGui::SliderFloat("compliance", &gpu_sim_->compute_.sim_params.compliance, 0.0f, 5e-4f, "%.1e");
+		ImGui::SliderFloat("damping", &gpu_sim_->compute_.sim_params.damping, 0.0f, 0.2f, "%.3f");
+		ImGui::SliderFloat("collisionBeta", &gpu_sim_->compute_.sim_params.collisionBeta, 0.0f, 1.0f);
+
 		ImGui::End();
 	}
 
@@ -314,12 +371,15 @@ void Context::UpdateGraphicsUBO(Camera& camera)
 
 void Context::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 {
-	const auto& cmd = graphics_.command_buffers[current_frame_];
+	const auto& cmd = cmds_.graphics[current_frame_];
 
 	cmd.reset();
 	cmd.begin({});
 
-	cpu_sim_->CopyPositions(current_frame_, cmd);
+	if (cpu_or_gpu_ == CpuOrGpu::CPU)
+	{
+		cpu_sim_->CopyPositions(current_frame_, cmd);
+	}
 
 	TransitionImageLayout(
 		swapchain_->swapchain_images_[imageIndex],
@@ -387,39 +447,13 @@ void Context::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 	uint32_t globalOffset = static_cast<uint32_t>(current_frame_ * graphics_.global_slot_size);
 	const uint32_t baseObjectOffset = static_cast<uint32_t>(current_frame_ * graphics_.object_slot_size * kMaxObjects);
 
-	//// Cloth
-	//{
-	//	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphics_.pipelines.cloth);
-
-	//	// Global Set
-	//	cmd.bindDescriptorSets(
-	//		vk::PipelineBindPoint::eGraphics,
-	//		graphics_.pipeline_layouts.cloth,
-	//		0,
-	//		{ *graphics_.global_set },
-	//		{ globalOffset }
-	//	);
-	//	cmd.bindDescriptorSets(
-	//		vk::PipelineBindPoint::eGraphics,
-	//		graphics_.pipeline_layouts.cloth,
-	//		1,
-	//		{ *graphics_.cloth_set },
-	//		{ 0 }
-	//	);
-
-	//	cmd.pushConstants<ClothPC>(
-	//		*graphics_.pipeline_layouts.cloth,
-	//		vk::ShaderStageFlagBits::eVertex,
-	//		/*offset=*/0,
-	//		cloth_pc_
-	//	);
-
-	//	cmd.bindIndexBuffer(*particle_index_buffer_, 0, vk::IndexType::eUint32);
-	//	cmd.drawIndexed(indices_size_, 1, 0, 0, 0);
-	//}
-
+	if (cpu_or_gpu_ == CpuOrGpu::CPU)
 	{
 		cpu_sim_->Record(current_frame_, cmd, graphics_.global_set, globalOffset);
+	}
+	else if (cpu_or_gpu_ == CpuOrGpu::GPU)
+	{
+		gpu_sim_->GraphicsRecord(current_frame_, cmd, graphics_.global_set, globalOffset);
 	}
 
 	// Model
@@ -717,15 +751,33 @@ void Context::CreateCommandPool() {
 
 void Context::CreateCommandBuffers()
 {
-	// Graphics
+	// Compute
 	{
-		graphics_.command_buffers.clear();
+		cmds_.compute.clear();
 		vk::CommandBufferAllocateInfo allocInfo{};
 		allocInfo.commandPool = *command_pool_;
 		allocInfo.level = vk::CommandBufferLevel::ePrimary;
 		allocInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
-		graphics_.command_buffers = vk::raii::CommandBuffers(device_, allocInfo);
+		cmds_.compute = vk::raii::CommandBuffers(device_, allocInfo);
 	}
+
+	// Graphics
+	{
+		cmds_.graphics.clear();
+		vk::CommandBufferAllocateInfo allocInfo{};
+		allocInfo.commandPool = *command_pool_;
+		allocInfo.level = vk::CommandBufferLevel::ePrimary;
+		allocInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
+		cmds_.graphics = vk::raii::CommandBuffers(device_, allocInfo);
+	}
+}
+
+void Context::CreateQueryPool() {
+	vk::QueryPoolCreateInfo queryInfo = {};
+	queryInfo.queryType = vk::QueryType::eTimestamp;
+	queryInfo.queryCount = 64;
+
+	timestamp_pool_ = device_.createQueryPool(queryInfo);
 }
 
 void Context::CreateDescriptorSetLayout()
@@ -969,8 +1021,8 @@ void Context::CreateGraphicsPipelines()
 	// Model
 	{
 		// Shader
-		auto vertCode = vku::ReadFile("shaders/model.vert.spv");
-		auto fragCode = vku::ReadFile("shaders/model.frag.spv");
+		auto vertCode = vku::ReadFile("shaders/spv/model.vert.spv");
+		auto fragCode = vku::ReadFile("shaders/spv/model.frag.spv");
 
 		vk::raii::ShaderModule vertModule = vku::CreateShaderModule(device_, vertCode);
 		vk::raii::ShaderModule fragModule = vku::CreateShaderModule(device_, fragCode);
