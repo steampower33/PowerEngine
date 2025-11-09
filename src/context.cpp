@@ -88,86 +88,96 @@ void Context::Draw(bool& printTimestamp)
 	while (vk::Result::eTimeout == device_.waitForFences(*in_flight_fences_[current_frame_], vk::True, UINT64_MAX));
 	device_.resetFences(*in_flight_fences_[current_frame_]);
 
-	uint64_t computeWaitValue = timeline_value_;
-	uint64_t computeSignalValue = ++timeline_value_;
-	uint64_t graphicsWaitValue = computeSignalValue;
-	uint64_t graphicsSignalValue = ++timeline_value_;
+	uint64_t computeWaitValue;
+	uint64_t computeSignalValue;
+	uint64_t graphicsWaitValue;
+	uint64_t graphicsSignalValue;
+
+	if (cpu_or_gpu_ == CpuOrGpu::GPU)
+	{
+		computeWaitValue = timeline_value_;
+		computeSignalValue = ++timeline_value_;
+		graphicsWaitValue = computeSignalValue;
+		graphicsSignalValue = ++timeline_value_;
 	
-	gpu_sim_->ComputeRecord(current_frame_, cmds_.compute[current_frame_], timestamp_pool_, steps);
-	{
-		// Submit compute work
-		vk::TimelineSemaphoreSubmitInfo computeTimelineInfo{
-			.waitSemaphoreValueCount = 1,
-			.pWaitSemaphoreValues = &computeWaitValue,
-			.signalSemaphoreValueCount = 1,
-			.pSignalSemaphoreValues = &computeSignalValue
-		};
+		gpu_sim_->ComputeRecord(current_frame_, cmds_.compute[current_frame_], timestamp_pool_, steps, test_scene_);
+		{
+			// Submit compute work
+			vk::TimelineSemaphoreSubmitInfo computeTimelineInfo{
+				.waitSemaphoreValueCount = 1,
+				.pWaitSemaphoreValues = &computeWaitValue,
+				.signalSemaphoreValueCount = 1,
+				.pSignalSemaphoreValues = &computeSignalValue
+			};
 
-		vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eComputeShader };
+			vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eComputeShader };
 
-		vk::SubmitInfo computeSubmitInfo{
-			.pNext = &computeTimelineInfo,
-			.waitSemaphoreCount = 1,
-			.pWaitSemaphores = &*semaphore_,
-			.pWaitDstStageMask = waitStages,
-			.commandBufferCount = 1,
-			.pCommandBuffers = &*cmds_.compute[current_frame_],
-			.signalSemaphoreCount = 1,
-			.pSignalSemaphores = &*semaphore_
-		};
+			vk::SubmitInfo computeSubmitInfo{
+				.pNext = &computeTimelineInfo,
+				.waitSemaphoreCount = 1,
+				.pWaitSemaphores = &*semaphore_,
+				.pWaitDstStageMask = waitStages,
+				.commandBufferCount = 1,
+				.pCommandBuffers = &*cmds_.compute[current_frame_],
+				.signalSemaphoreCount = 1,
+				.pSignalSemaphores = &*semaphore_
+			};
 
-		queue_.submit(computeSubmitInfo, nullptr);
-	}
+			queue_.submit(computeSubmitInfo, nullptr);
+		}
 
-	if (printTimestamp)
-	{
-		printTimestamp = false;
-		uint32_t prev = (current_frame_ + MAX_FRAMES_IN_FLIGHT - 1) % MAX_FRAMES_IN_FLIGHT;
+		if (printTimestamp)
+		{
+			printTimestamp = false;
+			uint32_t prev = (current_frame_ + MAX_FRAMES_IN_FLIGHT - 1) % MAX_FRAMES_IN_FLIGHT;
 
-		vk::SemaphoreWaitInfo waitInfo{
-			.semaphoreCount = 1,
-			.pSemaphores = &*semaphore_,
-			.pValues = &computeSignalValue // 또는 computeSignalValue
-		};
-		while (vk::Result::eTimeout == device_.waitSemaphores(waitInfo, UINT64_MAX));
+			vk::SemaphoreWaitInfo waitInfo{
+				.semaphoreCount = 1,
+				.pSemaphores = &*semaphore_,
+				.pValues = &computeSignalValue // 또는 computeSignalValue
+			};
+			while (vk::Result::eTimeout == device_.waitSemaphores(waitInfo, UINT64_MAX));
 
-		std::array<uint64_t, 8> ts;
+			std::array<uint64_t, 8> ts;
 
-		VkResult res = vkGetQueryPoolResults(
-			static_cast<VkDevice>(*device_),
-			static_cast<VkQueryPool>(*timestamp_pool_),
-			0, 8,
-			sizeof(ts), ts.data(), sizeof(uint64_t),
-			VK_QUERY_RESULT_64_BIT
-		);
-		float nsPerTick = physical_device_.getProperties().limits.timestampPeriod;
+			VkResult res = vkGetQueryPoolResults(
+				static_cast<VkDevice>(*device_),
+				static_cast<VkQueryPool>(*timestamp_pool_),
+				0, 8,
+				sizeof(ts), ts.data(), sizeof(uint64_t),
+				VK_QUERY_RESULT_64_BIT
+			);
+			float nsPerTick = physical_device_.getProperties().limits.timestampPeriod;
 
-		std::cout << "===============================" << std::endl;
-		for (int i = 0; i < 8; i += 2) {
-			double dt_ms = (ts[i + 1] - ts[i]) * nsPerTick / 1e6;
+			std::cout << "===============================" << std::endl;
+			for (int i = 0; i < 8; i += 2) {
+				double dt_ms = (ts[i + 1] - ts[i]) * nsPerTick / 1e6;
 
-			switch (i)
-			{
-				case 0:
-					std::cout << "Clear Deltas \t: ";
-					break;
-				case 2:
-					std::cout << "Solve XPBD \t: ";
-					break;
-				case 4:
-					std::cout << "Apply Deltas \t: ";
-					break;
-				case 6:
-					std::cout << "Collide Sphere \t: ";
-					break;
+				switch (i)
+				{
+					case 0:
+						std::cout << "Clear Deltas \t: ";
+						break;
+					case 2:
+						std::cout << "Solve XPBD \t: ";
+						break;
+					case 4:
+						std::cout << "Apply Deltas \t: ";
+						break;
+					case 6:
+						std::cout << "Collide Sphere \t: ";
+						break;
+				}
+
+				std::cout << std::format("{:.3f} ms\n", dt_ms);
 			}
-
-			std::cout << std::format("{:.3f} ms\n", dt_ms);
 		}
 	}
-
-	//uint64_t graphicsWaitValue = timeline_value_;
-	//uint64_t graphicsSignalValue = ++timeline_value_;
+	else if (cpu_or_gpu_ == CpuOrGpu::CPU)
+	{
+		graphicsWaitValue = timeline_value_;
+		graphicsSignalValue = ++timeline_value_;
+	}
 
 	RecordGraphicsCommandBuffer(imageIndex);
 	{
@@ -319,7 +329,7 @@ void Context::DrawImgui()
 	ImGui::NewFrame();
 
 	{
-		ImGui::Begin("Main");
+		ImGui::Begin("Parameter");
 
 		ImGuiIO& io = ImGui::GetIO(); (void)io;
 		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
@@ -328,6 +338,14 @@ void Context::DrawImgui()
 		ImGui::SliderFloat("compliance", &gpu_sim_->compute_.sim_params.compliance, 0.0f, 5e-4f, "%.1e");
 		ImGui::SliderFloat("damping", &gpu_sim_->compute_.sim_params.damping, 0.0f, 0.2f, "%.3f");
 		ImGui::SliderFloat("collisionBeta", &gpu_sim_->compute_.sim_params.collisionBeta, 0.0f, 1.0f);
+
+		ImGui::End();
+	}
+
+	{
+		ImGui::Begin("Test Scene");
+
+		ImGui::Checkbox("Sphere Collision", &test_scene_.sphereCollision);
 
 		ImGui::End();
 	}

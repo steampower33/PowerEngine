@@ -233,9 +233,9 @@ void CpuSim::CreateClothData_CPU(
 {
 	particles_size_ = Nx_ * Ny_;
 	const int N = particles_size_;
-	positions.resize(N);
-	velocities.resize(N, glm::vec4(0.0f));
-	invMass.resize(N, 1.0f);
+	positions_.resize(N);
+	velocities_.resize(N, glm::vec4(0.0f));
+	inv_mass_.resize(N, 1.0f);
 
 	const float width = spacing_ * (Nx_ - 1);
 	const float height = spacing_ * (Ny_ - 1);
@@ -252,7 +252,7 @@ void CpuSim::CreateClothData_CPU(
 			float py = originY + y * spacing_;
 			float pz = zPlane;
 			glm::vec3 pos(originX + x0 * spacing_, 2.0f, -originY - y * spacing_);
-			positions[id] = glm::vec4(pos, 1.0f);
+			positions_[id] = glm::vec4(pos, 1.0f);
 		}
 
 
@@ -311,27 +311,27 @@ void CpuSim::CreateClothData_CPU(
 	}
 
 	// 2) 초기 값 업로드(한 번)
-	std::memcpy(pos_staging_map_[0], positions.data(), (size_t)posSize);
+	std::memcpy(pos_staging_map_[0], positions_.data(), (size_t)posSize);
 	// 초기 카피는 임의 프레임 k로 실행해도 됨
 	vku::CopyBuffer(device, queue, commandPool, pos_staging_[0], pos_ssbo_[0], posSize);
 
 	// --- top row pin ---
 	for (int x0 = 0; x0 < Nx_; ++x0)
-		invMass[(Ny_ - 1) * Nx_ + x0] = 0.0f;
+		inv_mass_[(Ny_ - 1) * Nx_ + x0] = 0.0f;
 
 	// --- edges (structural only) ---
-	edges.clear();
+	edges_.clear();
 
 	for (int y = 0; y < Ny_; ++y) {
 		for (int x0 = 0; x0 < Nx_; ++x0) {
 			uint32_t i = idx(x0, y);
 			if (x0 < Nx_ - 1) { // horizontal
 				uint32_t j = idx(x0 + 1, y);
-				edges.push_back({ i, j, spacing_, 0.0f });
+				edges_.push_back({ i, j, spacing_, 0.0f });
 			}
 			if (y < Ny_ - 1) { // vertical
 				uint32_t j = idx(x0, y + 1);
-				edges.push_back({ i, j, spacing_, 0.0f });
+				edges_.push_back({ i, j, spacing_, 0.0f });
 			}
 		}
 	}
@@ -340,8 +340,8 @@ void CpuSim::CreateClothData_CPU(
 	for (uint32_t y = 0; y < Ny_ - 1; ++y) {
 		for (uint32_t x0 = 0; x0 < Nx_ - 1; ++x0) {
 			uint32_t i = idx(x0, y);
-			edges.push_back({ i, idx(x0 + 1, y + 1), spacing_ * 1.414f, 0.0f });
-			edges.push_back({ idx(x0 + 1, y), idx(x0, y + 1), spacing_ * 1.414f, 0.0f });
+			edges_.push_back({ i, idx(x0 + 1, y + 1), spacing_ * 1.414f, 0.0f });
+			edges_.push_back({ idx(x0 + 1, y), idx(x0, y + 1), spacing_ * 1.414f, 0.0f });
 		}
 	}
 }
@@ -355,25 +355,25 @@ void CpuSim::SimulateClothXPBD_CPU(
 
 	// 1. integrate
 	for (size_t i = 0; i < N; ++i) {
-		if (invMass[i] == 0.0f) { xp[i] = positions[i]; continue; }
-		glm::vec3 xi = glm::vec3(positions[i]);
-		glm::vec3 vi = glm::vec3(velocities[i]);
+		if (inv_mass_[i] == 0.0f) { xp[i] = positions_[i]; continue; }
+		glm::vec3 xi = glm::vec3(positions_[i]);
+		glm::vec3 vi = glm::vec3(velocities_[i]);
 		vi += gravity_ * dt_;
 		xi += vi * dt_;
 		xp[i] = glm::vec4(xi, 1.0f);
-		velocities[i] = glm::vec4(vi, 0.0f);
+		velocities_[i] = glm::vec4(vi, 0.0f);
 	}
 
-	for (auto& e : edges) {
+	for (auto& e : edges_) {
 		e.lambda = 0.0f;
 	}
 
 	// 2. XPBD 반복
 	for (int iter = 0; iter < iterations_; ++iter) {
 		// 거리 제약
-		for (auto& e : edges) {
+		for (auto& e : edges_) {
 			uint32_t i = e.i, j = e.j;
-			float wi = invMass[i], wj = invMass[j];
+			float wi = inv_mass_[i], wj = inv_mass_[j];
 			if (wi + wj < 1e-8f) continue;
 
 			glm::vec3 xi = glm::vec3(xp[i]);
@@ -384,7 +384,7 @@ void CpuSim::SimulateClothXPBD_CPU(
 			n /= L;
 
 			float C = L - e.rest;
-			float alpha = compliance / (dt_ * dt_);
+			float alpha = compliance_ / (dt_ * dt_);
 			float denom = wi + wj + alpha;
 			float dl = -(C + alpha * e.lambda) / denom;
 			e.lambda += dl;
@@ -396,7 +396,7 @@ void CpuSim::SimulateClothXPBD_CPU(
 
 		// 구 충돌 (투영)
 		for (size_t i = 0; i < N; ++i) {
-			if (invMass[i] == 0.0f) continue;
+			if (inv_mass_[i] == 0.0f) continue;
 			glm::vec3 p = glm::vec3(xp[i]);
 			glm::vec3 d = p - sphereCenter;
 			float dist = glm::length(d);
@@ -411,11 +411,11 @@ void CpuSim::SimulateClothXPBD_CPU(
 
 	// 3. 속도 업데이트
 	for (size_t i = 0; i < N; ++i) {
-		if (invMass[i] == 0.0f) continue;
-		glm::vec3 newV = (glm::vec3(xp[i]) - glm::vec3(positions[i])) / dt_;
-		newV *= (1.0f - damping);
-		velocities[i] = glm::vec4(newV, 0.0f);
-		positions[i] = xp[i];
+		if (inv_mass_[i] == 0.0f) continue;
+		glm::vec3 newV = (glm::vec3(xp[i]) - glm::vec3(positions_[i])) / dt_;
+		newV *= (1.0f - damping_);
+		velocities_[i] = glm::vec4(newV, 0.0f);
+		positions_[i] = xp[i];
 	}
 }
 
@@ -423,31 +423,7 @@ void CpuSim::CopyPositions(uint32_t currentFrame, const vk::raii::CommandBuffer&
 {
 	VkDeviceSize size = sizeof(glm::vec4) * particles_size_;
 
-	// 1) staging memcpy
-	std::memcpy(pos_staging_map_[currentFrame], positions.data(), (size_t)size);
-	// HostCoherent가 아니면 vkFlushMappedMemoryRanges 호출
-
-	// 2) copy staging -> device
-	vk::BufferCopy region{ 0, 0, size };
-	cmd.copyBuffer(*pos_staging_[currentFrame], *pos_ssbo_[currentFrame], { region });
-
-	// 3) barrier: TRANSFER_WRITE -> VERTEX/SSBO read
-	vk::BufferMemoryBarrier2 b{
-		.srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
-		.srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
-		// SSBO를 VS에서 읽는다면:
-		.dstStageMask = vk::PipelineStageFlagBits2::eVertexShader,
-		.dstAccessMask = vk::AccessFlagBits2::eShaderStorageRead,
-		.buffer = *pos_ssbo_[currentFrame],
-		.offset = 0,
-		.size = size
-	};
-	vk::DependencyInfo dep{
-		.bufferMemoryBarrierCount = 1,
-		.pBufferMemoryBarriers = &b
-	};
-	cmd.pipelineBarrier2(dep);
-
+	vku::CopyStagingToSSBO(cmd, size, pos_staging_map_[currentFrame], positions_, pos_staging_[currentFrame], pos_ssbo_[currentFrame], vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::PipelineStageFlagBits2::eVertexShader, vk::AccessFlagBits2::eShaderStorageRead);
 }
 
 void CpuSim::UpdatePushContants()

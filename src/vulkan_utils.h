@@ -10,6 +10,10 @@ namespace vku
 		uint32_t layout = 0;
 	};
 
+	struct TestScene {
+		bool sphereCollision = false;
+	};
+
 	inline [[nodiscard]] vk::raii::ShaderModule CreateShaderModule(vk::raii::Device& device, const std::vector<char>& code) {
 		vk::ShaderModuleCreateInfo createInfo{ .codeSize = code.size(), .pCode = reinterpret_cast<const uint32_t*>(code.data()) };
 		vk::raii::ShaderModule shaderModule{ device, createInfo };
@@ -192,13 +196,26 @@ namespace vku
 		vk::BufferUsageFlags ssboUsage,
 		vk::MemoryPropertyFlags ssboProperties,
 		vk::raii::Buffer& ssbo, 
-		vk::raii::DeviceMemory& ssboMem
+		vk::raii::DeviceMemory& ssboMem,
+		vk::raii::Buffer* optStagingBuf = nullptr,
+		vk::raii::DeviceMemory* optStagingMem = nullptr
 	)
 	{
 		vk::raii::Buffer stagingBuffer({});
 		vk::raii::DeviceMemory stagingBufferMemory({});
-		vku::CreateBuffer(physicalDevice, device, bufferSize, stagingUsage, stagingProperties, stagingBuffer, stagingBufferMemory);
 
+		if (optStagingBuf && optStagingMem) {
+			// 이미 만들어 둔 staging 사용
+			stagingBuffer = std::move(*optStagingBuf);
+			stagingBufferMemory = std::move(*optStagingMem);
+		}
+		else {
+			vku::CreateBuffer(physicalDevice, device, bufferSize,
+				stagingUsage, stagingProperties,
+				stagingBuffer, stagingBufferMemory);
+		}
+
+		vku::CreateBuffer(physicalDevice, device, bufferSize, stagingUsage, stagingProperties, stagingBuffer, stagingBufferMemory);
 		void* dataStaging = stagingBufferMemory.mapMemory(0, bufferSize);
 		memcpy(dataStaging, data.data(), (size_t)bufferSize);
 		stagingBufferMemory.unmapMemory();
@@ -212,6 +229,11 @@ namespace vku
 		vku::CopyBuffer(device, queue, commandPool, stagingBuffer, shaderStorageBufferTemp, bufferSize);
 		ssbo = std::move(shaderStorageBufferTemp);
 		ssboMem = std::move(shaderStorageBufferTempMemory);
+
+		if (optStagingBuf && optStagingMem) {
+			*optStagingBuf = std::move(stagingBuffer);
+			*optStagingMem = std::move(stagingBufferMemory);
+		}
 	}
 
 	inline void barrier2(
@@ -234,5 +256,34 @@ namespace vku
 		dep.setMemoryBarriers(mems); // ArrayProxy로 안전하게 복사됨
 
 		cmd.pipelineBarrier2(dep);
+	}
+
+	template <typename T>
+	inline void CopyStagingToSSBO(const vk::raii::CommandBuffer& cmd, VkDeviceSize size, void* map, std::vector<T>& data, vk::raii::Buffer& staging, vk::raii::Buffer& ssbo, vk::PipelineStageFlagBits2 srcStageMask, vk::AccessFlagBits2 srcAccessMask, vk::PipelineStageFlagBits2 dstStageMask, vk::AccessFlagBits2 dstAccessMask)
+	{
+		// 1) staging memcpy
+		std::memcpy(map, data.data(), (size_t)size);
+		
+		// 2) copy staging -> device
+		vk::BufferCopy region{ 0, 0, size };
+		cmd.copyBuffer(*staging, *ssbo, { region });
+
+		// 3) barrier: TRANSFER_WRITE -> VERTEX/SSBO read
+		vk::BufferMemoryBarrier2 b{
+			.srcStageMask = srcStageMask,
+			.srcAccessMask = srcAccessMask,
+			// SSBO를 VS에서 읽는다면:
+			.dstStageMask = dstStageMask,
+			.dstAccessMask = dstAccessMask,
+			.buffer = *ssbo,
+			.offset = 0,
+			.size = size
+		};
+		vk::DependencyInfo dep{
+			.bufferMemoryBarrierCount = 1,
+			.pBufferMemoryBarriers = &b
+		};
+		cmd.pipelineBarrier2(dep);
+
 	}
 }

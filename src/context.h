@@ -72,6 +72,7 @@ private:
 		GPU
 	};
 	CpuOrGpu cpu_or_gpu_ = CpuOrGpu::GPU;
+	vku::TestScene test_scene_;
 
 	std::unique_ptr<CpuSim> cpu_sim_;
 	std::unique_ptr<GpuSim> gpu_sim_;

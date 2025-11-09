@@ -19,11 +19,11 @@ public:
 	CpuSim& operator=(CpuSim&& rhs) = delete;
 	~CpuSim() = default;
 
-	float dt_ = 1.0f / 120.0f;
+	float dt_ = 1.0f / 480.0f;
 	glm::vec3 gravity_ = glm::vec3(0, -9.8f, 0);
-	int iterations_ = 10;
-	float compliance = 1e-5f;
-	float damping = 0.03f;
+	int iterations_ = 8;
+	float compliance_ = 1e-6f;
+	float damping_ = 0.01f;
 
 private:
 	vku::Counts counts_;
@@ -40,9 +40,9 @@ private:
 	uint32_t particles_size_ = 0;
 	uint32_t indices_size_ = 0;
 
-	std::vector<glm::vec4> positions, velocities;
-	std::vector<float> invMass;
-	std::vector<Edge> edges;
+	std::vector<glm::vec4> positions_, velocities_;
+	std::vector<float> inv_mass_;
+	std::vector<Edge> edges_;
 
 	std::vector<vk::raii::Buffer>      pos_ssbo_;            // per-frame
 	std::vector<vk::raii::DeviceMemory> pos_ssbo_mem_;

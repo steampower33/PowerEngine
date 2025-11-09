@@ -116,17 +116,21 @@ GpuSim::GpuSim(
 
 	// SSBOs
 	{
+
+		auto idx = [&](int x, int y) { return y * Nx_ + x; };
+
+		// 입력
+		positions_.resize(particles_size_);
+		velocities_.resize(particles_size_);
+		inverse_mass_.resize(particles_size_);
+
+
 		const float width = spacing_ * (Nx_ - 1);
 		const float height = spacing_ * (Ny_ - 1);
 
 		const float originX = -width * 0.5f;
 		const float originY = -height * 0.5f;
 		const float zPlane = 0.0f;
-
-		auto idx = [&](int x, int y) { return y * Nx_ + x; };
-
-		// 입력
-		std::vector<glm::vec3> positions(particles_size_);
 
 		for (int y = 0; y < Ny_; ++y)
 			for (int x = 0; x < Nx_; ++x) {
@@ -136,7 +140,9 @@ GpuSim::GpuSim(
 				float py = originY + y * spacing_;
 				float pz = zPlane;
 
-				positions[id] = { originX + x * spacing_, 2.0f, -originY - y * spacing_ };
+				positions_[id] = { originX + x * spacing_, 2.0f, -originY - y * spacing_, 1.0f};
+				velocities_[id] = glm::vec4(0.0f);
+				inverse_mass_[id] = 1.0f;
 			}
 
 		indices_size_ = (Nx_ - 1) * (Ny_ - 1) * 6;
@@ -159,20 +165,15 @@ GpuSim::GpuSim(
 		vku::CreateIndexBuffer(physicalDevice, device, queue, commandPool, indices, index_buffer_, index_buffer_memory_);
 
 		// 출력 SoA
-		const uint32_t V = (uint32_t)positions.size();
-		std::vector<glm::vec4> x(V), v(V, glm::vec4(0.0f)), xPrev(V, glm::vec4(0.0f));
-		std::vector<float>     w(V, 1.0f);
+		const uint32_t V = particles_size_;
+		std::vector<glm::vec4> xPrev(V, glm::vec4(0.0f));
 		std::vector<float > deltaX(V, 0.0f), deltaY(V, 0.0f), deltaZ(V, 0.0f);
 		std::vector<uint32_t>  dcount(V, 0);
 		std::vector<Edge> edge(V);
 
-		for (uint32_t i = 0; i < V; ++i) {
-			x[i] = glm::vec4(positions[i], 1.0f);
-		}
-
 		// --- top row pin ---
 		for (int x = 0; x < Nx_; ++x)
-			w[(Ny_ - 1) * Nx_ + x] = 0.0f;
+			inverse_mass_[(Ny_ - 1) * Nx_ + x] = 0.0f;
 
 		// --- edge (structural only) ---
 		edge.clear();
@@ -212,17 +213,6 @@ GpuSim::GpuSim(
 		//	}
 		//}
 
-		// sort
-		std::sort(edge.begin(), edge.end(), [&](const Edge& a, const Edge& b) {
-			auto key = [&](uint32_t v) {
-				uint32_t X = v % Nx, Y = v / Nx;
-				return (uint64_t(Y) << 32) | X; // row-major; 필요하면 morton2D로 교체
-				};
-			uint64_t ka = key(a.i) + key(a.j);
-			uint64_t kb = key(b.i) + key(b.j);
-			return ka < kb;
-			});
-
 		edges_size_ = edge.size();
 
 		// position
@@ -231,10 +221,12 @@ GpuSim::GpuSim(
 			positions_ssbo_size_,
 			vk::BufferUsageFlagBits::eTransferSrc,
 			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-			x,
+			positions_,
 			vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
 			vk::MemoryPropertyFlagBits::eDeviceLocal,
-			positions_ssbo_, positions_ssbo_memory_);
+			positions_ssbo_, positions_ssbo_memory_,
+			&positions_staging_, &positions_staging_memory_);
+		positions_staging_mapped_ = positions_staging_memory_.mapMemory(0, positions_ssbo_size_);
 
 		// velocity
 		velocities_ssbo_size_ = sizeof(glm::vec4) * particles_size_;
@@ -242,10 +234,12 @@ GpuSim::GpuSim(
 			velocities_ssbo_size_,
 			vk::BufferUsageFlagBits::eTransferSrc,
 			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-			v,
+			velocities_,
 			vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
 			vk::MemoryPropertyFlagBits::eDeviceLocal,
-			velocities_ssbo_, velocities_ssbo_memory_);
+			velocities_ssbo_, velocities_ssbo_memory_,
+			&velocities_staging_, &velocities_staging_memory_);
+		velocities_staging_mapped_ = velocities_staging_memory_.mapMemory(0, velocities_ssbo_size_);
 
 		// inverse mass
 		inverse_mass_ssbo_size_ = sizeof(float) * particles_size_;
@@ -253,10 +247,12 @@ GpuSim::GpuSim(
 			inverse_mass_ssbo_size_,
 			vk::BufferUsageFlagBits::eTransferSrc,
 			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-			w,
+			inverse_mass_,
 			vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
 			vk::MemoryPropertyFlagBits::eDeviceLocal,
-			inverse_mass_ssbo_, inverse_mass_ssbo_memory_);
+			inverse_mass_ssbo_, inverse_mass_ssbo_memory_,
+			&inverse_mass_staging_, &inverse_mass_staging_memory_);
+		inverse_mass_staging_mapped_ = inverse_mass_staging_memory_.mapMemory(0, inverse_mass_ssbo_size_);
 
 		// delta X
 		delta_x_ssbo_size_ = sizeof(float) * particles_size_;
@@ -712,10 +708,48 @@ void GpuSim::UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& mod
 	std::memcpy(dst, &compute_.sim_params, sizeof(Compute::SimParams));
 }
 
-void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& steps)
+void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& steps, vku::TestScene& testScene)
 {
 	cmd.reset();
 	cmd.begin({});
+	
+	if (testScene.sphereCollision)
+	{
+		testScene.sphereCollision = false;
+
+		const float width = spacing_ * (Nx_ - 1);
+		const float height = spacing_ * (Ny_ - 1);
+
+		const float originX = -width * 0.5f;
+		const float originY = -height * 0.5f;
+		const float zPlane = 0.0f;
+
+		for (int y = 0; y < Ny_; ++y)
+			for (int x = 0; x < Nx_; ++x) {
+				const int id = y * Nx_ + x;
+
+				float px = originX + x * spacing_;
+				float py = originY + y * spacing_;
+				float pz = zPlane;
+
+				positions_[id] = { originX + x * spacing_, 4.0f, -originY - y * spacing_, 1.0f };
+				velocities_[id] = glm::vec4(0.0f);
+				inverse_mass_[id] = 1.0f;
+			}
+
+		vku::CopyStagingToSSBO(cmd, positions_ssbo_size_, positions_staging_mapped_, positions_, positions_staging_, positions_ssbo_, 
+			vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, 
+			vk::PipelineStageFlagBits2::eVertexShader, vk::AccessFlagBits2::eShaderStorageRead);
+
+		vku::CopyStagingToSSBO(cmd, velocities_ssbo_size_, velocities_staging_mapped_, velocities_, velocities_staging_, velocities_ssbo_, 
+			vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, 
+			vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+
+		vku::CopyStagingToSSBO(cmd, inverse_mass_ssbo_size_, inverse_mass_staging_mapped_, inverse_mass_, inverse_mass_staging_, inverse_mass_ssbo_, 
+			vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, 
+			vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+
+	}
 
 	steps = 0;
 	constexpr uint32_t kSlotsPerIterPair = 8;

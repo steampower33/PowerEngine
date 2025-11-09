@@ -21,7 +21,7 @@ public:
 	~GpuSim() = default;
 
 	void UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& model);
-	void ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& steps);
+	void ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& steps, vku::TestScene& testScene);
 	void UpdatePushContants();
 	void GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset);
 
@@ -107,17 +107,29 @@ public:
 
 	} graphics_;
 
+	std::vector<glm::vec4> positions_;
 	vk::raii::Buffer positions_ssbo_{ nullptr };
 	vk::raii::DeviceMemory positions_ssbo_memory_{ nullptr };
 	uint32_t positions_ssbo_size_ = 0;
+	vk::raii::Buffer positions_staging_{ nullptr };
+	vk::raii::DeviceMemory positions_staging_memory_{ nullptr };
+	void* positions_staging_mapped_{ nullptr };
 
+	std::vector<glm::vec4> velocities_;
 	vk::raii::Buffer velocities_ssbo_{ nullptr };
 	vk::raii::DeviceMemory velocities_ssbo_memory_{ nullptr };
 	uint32_t velocities_ssbo_size_ = 0;
+	vk::raii::Buffer velocities_staging_{ nullptr };
+	vk::raii::DeviceMemory velocities_staging_memory_{ nullptr };
+	void* velocities_staging_mapped_{ nullptr };
 
+	std::vector<float> inverse_mass_;
 	vk::raii::Buffer inverse_mass_ssbo_{ nullptr };
 	vk::raii::DeviceMemory inverse_mass_ssbo_memory_{ nullptr };
 	uint32_t inverse_mass_ssbo_size_ = 0;
+	vk::raii::Buffer inverse_mass_staging_{ nullptr };
+	vk::raii::DeviceMemory inverse_mass_staging_memory_{ nullptr };
+	void* inverse_mass_staging_mapped_{ nullptr };
 
 	vk::raii::Buffer delta_x_ssbo_{ nullptr };
 	vk::raii::DeviceMemory delta_x_ssbo_memory_{ nullptr };
