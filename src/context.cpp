@@ -584,6 +584,12 @@ void Context::PickPhysicalDevice() {
 
 			// Check if all required device extensions are available
 			auto availableDeviceExtensions = device.enumerateDeviceExtensionProperties();
+			auto hasAtomicFloatExt = std::any_of(
+				availableDeviceExtensions.begin(), availableDeviceExtensions.end(),
+				[](const vk::ExtensionProperties& e) {
+					return std::strcmp(e.extensionName, VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME) == 0;
+				});
+
 			bool supportsAllRequiredExtensions =
 				std::ranges::all_of(required_device_extension_,
 					[&availableDeviceExtensions](auto const& requiredDeviceExtension)
@@ -593,16 +599,26 @@ void Context::PickPhysicalDevice() {
 							{ return strcmp(availableDeviceExtension.extensionName, requiredDeviceExtension) == 0; });
 					});
 
-			auto features = device.template getFeatures2<vk::PhysicalDeviceFeatures2,
+			auto features = device.template getFeatures2<
+				vk::PhysicalDeviceFeatures2,
 				vk::PhysicalDeviceVulkan13Features,
 				vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT,
-				vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>();
+				vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR,
+				vk::PhysicalDeviceShaderAtomicFloatFeaturesEXT>();
 			bool supportsRequiredFeatures = features.template get<vk::PhysicalDeviceFeatures2>().features.samplerAnisotropy &&
 				features.template get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering &&
 				features.template get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>().extendedDynamicState &&
 				features.template get<vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>().timelineSemaphore;
 
-			return supportsVulkan1_3 && supportsGraphics && supportsAllRequiredExtensions && supportsRequiredFeatures;
+			auto atomicFeats = features.template get<vk::PhysicalDeviceShaderAtomicFloatFeaturesEXT>();
+			bool bufF32Atomics = atomicFeats.shaderBufferFloat32Atomics;      // SSBO float32 원자연산
+			bool bufF32AtomicAdd = atomicFeats.shaderBufferFloat32AtomicAdd;    // SSBO float32 atomicAdd
+			bool sharedF32Atomics = atomicFeats.shaderSharedFloat32Atomics;      // shared memory float32 원자
+			bool sharedF32AtomicAdd = atomicFeats.shaderSharedFloat32AtomicAdd;    // shared memory float32 add
+
+			bool supportsRequiredAtomicFeatures = bufF32Atomics && bufF32AtomicAdd && sharedF32Atomics && sharedF32AtomicAdd;
+
+			return supportsVulkan1_3 && supportsGraphics && supportsAllRequiredExtensions && supportsRequiredFeatures && supportsRequiredAtomicFeatures;
 		});
 	if (devIter != devices.end())
 	{
