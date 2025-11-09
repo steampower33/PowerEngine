@@ -57,7 +57,8 @@ private:
 		vk::KHRSwapchainExtensionName,
 		vk::KHRSpirv14ExtensionName,
 		vk::KHRSynchronization2ExtensionName,
-		vk::KHRCreateRenderpass2ExtensionName
+		vk::KHRCreateRenderpass2ExtensionName,
+		vk::EXTShaderAtomicFloatExtensionName
 	};
 
 private:

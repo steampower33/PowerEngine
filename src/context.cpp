@@ -669,7 +669,8 @@ void Context::CreateLogicalDevice() {
 	vk::StructureChain<vk::PhysicalDeviceFeatures2,
 		vk::PhysicalDeviceVulkan13Features,
 		vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT,
-		vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>
+		vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR,
+		vk::PhysicalDeviceShaderAtomicFloatFeaturesEXT>
 		featureChain = {
 			{
 				.features = {
@@ -686,17 +687,23 @@ void Context::CreateLogicalDevice() {
 			},
 			{
 				.timelineSemaphore = true
+			},
+			{
+				.shaderBufferFloat32Atomics = vk::True,
+				.shaderBufferFloat32AtomicAdd = vk::True
 			}
 	};
 
 	// create a Device
 	float                     queuePriority = 0.0f;
 	vk::DeviceQueueCreateInfo deviceQueueCreateInfo{ .queueFamilyIndex = queue_index_, .queueCount = 1, .pQueuePriorities = &queuePriority };
-	vk::DeviceCreateInfo      deviceCreateInfo{ .pNext = &featureChain.get<vk::PhysicalDeviceFeatures2>(),
-												.queueCreateInfoCount = 1,
-												.pQueueCreateInfos = &deviceQueueCreateInfo,
-												.enabledExtensionCount = static_cast<uint32_t>(required_device_extension_.size()),
-												.ppEnabledExtensionNames = required_device_extension_.data() };
+	vk::DeviceCreateInfo      deviceCreateInfo{ 
+		.pNext = &featureChain.get<vk::PhysicalDeviceFeatures2>(),
+		.queueCreateInfoCount = 1,
+		.pQueueCreateInfos = &deviceQueueCreateInfo,
+		.enabledExtensionCount = static_cast<uint32_t>(required_device_extension_.size()),
+		.ppEnabledExtensionNames = required_device_extension_.data() 
+	};
 
 	device_ = vk::raii::Device(physical_device_, deviceCreateInfo);
 	queue_ = vk::raii::Queue(device_, queue_index_, 0);
