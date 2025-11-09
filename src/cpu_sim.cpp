@@ -37,7 +37,7 @@ CpuSim::CpuSim(
 
 	}
 
-	// pool
+	// Descriptor Pool
 	{
 		std::vector<vk::DescriptorPoolSize> poolSizes;
 
@@ -64,7 +64,7 @@ CpuSim::CpuSim(
 		descriptor_pool_ = vk::raii::DescriptorPool(device, poolInfo);
 	}
 
-	// set
+	// Descriptor Set
 	{
 		std::vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, sim_cpu_descriptor_set_layout_);
 		vk::DescriptorSetAllocateInfo allocInfo{
