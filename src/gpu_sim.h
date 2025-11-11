@@ -21,12 +21,12 @@ public:
 	~GpuSim() = default;
 
 	void UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& model);
-	void ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& steps, vku::TestScene& testScene);
-	void UpdatePushContants();
-	void GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset);
-
+	void ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& timestampSteps, vku::TestScene& testScene);
 	vku::Counts counts_;
 	vk::raii::DescriptorPool descriptor_pool_{ nullptr };
+	void UpdatePushContants();
+	void GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset);
+	void UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene);
 
 	uint32_t Nx_ = 0;
 	uint32_t Ny_ = 0;
@@ -34,9 +34,9 @@ public:
 
 	uint32_t particles_size_ = 0;
 	uint32_t indices_size_ = 0;
-	uint32_t edges_size_ = 0;
 
-	uint32_t iterations_ = 8;
+	float dt_ = 1 / 60.0f;
+	int substeps_ = 15;
 
 	// |===== Push Constant =====|
 	struct ClothPC {
@@ -48,21 +48,24 @@ public:
 	// |===== Compute =====|
 	struct Compute {
 		struct SimParams {
-			alignas(4)  float dt = 1 / 480.0f;
-			alignas(4)  float compliance = 1e-6f;
+			alignas(4)  float dt = 0.0f;
 			alignas(4)  float damping = 0.01f;
-			alignas(4)  int   numVerts;
+			alignas(4)  int   numParticles;
 			alignas(4)  int   numEdges;
 			alignas(16) glm::vec4 gravity = glm::vec4(0.0f, -9.8f, 0.0f, 0.0f);
 			alignas(16) glm::vec4 sphereCenter;
 			alignas(4)  float sphereRadius;
 			alignas(4)  float collisionBeta = 0.3f;
-			alignas(4)  float pad0;
-			alignas(4)  float pad1;
-			alignas(4)  float pad2;
+			alignas(4)  int  windTest = 0;
+			alignas(4)  float windStrength = 1.0f;
+			alignas(16) glm::vec4 windDir = glm::vec4(0.0f, 0.0f, -1.0f, 0.0f);
 		} sim_params;
 
 		static_assert(sizeof(SimParams) % 16 == 0, "std140 must be 16-byte aligned.");
+
+		struct PC { 
+			uint32_t base, count; 
+		} pc_;
 
 		vk::raii::Buffer sim_params_ubo{ nullptr };
 		vk::raii::DeviceMemory sim_params_ubo_memory{ nullptr };
@@ -80,12 +83,12 @@ public:
 		} pipeline_layouts;
 
 		struct Pipelines {
-			vk::raii::Pipeline clear_lambdas{ nullptr };
 			vk::raii::Pipeline copy_xprev{ nullptr };
 			vk::raii::Pipeline integrate{ nullptr };
 			vk::raii::Pipeline clear_deltas{ nullptr };
-			vk::raii::Pipeline solve_stretch{ nullptr };
+			vk::raii::Pipeline solve_atomic{ nullptr };
 			vk::raii::Pipeline apply_deltas{ nullptr };
+			vk::raii::Pipeline solve_coloring{ nullptr };
 			vk::raii::Pipeline collide_sphere{ nullptr };
 			vk::raii::Pipeline update_velocity{ nullptr };
 		} pipelines;
@@ -147,7 +150,6 @@ public:
 	vk::raii::DeviceMemory dcount_ssbo_memory_{ nullptr };
 	uint32_t dcount_ssbo_size_ = 0;
 
-	struct Edge { uint32_t i; uint32_t j; float rest; float lambda; };
 	vk::raii::Buffer edges_ssbo_{ nullptr };
 	vk::raii::DeviceMemory edges_ssbo_memory_{ nullptr };
 	uint32_t edges_ssbo_size_ = 0;
@@ -158,4 +160,24 @@ public:
 
 	vk::raii::Buffer index_buffer_{ nullptr };
 	vk::raii::DeviceMemory index_buffer_memory_{ nullptr };
+
+	// Edge
+	struct Edge {
+		uint32_t i;
+		uint32_t j;
+		float    rest;
+		float    stiff;
+	};
+	static_assert(sizeof(Edge) == 16, "Edge must be 24 bytes");
+
+	uint32_t edge_size_;
+	std::array<uint32_t, 6> pass_offset_; // [0..5], 5ดย total
+
+	struct EdgeAgg {
+		uint32_t i, j;
+		double   rest_sum = 0.0;
+		double   stiff_sum = 0.0;
+		int      cnt = 0;
+	};
+	std::vector<Edge> DedupEdges(const std::vector<Edge>& in, double restMismatchWarn = 1e-5);
 };

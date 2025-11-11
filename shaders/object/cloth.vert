@@ -22,7 +22,7 @@ void main() {
     uint j = vid / pc.Nx;
 
     vUV = vec2(float(i) / float(pc.Nx - 1),
-               1.0 - float(j) / float(pc.Nx - 1));
+               1.0 - float(j) / float(pc.Ny - 1));
 
     gl_Position = ubo.proj * ubo.view * vec4(p, 1.0);
 }

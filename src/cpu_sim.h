@@ -19,7 +19,7 @@ public:
 	CpuSim& operator=(CpuSim&& rhs) = delete;
 	~CpuSim() = default;
 
-	float dt_ = 1.0f / 480.0f;
+	float dt_ = 1.0f / 60.0f;
 	glm::vec3 gravity_ = glm::vec3(0, -9.8f, 0);
 	int iterations_ = 8;
 	float compliance_ = 1e-6f;
@@ -80,4 +80,24 @@ public:
 	void UpdatePushContants();
 	void CopyPositions(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd);
 	void Record(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset);
+
+private:
+
+	uint32_t stretch_edge_size_ = 0;
+	uint32_t bend_edge_size_ = 0;
+
+	struct EdgeKey { uint32_t a, b; };               // a < b
+	static inline EdgeKey makeKey(uint32_t i, uint32_t j) {
+		return (i < j) ? EdgeKey{ i,j } : EdgeKey{ j,i };
+	}
+	struct KeyHash {
+		size_t operator()(EdgeKey k) const {
+			return (size_t(k.a) << 32) ^ size_t(k.b);
+		}
+	};
+	struct KeyEq {
+		bool operator()(EdgeKey x, EdgeKey y) const {
+			return x.a == y.a && x.b == y.b;
+		}
+	};
 };

@@ -27,7 +27,7 @@ Context::Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height)
 	{
 		models.reserve(kMaxObjects);
 
-		models.emplace_back(std::make_unique<Model>("assets/models/sphere.gltf", physical_device_, device_, queue_, command_pool_, model_count_, glm::vec3(0.0f, 0.0f, 0.0f)));
+		models.emplace_back(std::make_unique<Model>("assets/models/sphere.gltf", physical_device_, device_, queue_, command_pool_, model_count_, glm::vec3(0.0f, 1.0f, 0.0f)));
 
 		texture_ = std::make_unique<Texture2D>("assets/textures/vulkan_cloth_rgba.ktx", physical_device_, device_, queue_, command_pool_);
 	}
@@ -64,7 +64,7 @@ Context::~Context()
 void Context::Update(Camera& camera, MouseInteractor& mouse_interactor, float dt)
 {
 	UpdateMouseInteractor(camera, mouse_interactor);
-	
+
 	if (cpu_or_gpu_ == CpuOrGpu::CPU)
 	{
 		cpu_sim_->SimulateClothXPBD_CPU(
@@ -99,8 +99,9 @@ void Context::Draw(bool& printTimestamp)
 		computeSignalValue = ++timeline_value_;
 		graphicsWaitValue = computeSignalValue;
 		graphicsSignalValue = ++timeline_value_;
-	
-		gpu_sim_->ComputeRecord(current_frame_, cmds_.compute[current_frame_], timestamp_pool_, steps, test_scene_);
+
+		gpu_sim_->ComputeRecord(current_frame_, cmds_.compute[current_frame_], timestamp_pool_, timestampSteps, test_scene_);
+
 		{
 			// Submit compute work
 			vk::TimelineSemaphoreSubmitInfo computeTimelineInfo{
@@ -138,35 +139,29 @@ void Context::Draw(bool& printTimestamp)
 			};
 			while (vk::Result::eTimeout == device_.waitSemaphores(waitInfo, UINT64_MAX));
 
-			std::array<uint64_t, 8> ts;
+			float nsPerTick = physical_device_.getProperties().limits.timestampPeriod;
+
+			std::vector<uint64_t> ts(4);
 
 			VkResult res = vkGetQueryPoolResults(
 				static_cast<VkDevice>(*device_),
 				static_cast<VkQueryPool>(*timestamp_pool_),
-				0, 8,
-				sizeof(ts), ts.data(), sizeof(uint64_t),
+				0, 4,
+				ts.size() * sizeof(uint64_t), ts.data(), sizeof(uint64_t),
 				VK_QUERY_RESULT_64_BIT
 			);
-			float nsPerTick = physical_device_.getProperties().limits.timestampPeriod;
-
 			std::cout << "===============================" << std::endl;
-			for (int i = 0; i < 8; i += 2) {
+			for (int i = 0; i < 4; i += 2) {
 				double dt_ms = (ts[i + 1] - ts[i]) * nsPerTick / 1e6;
 
 				switch (i)
 				{
-					case 0:
-						std::cout << "Clear Deltas \t: ";
-						break;
-					case 2:
-						std::cout << "Solve XPBD \t: ";
-						break;
-					case 4:
-						std::cout << "Apply Deltas \t: ";
-						break;
-					case 6:
-						std::cout << "Collide Sphere \t: ";
-						break;
+				case 0:
+					std::cout << "Solve Stretch \t: ";
+					break;
+				case 2:
+					std::cout << "Solve Bend \t: ";
+					break;
 				}
 
 				std::cout << std::format("{:.3f} ms\n", dt_ms);
@@ -329,26 +324,35 @@ void Context::DrawImgui()
 	ImGui::NewFrame();
 
 	{
-		ImGui::Begin("Parameter");
+		ImGui::Begin("Setting");
 
 		ImGuiIO& io = ImGui::GetIO(); (void)io;
 		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
-		ImGui::SliderFloat("dt", &gpu_sim_->compute_.sim_params.dt, 0.001f, 0.008f, "%.4f");
-		ImGui::SliderFloat("compliance", &gpu_sim_->compute_.sim_params.compliance, 0.0f, 5e-4f, "%.1e");
-		ImGui::SliderFloat("damping", &gpu_sim_->compute_.sim_params.damping, 0.0f, 0.2f, "%.3f");
-		ImGui::SliderFloat("collisionBeta", &gpu_sim_->compute_.sim_params.collisionBeta, 0.0f, 1.0f);
+		if (ImGui::CollapsingHeader("Parameter", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			ImGui::InputFloat("Damping", &gpu_sim_->compute_.sim_params.damping, 0.001f, 0.0f, "%.3f");
+			ImGui::InputFloat("CollisionBeta", &gpu_sim_->compute_.sim_params.collisionBeta, 0.01f, 0.0f, "%0.3f");
+			ImGui::InputInt("Substeps", &gpu_sim_->substeps_, 1, 0, 20);
+
+			bool windEnabled = (gpu_sim_->compute_.sim_params.windTest != 0);
+			if (ImGui::Checkbox("Wind", &windEnabled)) {
+				gpu_sim_->compute_.sim_params.windTest = windEnabled ? 1 : 0;
+			}
+			ImGui::DragFloat3("Wind Dir", &gpu_sim_->compute_.sim_params.windDir[0], 0.1f, -1.0f, 1.0f);
+			ImGui::DragFloat("Wind Strength", &gpu_sim_->compute_.sim_params.windStrength, 0.1f, 0.0f, 5.0f);
+		}
+
+		if (ImGui::CollapsingHeader("Test Scene", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			ImGui::Checkbox("Sphere Collision", &test_scene_.sphereCollision);
+			ImGui::Checkbox("Pinned Corner", &test_scene_.pinnedCornerDrop);
+		}
 
 		ImGui::End();
 	}
 
-	{
-		ImGui::Begin("Test Scene");
-
-		ImGui::Checkbox("Sphere Collision", &test_scene_.sphereCollision);
-
-		ImGui::End();
-	}
+	//ImGui::ShowDemoWindow();
 
 	ImGui::Render();
 }
@@ -749,12 +753,12 @@ void Context::CreateLogicalDevice() {
 	// create a Device
 	float                     queuePriority = 0.0f;
 	vk::DeviceQueueCreateInfo deviceQueueCreateInfo{ .queueFamilyIndex = queue_index_, .queueCount = 1, .pQueuePriorities = &queuePriority };
-	vk::DeviceCreateInfo      deviceCreateInfo{ 
+	vk::DeviceCreateInfo      deviceCreateInfo{
 		.pNext = &featureChain.get<vk::PhysicalDeviceFeatures2>(),
 		.queueCreateInfoCount = 1,
 		.pQueueCreateInfos = &deviceQueueCreateInfo,
 		.enabledExtensionCount = static_cast<uint32_t>(required_device_extension_.size()),
-		.ppEnabledExtensionNames = required_device_extension_.data() 
+		.ppEnabledExtensionNames = required_device_extension_.data()
 	};
 
 	device_ = vk::raii::Device(physical_device_, deviceCreateInfo);
@@ -793,7 +797,7 @@ void Context::CreateCommandBuffers()
 void Context::CreateQueryPool() {
 	vk::QueryPoolCreateInfo queryInfo = {};
 	queryInfo.queryType = vk::QueryType::eTimestamp;
-	queryInfo.queryCount = 64;
+	queryInfo.queryCount = 4;
 
 	timestamp_pool_ = device_.createQueryPool(queryInfo);
 }

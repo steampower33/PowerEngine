@@ -26,7 +26,7 @@ public:
 	void WaitIdle();
 
 private:
-	uint32_t steps = 0;
+	uint32_t timestampSteps = 0;
 
 	GLFWwindow* glfw_window_;
 
@@ -71,6 +71,7 @@ private:
 		CPU,
 		GPU
 	};
+
 	CpuOrGpu cpu_or_gpu_ = CpuOrGpu::GPU;
 	vku::TestScene test_scene_;
 
@@ -80,7 +81,7 @@ private:
 	// |===== Particle Info =====|
 	const uint32_t Nx_ = 256;
 	const uint32_t Ny_ = 256;
-	const float spacing_ = 0.02;
+	const float spacing_ = 0.01;
 
 	uint32_t particles_size_ = Nx_ * Ny_;
 	uint32_t indices_size_ = 0;

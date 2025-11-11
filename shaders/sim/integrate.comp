@@ -1,20 +1,36 @@
 #version 460
 #include "../common/params.glsl"
-
 layout(local_size_x = 256) in;
 void main(){
     uint i = gl_GlobalInvocationID.x;
-    if (i >= sim.numVerts) return;
+    if (i >= sim.numParticles) return;
 
-    float wi = w[i];
-    if (wi == 0.0) return;
+    vec3 xi_prev = x[i].xyz;
+    xPrev[i] = vec4(xi_prev,1.0);
+    if (w[i]==0.0) return;
 
-    vec3 xi = x[i].xyz;
     vec3 vi = v[i].xyz;
+    vec3 wind = vec3(0);
+    if (sim.windTest==1){
+        float L = length(sim.windDir.xyz);
+        if (L>1e-8) wind = (sim.windDir.xyz/L)*sim.windStrength;
+    }
+    vi += (sim.gravity.xyz + wind) * sim.dt;
+    vec3 xi = xi_prev + vi * sim.dt;
 
-    vi += sim.gravity.xyz * sim.dt;
-    xi += vi * sim.dt;
-
-    x[i] = vec4(xi, 1.0);
-    v[i] = vec4(vi, 0.0);
+    const float thickness=0.001, friction=0.01;
+    vec3 r = xi - sim.sphereCenter.xyz;
+    float d = length(r), R = sim.sphereRadius + thickness;
+    if (d < R){
+        vec3 p = mix(xi, xi_prev, friction);
+        vec3 rr = p - sim.sphereCenter.xyz;
+        float rd = length(rr);
+        if (rd>1e-8) xi = sim.sphereCenter.xyz + rr * (R/rd);
+    }
+    if (xi.y < thickness){
+        vec3 p = mix(xi, xi_prev, friction);
+        xi = vec3(p.x, thickness, p.z);
+    }
+    x[i] = vec4(xi,1.0);
+    v[i] = vec4(vi,0.0);
 }

@@ -1,0 +1,40 @@
+#version 460
+
+#include "../common/params.glsl"
+
+layout(push_constant) uniform PC { uint base; uint count; } pc;
+
+layout(local_size_x = 256) in;
+void main() {
+    uint t = gl_GlobalInvocationID.x;
+    if (t >= pc.count) return;
+
+    uint eidx = pc.base + t;
+    Edge e = edges[eidx];
+
+    uint i = e.i;
+    uint j = e.j;
+
+    float w0 = w[i];
+    float w1 = w[j];
+    float wsum = w0 + w1;
+    if (wsum == 0.0) return;
+
+    vec3 p0 = x[i].xyz;
+    vec3 p1 = x[j].xyz;
+
+    vec3 d = p1 - p0;
+    float l = length(d);
+    if (l < 1e-7) return;            // 안전장치
+    vec3 n = d / l;                  // from i to j (정규화 방향)
+
+    float l0 = e.rest;               // 초기 rest length
+    float C  = l - l0;               // 제약식: |p1 - p0| - l0
+
+    // PBD: Δp0 = -(w0/wsum) * C * n
+    //      Δp1 = +(w1/wsum) * C * n
+    vec3 corr = (C / wsum) * n * e.stiff;
+
+    if (w0 > 0.0) x[i].xyz += w0 * corr;
+    if (w1 > 0.0) x[j].xyz -= w1 * corr;
+}
