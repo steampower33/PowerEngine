@@ -207,13 +207,7 @@ GpuSim::GpuSim(
 				glm::vec3 pi = glm::vec3(positions_[i]);
 				glm::vec3 pj = glm::vec3(positions_[j]);
 				float rest = glm::length(pj - pi);
-				//edges.push_back({ i, j, rest, 0.0f });
-				if (p <= 3)
-					edges.push_back({ i, j, rest, 1.0f });
-				else if (p == 4)
-					edges.push_back({ i, j, rest, 0.5f });
-				else if (p == 5)
-					edges.push_back({ i, j, rest, 0.05f });
+				edges.push_back({ i, j, rest, 0.0f });
 			}
 			pass_offset_[p + 1] = static_cast<uint32_t>(edges.size());
 		}
@@ -513,16 +507,6 @@ GpuSim::GpuSim(
 			compute_.pipeline_layouts.common = vk::raii::PipelineLayout(device, pipelineLayoutInfo);
 		}
 
-		// copy xprev
-		{
-			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(device, vku::ReadFile("shaders/spv/copy_xprev.comp.spv"));
-
-			vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
-
-			vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *compute_.pipeline_layouts.common };
-			compute_.pipelines.copy_xprev = vk::raii::Pipeline(device, nullptr, pipelineInfo);
-		}
-
 		// integrate
 		{
 			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(device, vku::ReadFile("shaders/spv/integrate.comp.spv"));
@@ -531,6 +515,17 @@ GpuSim::GpuSim(
 
 			vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *compute_.pipeline_layouts.common };
 			compute_.pipelines.integrate = vk::raii::Pipeline(device, nullptr, pipelineInfo);
+		}
+
+		// solve_coloring
+		{
+			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(device, vku::ReadFile("shaders/spv/solve_coloring.comp.spv"));
+
+			vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
+
+			vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *compute_.pipeline_layouts.common,
+			};
+			compute_.pipelines.solve_coloring = vk::raii::Pipeline(device, nullptr, pipelineInfo);
 		}
 
 		// clear deltas
@@ -554,17 +549,6 @@ GpuSim::GpuSim(
 			compute_.pipelines.solve_atomic = vk::raii::Pipeline(device, nullptr, pipelineInfo);
 		}
 
-		// solve_coloring
-		{
-			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(device, vku::ReadFile("shaders/spv/solve_coloring.comp.spv"));
-
-			vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
-
-			vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *compute_.pipeline_layouts.common,
-			};
-			compute_.pipelines.solve_coloring = vk::raii::Pipeline(device, nullptr, pipelineInfo);
-		}
-
 		// apply deltas
 		{
 			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(device, vku::ReadFile("shaders/spv/apply_deltas.comp.spv"));
@@ -573,16 +557,6 @@ GpuSim::GpuSim(
 
 			vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *compute_.pipeline_layouts.common };
 			compute_.pipelines.apply_deltas = vk::raii::Pipeline(device, nullptr, pipelineInfo);
-		}
-
-		// collide sphere
-		{
-			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(device, vku::ReadFile("shaders/spv/collide_sphere.comp.spv"));
-
-			vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
-
-			vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *compute_.pipeline_layouts.common };
-			compute_.pipelines.collide_sphere = vk::raii::Pipeline(device, nullptr, pipelineInfo);
 		}
 
 		// update velocity
@@ -906,7 +880,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 		uint32_t groupsP = ceil_div(particles_size_, 256u);
 		uint32_t groupsEdges = ceil_div(edge_size_, 256u);
 
-		// 3. integrate
+		// 1. integrate
 		// x : write -> read
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.integrate);
 		cmd.dispatch(groupsP, 1, 1);
@@ -916,7 +890,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 			vk::PipelineStageFlagBits2::eComputeShader,
 			vk::AccessFlagBits2::eShaderStorageRead);
 
-		// 4. solve pbd
+		// 2. solve pbd
 		TS(timestampSteps++);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.solve_coloring);
 
@@ -940,7 +914,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 		}
 		TS(timestampSteps++);
 
-		// 4a. clear deltas
+		// 3. clear deltas
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.clear_deltas);
 		cmd.dispatch(groupsP, 1, 1);
 		vku::barrier2(cmd,
@@ -949,7 +923,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 			vk::PipelineStageFlagBits2::eComputeShader,
 			vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
-		// Solve PBD - Bend
+		// 4. Solve PBD - Bend
 		TS(timestampSteps++);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.solve_atomic);
 		uint32_t base = pass_offset_[4];
@@ -968,7 +942,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 			vk::PipelineStageFlagBits2::eComputeShader,
 			vk::AccessFlagBits2::eShaderStorageRead);
 
-		// 4c. apply deltas
+		// 5. apply deltas
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.apply_deltas);
 		cmd.dispatch(groupsP, 1, 1);
 		vku::barrier2(cmd,

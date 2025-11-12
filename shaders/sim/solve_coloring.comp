@@ -31,7 +31,7 @@ void main() {
     float l0 = e.rest;
     float C  = l - l0;
 
-    vec3 corr = (C / wsum) * n * e.stiff;
+    vec3 corr = (C / wsum) * n;
 
     if (w0 > 0.0) x[i].xyz += w0 * corr;
     if (w1 > 0.0) x[j].xyz -= w1 * corr;

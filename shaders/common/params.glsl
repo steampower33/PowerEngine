@@ -5,16 +5,16 @@
 
 layout(std140, set = 0, binding = 0) uniform SimParams {
     float dt;
-    float pad0;
     int   numParticles;
-    int   numAllEdges;
-    vec4  gravity;
-    vec4  sphereCenter;
-    float sphereRadius;
-    float pad1;
-    int  windTest;
+    int   numEdges;
+    int   windTest;
     float windStrength;
+    float sphereRadius;
+    float stretchCompliance;
+    float bendCompliance;
+    vec4  sphereCenter;
     vec4  windDir;
+    vec4  gravity;
 } sim;
 
 layout(std430, set = 1, binding = 0) buffer X { vec4 x[]; };
@@ -29,7 +29,7 @@ struct Edge {
     uint i; 
     uint j; 
     float rest; 
-    float stiff;
+    float lambda;
 };
 layout(std430, set = 1, binding = 7) buffer Edges { Edge  edges[]; };
 layout(std430, set = 1, binding = 8) buffer XPrev { vec4  xPrev[]; };

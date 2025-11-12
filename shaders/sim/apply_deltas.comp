@@ -12,7 +12,6 @@ void main() {
     }
     uint c = max(dcount[i], 1u);
     vec3 corr = vec3(deltaX[i], deltaY[i], deltaZ[i]) / c;
-    x[i].xyz += corr;
+    x[i].xyz += corr * 0.2;
     
-//    deltaX[i] = 0.0; deltaY[i] = 0.0; deltaZ[i] = 0.0; dcount[i] = 0u;
 }

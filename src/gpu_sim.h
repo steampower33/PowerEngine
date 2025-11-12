@@ -49,16 +49,16 @@ public:
 	struct Compute {
 		struct SimParams {
 			alignas(4)  float dt = 0.0f;
-			alignas(4)  float damping = 0.01f;
 			alignas(4)  int   numParticles;
 			alignas(4)  int   numEdges;
-			alignas(16) glm::vec4 gravity = glm::vec4(0.0f, -9.8f, 0.0f, 0.0f);
-			alignas(16) glm::vec4 sphereCenter;
-			alignas(4)  float sphereRadius;
-			alignas(4)  float collisionBeta = 0.3f;
-			alignas(4)  int  windTest = 0;
+			alignas(4)  int   windTest = 0;
 			alignas(4)  float windStrength = 1.0f;
+			alignas(4)  float sphereRadius;
+			alignas(4)  float stretchCompliance = 1e-6f;
+			alignas(4)  float bendCompliance = 1e-3f;
+			alignas(16) glm::vec4 sphereCenter;
 			alignas(16) glm::vec4 windDir = glm::vec4(0.0f, 0.0f, -1.0f, 0.0f);
+			alignas(16) glm::vec4 gravity = glm::vec4(0.0f, -9.8f, 0.0f, 0.0f);
 		} sim_params;
 
 		static_assert(sizeof(SimParams) % 16 == 0, "std140 must be 16-byte aligned.");
@@ -83,13 +83,11 @@ public:
 		} pipeline_layouts;
 
 		struct Pipelines {
-			vk::raii::Pipeline copy_xprev{ nullptr };
 			vk::raii::Pipeline integrate{ nullptr };
 			vk::raii::Pipeline clear_deltas{ nullptr };
 			vk::raii::Pipeline solve_atomic{ nullptr };
 			vk::raii::Pipeline apply_deltas{ nullptr };
 			vk::raii::Pipeline solve_coloring{ nullptr };
-			vk::raii::Pipeline collide_sphere{ nullptr };
 			vk::raii::Pipeline update_velocity{ nullptr };
 		} pipelines;
 
@@ -166,9 +164,9 @@ public:
 		uint32_t i;
 		uint32_t j;
 		float    rest;
-		float    stiff;
+		float    lambda;
 	};
-	static_assert(sizeof(Edge) == 16, "Edge must be 24 bytes");
+	static_assert(sizeof(Edge) == 16, "Edge must be 16 bytes");
 
 	uint32_t edge_size_;
 	std::array<uint32_t, 6> pass_offset_; // [0..5], 5ดย total

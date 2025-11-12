@@ -331,8 +331,6 @@ void Context::DrawImgui()
 
 		if (ImGui::CollapsingHeader("Parameter", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			ImGui::InputFloat("Damping", &gpu_sim_->compute_.sim_params.damping, 0.001f, 0.0f, "%.3f");
-			ImGui::InputFloat("CollisionBeta", &gpu_sim_->compute_.sim_params.collisionBeta, 0.01f, 0.0f, "%0.3f");
 			ImGui::InputInt("Substeps", &gpu_sim_->substeps_, 1, 0, 20);
 
 			bool windEnabled = (gpu_sim_->compute_.sim_params.windTest != 0);
