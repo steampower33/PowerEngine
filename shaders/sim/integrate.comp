@@ -19,13 +19,12 @@ void main(){
     vec3 xi = xi_prev + vi * sim.dt;
 
     const float thickness=0.001, friction=0.01;
-    vec3 r = xi - sim.sphereCenter.xyz;
-    float d = length(r), R = sim.sphereRadius + thickness;
-    if (d < R){
+    float d = length(xi - sim.sphereCenter.xyz);
+    if (d < sim.sphereRadius + thickness){
         vec3 p = mix(xi, xi_prev, friction);
-        vec3 rr = p - sim.sphereCenter.xyz;
-        float rd = length(rr);
-        if (rd>1e-8) xi = sim.sphereCenter.xyz + rr * (R/rd);
+        vec3 r = p - sim.sphereCenter.xyz;
+        float d = length(r);
+        xi = sim.sphereCenter.xyz + r * ((sim.sphereRadius + thickness) / d);
     }
     if (xi.y < thickness){
         vec3 p = mix(xi, xi_prev, friction);

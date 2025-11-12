@@ -186,18 +186,18 @@ GpuSim::GpuSim(
 			for (int x = 1; x + 1 < nx1; x += 2)
 				pass[3].push_back({ vid(x,y), vid(x + 1,y) });
 
-		//// (4) shear + 2-step bend (셀 기준)
-		//for (int y = 0; y + 1 < ny1; ++y)
-		//	for (int x = 0; x + 1 < nx1; ++x) {
-		//		pass[4].push_back({ vid(x,y),     vid(x + 1,y + 1) }); // "\"
-		//		pass[4].push_back({ vid(x + 1,y),   vid(x,  y + 1) }); // "/"
-		//	}
-		//for (int x = 0; x < nx1; ++x)
-		//	for (int y = 0; y + 2 < ny1; ++y)
-		//		pass[4].push_back({ vid(x,y), vid(x,  y + 2) });
-		//for (int y = 0; y < ny1; ++y)
-		//	for (int x = 0; x + 2 < nx1; ++x)
-		//		pass[4].push_back({ vid(x,y), vid(x + 2,y) });
+		// (4) shear + 2-step bend (셀 기준)
+		for (int y = 0; y + 1 < ny1; ++y)
+			for (int x = 0; x + 1 < nx1; ++x) {
+				pass[4].push_back({ vid(x,y),     vid(x + 1,y + 1) }); // "\"
+				pass[4].push_back({ vid(x + 1,y),   vid(x,  y + 1) }); // "/"
+			}
+		for (int x = 0; x < nx1; ++x)
+			for (int y = 0; y + 2 < ny1; ++y)
+				pass[4].push_back({ vid(x,y), vid(x,  y + 2) });
+		for (int y = 0; y < ny1; ++y)
+			for (int x = 0; x + 2 < nx1; ++x)
+				pass[4].push_back({ vid(x,y), vid(x + 2,y) });
 
 		std::vector<Edge> edges;
 		pass_offset_[0] = 0;
@@ -218,21 +218,6 @@ GpuSim::GpuSim(
 			pass_offset_[p + 1] = static_cast<uint32_t>(edges.size());
 		}
 
-		auto expect = [&](int p, float spacing) {
-			double mn = 1e30, mx = 0; size_t cnt = 0;
-			for (uint32_t k = pass_offset_[p]; k < pass_offset_[p + 1]; ++k) {
-				double r = edges[k].rest;
-				mn = std::min(mn, r); mx = std::max(mx, r); ++cnt;
-				if (!(r > 1e-6)) {
-				}
-			}
-			printf("pass %d: count=%zu  min=%.6f  max=%.6f\n", p, cnt, mn, mx);
-			};
-		expect(0, spacing); expect(1, spacing);
-		expect(2, spacing); expect(3, spacing);
-		expect(4, spacing);
-
-		/*edges = DedupEdges(edges);*/
 		edge_size_ = (uint32_t)edges.size();
 		edge_size_ = static_cast<uint32_t>(edges.size());
 
@@ -878,15 +863,9 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 			}
 		}
 
-		//const int base = (Ny1 - 1) * Nx1;
-		//inverse_mass_[base] = 0.0f;
-		//inverse_mass_[base + Nx1 - 1] = 0.0f;
-
-		int interval = 16;
-		for (int x = 0; x < nx1; x++)
-		{
-			inverse_mass_[(ny1 - 1) * nx1 + x] = 0.0f;
-		}
+		const int base = (ny1 - 1) * nx1;
+		inverse_mass_[base] = 0.0f;
+		inverse_mass_[base + nx1 - 1] = 0.0f;
 
 		vku::CopyStagingToSSBO(cmd, positions_ssbo_size_, positions_staging_mapped_, positions_, positions_staging_, positions_ssbo_,
 			vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
@@ -1009,50 +988,4 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 	}
 	cmd.end();
-}
-
-std::vector<GpuSim::Edge> GpuSim::DedupEdges(const std::vector<Edge>& in, double restMismatchWarn)
-{
-	std::unordered_map<uint64_t, EdgeAgg> agg;
-	agg.reserve(in.size() * 2);
-
-	int selfEdges = 0, outOfRange = 0;
-
-	for (const auto& e : in) {
-		if (e.i == e.j) { ++selfEdges; continue; }
-		// (필요하면 범위 체크: i< N, j< N)
-
-		uint32_t a = e.i, b = e.j;
-		if (a > b) std::swap(a, b);
-
-		uint64_t k = ((uint64_t)a << 32) | b;
-		auto& A = agg[k];
-		if (A.cnt == 0) { A.i = a; A.j = b; }
-
-		if (A.cnt > 0) {
-			double prevRest = A.rest_sum / std::max(1, A.cnt);
-			if (std::fabs(prevRest - e.rest) > restMismatchWarn)
-				std::fprintf(stderr,
-					"[EdgeWarning] duplicate (%u,%u) rest mismatch: prev=%.8f new=%.8f\n",
-					a, b, prevRest, e.rest);
-		}
-
-		A.rest_sum += e.rest;
-		A.stiff_sum += e.stiff;
-		A.cnt++;
-	}
-
-	std::vector<Edge> out;
-	out.reserve(agg.size());
-	for (auto& [k, A] : agg) {
-		Edge e;
-		e.i = A.i; e.j = A.j;
-		e.rest = float(A.rest_sum / std::max(1, A.cnt));  // 평균(원하면 첫 값으로 교체 가능)
-		e.stiff = float(A.stiff_sum);                      // 강도는 누적 (또는 평균/클램프)
-		out.push_back(e);
-	}
-
-	std::fprintf(stderr, "[Dedup] in=%zu  out=%zu  removed=%zu  self=%d  oob=%d\n",
-		in.size(), out.size(), in.size() - out.size(), selfEdges, outOfRange);
-	return out;
 }

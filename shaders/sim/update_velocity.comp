@@ -12,7 +12,6 @@ void main() {
     }
 
     vec3 newV = (x[i].xyz - xPrev[i].xyz) / sim.dt;
-    newV *= (1.0 - sim.damping);
     v[i].xyz = newV;
 
     xPrev[i] = x[i];

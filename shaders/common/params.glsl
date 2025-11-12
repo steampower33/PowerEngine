@@ -5,13 +5,13 @@
 
 layout(std140, set = 0, binding = 0) uniform SimParams {
     float dt;
-    float damping;
+    float pad0;
     int   numParticles;
     int   numAllEdges;
     vec4  gravity;
     vec4  sphereCenter;
     float sphereRadius;
-    float collisionBeta;
+    float pad1;
     int  windTest;
     float windStrength;
     vec4  windDir;

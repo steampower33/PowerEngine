@@ -173,11 +173,4 @@ public:
 	uint32_t edge_size_;
 	std::array<uint32_t, 6> pass_offset_; // [0..5], 5ดย total
 
-	struct EdgeAgg {
-		uint32_t i, j;
-		double   rest_sum = 0.0;
-		double   stiff_sum = 0.0;
-		int      cnt = 0;
-	};
-	std::vector<Edge> DedupEdges(const std::vector<Edge>& in, double restMismatchWarn = 1e-5);
 };
