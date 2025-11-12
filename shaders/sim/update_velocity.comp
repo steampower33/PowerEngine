@@ -10,12 +10,13 @@ void main() {
 
     vec3 newP = xp[i].xyz;
     vec3 newV = (newP - x[i].xyz) / sim.dt;
-    float vLen = length(newV);
-    if (vLen > sim.maxSpeed)
-    {
-        newV = newV / vLen * sim.maxSpeed;
-        newP = x[i].xyz + newV * sim.dt;
-    }
+//    float vLen = length(newV);
+//    if (vLen > sim.maxSpeed)
+//    {
+//        newV = newV / vLen * sim.maxSpeed;
+//        newP = x[i].xyz + newV * sim.dt;
+//    }
     v[i].xyz = newV * (1.0 - sim.damping * sim.dt);
+//    v[i].xyz = newV;
     x[i].xyz = newP;
 }

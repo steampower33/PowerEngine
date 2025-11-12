@@ -1,0 +1,74 @@
+#version 460
+#extension GL_EXT_shader_atomic_float : require
+
+#include "../common/params.glsl"
+
+layout(push_constant) uniform PC { uint base; uint count; float compliance; } pc;
+
+layout(local_size_x = 256) in;
+
+bool isFinite_f(float x){ return !isnan(x) && !isinf(x); }
+float safeLen(in vec3 v){ float l = length(v); return (l < 1e-8) ? 1e-8 : l; }
+
+void main(){
+    uint t = gl_GlobalInvocationID.x;
+    if (t >= pc.count) return;
+
+    uint cidx = pc.base + t;
+    if (cidx >= sim.numBends) return;
+
+    Bend bc = bends[cidx];
+    uint i1 = bc.p1, i2 = bc.p2, i3 = bc.p3, i4 = bc.p4;
+    float rest = bc.restAngle;
+    float lam  = bc.lambda;
+
+    float w1 = w[i1], w2 = w[i2], w3 = w[i3], w4 = w[i4];
+    if (w1 + w2 + w3 + w4 == 0.0) { bends[cidx].lambda = 0.0; return; }
+
+    vec3 P1 = xp[i1].xyz;
+    vec3 P2 = xp[i2].xyz;
+    vec3 P3 = xp[i3].xyz;
+    vec3 P4 = xp[i4].xyz;
+
+    vec3 e   = P2 - P1;
+    float el = safeLen(e);
+    vec3 ehat = e / el;
+
+    vec3 n1 = normalize(cross(P2 - P1, P3 - P1));
+    vec3 n2 = normalize(cross(P2 - P1, P4 - P1));
+
+    float c = clamp(dot(n1, n2), -1.0, 1.0);
+    float s = dot(ehat, cross(n1, n2));
+    float phi = atan(s, c);
+
+    float A1 = safeLen(cross(P2 - P1, P3 - P1));
+    float A2 = safeLen(cross(P2 - P1, P4 - P1));
+
+    vec3 q3 = (cross(P2 - P1, n2) + cross(n1, P2 - P1) * c) / A1;
+    vec3 q4 = (cross(P2 - P1, n1) + cross(n2, P2 - P1) * c) / A2;
+    vec3 q2 = -(cross(P3 - P1, n2) + cross(n1, P3 - P1) * c) / A1
+              -(cross(P4 - P1, n1) + cross(n2, P4 - P1) * c) / A2;
+    vec3 q1 = -q2 - q3 - q4;
+
+    float alpha = pc.compliance / (sim.dt * sim.dt);
+
+    float denom = alpha
+        + w1*dot(q1,q1) + w2*dot(q2,q2) + w3*dot(q3,q3) + w4*dot(q4,q4);
+    if (denom < 1e-8) denom = 1e-8;
+
+    float dLambda = (-(phi - rest) - alpha * lam) / denom;
+
+    float newLam = lam + dLambda;
+    if (!isFinite_f(newLam)) newLam = 0.0;
+    bends[cidx].lambda = newLam;
+
+    vec3 corr1 =  w1 * dLambda * q1;
+    vec3 corr2 =  w2 * dLambda * q2;
+    vec3 corr3 =  w3 * dLambda * q3;
+    vec3 corr4 =  w4 * dLambda * q4;
+
+    if (w1 > 0.0){ atomicAdd(deltaX[i1], corr1.x); atomicAdd(deltaY[i1], corr1.y); atomicAdd(deltaZ[i1], corr1.z); atomicAdd(dcount[i1], 1u); }
+    if (w2 > 0.0){ atomicAdd(deltaX[i2], corr2.x); atomicAdd(deltaY[i2], corr2.y); atomicAdd(deltaZ[i2], corr2.z); atomicAdd(dcount[i2], 1u); }
+    if (w3 > 0.0){ atomicAdd(deltaX[i3], corr3.x); atomicAdd(deltaY[i3], corr3.y); atomicAdd(deltaZ[i3], corr3.z); atomicAdd(dcount[i3], 1u); }
+    if (w4 > 0.0){ atomicAdd(deltaX[i4], corr4.x); atomicAdd(deltaY[i4], corr4.y); atomicAdd(deltaZ[i4], corr4.z); atomicAdd(dcount[i4], 1u); }
+}

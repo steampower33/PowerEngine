@@ -141,26 +141,44 @@ void Context::Draw(bool& printTimestamp)
 
 			float nsPerTick = physical_device_.getProperties().limits.timestampPeriod;
 
-			std::vector<uint64_t> ts(4);
+			std::vector<uint64_t> ts(16);
 
 			VkResult res = vkGetQueryPoolResults(
 				static_cast<VkDevice>(*device_),
 				static_cast<VkQueryPool>(*timestamp_pool_),
-				0, 4,
+				0, 16,
 				ts.size() * sizeof(uint64_t), ts.data(), sizeof(uint64_t),
 				VK_QUERY_RESULT_64_BIT
 			);
 			std::cout << "===============================" << std::endl;
-			for (int i = 0; i < 4; i += 2) {
+			for (int i = 0; i < 16; i += 2) {
 				double dt_ms = (ts[i + 1] - ts[i]) * nsPerTick / 1e6;
 
 				switch (i)
 				{
 				case 0:
-					std::cout << "Solve Stretch \t: ";
+					std::cout << "Integrate \t: ";
 					break;
 				case 2:
+					std::cout << "Clear Lambdas\t: ";
+					break;
+				case 4:
+					std::cout << "Solve Coloring - Stretch \t: ";
+					break;
+				case 6:
+					std::cout << "Clear Deltas \t: ";
+					break;
+				case 8:
+					std::cout << "Solve AtomicAdd - Diagonal \t: ";
+					break;
+				case 10:
 					std::cout << "Solve Bend \t: ";
+					break;
+				case 12:
+					std::cout << "Apply Deltas \t: ";
+					break;
+				case 14:
+					std::cout << "Update Velocity \t: ";
 					break;
 				}
 
@@ -331,9 +349,9 @@ void Context::DrawImgui()
 
 		if (ImGui::CollapsingHeader("Simulation", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			ImGui::InputInt("Substeps", &gpu_sim_->substeps_, 1);
 			ImGui::InputInt("Iterations", &gpu_sim_->iterations_, 1);
 			ImGui::InputFloat("Damping", &gpu_sim_->compute_.sim_params.damping, 0.1f);
+			ImGui::InputFloat("RelaxationFactor", &gpu_sim_->compute_.sim_params.relaxationFactor, 0.1f);
 			ImGui::InputFloat("Max Speed", &gpu_sim_->compute_.sim_params.maxSpeed, 0.1f);
 
 			bool windEnabled = (gpu_sim_->compute_.sim_params.windTest != 0);
@@ -732,8 +750,9 @@ void Context::CreateLogicalDevice() {
 			{
 				.features = {
 					.sampleRateShading = vk::True,
-					.samplerAnisotropy = vk::True
-				}
+					.fillModeNonSolid = vk::True,
+					.samplerAnisotropy = vk::True,
+				},
 			},
 			{
 				.synchronization2 = vk::True,
@@ -798,7 +817,7 @@ void Context::CreateCommandBuffers()
 void Context::CreateQueryPool() {
 	vk::QueryPoolCreateInfo queryInfo = {};
 	queryInfo.queryType = vk::QueryType::eTimestamp;
-	queryInfo.queryCount = 4;
+	queryInfo.queryCount = 16;
 
 	timestamp_pool_ = device_.createQueryPool(queryInfo);
 }

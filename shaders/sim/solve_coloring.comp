@@ -1,7 +1,7 @@
 #version 460
 #include "../common/params.glsl"
 
-layout(push_constant) uniform PC { uint base; uint count; } pc;
+layout(push_constant) uniform PC { uint base; uint count; float compliance; } pc;
 
 layout(local_size_x = 256) in;
 
@@ -34,8 +34,8 @@ void main() {
     vec3 n = d / len;
 
     // XPBD 파라미터
-    float dt    = sim.dt;                              // 한 substep의 dt
-    float alpha = 0.0f / (dt * dt);   // α = compliance / dt^2
+    float dt    = sim.dt;             // 한 substep의 dt
+    float alpha = pc.compliance / (dt * dt);   // α = compliance / dt^2
 
     // 제약값 C = |d| - rest
     float C = len - rest;

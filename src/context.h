@@ -79,9 +79,9 @@ private:
 	std::unique_ptr<GpuSim> gpu_sim_;
 
 	// |===== Particle Info =====|
-	const uint32_t Nx_ = 256;
-	const uint32_t Ny_ = 256;
-	const float spacing_ = 0.01;
+	const uint32_t Nx_ = 32;
+	const uint32_t Ny_ = 32;
+	const float spacing_ = 0.2;
 
 	uint32_t particles_size_ = Nx_ * Ny_;
 	uint32_t indices_size_ = 0;

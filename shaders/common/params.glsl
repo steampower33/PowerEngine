@@ -13,7 +13,7 @@ layout(std140, set = 0, binding = 0) uniform SimParams {
     float maxSpeed;
     float damping;
     float relaxationFactor;
-    float pad0;
+    int   numBends;
     float pad1;
     float pad2;
     vec4  sphereCenter;
@@ -37,5 +37,13 @@ struct Edge {
 };
 layout(std430, set = 1, binding = 7) buffer Edges { Edge  edges[]; };
 layout(std430, set = 1, binding = 8) buffer XP { vec4  xp[]; };
+
+struct Bend {
+    uint p1, p2, p3, p4;
+    float restAngle;
+    float lambda;
+    vec2 pad;
+};
+layout(std430, set = 1, binding = 9) buffer Bends { Bend  bends[]; };
 
 #endif

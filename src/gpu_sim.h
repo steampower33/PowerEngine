@@ -33,8 +33,7 @@ public:
 	uint32_t indices_size_ = 0;
 
 	float dt_ = 1 / 60.0f;
-	int substeps_ = 10;
-	int iterations_ = 4;
+	int iterations_ = 10;
 
 	// |===== Push Constant =====|
 	struct ClothPC {
@@ -56,9 +55,9 @@ public:
 			alignas(4)  float windStrength = 1.0f;
 			alignas(4)  float sphereRadius;
 			alignas(4)  float maxSpeed;
-			alignas(4)  float damping = 0.25f;
-			alignas(4)  float relaxationFactor = 1.0f;
-			alignas(4)  float pad0;
+			alignas(4)  float damping = 0.2f;
+			alignas(4)  float relaxationFactor = 0.2f;
+			alignas(4)  int   numBends;
 			alignas(4)  float pad1;
 			alignas(4)  float pad2;
 			alignas(16) glm::vec4 sphereCenter;
@@ -69,7 +68,9 @@ public:
 		static_assert(sizeof(SimParams) % 16 == 0, "std140 must be 16-byte aligned.");
 
 		struct PC {
-			uint32_t base, count;
+			uint32_t base;
+			uint32_t count;
+			float compliance;
 		} pc_;
 
 		vk::raii::Buffer sim_params_ubo{ nullptr };
@@ -93,6 +94,7 @@ public:
 			vk::raii::Pipeline integrate{ nullptr };
 			vk::raii::Pipeline clear_deltas{ nullptr };
 			vk::raii::Pipeline solve_atomic{ nullptr };
+			vk::raii::Pipeline solve_bend{ nullptr };
 			vk::raii::Pipeline apply_deltas{ nullptr };
 			vk::raii::Pipeline solve_coloring{ nullptr };
 			vk::raii::Pipeline update_velocity{ nullptr };
@@ -166,6 +168,10 @@ public:
 	vk::raii::DeviceMemory pred_positions_ssbo_memory_{ nullptr };
 	uint32_t pred_positions_ssbo_size_ = 0;
 
+	vk::raii::Buffer bends_ssbo_{ nullptr };
+	vk::raii::DeviceMemory bends_ssbo_memory_{ nullptr };
+	uint32_t bends_ssbo_size_ = 0;
+
 	vk::raii::Buffer index_buffer_{ nullptr };
 	vk::raii::DeviceMemory index_buffer_memory_{ nullptr };
 
@@ -180,5 +186,14 @@ public:
 
 	uint32_t edge_size_;
 	std::vector<Edge> edges_;
-	std::array<uint32_t, 7> pass_offset_;
+	std::array<uint32_t, 6> pass_offset_;
+
+	struct Bend {
+		uint32_t p1, p2, p3, p4;
+		float restAngle;
+		float lambda;
+		glm::vec2 pad;
+	};
+	static_assert(sizeof(Bend) == 32, "Bend must be 32 bytes");
+	uint32_t bends_size_ = 0;
 };
