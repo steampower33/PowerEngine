@@ -170,6 +170,7 @@ set(GLSL_SHADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/model.frag
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/cloth.vert
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/cloth.frag
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/clear_lambdas.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/integrate.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_coloring.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/clear_deltas.comp

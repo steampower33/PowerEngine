@@ -4,14 +4,17 @@
 
 layout(push_constant) uniform PC { uint base; uint count; } pc;
 
+bool isFinite_f(float x) { return !isnan(x) && !isinf(x); }
+
 layout(local_size_x = 256) in;
 void main() {
     uint t = gl_GlobalInvocationID.x;
     if (t >= pc.count) return;
 
     uint eidx = pc.base + t;
-    Edge e = edges[eidx];
+    if (eidx >= sim.numEdges) return;
 
+    Edge e = edges[eidx];
     uint i = e.i;
     uint j = e.j;
 

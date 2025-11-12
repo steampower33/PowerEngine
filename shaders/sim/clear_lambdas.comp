@@ -1,0 +1,9 @@
+#version 460
+#include "../common/params.glsl"
+
+layout(local_size_x = 256) in;
+void main(){
+    uint e = gl_GlobalInvocationID.x;
+    if (e >= sim.numEdges) return;
+    edges[e].lambda = 0.0;
+}

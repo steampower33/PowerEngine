@@ -22,9 +22,6 @@ public:
 
 	void UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& model);
 	void ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& timestampSteps, vku::TestScene& testScene);
-	vku::Counts counts_;
-	vk::raii::DescriptorPool descriptor_pool_{ nullptr };
-	void UpdatePushContants();
 	void GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset);
 	void UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene);
 
@@ -36,7 +33,7 @@ public:
 	uint32_t indices_size_ = 0;
 
 	float dt_ = 1 / 60.0f;
-	int substeps_ = 15;
+	int substeps_ = 40;
 
 	// |===== Push Constant =====|
 	struct ClothPC {
@@ -45,6 +42,9 @@ public:
 	} cloth_pc_;
 	static_assert(sizeof(ClothPC) % 4 == 0, "push constant must be multiple of 4 bytes");
 
+	vku::Counts counts_;
+	vk::raii::DescriptorPool descriptor_pool_{ nullptr };
+	
 	// |===== Compute =====|
 	struct Compute {
 		struct SimParams {
@@ -63,14 +63,15 @@ public:
 
 		static_assert(sizeof(SimParams) % 16 == 0, "std140 must be 16-byte aligned.");
 
-		struct PC { 
-			uint32_t base, count; 
+		struct PC {
+			uint32_t base, count;
 		} pc_;
 
 		vk::raii::Buffer sim_params_ubo{ nullptr };
 		vk::raii::DeviceMemory sim_params_ubo_memory{ nullptr };
 		void* sim_params_ubo_mapped{ nullptr };
 		vk::DeviceSize sim_params_slot_size;
+
 
 		vk::raii::DescriptorSetLayout sim_params_set_layout{ nullptr };
 		vk::raii::DescriptorSet sim_params_set{ nullptr };
@@ -83,6 +84,7 @@ public:
 		} pipeline_layouts;
 
 		struct Pipelines {
+			vk::raii::Pipeline clear_lambdas{ nullptr };
 			vk::raii::Pipeline integrate{ nullptr };
 			vk::raii::Pipeline clear_deltas{ nullptr };
 			vk::raii::Pipeline solve_atomic{ nullptr };
@@ -151,6 +153,9 @@ public:
 	vk::raii::Buffer edges_ssbo_{ nullptr };
 	vk::raii::DeviceMemory edges_ssbo_memory_{ nullptr };
 	uint32_t edges_ssbo_size_ = 0;
+	vk::raii::Buffer edges_staging_{ nullptr };
+	vk::raii::DeviceMemory edges_staging_memory_{ nullptr };
+	void* edges_staging_mapped_{ nullptr };
 
 	vk::raii::Buffer prev_positions_ssbo_{ nullptr };
 	vk::raii::DeviceMemory prev_positions_ssbo_memory_{ nullptr };
@@ -169,6 +174,7 @@ public:
 	static_assert(sizeof(Edge) == 16, "Edge must be 16 bytes");
 
 	uint32_t edge_size_;
-	std::array<uint32_t, 6> pass_offset_; // [0..5], 5ดย total
+	std::vector<Edge> edges_;
+	std::array<uint32_t, 7> pass_offset_; // [0..5], 5ดย total
 
 };

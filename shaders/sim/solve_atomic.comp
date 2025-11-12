@@ -7,15 +7,44 @@ layout(push_constant) uniform PC { uint base; uint count; } pc;
 
 layout(local_size_x = 256) in;
 
+bool isFinite_f(float x) { return !isnan(x) && !isinf(x); }
+
 void main() {
     uint t = gl_GlobalInvocationID.x;
     if (t >= pc.count) return;
 
     uint eidx = pc.base + t;
-    Edge e = edges[eidx];
-    uint i = e.i;
-    uint j = e.j;
+    if (eidx >= sim.numEdges) return;
 
+//    Edge e = edges[eidx];
+//    uint i = e.i;
+//    uint j = e.j;
+//
+//    float w0 = w[i];
+//    float w1 = w[j];
+//    float wsum = w0 + w1;
+//    if (wsum == 0.0) return;
+//
+//    vec3 p0 = x[i].xyz;
+//    vec3 p1 = x[j].xyz;
+//
+//    vec3 d = p1 - p0;
+//    float l = length(d);
+//    if (l < 1e-7) return;
+//    vec3 n = d / l;
+//
+//    float l0 = e.rest;
+//    float C  = l - l0;
+
+//    vec3 corr = (C / wsum) * n;
+
+    // XPBD
+    // 개별 필드로 읽기 (로컬 Edge 복사 지양: 버그 감지 쉬움)
+    uint  i  = edges[eidx].i;
+    uint  j  = edges[eidx].j;
+    float l0 = edges[eidx].rest;
+    float lambda = edges[eidx].lambda;
+    
     float w0 = w[i];
     float w1 = w[j];
     float wsum = w0 + w1;
@@ -29,21 +58,32 @@ void main() {
     if (l < 1e-7) return;
     vec3 n = d / l;
 
-    float l0 = e.rest;
-    float C  = l - l0;
+    // … (w0/w1, p0/p1, l 계산)
+    float dtf   = sim.dt;
+    float alpha = sim.bendCompliance / (dtf * dtf);  // stretch
+    float C = l - l0;
+    float denom = w0 + w1 + alpha;
 
-    vec3 corr = (C / wsum) * n;
+    float dLambda = ( -C - alpha * lambda ) / denom;
+    lambda += dLambda;
+    edges[eidx].lambda = lambda;
+
+    vec3 corr = dLambda * n;
+    
+    float pbd_C  = l - l0;
+
+    vec3 pbd_corr = (pbd_C / wsum) * n;
     
     if (w0 > 0.0) {
-        atomicAdd(deltaX[i], +w0 * corr.x);
-        atomicAdd(deltaY[i], +w0 * corr.y);
-        atomicAdd(deltaZ[i], +w0 * corr.z);
+        atomicAdd(deltaX[i], +w0 * pbd_corr.x);
+        atomicAdd(deltaY[i], +w0 * pbd_corr.y);
+        atomicAdd(deltaZ[i], +w0 * pbd_corr.z);
         atomicAdd(dcount[i], 1u);
     }
     if (w1 > 0.0) {
-        atomicAdd(deltaX[j], -w1 * corr.x);
-        atomicAdd(deltaY[j], -w1 * corr.y);
-        atomicAdd(deltaZ[j], -w1 * corr.z);
+        atomicAdd(deltaX[j], -w1 * pbd_corr.x);
+        atomicAdd(deltaY[j], -w1 * pbd_corr.y);
+        atomicAdd(deltaZ[j], -w1 * pbd_corr.z);
         atomicAdd(dcount[j], 1u);
     }
 }
