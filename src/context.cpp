@@ -329,9 +329,12 @@ void Context::DrawImgui()
 		ImGuiIO& io = ImGui::GetIO(); (void)io;
 		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
-		if (ImGui::CollapsingHeader("Parameter", ImGuiTreeNodeFlags_DefaultOpen))
+		if (ImGui::CollapsingHeader("Simulation", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			ImGui::InputInt("Substeps", &gpu_sim_->substeps_, 1, 0, 20);
+			ImGui::InputInt("Substeps", &gpu_sim_->substeps_, 1);
+			ImGui::InputInt("Iterations", &gpu_sim_->iterations_, 1);
+			ImGui::InputFloat("Damping", &gpu_sim_->compute_.sim_params.damping, 0.1f);
+			ImGui::InputFloat("Max Speed", &gpu_sim_->compute_.sim_params.maxSpeed, 0.1f);
 
 			bool windEnabled = (gpu_sim_->compute_.sim_params.windTest != 0);
 			if (ImGui::Checkbox("Wind", &windEnabled)) {
@@ -341,7 +344,7 @@ void Context::DrawImgui()
 			ImGui::DragFloat("Wind Strength", &gpu_sim_->compute_.sim_params.windStrength, 0.1f, 0.0f, 5.0f);
 		}
 
-		if (ImGui::CollapsingHeader("Test Scene", ImGuiTreeNodeFlags_DefaultOpen))
+		if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGui::Checkbox("Sphere Collision", &test_scene_.sphereCollision);
 			ImGui::Checkbox("Pinned Corner", &test_scene_.pinnedCornerDrop);

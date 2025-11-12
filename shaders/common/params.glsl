@@ -10,8 +10,12 @@ layout(std140, set = 0, binding = 0) uniform SimParams {
     int   windTest;
     float windStrength;
     float sphereRadius;
-    float stretchCompliance;
-    float bendCompliance;
+    float maxSpeed;
+    float damping;
+    float relaxationFactor;
+    float pad0;
+    float pad1;
+    float pad2;
     vec4  sphereCenter;
     vec4  windDir;
     vec4  gravity;
@@ -32,6 +36,6 @@ struct Edge {
     float lambda;
 };
 layout(std430, set = 1, binding = 7) buffer Edges { Edge  edges[]; };
-layout(std430, set = 1, binding = 8) buffer XPrev { vec4  xPrev[]; };
+layout(std430, set = 1, binding = 8) buffer XP { vec4  xp[]; };
 
 #endif

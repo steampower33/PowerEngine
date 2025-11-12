@@ -4,32 +4,36 @@ layout(local_size_x = 256) in;
 void main(){
     uint i = gl_GlobalInvocationID.x;
     if (i >= sim.numParticles) return;
+    
+    vec3 xi = x[i].xyz;
 
-    vec3 xi_prev = x[i].xyz;
-    xPrev[i] = vec4(xi_prev,1.0);
-    if (w[i]==0.0) return;
-
+    if (w[i] == 0.0) {
+        xp[i] = vec4(xi, 1.0);
+        v[i]  = vec4(0.0);
+        return;
+    }
     vec3 vi = v[i].xyz;
+
     vec3 wind = vec3(0);
     if (sim.windTest==1){
         float L = length(sim.windDir.xyz);
         if (L>1e-8) wind = (sim.windDir.xyz/L)*sim.windStrength;
     }
     vi += (sim.gravity.xyz + wind) * sim.dt;
-    vec3 xi = xi_prev + vi * sim.dt;
+    vec3 xpi = xi + vi * sim.dt;
 
     const float thickness=0.001, friction=0.01;
-    float d = length(xi - sim.sphereCenter.xyz);
+    float d = length(xpi - sim.sphereCenter.xyz);
     if (d < sim.sphereRadius + thickness){
-        vec3 p = mix(xi, xi_prev, friction);
+        vec3 p = mix(xpi, xi, friction);
         vec3 r = p - sim.sphereCenter.xyz;
         float d = length(r);
-        xi = sim.sphereCenter.xyz + r * ((sim.sphereRadius + thickness) / d);
+        xpi = sim.sphereCenter.xyz + r * ((sim.sphereRadius + thickness) / d);
     }
-    if (xi.y < thickness){
-        vec3 p = mix(xi, xi_prev, friction);
-        xi = vec3(p.x, thickness, p.z);
+    if (xpi.y < thickness){
+        vec3 p = mix(xpi, xi, friction);
+        xpi = vec3(p.x, thickness, p.z);
     }
-    x[i] = vec4(xi,1.0);
+    xp[i] = vec4(xpi,1.0);
     v[i] = vec4(vi,0.0);
 }

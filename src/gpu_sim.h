@@ -33,7 +33,8 @@ public:
 	uint32_t indices_size_ = 0;
 
 	float dt_ = 1 / 60.0f;
-	int substeps_ = 40;
+	int substeps_ = 10;
+	int iterations_ = 4;
 
 	// |===== Push Constant =====|
 	struct ClothPC {
@@ -54,8 +55,12 @@ public:
 			alignas(4)  int   windTest = 0;
 			alignas(4)  float windStrength = 1.0f;
 			alignas(4)  float sphereRadius;
-			alignas(4)  float stretchCompliance = 1e-6f;
-			alignas(4)  float bendCompliance = 1e-3f;
+			alignas(4)  float maxSpeed;
+			alignas(4)  float damping = 0.25f;
+			alignas(4)  float relaxationFactor = 1.0f;
+			alignas(4)  float pad0;
+			alignas(4)  float pad1;
+			alignas(4)  float pad2;
 			alignas(16) glm::vec4 sphereCenter;
 			alignas(16) glm::vec4 windDir = glm::vec4(0.0f, 0.0f, -1.0f, 0.0f);
 			alignas(16) glm::vec4 gravity = glm::vec4(0.0f, -9.8f, 0.0f, 0.0f);
@@ -157,9 +162,9 @@ public:
 	vk::raii::DeviceMemory edges_staging_memory_{ nullptr };
 	void* edges_staging_mapped_{ nullptr };
 
-	vk::raii::Buffer prev_positions_ssbo_{ nullptr };
-	vk::raii::DeviceMemory prev_positions_ssbo_memory_{ nullptr };
-	uint32_t prev_positions_ssbo_size_ = 0;
+	vk::raii::Buffer pred_positions_ssbo_{ nullptr };
+	vk::raii::DeviceMemory pred_positions_ssbo_memory_{ nullptr };
+	uint32_t pred_positions_ssbo_size_ = 0;
 
 	vk::raii::Buffer index_buffer_{ nullptr };
 	vk::raii::DeviceMemory index_buffer_memory_{ nullptr };
@@ -175,6 +180,5 @@ public:
 
 	uint32_t edge_size_;
 	std::vector<Edge> edges_;
-	std::array<uint32_t, 7> pass_offset_; // [0..5], 5ดย total
-
+	std::array<uint32_t, 7> pass_offset_;
 };

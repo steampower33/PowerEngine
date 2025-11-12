@@ -1,12 +1,12 @@
 #version 460
-
 #include "../common/params.glsl"
 
 layout(push_constant) uniform PC { uint base; uint count; } pc;
 
+layout(local_size_x = 256) in;
+
 bool isFinite_f(float x) { return !isnan(x) && !isinf(x); }
 
-layout(local_size_x = 256) in;
 void main() {
     uint t = gl_GlobalInvocationID.x;
     if (t >= pc.count) return;
@@ -14,28 +14,47 @@ void main() {
     uint eidx = pc.base + t;
     if (eidx >= sim.numEdges) return;
 
-    Edge e = edges[eidx];
-    uint i = e.i;
-    uint j = e.j;
+    // --- edge fields 개별 읽기 (aliasing·캐시 이슈 최소화)
+    uint  i      = edges[eidx].i;
+    uint  j      = edges[eidx].j;
+    float rest   = edges[eidx].rest;
+    float lambda = edges[eidx].lambda;
 
-    float w0 = w[i];
-    float w1 = w[j];
-    float wsum = w0 + w1;
-    if (wsum == 0.0) return;
+    float wi = w[i];
+    float wj = w[j];
+    float wsum = wi + wj;
+    if (wsum == 0.0) { edges[eidx].lambda = 0.0; return; }  // 둘 다 고정점이면 λ 유지 필요X
 
-    vec3 p0 = x[i].xyz;
-    vec3 p1 = x[j].xyz;
+    vec3 pi = xp[i].xyz;
+    vec3 pj = xp[j].xyz;
 
-    vec3 d = p1 - p0;
-    float l = length(d);
-    if (l < 1e-7) return;
-    vec3 n = d / l;
+    vec3 d = pi - pj;
+    float len = length(d);
+    if (len < 1e-7) return;
+    vec3 n = d / len;
 
-    float l0 = e.rest;
-    float C  = l - l0;
+    // XPBD 파라미터
+    float dt    = sim.dt;                              // 한 substep의 dt
+    float alpha = 0.0f / (dt * dt);   // α = compliance / dt^2
 
-    vec3 corr = (C / wsum) * n;
+    // 제약값 C = |d| - rest
+    float C = len - rest;
 
-    if (w0 > 0.0) x[i].xyz += w0 * corr;
-    if (w1 > 0.0) x[j].xyz -= w1 * corr;
+    // Δλ = ( -C - α λ ) / (Σ w + α)
+    float denom = wsum + alpha;
+    // 안전장치(희박하지만 0 분모 방지)
+    if (denom < 1e-8) denom = 1e-8;
+
+    float dLambda = (-C - alpha * lambda) / denom;
+
+    // λ 누적 및 NaN 가드
+    float newLambda = lambda + dLambda;
+    if (!isFinite_f(newLambda)) newLambda = 0.0;
+    edges[eidx].lambda = newLambda;
+
+    // 위치 보정: Δx_i =  wi * dLambda * n,  Δx_j = -wj * dLambda * n
+    vec3 corr = dLambda * n;
+
+    if (wi > 0.0) xp[i].xyz += wi * corr;
+    if (wj > 0.0) xp[j].xyz -= wj * corr;
 }

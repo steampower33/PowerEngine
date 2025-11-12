@@ -161,7 +161,7 @@ GpuSim::GpuSim(
 		vku::CreateIndexBuffer(physicalDevice, device, queue, commandPool, indices, index_buffer_, index_buffer_memory_);
 
 		// Ãâ·Â SoA
-		std::vector<glm::vec4> xPrev(N, glm::vec4(0.0f));
+		std::vector<glm::vec4> xPred(N, glm::vec4(0.0f));
 		std::vector<float > deltaX(N, 0.0f), deltaY(N, 0.0f), deltaZ(N, 0.0f);
 		std::vector<uint32_t>  dcount(N, 0);
 
@@ -187,7 +187,7 @@ GpuSim::GpuSim(
 			for (int x = 1; x + 1 < nx1; x += 2)
 				pass[3].push_back({ vid(x,y), vid(x + 1,y) });
 
-		// (4) shear
+		// (4) Diagonal
 		for (int y = 0; y + 1 < ny1; ++y)
 			for (int x = 0; x + 1 < nx1; ++x) {
 				pass[4].push_back({ vid(x,y),     vid(x + 1,y + 1) }); // "\"
@@ -197,10 +197,10 @@ GpuSim::GpuSim(
 		// (5) 2-step bend
 		for (int x = 0; x < nx1; ++x)
 			for (int y = 0; y + 2 < ny1; ++y)
-				pass[5].push_back({ vid(x,y), vid(x,  y + 2) });
+				pass[4].push_back({ vid(x,y), vid(x,  y + 2) });
 		for (int y = 0; y < ny1; ++y)
 			for (int x = 0; x + 2 < nx1; ++x)
-				pass[5].push_back({ vid(x,y), vid(x + 2,y) });
+				pass[4].push_back({ vid(x,y), vid(x + 2,y) });
 
 		pass_offset_[0] = 0;
 
@@ -312,16 +312,16 @@ GpuSim::GpuSim(
 			&edges_staging_, &edges_staging_memory_);
 		edges_staging_mapped_ = edges_staging_memory_.mapMemory(0, edges_ssbo_size_);
 
-		// Prev Position
-		prev_positions_ssbo_size_ = sizeof(glm::vec4) * N;
+		// Pred Position
+		pred_positions_ssbo_size_ = sizeof(glm::vec4) * N;
 		vku::CreateSSBO(physicalDevice, device, queue, commandPool,
-			prev_positions_ssbo_size_,
+			pred_positions_ssbo_size_,
 			vk::BufferUsageFlagBits::eTransferSrc,
 			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-			xPrev,
+			xPred,
 			vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
 			vk::MemoryPropertyFlagBits::eDeviceLocal,
-			prev_positions_ssbo_, prev_positions_ssbo_memory_);
+			pred_positions_ssbo_, pred_positions_ssbo_memory_);
 	}
 
 	// Descriptor Sets
@@ -371,7 +371,7 @@ GpuSim::GpuSim(
 			vk::DescriptorBufferInfo deltaZ(*delta_z_ssbo_, 0, VK_WHOLE_SIZE);
 			vk::DescriptorBufferInfo dcount(*dcount_ssbo_, 0, VK_WHOLE_SIZE);
 			vk::DescriptorBufferInfo edge(*edges_ssbo_, 0, VK_WHOLE_SIZE);
-			vk::DescriptorBufferInfo prevPositions(*prev_positions_ssbo_, 0, VK_WHOLE_SIZE);
+			vk::DescriptorBufferInfo prevPositions(*pred_positions_ssbo_, 0, VK_WHOLE_SIZE);
 			std::array descriptorWrites{
 				vk::WriteDescriptorSet{
 					.dstSet = *compute_.cloth_compute_set,
@@ -708,6 +708,7 @@ void GpuSim::UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& mod
 	compute_.sim_params.dt = dt_ / substeps_;
 	compute_.sim_params.numParticles = particles_size_;
 	compute_.sim_params.numEdges = edge_size_;
+	compute_.sim_params.maxSpeed = 2 * spacing_ * 1.5f / dt_ * substeps_;
 	compute_.sim_params.sphereCenter = glm::vec4(model->position_, 0.0f);
 	compute_.sim_params.sphereRadius = model->radius_;
 
@@ -895,7 +896,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 		};
 
 	cmd.resetQueryPool(*timestampPool, 0, kSlotsPerIterPair);
-	
+
 	uint32_t simparamOffset = currentFrame * static_cast<uint32_t>(compute_.sim_params_slot_size);
 	cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute, compute_.pipeline_layouts.common, 0, { compute_.sim_params_set, compute_.cloth_compute_set }, { simparamOffset });
 
@@ -903,15 +904,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 	uint32_t groupsP = ceil_div(particles_size_, 256u);
 	uint32_t groupsEdges = ceil_div(edge_size_, 256u);
 
-	for (int it = 0; it < substeps_; ++it) {
-
-		// 0. clear lmabdas
-		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.clear_lambdas);
-		cmd.dispatch(groupsEdges, 1, 1);
-		vku::barrier2(cmd,  // write->read
-			vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageWrite,
-			vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
-
+	for (int substep = 0; substep < substeps_; ++substep) {
 		// 1. integrate
 		// x : write -> read
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.integrate);
@@ -922,71 +915,79 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 			vk::PipelineStageFlagBits2::eComputeShader,
 			vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
-		// 2. solve pbd
-		TS(timestampSteps++);
-		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.solve_coloring);
+		// 0. clear lmabdas
+		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.clear_lambdas);
+		cmd.dispatch(groupsEdges, 1, 1);
+		vku::barrier2(cmd,  // write->read
+			vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageWrite,
+			vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
 
-		for (uint32_t c = 0; c < 4; ++c) {
-			uint32_t base = pass_offset_[c];
-			uint32_t count = pass_offset_[c + 1] - pass_offset_[c];
-			if (!count) continue;
-
-			compute_.pc_.base = base;
-			compute_.pc_.count = count;
-
-			cmd.pushConstants<Compute::PC>(*compute_.pipeline_layouts.common, vk::ShaderStageFlagBits::eCompute, 0u, compute_.pc_);
-
-			uint32_t groups = (count + 256 - 1) / 256;
-			cmd.dispatch(groups, 1, 1);
-			vku::barrier2(cmd,
-				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageWrite,
-				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
-		}
-		TS(timestampSteps++);
-
-		for (uint32_t c = 4; c < 6; c++)
+		for (uint32_t iter = 0; iter < iterations_; iter++)
 		{
-			// 3. clear deltas
-			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.clear_deltas);
-			cmd.dispatch(groupsP, 1, 1);
-			vku::barrier2(cmd,
-				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageWrite,
-				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
-
-			// 4. Solve PBD - Bend
+			// 2. Solve Coloring - Stretch
 			TS(timestampSteps++);
-			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.solve_atomic);
-			uint32_t base = pass_offset_[c];
-			uint32_t count = pass_offset_[c + 1] - pass_offset_[c];
-			compute_.pc_.base = base;
-			compute_.pc_.count = count;
-			cmd.pushConstants<Compute::PC>(*compute_.pipeline_layouts.common,
-				vk::ShaderStageFlagBits::eCompute, 0u, compute_.pc_);
+			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.solve_coloring);
 
-			uint32_t group = (count + 256 - 1) / 256;
-			cmd.dispatch(group, 1, 1);
+			for (uint32_t c = 0; c < 4; ++c) {
+				uint32_t base = pass_offset_[c];
+				uint32_t count = pass_offset_[c + 1] - pass_offset_[c];
+				if (!count) continue;
+
+				compute_.pc_.base = base;
+				compute_.pc_.count = count;
+
+				cmd.pushConstants<Compute::PC>(*compute_.pipeline_layouts.common, vk::ShaderStageFlagBits::eCompute, 0u, compute_.pc_);
+
+				uint32_t groups = (count + 256 - 1) / 256;
+				cmd.dispatch(groups, 1, 1);
+				vku::barrier2(cmd,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageWrite,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+			}
 			TS(timestampSteps++);
-			vku::barrier2(cmd,
-				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageWrite,
-				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
-			// 5. apply deltas
-			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.apply_deltas);
-			cmd.dispatch(groupsP, 1, 1);
-			vku::barrier2(cmd,
-				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageWrite,
-				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+			for (uint32_t c = 4; c < 6; c++)
+			{
+				// 3. clear deltas
+				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.clear_deltas);
+				cmd.dispatch(groupsP, 1, 1);
+				vku::barrier2(cmd,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageWrite,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
+				// 4. Solve AtomicAdd - Diagonal
+				TS(timestampSteps++);
+				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.solve_atomic);
+				uint32_t base = pass_offset_[c];
+				uint32_t count = pass_offset_[c + 1] - pass_offset_[c];
+				compute_.pc_.base = base;
+				compute_.pc_.count = count;
+				cmd.pushConstants<Compute::PC>(*compute_.pipeline_layouts.common,
+					vk::ShaderStageFlagBits::eCompute, 0u, compute_.pc_);
+
+				uint32_t group = (count + 256 - 1) / 256;
+				cmd.dispatch(group, 1, 1);
+				TS(timestampSteps++);
+				vku::barrier2(cmd,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageWrite,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+
+				// 5. apply deltas
+				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.apply_deltas);
+				cmd.dispatch(groupsP, 1, 1);
+				vku::barrier2(cmd,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageWrite,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+			}
 		}
-
 		// 6. update velocity
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.update_velocity);
 		cmd.dispatch(groupsP, 1, 1);
@@ -997,6 +998,6 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 			vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
 	}
-	
+
 	cmd.end();
 }
