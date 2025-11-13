@@ -1,5 +1,7 @@
 #pragma once
 
+class Context;
+
 class Texture2D
 {
 public:

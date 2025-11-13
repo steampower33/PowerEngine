@@ -3,7 +3,7 @@
 int main() {
     try {
         Window win;
-        win.run();
+        win.mainloop();
     }
     catch (const std::exception& e) {
         std::cerr << e.what() << std::endl;

@@ -18,8 +18,6 @@ public:
 
 	struct UniformData {
 		glm::mat4 model;
-		glm::mat4 view;
-		glm::mat4 proj;
 	} uniform_data;
 
 	void LoadModel(const std::string& modelPath);

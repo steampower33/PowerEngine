@@ -78,7 +78,6 @@ public:
 		void* sim_params_ubo_mapped{ nullptr };
 		vk::DeviceSize sim_params_slot_size;
 
-
 		vk::raii::DescriptorSetLayout sim_params_set_layout{ nullptr };
 		vk::raii::DescriptorSet sim_params_set{ nullptr };
 

@@ -25,7 +25,6 @@ public:
 	void Draw(bool& printTimestamp);
 	void WaitIdle();
 
-private:
 	uint32_t timestampSteps = 0;
 
 	GLFWwindow* glfw_window_;
@@ -44,7 +43,6 @@ private:
 	vk::raii::CommandPool			 command_pool_{ nullptr };
 
 	vk::raii::DescriptorPool		 descriptor_pool_{ nullptr };
-	vk::raii::DescriptorPool		 imgui_pool_{ nullptr };
 
 	std::unique_ptr<Swapchain>       swapchain_{ nullptr };
 
@@ -66,7 +64,6 @@ private:
 		vk::EXTShaderAtomicFloatExtensionName
 	};
 
-private:
 	enum CpuOrGpu {
 		CPU,
 		GPU
@@ -148,7 +145,6 @@ private:
 	vk::raii::ImageView depth_image_view_ = nullptr;
 
 private:
-	void DrawImgui();
 
 	void UpdateMouseInteractor(Camera& camera, MouseInteractor& mouse_interactor);
 	void UpdatePushContants();
@@ -200,7 +196,4 @@ private:
 	void CreateSyncObjects();
 
 	void CreateDepthResources();
-
-	void SetupImgui(uint32_t width, uint32_t height);
-
 };

@@ -1,6 +1,7 @@
 #include "context.h"
 #include "camera.h"
 #include "mouse_interactor.h"
+#include "gui.h"
 
 #include "window.h"
 
@@ -29,6 +30,7 @@ Window::Window()
 	ctx_ = std::make_unique<Context>(glfw_window_, init_width_, init_height_);
 	camera_ = std::make_unique<Camera>();
 	mouse_interactor_ = std::make_unique<MouseInteractor>();
+	gui_ = std::make_unique<GUI>(ctx_, glfw_window_);
 
 }
 
@@ -133,20 +135,22 @@ Window::~Window()
 	glfwTerminate();
 }
 
-void Window::run()
+void Window::mainloop()
 {
 	double lastTime = glfwGetTime();
 
 	while (!glfwWindowShouldClose(glfw_window_)) {
+		glfwPollEvents();
+
 		double current = glfwGetTime();
 		float dt = static_cast<float>(current - lastTime);
 		lastTime = current;
 
-		glfwPollEvents();
 		ProcessKeyboard(dt);
 
 		key_timeout_ -= dt;
 
+		gui_->UpdateImgui(ctx_->gpu_sim_, ctx_->test_scene_);
 		ctx_->Update(*camera_, *mouse_interactor_, dt);
 		ctx_->Draw(print_timestamp_);
 	}

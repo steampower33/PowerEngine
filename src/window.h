@@ -5,6 +5,7 @@
 class Context;
 struct Camera;
 class MouseInteractor;
+class GUI;
 
 class Window
 {
@@ -17,10 +18,9 @@ public:
     Window& operator=(const Window& rhs) = delete;
     Window& operator=(Window&& rhs) = delete;
 
-    void run();
+    void mainloop();
 
 private:
-    // GLFW가 요구하는 정확한 시그니처(반환형 void, 첫 인자 GLFWwindow*)
     static void CursorPosCallback(GLFWwindow* w, double x, double y);
     static void FramebufferResizeCallback(GLFWwindow* w, int width, int height);
     static void KeyCallback(GLFWwindow* w, int key, int scancode, int action, int mods);
@@ -30,12 +30,14 @@ private:
     void OnCursorPos(double x, double y);
     void OnKey(int key, int scancode, int action, int mods);
     void OnMouseClick(int button, int action, int mods);
+    void ProcessKeyboard(float dt);
 
 private:
     GLFWwindow* glfw_window_{};
     std::unique_ptr<Context> ctx_;
     std::unique_ptr<Camera> camera_;
-    std::unique_ptr<MouseInteractor> mouse_interactor_{ nullptr };
+    std::unique_ptr<MouseInteractor> mouse_interactor_;
+    std::unique_ptr<GUI> gui_;
 
     bool mouse_enabled_ = false;
 
@@ -49,5 +51,4 @@ private:
     bool print_timestamp_ = false;
     float key_timeout_ = 0.2f;
 
-    void ProcessKeyboard(float dt);
 };
