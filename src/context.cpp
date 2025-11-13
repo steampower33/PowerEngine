@@ -341,35 +341,91 @@ void Context::DrawImgui()
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
+	ImGuiStyle& st = ImGui::GetStyle();
+	st.WindowRounding = 12.f;          // 창 라운드
+	st.FrameRounding = 10.f;          // 슬라이더/체크 등 라운드
+	st.GrabRounding = 10.f;
+	st.ScrollbarRounding = 10.f;
+
+	st.FramePadding = ImVec2(10, 6); // 컨트롤 패딩
+	st.ItemSpacing = ImVec2(10, 8); // 항목 간 간격
+	st.WindowTitleAlign = ImVec2(0.5f, 0.5f);
+
+
+	// 다크 테마 + 반투명 창
+	ImVec4* col = st.Colors;
+	col[ImGuiCol_WindowBg].w = 0.1f;          // 창 배경 알파
+	col[ImGuiCol_FrameBg].w = 0.7f;           // 프레임 알파
+	col[ImGuiCol_Header].w = 0.5f;           // CollapsingHeader
+
+	ImGui::SetNextWindowSize(ImVec2(280, 0), ImGuiCond_Once);
+	ImGui::SetNextWindowBgAlpha(0.85f); // 창 자체 투명도
+	ImGuiWindowFlags wf = ImGuiWindowFlags_NoResize |
+		ImGuiWindowFlags_AlwaysAutoResize |
+		ImGuiWindowFlags_NoCollapse;
+
+	if (ImGui::Begin("Options", nullptr, wf))
 	{
-		ImGui::Begin("Setting");
+
+		ImGui::Checkbox("Draw Wireframe", &gpu_sim_->is_wireframe_);
 
 		ImGuiIO& io = ImGui::GetIO(); (void)io;
-		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+		ImGui::Text("Avr %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
-		if (ImGui::CollapsingHeader("Simulation", ImGuiTreeNodeFlags_DefaultOpen))
+		auto row = [&](const char* label, auto drawControl)
+			{
+				ImGui::TableNextRow();
+
+				// 1) 라벨 열
+				ImGui::TableSetColumnIndex(0);
+				ImGui::AlignTextToFramePadding();
+				ImGui::TextUnformatted(label);
+
+				// 2) 컨트롤 열: 위젯 폭을 컬럼의 남은 폭 전체로
+				ImGui::TableSetColumnIndex(1);
+				ImGui::SetNextItemWidth(-FLT_MIN);   // ★ 핵심: 해당 아이템 하나가 열 폭을 다 씀
+				drawControl();
+			};
+
+		if (ImGui::BeginTable("sim_tbl", 2,
+			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
-			ImGui::InputInt("Iterations", &gpu_sim_->iterations_, 1);
-			ImGui::InputFloat("Damping", &gpu_sim_->compute_.sim_params.damping, 0.1f);
-			ImGui::InputFloat("RelaxationFactor", &gpu_sim_->compute_.sim_params.relaxationFactor, 0.1f);
-			ImGui::InputFloat("Max Speed", &gpu_sim_->compute_.sim_params.maxSpeed, 0.1f);
+			row("Iterations", [&] { ImGui::DragInt("##Iterations", &gpu_sim_->iterations_, 1, 1, 50); });
+			row("Damping", [&] { ImGui::SliderFloat("##Damping", &gpu_sim_->compute_.sim_params.damping, 0.f, 2.f, "%.3f"); });
+			row("Relaxation Factor", [&] { ImGui::SliderFloat("##RelaxationFactor", &gpu_sim_->compute_.sim_params.relaxationFactor, 0.f, 2.f, "%.3f"); });
+			row("Max Speed", [&] { ImGui::SliderFloat("##MaxSpeed", &gpu_sim_->compute_.sim_params.maxSpeed, 0.f, 500.f, "%.3f"); });
 
 			bool windEnabled = (gpu_sim_->compute_.sim_params.windTest != 0);
-			if (ImGui::Checkbox("Wind", &windEnabled)) {
+			row("Wind", [&] { 
+				if (ImGui::Checkbox("##Wind", &windEnabled)) {
 				gpu_sim_->compute_.sim_params.windTest = windEnabled ? 1 : 0;
+			} });
+
+			row("Wind Dir", [&] {
+				ImGui::DragFloat3("##WindDir", &gpu_sim_->compute_.sim_params.windDir[0], 0.1f, -1.0f, 1.0f); });
+
+			row("Wind Strength", [&] {
+				ImGui::DragFloat("##WindStrength", &gpu_sim_->compute_.sim_params.windStrength, 0.1f, 0.0f, 5.0f); });
+
+			ImGui::EndTable();
+		}
+
+		if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen)) {
+			if (ImGui::BeginTable("scene_tbl", 2,
+				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+			{
+
+				row("Sphere Collision", [&] {
+					ImGui::Checkbox("##SphereCollision", &test_scene_.sphereCollision); });
+				row("Pinned Corner", [&] {
+					ImGui::Checkbox("##PinnedCorner", &test_scene_.pinnedCorner); });
+
+				ImGui::EndTable();
 			}
-			ImGui::DragFloat3("Wind Dir", &gpu_sim_->compute_.sim_params.windDir[0], 0.1f, -1.0f, 1.0f);
-			ImGui::DragFloat("Wind Strength", &gpu_sim_->compute_.sim_params.windStrength, 0.1f, 0.0f, 5.0f);
 		}
-
-		if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			ImGui::Checkbox("Sphere Collision", &test_scene_.sphereCollision);
-			ImGui::Checkbox("Pinned Corner", &test_scene_.pinnedCornerDrop);
-		}
-
-		ImGui::End();
 	}
+	ImGui::End();
+
 
 	//ImGui::ShowDemoWindow();
 

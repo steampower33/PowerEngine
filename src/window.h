@@ -39,8 +39,8 @@ private:
 
     bool mouse_enabled_ = false;
 
-    uint32_t init_width_ = 1400;
-    uint32_t init_height_ = 800;
+    uint32_t init_width_ = 1600;
+    uint32_t init_height_ = 900;
 
     bool framebuffer_resized_ = false;
 

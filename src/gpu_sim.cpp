@@ -136,7 +136,7 @@ GpuSim::GpuSim(
 			for (int x = 0; x < nx1; ++x) {
 				uint32_t id = vid(x, y);
 				float px = (x - 0.5f * Nx_) * spacing_;   // (-Nx/2 .. +Nx/2) * spacing
-				float py = 4.0f;
+				float py = 8.0f;
 				float pz = (y - 0.5f * Ny_) * spacing_;   // (-Ny/2 .. +Ny/2) * spacing
 				positions_[id] = { px, py, pz, 1.0f };
 				velocities_[id] = glm::vec4(0);
@@ -653,7 +653,7 @@ GpuSim::GpuSim(
 		vk::PipelineRasterizationStateCreateInfo rasterizer{
 			.depthClampEnable = vk::False,
 			.rasterizerDiscardEnable = vk::False,
-			.polygonMode = vk::PolygonMode::eLine,
+			.polygonMode = vk::PolygonMode::eFill,
 			.cullMode = vk::CullModeFlagBits::eNone,
 			.frontFace = vk::FrontFace::eCounterClockwise,
 			.depthBiasEnable = vk::False
@@ -735,7 +735,7 @@ GpuSim::GpuSim(
 				.pushConstantRangeCount = 1,
 				.pPushConstantRanges = &pcRange
 			};
-			graphics_.pipeline_layouts.cloth = vk::raii::PipelineLayout(device, pipelineLayoutInfo);
+			graphics_.pipeline_layouts.cloth_solid = vk::raii::PipelineLayout(device, pipelineLayoutInfo);
 
 			// Pipeline
 			vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
@@ -750,11 +750,15 @@ GpuSim::GpuSim(
 				.pDepthStencilState = &depthStencil,
 				.pColorBlendState = &colorBlending,
 				.pDynamicState = &dynamicState,
-				.layout = graphics_.pipeline_layouts.cloth,
+				.layout = graphics_.pipeline_layouts.cloth_solid,
 				.renderPass = nullptr },
 			  {.colorAttachmentCount = 1, .pColorAttachmentFormats = &swapchain->swapchain_surface_format_.format, .depthAttachmentFormat = depthFormat }
 			};
-			graphics_.pipelines.cloth = vk::raii::Pipeline(device, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+			graphics_.pipelines.cloth_solid = vk::raii::Pipeline(device, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+
+			rasterizer.polygonMode = vk::PolygonMode::eLine,
+
+			graphics_.pipelines.cloth_wireframe = vk::raii::Pipeline(device, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 		}
 	}
 }
@@ -779,26 +783,29 @@ void GpuSim::GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer
 {
 	// Cloth
 	{
-		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphics_.pipelines.cloth);
+		if (is_wireframe_)
+			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphics_.pipelines.cloth_wireframe);
+		else
+			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphics_.pipelines.cloth_solid);
 
 		// Global Set
 		cmd.bindDescriptorSets(
 			vk::PipelineBindPoint::eGraphics,
-			graphics_.pipeline_layouts.cloth,
+			graphics_.pipeline_layouts.cloth_solid,
 			0,
 			{ *globalSet },
 			{ globalOffset }
 		);
 		cmd.bindDescriptorSets(
 			vk::PipelineBindPoint::eGraphics,
-			graphics_.pipeline_layouts.cloth,
+			graphics_.pipeline_layouts.cloth_solid,
 			1,
 			{ *graphics_.cloth_set },
 			{ }
 		);
 
 		cmd.pushConstants<ClothPC>(
-			*graphics_.pipeline_layouts.cloth,
+			*graphics_.pipeline_layouts.cloth_solid,
 			vk::ShaderStageFlagBits::eVertex,
 			/*offset=*/0,
 			cloth_pc_
@@ -828,7 +835,7 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 			for (int x = 0; x < nx1; ++x) {
 				uint32_t id = vid(x, y);
 				float px = (x - 0.5f * Nx_) * spacing_;   // (-Nx/2 .. +Nx/2) * spacing
-				float py = 4.0f;
+				float py = 8.0f;
 				float pz = (y - 0.5f * Ny_) * spacing_;   // (-Ny/2 .. +Ny/2) * spacing
 				positions_[id] = { px, py, pz, 1.0f };
 				velocities_[id] = glm::vec4(0);
@@ -872,9 +879,9 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 			vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
 
 	}
-	else if (testScene.pinnedCornerDrop)
+	else if (testScene.pinnedCorner)
 	{
-		testScene.pinnedCornerDrop = false;
+		testScene.pinnedCorner = false;
 
 		const int nxCells = Nx_;
 		const int nyCells = Ny_;
@@ -889,7 +896,7 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 			for (int x = 0; x < nx1; ++x) {
 				uint32_t id = vid(x, y);
 				float px = (x - 0.5f * Nx_) * spacing_;   // (-Nx/2 .. +Nx/2) * spacing
-				float py = 4.0f;
+				float py = 8.0f;
 				float pz = (y - 0.5f * Ny_) * spacing_;   // (-Ny/2 .. +Ny/2) * spacing
 				positions_[id] = { px, py, pz, 1.0f };
 				velocities_[id] = glm::vec4(0);
@@ -915,7 +922,6 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 		inverse_mass_[nx1 - 1] = 0.0f;
 		inverse_mass_[(ny1 - 1) * nx1] = 0.0f;
 		inverse_mass_[(ny1 - 1) * nx1 + nx1 - 1] = 0.0f;
-		inverse_mass_[nx1 - 1] = 0.0f;
 
 		for (int i = 0; i < edge_size_; i++)
 		{

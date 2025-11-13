@@ -108,14 +108,17 @@ public:
 		vk::raii::DescriptorSet cloth_set{ nullptr };
 
 		struct PipelineLayouts {
-			vk::raii::PipelineLayout cloth{ nullptr };
+			vk::raii::PipelineLayout cloth_solid{ nullptr };
 		} pipeline_layouts;
 
 		struct Pipelines {
-			vk::raii::Pipeline cloth{ nullptr };
+			vk::raii::Pipeline cloth_solid{ nullptr };
+			vk::raii::Pipeline cloth_wireframe{ nullptr };
 		} pipelines;
 
 	} graphics_;
+
+	bool is_wireframe_ = false;
 
 	std::vector<glm::vec4> positions_;
 	vk::raii::Buffer positions_ssbo_{ nullptr };

@@ -12,7 +12,7 @@ namespace vku
 
 	struct TestScene {
 		bool sphereCollision = false;
-		bool pinnedCornerDrop = false;
+		bool pinnedCorner = false;
 	};
 
 	inline [[nodiscard]] vk::raii::ShaderModule CreateShaderModule(vk::raii::Device& device, const std::vector<char>& code) {
