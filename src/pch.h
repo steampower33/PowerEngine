@@ -29,8 +29,10 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #define GLM_FORCE_RIGHT_HANDED
 #include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtx/hash.hpp>
+#include <glm/gtc/constants.hpp>   // glm::pi, glm::two_pi
+#include <glm/gtc/matrix_transform.hpp> // glm::rotate
+#include <glm/gtx/normalize_dot.hpp>
+#include <glm/gtx/norm.hpp>
 
 constexpr int      MAX_FRAMES_IN_FLIGHT = 2;
 

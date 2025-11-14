@@ -89,7 +89,7 @@ GUI::~GUI()
 	ImGui::DestroyContext();
 }
 
-void GUI::UpdateImgui(std::unique_ptr<GpuSim>& gpuSim, vku::TestScene& testScene)
+void GUI::UpdateImgui(std::unique_ptr<GpuSim>& gpuSim, vku::TestScene& testScene, std::unique_ptr<Context>& context)
 {
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
@@ -111,33 +111,50 @@ void GUI::UpdateImgui(std::unique_ptr<GpuSim>& gpuSim, vku::TestScene& testScene
 	col[ImGuiCol_FrameBg].w = 0.7f;           // 프레임 알파
 	col[ImGuiCol_Header].w = 0.5f;           // CollapsingHeader
 
-	ImGui::SetNextWindowSize(ImVec2(280, 0), ImGuiCond_Once);
 	ImGui::SetNextWindowBgAlpha(0.85f); // 창 자체 투명도
-	ImGuiWindowFlags wf = ImGuiWindowFlags_NoResize |
-		ImGuiWindowFlags_AlwaysAutoResize |
+	ImGuiWindowFlags wf = 
+		ImGuiWindowFlags_NoResize |
 		ImGuiWindowFlags_NoCollapse;
 
-	if (ImGui::Begin("Options", nullptr, wf))
+	auto row = [&](const char* label, auto drawControl)
+		{
+			ImGui::TableNextRow();
+
+			// 1) 라벨 열
+			ImGui::TableSetColumnIndex(0);
+			ImGui::AlignTextToFramePadding();
+			ImGui::TextUnformatted(label);
+
+			// 2) 컨트롤 열: 위젯 폭을 컬럼의 남은 폭 전체로
+			ImGui::TableSetColumnIndex(1);
+			ImGui::SetNextItemWidth(-FLT_MIN);   // ★ 핵심: 해당 아이템 하나가 열 폭을 다 씀
+			drawControl();
+		};
+
+	//ImGui::SetNextWindowSize(ImVec2(400, 0));
+	//ImGui::SetNextWindowPos(ImVec2(5, 5), ImGuiCond_Once);
+	//if (ImGui::Begin("Option", nullptr, wf))
+	//{
+
+	//	if (ImGui::BeginTable("option_tbl", 2,
+	//		ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+	//	{
+	//		row("Background Color", [&] { ImGui::DragFloat3("##BackgroundColor", &context->graphics_.global_ubo_data.background_color[0], 0.01f, 0.0f, 1.0f); });
+
+	//		ImGui::EndTable();
+	//	}
+
+	//	ImGui::End();
+	//}
+
+	ImGui::SetNextWindowPos(ImVec2(5, 400), ImGuiCond_Once);
+	if (ImGui::Begin("Simulation", nullptr, wf))
 	{
 		ImGui::Checkbox("Draw Wireframe", &gpuSim->is_wireframe_);
 
 		ImGuiIO& io = ImGui::GetIO(); (void)io;
 		ImGui::Text("Avr %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
-		auto row = [&](const char* label, auto drawControl)
-			{
-				ImGui::TableNextRow();
-
-				// 1) 라벨 열
-				ImGui::TableSetColumnIndex(0);
-				ImGui::AlignTextToFramePadding();
-				ImGui::TextUnformatted(label);
-
-				// 2) 컨트롤 열: 위젯 폭을 컬럼의 남은 폭 전체로
-				ImGui::TableSetColumnIndex(1);
-				ImGui::SetNextItemWidth(-FLT_MIN);   // ★ 핵심: 해당 아이템 하나가 열 폭을 다 씀
-				drawControl();
-			};
 
 		if (ImGui::BeginTable("sim_tbl", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
@@ -159,7 +176,7 @@ void GUI::UpdateImgui(std::unique_ptr<GpuSim>& gpuSim, vku::TestScene& testScene
 				row("Wind Strength", [&] {
 					ImGui::DragFloat("##WindStrength", &gpuSim->compute_.sim_params.windStrength, 0.1f, 0.0f, 5.0f); });
 
-				ImGui::EndTable();
+			ImGui::EndTable();
 		}
 
 		if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen)) {

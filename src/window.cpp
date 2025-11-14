@@ -150,7 +150,7 @@ void Window::mainloop()
 
 		key_timeout_ -= dt;
 
-		gui_->UpdateImgui(ctx_->gpu_sim_, ctx_->test_scene_);
+		gui_->UpdateImgui(ctx_->gpu_sim_, ctx_->test_scene_, ctx_);
 		ctx_->Update(*camera_, *mouse_interactor_, dt);
 		ctx_->Draw(print_timestamp_);
 	}

@@ -8,6 +8,8 @@ class Texture2D;
 class MouseInteractor;
 class CpuSim;
 class GpuSim;
+struct MeshData;
+class GeometryGenerator;
 
 #include "vulkan_utils.h"
 
@@ -112,6 +114,7 @@ public:
 
 		struct ObjectUboData {
 			glm::mat4 model;
+			glm::vec4 color_use;
 		} object_ubo_data;
 		vk::raii::Buffer object_ubo{ nullptr };
 		vk::raii::DeviceMemory object_ubo_memory{ nullptr };
@@ -133,6 +136,8 @@ public:
 
 	} graphics_;
 
+	glm::vec3 background_color = glm::vec3(glm::pow(214.0f / 255.0f, 2.2f), glm::pow(225.0f / 255.0f, 2.2f), glm::pow(252.0f / 255.0f, 2.2f));
+
 	// |===== Model & Texture =====|
 	static constexpr uint32_t kMaxObjects = 8;
 	uint32_t model_count_ = 0;
@@ -143,6 +148,7 @@ public:
 	vk::raii::Image depth_image_ = nullptr;
 	vk::raii::DeviceMemory depth_image_memory_ = nullptr;
 	vk::raii::ImageView depth_image_view_ = nullptr;
+
 
 private:
 

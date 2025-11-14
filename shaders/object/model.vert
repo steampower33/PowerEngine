@@ -1,14 +1,22 @@
 #version 450
 
-layout(set=0, binding=0) uniform GlobalUBO { mat4 view; mat4 proj; } global;
-layout(set=1, binding=0) uniform ObjectUBO { mat4 model; } object;
+layout(set=0, binding=0) uniform GlobalUBO { 
+    mat4 view; 
+    mat4 proj; 
+    vec4 background_color;
+} global;
 
-layout(location = 0) in vec4 inPos;   // VSInput.pos
-layout(location = 1) in vec4 inUV;    // VSInput.uv (float4였으니 vec4로 받되 .xy만 사용)
+layout(set=1, binding=0) uniform ObjectUBO { 
+    mat4 model; 
+    vec4 color_use; 
+} object;
+
+layout(location = 0) in vec3 inPos;
+layout(location = 1) in vec2 inUV;
 
 layout(location = 0) out vec2 vUV;
 
 void main() {
-    gl_Position = global.proj * global.view * object.model * inPos;
-    vUV = vec2(inUV.x, 1.0 - inUV.y); // 기존과 동일한 Y flip
+    gl_Position = global.proj * global.view * object.model * vec4(inPos, 1.0);
+    vUV = vec2(inUV.x, inUV.y);
 }

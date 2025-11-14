@@ -38,7 +38,8 @@ find_package(KTX CONFIG REQUIRED)
 
 # 실행 파일
 file(GLOB SRC CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/model/*.cpp")
 add_executable(PowerEngine ${SRC})
 
 target_precompile_headers(PowerEngine PRIVATE

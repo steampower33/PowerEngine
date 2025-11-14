@@ -97,7 +97,7 @@ void MouseInteractor::Update(const Camera& camera,
         float dist = 0.0f;
         Model& model = *models[selected_];
 
-        if (ray.Intersects(model, dist)) {
+        if (model.moveble_ && ray.Intersects(model, dist)) {
             glm::vec3 center = model.position_;
             glm::vec3 pickPoint = ray.origin + ray.direction * dist;
             glm::vec3 v = pickPoint - center;

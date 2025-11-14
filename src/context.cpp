@@ -7,6 +7,8 @@
 #include "mouse_interactor.h"
 #include "cpu_sim.h"
 #include "gpu_sim.h"
+#include "model/mesh_data.h"
+#include "model/geometry_generator.h"
 
 #include "context.h"
 
@@ -28,9 +30,35 @@ Context::Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height)
 	{
 		models.reserve(kMaxObjects);
 
-		models.emplace_back(std::make_unique<Model>("assets/models/sphere.gltf", physical_device_, device_, queue_, command_pool_, model_count_, glm::vec3(0.0f, 1.0f, 0.0f)));
+		{
+			glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
+			glm::vec3 initPos = glm::vec3(0.0f, 1.0f, 0.0f);
+			glm::vec4 initColor = glm::vec4(244.0f / 255.0f, 114 / 255.0f, 43 / 255.0f, 1.0);
+			std::unique_ptr<Model> model = std::make_unique<Model>("assets/models/sphere.gltf", vku::VertexIncludeInfo{ true, false }, physical_device_, device_, queue_, command_pool_, model_count_, initPos, angleQuat, initColor, true);
+			models.emplace_back(std::move(model));
+		}
+
+		{
+			MeshData plane = GeometryGenerator::MakeSquare(10.0f);
+			glm::quat angleQuat = glm::angleAxis(glm::radians(90.0f), glm::vec3(1, 0, 0));
+			glm::vec3 initPos = glm::vec3(0.0f, 0.0f, 0.0f);
+			float color = 62.0f / 255.0f;
+			glm::vec4 initColor = glm::vec4(color, color, color, 1.0);
+			std::unique_ptr<Model> model = std::make_unique<Model>(plane, vku::VertexIncludeInfo{ true, false }, physical_device_, device_, queue_, command_pool_, model_count_, initPos, angleQuat, initColor, false);
+			models.emplace_back(std::move(model));
+		}
+
+		//{
+		//	MeshData box = GeometryGenerator::MakeBox(1.0f);
+		//	glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
+		//	glm::vec3 initPos = glm::vec3(0.0f, 1.0f, 0.0f);
+		//	glm::vec4 initColor = glm::vec4(244.0f / 255.0f, 114 / 255.0f, 43 / 255.0f, 1.0);
+		//	std::unique_ptr<Model> model = std::make_unique<Model>(box, vku::VertexIncludeInfo{ false, false }, physical_device_, device_, queue_, command_pool_, model_count_, initPos, angleQuat, initColor, true);
+		//	models.emplace_back(std::move(model));
+		//}
 
 		texture_ = std::make_unique<Texture2D>("assets/textures/vulkan_cloth_rgba.ktx", physical_device_, device_, queue_, command_pool_);
+
 	}
 
 	CreateDescriptorSetLayout();
@@ -157,13 +185,13 @@ void Context::Draw(bool& printTimestamp)
 					std::cout << "Clear Lambdas\t: ";
 					break;
 				case 4:
-					std::cout << "Solve Coloring - Stretch \t: ";
+					std::cout << "Solve Stretch \t: ";
 					break;
 				case 6:
 					std::cout << "Clear Deltas \t: ";
 					break;
 				case 8:
-					std::cout << "Solve AtomicAdd - Diagonal \t: ";
+					std::cout << "Solve Diagonal \t: ";
 					break;
 				case 10:
 					std::cout << "Solve Bend \t: ";
@@ -172,7 +200,7 @@ void Context::Draw(bool& printTimestamp)
 					std::cout << "Apply Deltas \t: ";
 					break;
 				case 14:
-					std::cout << "Update Velocity \t: ";
+					std::cout << "Update \t: ";
 					break;
 				}
 
@@ -357,6 +385,7 @@ void Context::UpdateGraphicsUBO(Camera& camera)
 			auto* dst = static_cast<std::byte*>(graphics_.object_ubo_mapped) + objOff;
 
 			graphics_.object_ubo_data.model = models[i]->world_;
+			graphics_.object_ubo_data.color_use = models[i]->color_use;
 
 			std::memcpy(dst, &graphics_.object_ubo_data, sizeof(Graphics::ObjectUboData));
 		}
@@ -399,7 +428,7 @@ void Context::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 		vk::ImageAspectFlagBits::eDepth
 	);
 
-	vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
+	vk::ClearValue clearColor = vk::ClearColorValue(background_color.r, background_color.g, background_color.b, 1.0f);
 	vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
 
 	vk::RenderingAttachmentInfo colorAttachmentInfo = {
@@ -432,7 +461,7 @@ void Context::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 		0.0f,
 		0.0f,
 		static_cast<float>(swapchain_->swapchain_extent_.width),
-		static_cast<float>(swapchain_->swapchain_extent_.height), // height = -H
+		static_cast<float>(swapchain_->swapchain_extent_.height),
 		0.0f, 1.0f
 	);
 	cmd.setViewport(0, vp);
@@ -477,9 +506,9 @@ void Context::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 				{ objectOffset }   // ← Set 1에도 동적 바인딩 1개 → 오프셋 1개만
 			);
 
-			cmd.bindVertexBuffers(0, { models[i]->vertex_buffer_ }, { 0 });
-			cmd.bindIndexBuffer(*models[i]->index_buffer_, 0, vk::IndexType::eUint32);
-			cmd.drawIndexed(models[i]->indices_.size(), 1, 0, 0, 0);
+			cmd.bindVertexBuffers(0, { models[i]->mesh_data_.vertex_buffer }, { 0 });
+			cmd.bindIndexBuffer(*models[i]->mesh_data_.index_buffer, 0, vk::IndexType::eUint32);
+			cmd.drawIndexed(models[i]->mesh_data_.indices_count, 1, 0, 0, 0);
 		}
 	}
 
@@ -780,7 +809,7 @@ void Context::CreateDescriptorSetLayout()
 	// Global UBO - Graphics
 	{
 		std::array layoutBindings{
-			vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eVertex, nullptr),
+			vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, nullptr),
 		};
 		counts_.ubo_dynamic += 1;
 		counts_.layout += 1;
@@ -792,7 +821,7 @@ void Context::CreateDescriptorSetLayout()
 	// Object UBO + Sampler - Graphics
 	{
 		std::array layoutBindings{
-			vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eVertex, nullptr),
+			vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, nullptr),
 			vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr)
 		};
 		counts_.ubo_dynamic += 1;
@@ -1012,14 +1041,13 @@ void Context::CreateGraphicsPipelines()
 		std::array<vk::PipelineShaderStageCreateInfo, 2> stages{ vertStage, fragStage };
 
 		// Vectex Input
-		auto bindingDescription = Vertex::GetBindingDescription();
-		auto attributeDescriptions = Vertex::GetAttributeDescriptions();
-		vk::PipelineVertexInputStateCreateInfo vertexInputInfo{
-			.vertexBindingDescriptionCount = 1,
-			.pVertexBindingDescriptions = &bindingDescription,
-			.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size()),
-			.pVertexAttributeDescriptions = attributeDescriptions.data()
-		};
+		auto vdesc = Vertex::GetInputDescription(vku::VertexIncludeInfo{ false, false });
+
+		vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
+		vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(vdesc.bindings.size());
+		vertexInputInfo.pVertexBindingDescriptions = vdesc.bindings.data();
+		vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(vdesc.attributes.size());
+		vertexInputInfo.pVertexAttributeDescriptions = vdesc.attributes.data();
 
 		// Pipeline Layout
 		std::array<vk::DescriptorSetLayout, 2> setLayouts(*graphics_.global_set_layout, *graphics_.object_set_layout);

@@ -15,6 +15,11 @@ namespace vku
 		bool pinnedCorner = false;
 	};
 
+	struct VertexIncludeInfo {
+		bool normal = false;
+		bool tangent = false;
+	};
+
 	inline [[nodiscard]] vk::raii::ShaderModule CreateShaderModule(vk::raii::Device& device, const std::vector<char>& code) {
 		vk::ShaderModuleCreateInfo createInfo{ .codeSize = code.size(), .pCode = reinterpret_cast<const uint32_t*>(code.data()) };
 		vk::raii::ShaderModule shaderModule{ device, createInfo };

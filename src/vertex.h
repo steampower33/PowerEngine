@@ -1,35 +1,68 @@
 #pragma once
 
-struct Vertex {
-    glm::vec3 pos;
-    glm::vec2 texcoord;
-    //glm::vec3 normal;
+#include "vulkan_utils.h"
 
-    static vk::VertexInputBindingDescription GetBindingDescription() {
-        return { 0, sizeof(Vertex), vk::VertexInputRate::eVertex };
-    }
-
-    static std::array<vk::VertexInputAttributeDescription, 2> GetAttributeDescriptions() {
-        return {
-            vk::VertexInputAttributeDescription(0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, pos)),
-            vk::VertexInputAttributeDescription(1, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, texcoord)),
-            //vk::VertexInputAttributeDescription(2, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, normal))
-        };
-    }
-
-    bool operator==(const Vertex& other) const {
-        //return pos == other.pos && normal == other.normal && texcoord == other.texcoord;
-        return pos == other.pos && texcoord == other.texcoord;
-    }
+// 파이프라인 만들 때 쓰기 편하게 묶어둔 구조체
+struct VertexInputDescription {
+    std::vector<vk::VertexInputBindingDescription>   bindings;
+    std::vector<vk::VertexInputAttributeDescription> attributes;
 };
 
-namespace std {
-    template<> struct hash<Vertex> {
-        size_t operator()(Vertex const& vertex) const {
-            // pos, texcoord, normal을 모두 조합하여 해시값 생성
-            return ((hash<glm::vec3>()(vertex.pos) ^
-                (hash<glm::vec2>()(vertex.texcoord) << 1)) >> 1);
-            //^ (hash<glm::vec3>()(vertex.normal) << 1);
+struct Vertex {
+    glm::vec3 pos = {};
+    glm::vec2 uv = {};
+    glm::vec3 normal = {};
+    glm::vec4 tangent = glm::vec4(0, 0, 0, 1);
+
+    // 1) 바인딩 + 어트리뷰트 자동 생성기
+    static VertexInputDescription GetInputDescription(const vku::VertexIncludeInfo& include)
+    {
+        VertexInputDescription desc;
+
+        // 하나의 바인딩(0번)만 사용
+        vk::VertexInputBindingDescription binding{};
+        binding.binding = 0;
+        binding.stride = sizeof(Vertex);
+        binding.inputRate = vk::VertexInputRate::eVertex;
+
+        desc.bindings.push_back(binding);
+
+        // location 0 : position (vec3)
+        vk::VertexInputAttributeDescription posAttr{};
+        posAttr.location = 0;
+        posAttr.binding = 0;
+        posAttr.format = vk::Format::eR32G32B32Sfloat;
+        posAttr.offset = static_cast<uint32_t>(offsetof(Vertex, pos));
+        desc.attributes.push_back(posAttr);
+
+        // location 1 : uv (vec2)
+        vk::VertexInputAttributeDescription uvAttr{};
+        uvAttr.location = 1;
+        uvAttr.binding = 0;
+        uvAttr.format = vk::Format::eR32G32Sfloat;
+        uvAttr.offset = static_cast<uint32_t>(offsetof(Vertex, uv));
+        desc.attributes.push_back(uvAttr);
+
+        // 나머지 location은 include에 따라 선택적으로 추가
+        // (원하면 항상 추가해서 고정 레이아웃으로 써도 됨)
+        if (include.normal) {
+            vk::VertexInputAttributeDescription nAttr{};
+            nAttr.location = 2;
+            nAttr.binding = 0;
+            nAttr.format = vk::Format::eR32G32B32Sfloat;
+            nAttr.offset = static_cast<uint32_t>(offsetof(Vertex, normal));
+            desc.attributes.push_back(nAttr);
         }
-    };
-}
+
+        if (include.tangent) {
+            vk::VertexInputAttributeDescription tAttr{};
+            tAttr.location = 3;
+            tAttr.binding = 0;
+            tAttr.format = vk::Format::eR32G32B32A32Sfloat;
+            tAttr.offset = static_cast<uint32_t>(offsetof(Vertex, tangent));
+            desc.attributes.push_back(tAttr);
+        }
+
+        return desc;
+    }
+};

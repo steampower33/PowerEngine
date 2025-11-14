@@ -15,5 +15,5 @@ public:
 	~GUI();
 
 	vk::raii::DescriptorPool imgui_pool_{ nullptr };
-	void UpdateImgui(std::unique_ptr<GpuSim>& gpuSim, vku::TestScene& testScene);
+	void UpdateImgui(std::unique_ptr<GpuSim>& gpuSim, vku::TestScene& testScene, std::unique_ptr<Context>& context);
 };

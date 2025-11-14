@@ -3,141 +3,200 @@
 
 #include "model.h"
 
-Model::Model(const std::string modelPath, vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool, uint32_t& model_count, glm::vec3 initPos)
+Model::Model(const std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool, uint32_t& model_count, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble)
 {
-    LoadModel(modelPath);
+    LoadModel(modelPath, vertexIncludeInfo);
 
-    vku::CreateVertexBuffer(physicalDevice, device, queue, commandPool, vertices_, vertex_buffer_, vertex_buffer_memory_);
-    vku::CreateIndexBuffer(physicalDevice, device, queue, commandPool, indices_, index_buffer_, index_buffer_memory_);
+    vku::CreateVertexBuffer(physicalDevice, device, queue, commandPool, mesh_data_.vertices, mesh_data_.vertex_buffer, mesh_data_.vertex_buffer_memory);
+    vku::CreateIndexBuffer(physicalDevice, device, queue, commandPool, mesh_data_.indices, mesh_data_.index_buffer, mesh_data_.index_buffer_memory);
+
+    model_count++;
+    color_use = colorUse;
+    moveble_ = moveble;
+
+    ApplyTransform(initRotation, initPos);
+}
+
+Model::Model(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool, uint32_t& model_count, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble)
+{
+    mesh_data_ = std::move(meshData);
+
+    vku::CreateVertexBuffer(physicalDevice, device, queue, commandPool, mesh_data_.vertices, mesh_data_.vertex_buffer, mesh_data_.vertex_buffer_memory);
+    vku::CreateIndexBuffer(physicalDevice, device, queue, commandPool, mesh_data_.indices, mesh_data_.index_buffer, mesh_data_.index_buffer_memory);
 
     model_count++;
 
-    position_ = initPos;
-    glm::mat4 translationMatrix = glm::translate(glm::mat4(1.0f), position_);
-    world_ = translationMatrix;
+    color_use = colorUse;
+    moveble_ = moveble;
 
+    ApplyTransform(initRotation, initPos);
 }
 
-void Model::LoadModel(const std::string& modelPath) {
-    // Use tinygltf to load the model instead of tinyobjloader
+void Model::LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo& vertexIncludeInfo)
+{
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
-    std::string err;
-    std::string warn;
+    std::string err, warn;
 
     bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, modelPath);
+    if (!ret) throw std::runtime_error("Failed to load glTF model");
 
-    if (!warn.empty()) {
-        std::cout << "glTF warning: " << warn << std::endl;
-    }
+    mesh_data_.vertices.clear();
+    mesh_data_.indices.clear();
 
-    if (!err.empty()) {
-        std::cout << "glTF error: " << err << std::endl;
-    }
+    for (const auto& mesh : model.meshes)
+    {
+        for (const auto& primitive : mesh.primitives)
+        {
+            // 1) geometry attribute 존재 여부 확인
+            bool hasUV = primitive.attributes.find("TEXCOORD_0") != primitive.attributes.end();
+            bool hasNormals = primitive.attributes.find("NORMAL") != primitive.attributes.end();
+            bool hasTangents = primitive.attributes.find("TANGENT") != primitive.attributes.end();
 
-    if (!ret) {
-        throw std::runtime_error("Failed to load glTF model");
-    }
+            // 2) VertexIncludeInfo 까지 결합
+            bool loadNormal = vertexIncludeInfo.normal && hasNormals;
+            bool loadTangent = vertexIncludeInfo.tangent && hasTangents;
 
-    // Process all meshes in the model
-    std::unordered_map<Vertex, uint32_t> uniqueVertices{};
+            // 3) Accessors
+            const auto& posAccessor = model.accessors[primitive.attributes.at("POSITION")];
+            const auto& posBufferView = model.bufferViews[posAccessor.bufferView];
+            const auto& posBuffer = model.buffers[posBufferView.buffer];
 
-    for (const auto& mesh : model.meshes) {
-        for (const auto& primitive : mesh.primitives) {
-            // Get indices
-            const tinygltf::Accessor& indexAccessor = model.accessors[primitive.indices];
-            const tinygltf::BufferView& indexBufferView = model.bufferViews[indexAccessor.bufferView];
-            const tinygltf::Buffer& indexBuffer = model.buffers[indexBufferView.buffer];
+            const tinygltf::Accessor* uvAccessor = nullptr;
+            const tinygltf::BufferView* uvBufferView = nullptr;
+            const tinygltf::Buffer* uvBuffer = nullptr;
 
-            // Get vertex positions
-            const tinygltf::Accessor& posAccessor = model.accessors[primitive.attributes.at("POSITION")];
-            const tinygltf::BufferView& posBufferView = model.bufferViews[posAccessor.bufferView];
-            const tinygltf::Buffer& posBuffer = model.buffers[posBufferView.buffer];
-
-            // Get texture coordinates if available
-            bool hasTexCoords = primitive.attributes.find("TEXCOORD_0") != primitive.attributes.end();
-            const tinygltf::Accessor* texCoordAccessor = nullptr;
-            const tinygltf::BufferView* texCoordBufferView = nullptr;
-            const tinygltf::Buffer* texCoordBuffer = nullptr;
-
-            if (hasTexCoords) {
-                texCoordAccessor = &model.accessors[primitive.attributes.at("TEXCOORD_0")];
-                texCoordBufferView = &model.bufferViews[texCoordAccessor->bufferView];
-                texCoordBuffer = &model.buffers[texCoordBufferView->buffer];
+            if (hasUV)
+            {
+                uvAccessor = &model.accessors[primitive.attributes.at("TEXCOORD_0")];
+                uvBufferView = &model.bufferViews[uvAccessor->bufferView];
+                uvBuffer = &model.buffers[uvBufferView->buffer];
             }
 
-            //// Get normals if available
-            //bool hasNormals = primitive.attributes.find("NORMAL") != primitive.attributes.end();
-            //const tinygltf::Accessor* normalAccessor = nullptr;
-            //const tinygltf::BufferView* normalBufferView = nullptr;
-            //const tinygltf::Buffer* normalBuffer = nullptr;
+            const tinygltf::Accessor* normalAccessor = nullptr;
+            const tinygltf::BufferView* normalBufferView = nullptr;
+            const tinygltf::Buffer* normalBuffer = nullptr;
 
-            //if (hasNormals) {
-            //    normalAccessor = &model.accessors[primitive.attributes.at("NORMAL")];
-            //    normalBufferView = &model.bufferViews[normalAccessor->bufferView];
-            //    normalBuffer = &model.buffers[normalBufferView->buffer];
-            //}
+            if (loadNormal)
+            {
+                normalAccessor = &model.accessors[primitive.attributes.at("NORMAL")];
+                normalBufferView = &model.bufferViews[normalAccessor->bufferView];
+                normalBuffer = &model.buffers[normalBufferView->buffer];
+            }
 
-            // Process vertices
-            for (size_t i = 0; i < posAccessor.count; i++) {
-                Vertex vertex{};
+            const tinygltf::Accessor* tangentAccessor = nullptr;
+            const tinygltf::BufferView* tangentBufferView = nullptr;
+            const tinygltf::Buffer* tangentBuffer = nullptr;
 
-                // Get position
-                const float* pos = reinterpret_cast<const float*>(&posBuffer.data[posBufferView.byteOffset + posAccessor.byteOffset + i * 12]);
-                vertex.pos = { pos[0], pos[1], pos[2] };
+            if (loadTangent)
+            {
+                tangentAccessor = &model.accessors[primitive.attributes.at("TANGENT")];
+                tangentBufferView = &model.bufferViews[tangentAccessor->bufferView];
+                tangentBuffer = &model.buffers[tangentBufferView->buffer];
+            }
 
-                // Get texture coordinates if available
-                if (hasTexCoords) {
-                    const float* texCoord = reinterpret_cast<const float*>(&texCoordBuffer->data[texCoordBufferView->byteOffset + texCoordAccessor->byteOffset + i * 8]);
-                    vertex.texcoord = { texCoord[0], 1.0f - texCoord[1] };
+            uint32_t baseVert = mesh_data_.vertices.size();
+
+            // ------------------------
+            // BUILD VERTEX LIST
+            // ------------------------
+            for (size_t i = 0; i < posAccessor.count; i++)
+            {
+                if (loadTangent)
+                {
+                    Vertex v;
+                    const float* p = reinterpret_cast<const float*>(
+                        &posBuffer.data[posBufferView.byteOffset + posAccessor.byteOffset + i * sizeof(glm::vec3)]
+                        );
+                    v.pos = glm::vec3(p[0], p[1], p[2]);
+
+                    if (hasUV)
+                    {
+                        const float* uvp = reinterpret_cast<const float*>(
+                            &uvBuffer->data[uvBufferView->byteOffset + uvAccessor->byteOffset + i * sizeof(glm::vec2)]
+                            );
+                        v.uv = glm::vec2(uvp[0], uvp[1]);
+                    }
+
+                    const float* np = reinterpret_cast<const float*>(
+                        &normalBuffer->data[normalBufferView->byteOffset + normalAccessor->byteOffset + i * sizeof(glm::vec3)]
+                        );
+                    v.normal = glm::vec3(np[0], np[1], np[2]);
+
+                    const float* tp = reinterpret_cast<const float*>(
+                        &tangentBuffer->data[tangentBufferView->byteOffset + tangentAccessor->byteOffset + i * sizeof(glm::vec4)]
+                        );
+                    v.tangent = glm::vec4(tp[0], tp[1], tp[2], tp[3]);
+
+                    mesh_data_.vertices.push_back(v);
                 }
-                else {
-                    vertex.texcoord = { 0.0f, 0.0f };
+                else if (loadNormal)
+                {
+                    Vertex v;
+                    const float* p = reinterpret_cast<const float*>(
+                        &posBuffer.data[posBufferView.byteOffset + posAccessor.byteOffset + i * sizeof(glm::vec3)]
+                        );
+                    v.pos = glm::vec3(p[0], p[1], p[2]);
+
+                    if (hasUV)
+                    {
+                        const float* uvp = reinterpret_cast<const float*>(
+                            &uvBuffer->data[uvBufferView->byteOffset + uvAccessor->byteOffset + i * sizeof(glm::vec2)]
+                            );
+                        v.uv = glm::vec2(uvp[0], uvp[1]);
+                    }
+
+                    const float* np = reinterpret_cast<const float*>(
+                        &normalBuffer->data[normalBufferView->byteOffset + normalAccessor->byteOffset + i * sizeof(glm::vec3)]
+                        );
+                    v.normal = glm::vec3(np[0], np[1], np[2]);
+
+                    mesh_data_.vertices.push_back(v);
                 }
+                else
+                {
+                    Vertex v;
+                    const float* p = reinterpret_cast<const float*>(
+                        &posBuffer.data[posBufferView.byteOffset + posAccessor.byteOffset + i * sizeof(glm::vec3)]
+                        );
+                    v.pos = glm::vec3(p[0], p[1], p[2]);
 
-                //// Get normal if available
-                //if (hasNormals) {
-                //    // 법선 벡터는 float 3개 (12바이트)
-                //    const float* n = reinterpret_cast<const float*>(&normalBuffer->data[normalBufferView->byteOffset + normalAccessor->byteOffset + i * sizeof(glm::vec3)]);
-                //    vertex.normal = { n[0], n[1], n[2] };
-                //}
-                //else {
-                //    // 모델에 법선 데이터가 없을 경우, 기본값(또는 나중에 계산)
-                //    vertex.normal = { 0.0f, 0.0f, 0.0f };
-                //}
+                    if (hasUV)
+                    {
+                        const float* uvp = reinterpret_cast<const float*>(
+                            &uvBuffer->data[uvBufferView->byteOffset + uvAccessor->byteOffset + i * sizeof(glm::vec2)]
+                            );
+                        v.uv = glm::vec2(uvp[0], uvp[1]);
+                    }
 
-                // Add vertex if unique
-                if (!uniqueVertices.contains(vertex)) {
-                    uniqueVertices[vertex] = static_cast<uint32_t>(vertices_.size());
-                    vertices_.push_back(vertex);
+                    mesh_data_.vertices.push_back(v);
                 }
             }
 
-            // Process indices
-            const unsigned char* indexData = &indexBuffer.data[indexBufferView.byteOffset + indexAccessor.byteOffset];
+            // ------------------------
+            // BUILD INDICES
+            // ------------------------
+            const auto& idxAccessor = model.accessors[primitive.indices];
+            const auto& idxView = model.bufferViews[idxAccessor.bufferView];
+            const auto& idxBuffer = model.buffers[idxView.buffer];
 
-            // Handle different index component types
-            if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
-                const uint16_t* indices16 = reinterpret_cast<const uint16_t*>(indexData);
-                for (size_t i = 0; i < indexAccessor.count; i++) {
-                    Vertex vertex = vertices_[indices16[i]];
-                    indices_.push_back(uniqueVertices[vertex]);
-                }
+            const unsigned char* idxData =
+                &idxBuffer.data[idxView.byteOffset + idxAccessor.byteOffset];
+
+            for (size_t i = 0; i < idxAccessor.count; i++)
+            {
+                uint32_t raw = 0;
+
+                if (idxAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT)
+                    raw = *reinterpret_cast<const uint16_t*>(idxData + i * sizeof(uint16_t));
+                else if (idxAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)
+                    raw = *reinterpret_cast<const uint32_t*>(idxData + i * sizeof(uint32_t));
+                else if (idxAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE)
+                    raw = *reinterpret_cast<const uint8_t*>(idxData + i * sizeof(uint8_t));
+
+                mesh_data_.indices.push_back(baseVert + raw);
             }
-            else if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT) {
-                const uint32_t* indices32 = reinterpret_cast<const uint32_t*>(indexData);
-                for (size_t i = 0; i < indexAccessor.count; i++) {
-                    Vertex vertex = vertices_[indices32[i]];
-                    indices_.push_back(uniqueVertices[vertex]);
-                }
-            }
-            else if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE) {
-                const uint8_t* indices8 = reinterpret_cast<const uint8_t*>(indexData);
-                for (size_t i = 0; i < indexAccessor.count; i++) {
-                    Vertex vertex = vertices_[indices8[i]];
-                    indices_.push_back(uniqueVertices[vertex]);
-                }
-            }
+            mesh_data_.indices_count = mesh_data_.indices.size();
         }
     }
 }
