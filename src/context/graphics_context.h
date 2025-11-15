@@ -63,7 +63,7 @@ public:
 	// |===== Particle Info =====|
 	const uint32_t Nx_ = 64;
 	const uint32_t Ny_ = 64;
-	const float spacing_ = 0.1;
+	const float spacing_ = 0.05;
 
 	uint32_t particles_size_ = Nx_ * Ny_;
 	uint32_t indices_size_ = 0;

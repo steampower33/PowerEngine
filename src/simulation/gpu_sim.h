@@ -36,8 +36,9 @@ public:
 	uint32_t particles_size_ = 0;
 	uint32_t indices_size_ = 0;
 
-	float dt_ = 1 / 60.0f;
+	float deviding_dt_ = 120.0f;
 	int iterations_ = 10;
+	float bendCompliance = 1.0f;
 
 	// |===== Push Constant =====|
 	struct ClothPC {
@@ -59,8 +60,8 @@ public:
 			alignas(4)  float windStrength = 1.0f;
 			alignas(4)  float sphereRadius;
 			alignas(4)  float maxSpeed;
-			alignas(4)  float damping = 0.2f;
-			alignas(4)  float relaxationFactor = 0.2f;
+			alignas(4)  float damping = 1.0f;
+			alignas(4)  float relaxationFactor = 0.1f;
 			alignas(4)  int   numBends;
 			alignas(4)  uint32_t numColliders = 1;
 			alignas(4)  float collisionMargin = 0.1f;

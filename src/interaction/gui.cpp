@@ -167,7 +167,7 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 		ImGui::End();
 	}
 
-	ImGui::SetNextWindowSize(ImVec2(500, 0));
+	ImGui::SetNextWindowSize(ImVec2(500, 500));
 	ImGui::SetNextWindowPos(ImVec2(5, 350), ImGuiCond_Once);
 	if (ImGui::Begin("Simulation", nullptr, wf))
 	{
@@ -180,7 +180,9 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 		if (ImGui::BeginTable("sim_tbl", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
+			row("DevidingDt", [&] { ImGui::DragFloat("##DevidingDt", &graphicsContext.gpu_sim_->deviding_dt_, 1.0f, 1.0f, 240.0f); });
 			row("Iterations", [&] { ImGui::DragInt("##Iterations", &graphicsContext.gpu_sim_->iterations_, 1, 1, 40); });
+			row("BendCompliance", [&] { ImGui::DragFloat("##BendCompliance", &graphicsContext.gpu_sim_->bendCompliance, 0.1f, 0.0f, 1.0f); });
 			row("Damping", [&] { ImGui::SliderFloat("##Damping", &graphicsContext.gpu_sim_->compute_.sim_params.damping, 0.f, 2.f, "%.3f"); });
 			row("Relaxation Factor", [&] { ImGui::SliderFloat("##RelaxationFactor", &graphicsContext.gpu_sim_->compute_.sim_params.relaxationFactor, 0.f, 2.f, "%.3f"); });
 			row("Max Speed", [&] { ImGui::SliderFloat("##MaxSpeed", &graphicsContext.gpu_sim_->compute_.sim_params.maxSpeed, 0.f, 500.f, "%.3f"); });

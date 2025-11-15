@@ -15,7 +15,6 @@ GpuSim::GpuSim(
 	vk::raii::DescriptorSetLayout& globalSetLayout,
 	uint32_t Nx, uint32_t Ny, float spacing)
 {
-
 	// Descriptor Set Layout
 	{
 		// Sim Params UBO - Compute
@@ -771,11 +770,11 @@ GpuSim::GpuSim(
 
 void GpuSim::UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& model)
 {
-	compute_.sim_params.dt = dt_;
+	compute_.sim_params.dt = 1 / deviding_dt_;
 	compute_.sim_params.numParticles = particles_size_;
 	compute_.sim_params.numEdges = edge_size_;
 	compute_.sim_params.numBends = bends_size_;
-	compute_.sim_params.maxSpeed = 2 * spacing_ * 1.5f / dt_;
+	compute_.sim_params.maxSpeed = 2 * spacing_ * 1.5f / compute_.sim_params.dt;
 	compute_.sim_params.sphereCenter = glm::vec4(model->position_, 0.0f);
 	compute_.sim_params.sphereRadius = model->radius_;
 
@@ -1075,8 +1074,8 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 			if (!count) continue;
 
 			compute_.pc_.base = base;
-			compute_.pc_.count = count;
-			compute_.pc_.compliance = 1e-8f;
+			compute_.pc_.count = count;	
+			compute_.pc_.compliance = 1e-10f;
 
 			cmd.pushConstants<Compute::PC>(*compute_.pipeline_layouts.common, vk::ShaderStageFlagBits::eCompute, 0u, compute_.pc_);
 
@@ -1091,14 +1090,14 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 		TS(timestampSteps);
 
 		{
-			// 5. Solve AtomicAdd - Diagonal
+			// 4. Solve AtomicAdd - Diagonal
 			TS(timestampSteps);
 			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.solve_atomic);
 			uint32_t base = pass_offset_[4];
 			uint32_t count = pass_offset_[5] - pass_offset_[4];
 			compute_.pc_.base = base;
 			compute_.pc_.count = count;
-			compute_.pc_.compliance = 1e-8f;
+			compute_.pc_.compliance = 5e-9f;
 			cmd.pushConstants<Compute::PC>(*compute_.pipeline_layouts.common,
 				vk::ShaderStageFlagBits::eCompute, 0u, compute_.pc_);
 
@@ -1113,14 +1112,14 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 		}
 
 		{
-			// 6. Solve Bend
+			// 5. Solve Bend
 			TS(timestampSteps);
 			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.solve_bend);
 			uint32_t base = 0;
 			uint32_t count = bends_size_;
 			compute_.pc_.base = base;
 			compute_.pc_.count = count;
-			compute_.pc_.compliance = 1.0f;
+			compute_.pc_.compliance = bendCompliance;
 			cmd.pushConstants<Compute::PC>(*compute_.pipeline_layouts.common,
 				vk::ShaderStageFlagBits::eCompute, 0u, compute_.pc_);
 
@@ -1134,7 +1133,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 		}
 
-		// 7. Apply Deltas 
+		// 6. Apply Deltas 
 		TS(timestampSteps);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.apply_deltas);
 		cmd.dispatch(groupsP, 1, 1);
@@ -1145,7 +1144,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 			vk::PipelineStageFlagBits2::eComputeShader,
 			vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
-		// 8. Collide SDF
+		// 7. Collide SDF
 		TS(timestampSteps);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.collide_sdf);
 		cmd.dispatch(groupsP, 1, 1);

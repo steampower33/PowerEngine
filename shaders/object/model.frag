@@ -3,13 +3,13 @@
 #extension GL_KHR_vulkan_glsl : enable
 
 layout(set=0, binding=0) uniform GlobalUBO { 
-    mat4 view; 
+    mat4 view;
     mat4 proj;
 } global;
 
-layout(set=1, binding=0) uniform ObjectUBO { 
-    mat4 model; 
-    vec4 color_use; 
+layout(set=1, binding=0) uniform ObjectUBO {
+    mat4 model;
+    vec4 color_use;
 } object;
 
 layout(set=1, binding=1) uniform sampler2D tex;
