@@ -14,11 +14,15 @@ layout(std140, set = 0, binding = 0) uniform SimParams {
     float damping;
     float relaxationFactor;
     int   numBends;
-    float pad1;
-    float pad2;
+    uint  numColliders;
+    float collisionMargin;
     vec4  sphereCenter;
     vec4  windDir;
     vec4  gravity;
+    float thickness;
+    float friction;
+    float pad1;
+    float pad2;
 } sim;
 
 layout(std430, set = 1, binding = 0) buffer X { vec4 x[]; };
@@ -45,5 +49,14 @@ struct Bend {
     vec2 pad;
 };
 layout(std430, set = 1, binding = 9) buffer Bends { Bend  bends[]; };
+
+struct SDFCollider {
+    int   type;       // 0: sphere, 1: plane, 2: capsule ...
+    vec3  center;
+    float radius;
+    vec3  normal;     // plane normal 등
+    vec3  velocity;   // 간단히 전체 rigid body 속도 넣어도 됨
+    float pad;
+};
 
 #endif

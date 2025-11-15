@@ -1,16 +1,15 @@
-#include "swapchain.h"
+#include "context.h"
 #include "camera.h"
+
+#include "swapchain.h"
 
 Swapchain::Swapchain(
 	GLFWwindow* glfwWindow,
-	vk::raii::Device& device,
-	vk::raii::PhysicalDevice& physicalDevice,
-	vk::SampleCountFlagBits msaaSamples,
-	vk::raii::SurfaceKHR& surface
+	Context& context
 ) : glfw_window_(glfwWindow)
 {
-	CreateSwapchain(physicalDevice, device, surface);
-	CreateImageViews(device);
+	CreateSwapchain(context.physical_device_, context.device_, context.surface_);
+	CreateImageViews(context.device_);
 }
 
 Swapchain::~Swapchain()

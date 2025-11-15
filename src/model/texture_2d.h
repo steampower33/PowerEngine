@@ -1,11 +1,12 @@
 #pragma once
 
 class Context;
+class GraphicsContext;
 
 class Texture2D
 {
 public:
-	Texture2D(const std::string texturePath, vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool);
+	Texture2D(const std::string texturePath, Context& context, GraphicsContext& graphicsContext);
 	Texture2D(const Texture2D& rhs) = delete;
 	Texture2D(Texture2D&& rhs) = delete;
 	~Texture2D() = default;

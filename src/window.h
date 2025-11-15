@@ -1,11 +1,8 @@
 #pragma once
 
-#include "camera.h"
-
-class Context;
 struct Camera;
 class MouseInteractor;
-class GUI;
+class Renderer;
 
 class Window
 {
@@ -34,10 +31,9 @@ private:
 
 private:
     GLFWwindow* glfw_window_{};
-    std::unique_ptr<Context> ctx_;
     std::unique_ptr<Camera> camera_;
     std::unique_ptr<MouseInteractor> mouse_interactor_;
-    std::unique_ptr<GUI> gui_;
+    std::unique_ptr<Renderer> renderer_;
 
     bool mouse_enabled_ = false;
 

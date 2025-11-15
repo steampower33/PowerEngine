@@ -38,13 +38,17 @@ find_package(KTX CONFIG REQUIRED)
 
 # 실행 파일
 file(GLOB SRC CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
-     "${CMAKE_CURRENT_SOURCE_DIR}/src/model/*.cpp")
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/context/*.cpp"
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/model/*.cpp"
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/simulation/*.cpp"
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/interaction/*.cpp"
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/util/*.cpp"
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 add_executable(PowerEngine ${SRC})
 
 target_precompile_headers(PowerEngine PRIVATE
     # 컴파일러가 C++일 때만 적용 (C/ObjC와 구분)
-    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/src/pch.h>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/src/util/pch.h>"
 )
 
 # Additional Options
@@ -102,6 +106,16 @@ target_link_libraries(PowerEngine
     imgui
     KTX::ktx
 )
+target_include_directories(PowerEngine
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/context
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/model
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/simulation
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/interaction
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/util
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
 # ---- GLSL -> SPIR-V 컴파일러 선택 ----
 # Vulkan SDK 설치 시 보통 GLSLC_EXECUTABLE 변수 제공됨. 없으면 glslc 이름으로 탐색.
 if (NOT GLSLC_EXECUTABLE)
@@ -174,10 +188,10 @@ set(GLSL_SHADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/clear_lambdas.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/integrate.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_coloring.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/clear_deltas.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_atomic.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_bend.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/apply_deltas.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/collide_sdf.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/update_velocity.comp
 )
 

@@ -1,18 +1,19 @@
-#include "texture_2d.h"
+#include "context.h"
 #include "swapchain.h"
-#include "vulkan_utils.h"
+#include "texture_2d.h"
+#include "texture_manager.h"
 #include "model.h"
+#include "model_manager.h"
+#include "vulkan_utils.h"
 
 #include "gpu_sim.h"
 
 GpuSim::GpuSim(
-	vk::raii::PhysicalDevice& physicalDevice,
-	vk::raii::Device& device,
-	vk::raii::Queue& queue,
-	vk::raii::CommandPool& commandPool,
-	std::unique_ptr<Swapchain>& swapchain,
-	uint32_t Nx, uint32_t Ny, float spacing, std::unique_ptr<Texture2D>& texture,
-	vk::raii::DescriptorSetLayout& globalSetLayout)
+	Context& context,
+	Swapchain& swapchain,
+	TextureManager& textureManager,
+	vk::raii::DescriptorSetLayout& globalSetLayout,
+	uint32_t Nx, uint32_t Ny, float spacing)
 {
 
 	// Descriptor Set Layout
@@ -26,7 +27,7 @@ GpuSim::GpuSim(
 			counts_.layout += 1;
 
 			vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
-			compute_.sim_params_set_layout = vk::raii::DescriptorSetLayout(device, layoutInfo);
+			compute_.sim_params_set_layout = vk::raii::DescriptorSetLayout(context.device_, layoutInfo);
 		}
 
 		// Cloth Compute - Compute
@@ -47,7 +48,7 @@ GpuSim::GpuSim(
 			counts_.layout += 1;
 
 			vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
-			compute_.cloth_compute_set_layout = vk::raii::DescriptorSetLayout(device, layoutInfo);
+			compute_.cloth_compute_set_layout = vk::raii::DescriptorSetLayout(context.device_, layoutInfo);
 		}
 
 		// Cloth Rendering - Graphics
@@ -61,7 +62,7 @@ GpuSim::GpuSim(
 			counts_.layout += 1;
 
 			vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
-			graphics_.cloth_set_layout = vk::raii::DescriptorSetLayout(device, layoutInfo);
+			graphics_.cloth_set_layout = vk::raii::DescriptorSetLayout(context.device_, layoutInfo);
 		}
 	}
 
@@ -89,7 +90,7 @@ GpuSim::GpuSim(
 			.pPoolSizes = poolSizes.data()
 		};
 
-		descriptor_pool_ = vk::raii::DescriptorPool(device, poolInfo);
+		descriptor_pool_ = vk::raii::DescriptorPool(context.device_, poolInfo);
 	}
 
 	// Sim Params UBO
@@ -98,14 +99,14 @@ GpuSim::GpuSim(
 		compute_.sim_params_ubo_memory.clear();
 		compute_.sim_params_ubo_mapped = nullptr;
 
-		auto limits = physicalDevice.getProperties().limits;
+		auto limits = context.physical_device_.getProperties().limits;
 		compute_.sim_params_slot_size = (sizeof(Compute::SimParams) + limits.minUniformBufferOffsetAlignment - 1)
 			& ~(limits.minUniformBufferOffsetAlignment - 1);
 		vk::DeviceSize totalSize = compute_.sim_params_slot_size * MAX_FRAMES_IN_FLIGHT;
 
 		vk::raii::Buffer buffer({});
 		vk::raii::DeviceMemory bufferMem({});
-		vku::CreateBuffer(physicalDevice, device, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
+		vku::CreateBuffer(context.physical_device_, context.device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
 		compute_.sim_params_ubo = std::move(buffer);
 		compute_.sim_params_ubo_memory = std::move(bufferMem);
 		compute_.sim_params_ubo_mapped = compute_.sim_params_ubo_memory.mapMemory(0, totalSize);
@@ -159,7 +160,7 @@ GpuSim::GpuSim(
 		}
 		indices_size_ = static_cast<uint32_t>(indices.size());
 
-		vku::CreateIndexBuffer(physicalDevice, device, queue, commandPool, indices, index_buffer_, index_buffer_memory_);
+		vku::CreateIndexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, indices, index_buffer_, index_buffer_memory_);
 
 		// 출력 SoA
 		std::vector<glm::vec4> xPred(N, glm::vec4(0.0f));
@@ -241,9 +242,11 @@ GpuSim::GpuSim(
 
 		edge_size_ = static_cast<uint32_t>(edges_.size());
 
+		sdfColliders.push_back(SDFCollider{ 0, glm::vec3(0.0f, 0.0f, 0.0f), 1.0f, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0f), 0.0f });
+
 		// position
 		positions_ssbo_size_ = sizeof(glm::vec4) * N;
-		vku::CreateSSBO(physicalDevice, device, queue, commandPool,
+		vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
 			positions_ssbo_size_,
 			vk::BufferUsageFlagBits::eTransferSrc,
 			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -256,7 +259,7 @@ GpuSim::GpuSim(
 
 		// velocity
 		velocities_ssbo_size_ = sizeof(glm::vec4) * N;
-		vku::CreateSSBO(physicalDevice, device, queue, commandPool,
+		vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
 			velocities_ssbo_size_,
 			vk::BufferUsageFlagBits::eTransferSrc,
 			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -269,7 +272,7 @@ GpuSim::GpuSim(
 
 		// inverse mass
 		inverse_mass_ssbo_size_ = sizeof(float) * N;
-		vku::CreateSSBO(physicalDevice, device, queue, commandPool,
+		vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
 			inverse_mass_ssbo_size_,
 			vk::BufferUsageFlagBits::eTransferSrc,
 			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -282,7 +285,7 @@ GpuSim::GpuSim(
 
 		// delta X
 		delta_x_ssbo_size_ = sizeof(float) * N;
-		vku::CreateSSBO(physicalDevice, device, queue, commandPool,
+		vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
 			delta_x_ssbo_size_,
 			vk::BufferUsageFlagBits::eTransferSrc,
 			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -293,7 +296,7 @@ GpuSim::GpuSim(
 
 		// delta Y
 		delta_y_ssbo_size_ = sizeof(float) * N;
-		vku::CreateSSBO(physicalDevice, device, queue, commandPool,
+		vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
 			delta_y_ssbo_size_,
 			vk::BufferUsageFlagBits::eTransferSrc,
 			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -304,7 +307,7 @@ GpuSim::GpuSim(
 
 		// delta Z
 		delta_z_ssbo_size_ = sizeof(float) * N;
-		vku::CreateSSBO(physicalDevice, device, queue, commandPool,
+		vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
 			delta_z_ssbo_size_,
 			vk::BufferUsageFlagBits::eTransferSrc,
 			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -315,7 +318,7 @@ GpuSim::GpuSim(
 
 		// delta count
 		dcount_ssbo_size_ = sizeof(uint32_t) * N;
-		vku::CreateSSBO(physicalDevice, device, queue, commandPool,
+		vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
 			dcount_ssbo_size_,
 			vk::BufferUsageFlagBits::eTransferSrc,
 			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -326,7 +329,7 @@ GpuSim::GpuSim(
 
 		// edges
 		edges_ssbo_size_ = sizeof(Edge) * edge_size_;
-		vku::CreateSSBO(physicalDevice, device, queue, commandPool,
+		vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
 			edges_ssbo_size_,
 			vk::BufferUsageFlagBits::eTransferSrc,
 			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -339,7 +342,7 @@ GpuSim::GpuSim(
 
 		// Pred Position
 		pred_positions_ssbo_size_ = sizeof(glm::vec4) * N;
-		vku::CreateSSBO(physicalDevice, device, queue, commandPool,
+		vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
 			pred_positions_ssbo_size_,
 			vk::BufferUsageFlagBits::eTransferSrc,
 			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -350,7 +353,7 @@ GpuSim::GpuSim(
 
 		// Bend
 		bends_ssbo_size_ = sizeof(Bend) * bends_size_;
-		vku::CreateSSBO(physicalDevice, device, queue, commandPool,
+		vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
 			bends_ssbo_size_,
 			vk::BufferUsageFlagBits::eTransferSrc,
 			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -371,7 +374,7 @@ GpuSim::GpuSim(
 				.pSetLayouts = &*compute_.sim_params_set_layout
 			};
 
-			auto sets = vk::raii::DescriptorSets{ device, allocInfo };
+			auto sets = vk::raii::DescriptorSets{ context.device_, allocInfo };
 			compute_.sim_params_set = std::move(sets.front());
 
 			vk::DescriptorBufferInfo simParamsUboInfo{ *compute_.sim_params_ubo, 0, sizeof(Compute::SimParams) };
@@ -385,7 +388,7 @@ GpuSim::GpuSim(
 					.pBufferInfo = &simParamsUboInfo
 				}
 			};
-			device.updateDescriptorSets(descriptorWrites, {});
+			context.device_.updateDescriptorSets(descriptorWrites, {});
 		}
 
 		// Cloth Compute
@@ -396,7 +399,7 @@ GpuSim::GpuSim(
 				.pSetLayouts = &*compute_.cloth_compute_set_layout
 			};
 
-			auto sets = vk::raii::DescriptorSets{ device, allocInfo };
+			auto sets = vk::raii::DescriptorSets{ context.device_, allocInfo };
 			compute_.cloth_compute_set = std::move(sets.front());
 
 			vk::DescriptorBufferInfo positions(*positions_ssbo_, 0, VK_WHOLE_SIZE);
@@ -491,7 +494,7 @@ GpuSim::GpuSim(
 						.pBufferInfo = &bend
 				},
 			};
-			device.updateDescriptorSets(descriptorWrites, {});
+			context.device_.updateDescriptorSets(descriptorWrites, {});
 		}
 
 		// Cloth Graphics
@@ -502,13 +505,13 @@ GpuSim::GpuSim(
 				.pSetLayouts = &*graphics_.cloth_set_layout
 			};
 
-			auto sets = vk::raii::DescriptorSets{ device, allocInfo };
+			auto sets = vk::raii::DescriptorSets{ context.device_, allocInfo };
 			graphics_.cloth_set = std::move(sets.front());
 
 			vk::DescriptorBufferInfo positions(positions_ssbo_, 0, VK_WHOLE_SIZE);
 			vk::DescriptorImageInfo imageInfo{
-				.sampler = *texture->texture_sampler_,
-				.imageView = *texture->texture_image_view_,
+				.sampler = *textureManager.texture_->texture_sampler_,
+				.imageView = *textureManager.texture_->texture_image_view_,
 				.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
 			};
 			std::array descriptorWrites{
@@ -530,7 +533,7 @@ GpuSim::GpuSim(
 				},
 
 			};
-			device.updateDescriptorSets(descriptorWrites, {});
+			context.device_.updateDescriptorSets(descriptorWrites, {});
 		}
 	}
 
@@ -552,90 +555,90 @@ GpuSim::GpuSim(
 				.pushConstantRangeCount = 1,
 				.pPushConstantRanges = &pcRange
 			};
-			compute_.pipeline_layouts.common = vk::raii::PipelineLayout(device, pipelineLayoutInfo);
+			compute_.pipeline_layouts.common = vk::raii::PipelineLayout(context.device_, pipelineLayoutInfo);
 		}
 
 		// clear_lambdas
 		{
-			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(device, vku::ReadFile("shaders/spv/clear_lambdas.comp.spv"));
+			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/clear_lambdas.comp.spv"));
 
 			vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 			vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *compute_.pipeline_layouts.common };
-			compute_.pipelines.clear_lambdas = vk::raii::Pipeline(device, nullptr, pipelineInfo);
+			compute_.pipelines.clear_lambdas = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
 		}
 
 		// integrate
 		{
-			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(device, vku::ReadFile("shaders/spv/integrate.comp.spv"));
+			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/integrate.comp.spv"));
 
 			vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 			vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *compute_.pipeline_layouts.common };
-			compute_.pipelines.integrate = vk::raii::Pipeline(device, nullptr, pipelineInfo);
+			compute_.pipelines.integrate = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
 		}
 
 		// solve_coloring
 		{
-			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(device, vku::ReadFile("shaders/spv/solve_coloring.comp.spv"));
+			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/solve_coloring.comp.spv"));
 
 			vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 			vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *compute_.pipeline_layouts.common,
 			};
-			compute_.pipelines.solve_coloring = vk::raii::Pipeline(device, nullptr, pipelineInfo);
-		}
-
-		// clear deltas
-		{
-			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(device, vku::ReadFile("shaders/spv/clear_deltas.comp.spv"));
-
-			vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
-
-			vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *compute_.pipeline_layouts.common };
-			compute_.pipelines.clear_deltas = vk::raii::Pipeline(device, nullptr, pipelineInfo);
+			compute_.pipelines.solve_coloring = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
 		}
 
 		// solve_atomic
 		{
-			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(device, vku::ReadFile("shaders/spv/solve_atomic.comp.spv"));
+			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/solve_atomic.comp.spv"));
 
 			vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 			vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *compute_.pipeline_layouts.common,
 			};
-			compute_.pipelines.solve_atomic = vk::raii::Pipeline(device, nullptr, pipelineInfo);
+			compute_.pipelines.solve_atomic = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
 		}
 
 		// solve_bend
 		{
-			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(device, vku::ReadFile("shaders/spv/solve_bend.comp.spv"));
+			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/solve_bend.comp.spv"));
 
 			vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 			vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *compute_.pipeline_layouts.common,
 			};
-			compute_.pipelines.solve_bend = vk::raii::Pipeline(device, nullptr, pipelineInfo);
+			compute_.pipelines.solve_bend = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
 		}
 
 		// apply deltas
 		{
-			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(device, vku::ReadFile("shaders/spv/apply_deltas.comp.spv"));
+			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/apply_deltas.comp.spv"));
 
 			vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 			vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *compute_.pipeline_layouts.common };
-			compute_.pipelines.apply_deltas = vk::raii::Pipeline(device, nullptr, pipelineInfo);
+			compute_.pipelines.apply_deltas = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
+		}
+		
+		// collide_sdf
+		{
+			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/collide_sdf.comp.spv"));
+
+			vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
+
+			vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *compute_.pipeline_layouts.common };
+			compute_.pipelines.collide_sdf = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
 		}
 
 		// update velocity
 		{
-			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(device, vku::ReadFile("shaders/spv/update_velocity.comp.spv"));
+			vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/update_velocity.comp.spv"));
 
 			vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 			vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *compute_.pipeline_layouts.common };
-			compute_.pipelines.update_velocity = vk::raii::Pipeline(device, nullptr, pipelineInfo);
+			compute_.pipelines.update_velocity = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
 		}
 	}
 
@@ -687,7 +690,7 @@ GpuSim::GpuSim(
 		};
 		vk::PipelineDynamicStateCreateInfo dynamicState{ .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()), .pDynamicStates = dynamicStates.data() };
 
-		vk::Format depthFormat = vku::FindDepthFormat(physicalDevice);
+		vk::Format depthFormat = vku::FindDepthFormat(context.physical_device_);
 
 		// Cloth
 		{
@@ -695,8 +698,8 @@ GpuSim::GpuSim(
 			auto vertCode = vku::ReadFile("shaders/spv/cloth.vert.spv");
 			auto fragCode = vku::ReadFile("shaders/spv/cloth.frag.spv");
 
-			vk::raii::ShaderModule vertModule = vku::CreateShaderModule(device, vertCode);
-			vk::raii::ShaderModule fragModule = vku::CreateShaderModule(device, fragCode);
+			vk::raii::ShaderModule vertModule = vku::CreateShaderModule(context.device_, vertCode);
+			vk::raii::ShaderModule fragModule = vku::CreateShaderModule(context.device_, fragCode);
 
 			vk::PipelineShaderStageCreateInfo vertStage{
 				.stage = vk::ShaderStageFlagBits::eVertex,
@@ -735,7 +738,7 @@ GpuSim::GpuSim(
 				.pushConstantRangeCount = 1,
 				.pPushConstantRanges = &pcRange
 			};
-			graphics_.pipeline_layouts.cloth_solid = vk::raii::PipelineLayout(device, pipelineLayoutInfo);
+			graphics_.pipeline_layouts.cloth_solid = vk::raii::PipelineLayout(context.device_, pipelineLayoutInfo);
 
 			// Pipeline
 			vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
@@ -752,13 +755,16 @@ GpuSim::GpuSim(
 				.pDynamicState = &dynamicState,
 				.layout = graphics_.pipeline_layouts.cloth_solid,
 				.renderPass = nullptr },
-			  {.colorAttachmentCount = 1, .pColorAttachmentFormats = &swapchain->swapchain_surface_format_.format, .depthAttachmentFormat = depthFormat }
+			  {.colorAttachmentCount = 1, .pColorAttachmentFormats = &swapchain.swapchain_surface_format_.format, .depthAttachmentFormat = depthFormat }
 			};
-			graphics_.pipelines.cloth_solid = vk::raii::Pipeline(device, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+			graphics_.pipelines.cloth_solid = vk::raii::Pipeline(context.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 
 			rasterizer.polygonMode = vk::PolygonMode::eLine,
 
-			graphics_.pipelines.cloth_wireframe = vk::raii::Pipeline(device, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+			graphics_.pipelines.cloth_wireframe = vk::raii::Pipeline(context.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+
+			rasterizer.polygonMode = vk::PolygonMode::ePoint,
+			graphics_.pipelines.cloth_point = vk::raii::Pipeline(context.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 		}
 	}
 }
@@ -785,6 +791,8 @@ void GpuSim::GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer
 	{
 		if (is_wireframe_)
 			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphics_.pipelines.cloth_wireframe);
+		else if (is_point_)
+			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphics_.pipelines.cloth_point);
 		else
 			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphics_.pipelines.cloth_solid);
 
@@ -944,6 +952,71 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 			vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
 			vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
 	}
+	else if (testScene.topPinnedCorner)
+	{
+		testScene.topPinnedCorner = false;
+
+		const int nxCells = Nx_;
+		const int nyCells = Ny_;
+		const int nx1 = nxCells + 1;
+		const int ny1 = nyCells + 1;
+
+		auto vid = [&](int x, int y) { return uint32_t(y * nx1 + x); };
+
+		const uint32_t N = nx1 * ny1;            // 파티클 총수
+
+		for (int y = 0; y < ny1; ++y) {
+			for (int x = 0; x < nx1; ++x) {
+				uint32_t id = vid(x, y);
+				float px = (x - 0.5f * Nx_) * spacing_;   // (-Nx/2 .. +Nx/2) * spacing
+				float py = 8.0f;
+				float pz = (y - 0.5f * Ny_) * spacing_;   // (-Ny/2 .. +Ny/2) * spacing
+				positions_[id] = { px, py, pz, 1.0f };
+				velocities_[id] = glm::vec4(0);
+				inverse_mass_[id] = 1.0f;
+			}
+		}
+
+		// 인덱스 버퍼도 그대로
+		std::vector<uint32_t> indices;
+		indices.reserve(Nx_ * Ny_ * 6);
+		for (int y = 0; y < Ny_; ++y) {
+			for (int x = 0; x < Nx_; ++x) {
+				uint32_t i0 = vid(x, y);
+				uint32_t i1 = vid(x + 1, y);
+				uint32_t i2 = vid(x, y + 1);
+				uint32_t i3 = vid(x + 1, y + 1);
+				indices.push_back(i0); indices.push_back(i1); indices.push_back(i2);
+				indices.push_back(i1); indices.push_back(i3); indices.push_back(i2);
+			}
+		}
+
+		//inverse_mass_[0] = 0.0f;
+		//inverse_mass_[nx1 - 1] = 0.0f;
+		inverse_mass_[(ny1 - 1) * nx1] = 0.0f;
+		inverse_mass_[(ny1 - 1) * nx1 + nx1 - 1] = 0.0f;
+
+		for (int i = 0; i < edge_size_; i++)
+		{
+			edges_[i].lambda = 0.0f;
+		}
+
+		vku::CopyStagingToSSBO(cmd, positions_ssbo_size_, positions_staging_mapped_, positions_, positions_staging_, positions_ssbo_,
+			vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
+			vk::PipelineStageFlagBits2::eVertexShader, vk::AccessFlagBits2::eShaderStorageRead);
+
+		vku::CopyStagingToSSBO(cmd, velocities_ssbo_size_, velocities_staging_mapped_, velocities_, velocities_staging_, velocities_ssbo_,
+			vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
+			vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+
+		vku::CopyStagingToSSBO(cmd, inverse_mass_ssbo_size_, inverse_mass_staging_mapped_, inverse_mass_, inverse_mass_staging_, inverse_mass_ssbo_,
+			vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
+			vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+
+		vku::CopyStagingToSSBO(cmd, edges_ssbo_size_, edges_staging_mapped_, edges_, edges_staging_, edges_ssbo_,
+			vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
+			vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+	}
 }
 
 void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& timestampSteps, vku::TestScene& testScene)
@@ -954,13 +1027,9 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 	UpdateTestScene(cmd, testScene);
 
 	timestampSteps = 0;
-	uint32_t kSlotsPerIterPair = 16;
+	uint32_t kSlotsPerIterPair = 4 + iter_contraint_count_ * iterations_ + 2;
 	const auto stage = vk::PipelineStageFlagBits2::eComputeShader;
-	auto TSInner = [&](uint32_t& idx) {
-		if (4 <= idx && idx <= 13)
-			cmd.writeTimestamp2(stage, *timestampPool, idx++);
-		};
-	auto TSOuter = [&](uint32_t& idx) {
+	auto TS = [&](uint32_t& idx) {
 		cmd.writeTimestamp2(stage, *timestampPool, idx++);
 		};
 
@@ -975,21 +1044,21 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 	// 1. Integrate
 	// x : write -> read
-	TSOuter(timestampSteps);
+	TS(timestampSteps);
 	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.integrate);
 	cmd.dispatch(groupsP, 1, 1);
-	TSOuter(timestampSteps);
+	TS(timestampSteps);
 	vku::barrier2(cmd,
 		vk::PipelineStageFlagBits2::eComputeShader,
 		vk::AccessFlagBits2::eShaderStorageWrite,
 		vk::PipelineStageFlagBits2::eComputeShader,
 		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
-	// 2. Clear Lmabdas
-	TSOuter(timestampSteps);
+	// 2. Clear Lambdas
+	TS(timestampSteps);
 	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.clear_lambdas);
 	cmd.dispatch(groupsEdges, 1, 1);
-	TSOuter(timestampSteps);
+	TS(timestampSteps);
 	vku::barrier2(cmd,  // write->read
 		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageWrite,
 		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
@@ -997,7 +1066,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 	for (uint32_t iter = 0; iter < iterations_; iter++)
 	{
 		// 3. Solve Coloring - Stretch
-		TSInner(timestampSteps);
+		TS(timestampSteps);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.solve_coloring);
 
 		for (uint32_t c = 0; c < 4; ++c) {
@@ -1019,22 +1088,11 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				vk::PipelineStageFlagBits2::eComputeShader,
 				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 		}
-		TSInner(timestampSteps);
-
-		// 4. clear deltas
-		TSInner(timestampSteps);
-		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.clear_deltas);
-		cmd.dispatch(groupsP, 1, 1);
-		TSInner(timestampSteps);
-		vku::barrier2(cmd,
-			vk::PipelineStageFlagBits2::eComputeShader,
-			vk::AccessFlagBits2::eShaderStorageWrite,
-			vk::PipelineStageFlagBits2::eComputeShader,
-			vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+		TS(timestampSteps);
 
 		{
 			// 5. Solve AtomicAdd - Diagonal
-			TSInner(timestampSteps);
+			TS(timestampSteps);
 			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.solve_atomic);
 			uint32_t base = pass_offset_[4];
 			uint32_t count = pass_offset_[5] - pass_offset_[4];
@@ -1046,7 +1104,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 			uint32_t group = (count + 256 - 1) / 256;
 			cmd.dispatch(group, 1, 1);
-			TSInner(timestampSteps);
+			TS(timestampSteps);
 			vku::barrier2(cmd,
 				vk::PipelineStageFlagBits2::eComputeShader,
 				vk::AccessFlagBits2::eShaderStorageWrite,
@@ -1056,7 +1114,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 		{
 			// 6. Solve Bend
-			TSInner(timestampSteps);
+			TS(timestampSteps);
 			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.solve_bend);
 			uint32_t base = 0;
 			uint32_t count = bends_size_;
@@ -1068,7 +1126,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 			uint32_t group = (count + 256 - 1) / 256;
 			cmd.dispatch(group, 1, 1);
-			TSInner(timestampSteps);
+			TS(timestampSteps);
 			vku::barrier2(cmd,
 				vk::PipelineStageFlagBits2::eComputeShader,
 				vk::AccessFlagBits2::eShaderStorageWrite,
@@ -1077,10 +1135,21 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 		}
 
 		// 7. Apply Deltas 
-		TSInner(timestampSteps);
+		TS(timestampSteps);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.apply_deltas);
 		cmd.dispatch(groupsP, 1, 1);
-		TSInner(timestampSteps);
+		TS(timestampSteps);
+		vku::barrier2(cmd,
+			vk::PipelineStageFlagBits2::eComputeShader,
+			vk::AccessFlagBits2::eShaderStorageWrite,
+			vk::PipelineStageFlagBits2::eComputeShader,
+			vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+
+		// 8. Collide SDF
+		TS(timestampSteps);
+		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.collide_sdf);
+		cmd.dispatch(groupsP, 1, 1);
+		TS(timestampSteps);
 		vku::barrier2(cmd,
 			vk::PipelineStageFlagBits2::eComputeShader,
 			vk::AccessFlagBits2::eShaderStorageWrite,
@@ -1089,10 +1158,10 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 	}
 
 	// 8. Update Velocity
-	TSOuter(timestampSteps);
+	TS(timestampSteps);
 	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, compute_.pipelines.update_velocity);
 	cmd.dispatch(groupsP, 1, 1);
-	TSOuter(timestampSteps);
+	TS(timestampSteps);
 	vku::barrier2(cmd,
 		vk::PipelineStageFlagBits2::eComputeShader,
 		vk::AccessFlagBits2::eShaderStorageWrite,

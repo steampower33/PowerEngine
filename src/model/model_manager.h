@@ -1,0 +1,21 @@
+#pragma once
+
+class Model;
+class Context;
+class GraphicsContext;
+class GeometryGenerator;
+
+class ModelManager
+{
+public:
+	ModelManager(Context& context, GraphicsContext& graphicsContext);
+	ModelManager(const ModelManager& rhs) = delete;
+	ModelManager(ModelManager&& rhs) = delete;
+	ModelManager& operator=(const ModelManager& rhs) = delete;
+	ModelManager& operator=(ModelManager&& rhs) = delete;
+	~ModelManager();
+
+	static constexpr uint32_t kMaxObjects = 8;
+	uint32_t model_count_ = 0;
+	std::vector<std::unique_ptr<Model>> models;
+};

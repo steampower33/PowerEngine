@@ -1,6 +1,7 @@
 #pragma once
 
 struct Camera;
+class Model;
 struct Ray;
 
 class MouseInteractor

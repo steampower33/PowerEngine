@@ -1,5 +1,6 @@
 #pragma once
 
+class Context;
 struct Camera;
 
 class Swapchain
@@ -7,10 +8,7 @@ class Swapchain
 public:
 	Swapchain(
 		GLFWwindow* glfwWindow,
-		vk::raii::Device& device,
-		vk::raii::PhysicalDevice& physicalDevice,
-		vk::SampleCountFlagBits msaaSamples,
-		vk::raii::SurfaceKHR& surface
+		Context& context
 	);
 	Swapchain(const Swapchain& rhs) = delete;
 	Swapchain(Swapchain&& rhs) = delete;

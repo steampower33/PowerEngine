@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../vertex.h"
+#include "vertex.h"
 
 struct MeshData
 {

@@ -1,54 +1,42 @@
 #pragma once
 
-class Swapchain;
-struct Vertex;
-struct Camera;
-class Model;
-class Texture2D;
-class MouseInteractor;
-class CpuSim;
-class GpuSim;
-struct MeshData;
-class GeometryGenerator;
-
 #include "vulkan_utils.h"
 
-class Context
+class Context;
+class Swapchain;
+class CpuSim;
+class GpuSim;
+class Camera;
+class Texture2D;
+class TextureManager;
+class Model;
+class ModelManager;
+class GUI;
+
+class GraphicsContext
 {
 public:
-	Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height);
-	Context(const Context& rhs) = delete;
-	Context(Context&& rhs) = delete;
-	Context& operator=(const Context& rhs) = delete;
-	Context& operator=(Context&& rhs) = delete;
-	~Context();
+	GraphicsContext(GLFWwindow* glfwWindow, Context& context, Swapchain& swapchain, TextureManager& textureManager, ModelManager& modelManager);
+	GraphicsContext(const GraphicsContext& rhs) = delete;
+	GraphicsContext(GraphicsContext&& rhs) = delete;
+	GraphicsContext& operator=(const GraphicsContext& rhs) = delete;
+	GraphicsContext& operator=(GraphicsContext&& rhs) = delete;
+	~GraphicsContext();
 
-	void Update(Camera& camera, MouseInteractor& mouse_interactor, float dt);
-	void Draw(bool& printTimestamp);
-	void WaitIdle();
+	Context& context_;
+	Swapchain& swapchain_;
+	TextureManager& texture_manager_;
+	ModelManager& model_manager_;
 
-	uint32_t timestampSteps = 0;
+	void Update(Camera& camera);
+	void Draw(std::unique_ptr<GUI>& gui);
 
-	GLFWwindow* glfw_window_;
-
-	vk::raii::Instance               instance_{ nullptr };
-	vk::raii::DebugUtilsMessengerEXT debug_messenger_{ nullptr };
-	vk::raii::SurfaceKHR             surface_{ nullptr };
-	vk::raii::PhysicalDevice         physical_device_{ nullptr };
 	vk::SampleCountFlagBits			 msaa_samples_ = vk::SampleCountFlagBits::e1;
-	bool use_float_atomics_{ false };
-	vk::raii::Device                 device_{ nullptr };
-
-	uint32_t                         queue_index_ = ~0;
-	vk::raii::Queue                  queue_{ nullptr };
-
-	vk::raii::CommandPool			 command_pool_{ nullptr };
 
 	vk::raii::DescriptorPool		 descriptor_pool_{ nullptr };
 
-	std::unique_ptr<Swapchain>       swapchain_{ nullptr };
-
 	vk::raii::QueryPool				 timestamp_pool_{ nullptr };
+	uint32_t timestampSteps = 0;
 
 	vk::raii::Semaphore semaphore_{ nullptr };
 	uint64_t timeline_value_{ 0 };
@@ -56,15 +44,10 @@ public:
 	uint32_t current_frame_{ 0 };
 	uint32_t read_set_{ 0 };
 
-	bool framebuffer_resized_{ false };
-
-	std::vector<const char*> required_device_extension_ = {
-		vk::KHRSwapchainExtensionName,
-		vk::KHRSpirv14ExtensionName,
-		vk::KHRSynchronization2ExtensionName,
-		vk::KHRCreateRenderpass2ExtensionName,
-		vk::EXTShaderAtomicFloatExtensionName
-	};
+	std::array<std::string, 9> labels_ = { "Intergrate", "Clear Lambdas", "SolveStretch", "SolveDiagonal", "SolveBend", "ApplyDeltas", "CollideSdf", "Update", "Total" };
+	std::unordered_map<std::string, double> label_time_;
+	std::unordered_map<std::string, double> label_avg_time_;
+	uint32_t time_count_ = 0;
 
 	enum CpuOrGpu {
 		CPU,
@@ -78,9 +61,9 @@ public:
 	std::unique_ptr<GpuSim> gpu_sim_;
 
 	// |===== Particle Info =====|
-	const uint32_t Nx_ = 32;
-	const uint32_t Ny_ = 32;
-	const float spacing_ = 0.2;
+	const uint32_t Nx_ = 64;
+	const uint32_t Ny_ = 64;
+	const float spacing_ = 0.1;
 
 	uint32_t particles_size_ = Nx_ * Ny_;
 	uint32_t indices_size_ = 0;
@@ -138,21 +121,13 @@ public:
 
 	glm::vec3 background_color = glm::vec3(glm::pow(214.0f / 255.0f, 2.2f), glm::pow(225.0f / 255.0f, 2.2f), glm::pow(252.0f / 255.0f, 2.2f));
 
-	// |===== Model & Texture =====|
-	static constexpr uint32_t kMaxObjects = 8;
-	uint32_t model_count_ = 0;
-	std::vector<std::unique_ptr<Model>> models;
-	std::unique_ptr<Texture2D> texture_{ nullptr };
-
 	// |===== Depth Image =====|
 	vk::raii::Image depth_image_ = nullptr;
 	vk::raii::DeviceMemory depth_image_memory_ = nullptr;
 	vk::raii::ImageView depth_image_view_ = nullptr;
 
-
 private:
-
-	void UpdateMouseInteractor(Camera& camera, MouseInteractor& mouse_interactor);
+	void RecreateSwapchain();
 	void UpdatePushContants();
 	void UpdateGraphicsUBO(Camera& camera);
 
@@ -180,15 +155,8 @@ private:
 	);
 
 private:
-	void CreateInstance();
-	std::vector<const char*> GetRequiredExtensions();
-	void SetupDebugMessenger();
-	static VKAPI_ATTR vk::Bool32 VKAPI_CALL DebugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type, const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void*);
-	void CreateSurface();
-	void PickPhysicalDevice();
 	vk::SampleCountFlagBits GetMaxUsableSampleCount();
-	void CreateLogicalDevice();
-	void CreateCommandPool();
+
 	void CreateCommandBuffers();
 	void CreateQueryPool();
 
@@ -202,4 +170,5 @@ private:
 	void CreateSyncObjects();
 
 	void CreateDepthResources();
+
 };

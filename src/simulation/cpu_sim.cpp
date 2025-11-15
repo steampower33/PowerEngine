@@ -1,17 +1,18 @@
-#include "texture_2d.h"
+#include "context.h"
 #include "swapchain.h"
+#include "model_manager.h"
+#include "texture_2d.h"
+#include "texture_manager.h"
 #include "vulkan_utils.h"
 
 #include "cpu_sim.h"
 
 CpuSim::CpuSim(
-	vk::raii::PhysicalDevice& physicalDevice, 
-	vk::raii::Device& device, 
-	vk::raii::Queue& queue,
-	vk::raii::CommandPool& commandPool,
-	std::unique_ptr<Swapchain>& swapchain,
-	uint32_t Nx, uint32_t Ny, float spacing, std::unique_ptr<Texture2D>& texture,
-	vk::raii::DescriptorSetLayout& globalSetLayout)
+	Context& context,
+	Swapchain& swapchain,
+	TextureManager& textureManager,
+	vk::raii::DescriptorSetLayout& globalSetLayout,
+	uint32_t Nx, uint32_t Ny, float spacing)
 {
 	Nx_ = Nx;
 	Ny_ = Ny;
@@ -19,7 +20,7 @@ CpuSim::CpuSim(
 	spacing_ = spacing;
 
 	{
-		CreateClothData_CPU(physicalDevice, device, queue, commandPool);
+		CreateClothData_CPU(context.physical_device_, context.device_, context.queue_, context.command_pool_);
 	}
 
 	// Descriptor set layout
@@ -33,7 +34,7 @@ CpuSim::CpuSim(
 		counts_.layout += 1 * MAX_FRAMES_IN_FLIGHT;
 
 		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
-		sim_cpu_descriptor_set_layout_ = vk::raii::DescriptorSetLayout(device, layoutInfo);
+		sim_cpu_descriptor_set_layout_ = vk::raii::DescriptorSetLayout(context.device_, layoutInfo);
 
 	}
 
@@ -61,7 +62,7 @@ CpuSim::CpuSim(
 			.pPoolSizes = poolSizes.data()
 		};
 
-		descriptor_pool_ = vk::raii::DescriptorPool(device, poolInfo);
+		descriptor_pool_ = vk::raii::DescriptorPool(context.device_, poolInfo);
 	}
 
 	// Descriptor Set
@@ -74,14 +75,14 @@ CpuSim::CpuSim(
 		};
 
 		sim_cpu_descriptor_set_.clear();
-		sim_cpu_descriptor_set_ = vk::raii::DescriptorSets{ device, allocInfo };
+		sim_cpu_descriptor_set_ = vk::raii::DescriptorSets{ context.device_, allocInfo };
 
 		for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 		{
 			vk::DescriptorBufferInfo positions(pos_ssbo_[i], 0, VK_WHOLE_SIZE);
 			vk::DescriptorImageInfo imageInfo{
-				.sampler = *texture->texture_sampler_,
-				.imageView = *texture->texture_image_view_,
+				.sampler = *textureManager.texture_->texture_sampler_,
+				.imageView = *textureManager.texture_->texture_image_view_,
 				.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
 			};
 			std::array descriptorWrites{
@@ -103,7 +104,7 @@ CpuSim::CpuSim(
 				}
 			};
 
-			device.updateDescriptorSets(descriptorWrites, {});
+			context.device_.updateDescriptorSets(descriptorWrites, {});
 		}
 	}
 
@@ -155,14 +156,14 @@ CpuSim::CpuSim(
 			};
 			vk::PipelineDynamicStateCreateInfo dynamicState{ .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()), .pDynamicStates = dynamicStates.data() };
 
-			vk::Format depthFormat = vku::FindDepthFormat(physicalDevice);
+			vk::Format depthFormat = vku::FindDepthFormat(context.physical_device_);
 
 			// Shader
 			auto vertCode = vku::ReadFile("shaders/spv/cloth.vert.spv");
 			auto fragCode = vku::ReadFile("shaders/spv/cloth.frag.spv");
 
-			vk::raii::ShaderModule vertModule = vku::CreateShaderModule(device, vertCode);
-			vk::raii::ShaderModule fragModule = vku::CreateShaderModule(device, fragCode);
+			vk::raii::ShaderModule vertModule = vku::CreateShaderModule(context.device_, vertCode);
+			vk::raii::ShaderModule fragModule = vku::CreateShaderModule(context.device_, fragCode);
 
 			vk::PipelineShaderStageCreateInfo vertStage{
 				.stage = vk::ShaderStageFlagBits::eVertex,
@@ -199,7 +200,7 @@ CpuSim::CpuSim(
 				.pushConstantRangeCount = 1,
 				.pPushConstantRanges = &pcRange
 			};
-			sim_cpu_pipeline_layout_ = vk::raii::PipelineLayout(device, pipelineLayoutInfo);
+			sim_cpu_pipeline_layout_ = vk::raii::PipelineLayout(context.device_, pipelineLayoutInfo);
 
 			rasterizer.cullMode = vk::CullModeFlagBits::eNone;
 
@@ -218,9 +219,9 @@ CpuSim::CpuSim(
 				.pDynamicState = &dynamicState,
 				.layout = sim_cpu_pipeline_layout_,
 				.renderPass = nullptr },
-			  {.colorAttachmentCount = 1, .pColorAttachmentFormats = &swapchain->swapchain_surface_format_.format, .depthAttachmentFormat = depthFormat }
+			  {.colorAttachmentCount = 1, .pColorAttachmentFormats = &swapchain.swapchain_surface_format_.format, .depthAttachmentFormat = depthFormat }
 			};
-			sim_cpu_pipeline_ = vk::raii::Pipeline(device, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+			sim_cpu_pipeline_ = vk::raii::Pipeline(context.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 		}
 	}
 }
@@ -344,141 +345,6 @@ void CpuSim::CreateClothData_CPU(
 			edges_.push_back({ idx(x0 + 1, y), idx(x0, y + 1), spacing_ * 1.414f, 0.0f });
 		}
 	}
-
-
-	//// 트라이 배열 만들기
-	//struct Tri { uint32_t v[3]; };   // 시계/반시계 어느 쪽이든 일관만 유지
-	//std::vector<Tri> tris;
-	//tris.reserve((Nx - 1) * (Ny - 1) * 2);
-
-	//auto V = [&](int x, int y) { return uint32_t(y * Nx + x); };
-
-	//for (int y = 0; y < Ny - 1; ++y) {
-	//	for (int x = 0; x < Nx - 1; ++x) {
-	//		uint32_t v00 = V(x, y);
-	//		uint32_t v10 = V(x + 1, y);
-	//		uint32_t v01 = V(x, y + 1);
-	//		uint32_t v11 = V(x + 1, y + 1);
-
-	//		// tri A : (x,y)-(x+1,y)-(x+1,y+1)
-	//		tris.push_back({ v00, v10, v11 });
-	//		// tri B : (x,y)-(x+1,y+1)-(x,y+1)
-	//		tris.push_back({ v00, v11, v01 });
-	//	}
-	//}
-
-	//std::vector<std::array<int, 3>> neighbors(tris.size(), std::array<int, 3>{-1, -1, -1});
-	//// 삼각형 t의 e번째 엣지와 동일한 엣지를 가진 다른 삼각형 인덱스를 채움
-
-	//std::unordered_map<EdgeKey, std::pair<int, int>, KeyHash, KeyEq> owner;
-	//// key -> (t, e) 첫 소유자
-
-	//for (int t = 0; t < (int)tris.size(); ++t) {
-	//	for (int e = 0; e < 3; ++e) {
-	//		uint32_t i = tris[t].v[e];
-	//		uint32_t j = tris[t].v[(e + 1) % 3];
-	//		EdgeKey key = makeKey(i, j);
-	//		auto it = owner.find(key);
-	//		if (it == owner.end()) {
-	//			owner.emplace(key, std::make_pair(t, e));        // 첫 등장
-	//		}
-	//		else {
-	//			int t2 = it->second.first;
-	//			int e2 = it->second.second;                     // 이전 삼각형/엣지
-	//			neighbors[t][e] = t2;
-	//			neighbors[t2][e2] = t;                          // 양방향 연결
-	//		}
-	//	}
-	//}
-
-	//// Stretch Edges
-	//std::vector<Edge> stretchEdges;
-	//stretchEdges.reserve(owner.size());
-
-	//for (auto& kv : owner) {
-	//	auto [a, b] = kv.first;     // (min,max) 엣지
-	//	float rest = glm::length(positions_[a] - positions_[b]);
-	//	stretchEdges.emplace_back(Edge{ a, b, rest, 0.0f });
-	//}
-
-	//// Bending Edges
-	//std::vector<Edge> bendEdges;
-	//for (int t = 0; t < (int)tris.size(); ++t) {
-	//	for (int e = 0; e < 3; ++e) {
-	//		int n = neighbors[t][e];
-	//		if (n < 0 || t > n) continue;   // 같은 내부 엣지를 두 번 처리하지 않기 위해 t<n에서만
-
-	//		// 공유 엣지의 두 끝점 (i,j)
-	//		uint32_t i = tris[t].v[e];
-	//		uint32_t j = tris[t].v[(e + 1) % 3];
-
-	//		// t에서 공유 엣지의 "반대 꼭짓점" a
-	//		uint32_t a = tris[t].v[(e + 2) % 3];
-
-	//		// n에서의 "반대 꼭짓점" b (n에서 (i,j)에 해당하는 엣지를 찾아야 함)
-	//		int eN = -1;
-	//		for (int k = 0; k < 3; ++k) {
-	//			uint32_t ni = tris[n].v[k];
-	//			uint32_t nj = tris[n].v[(k + 1) % 3];
-	//			if ((ni == i && nj == j) || (ni == j && nj == i)) { eN = k; break; }
-	//		}
-	//		// 이웃 삼각형에서의 반대점
-	//		uint32_t b = tris[n].v[(eN + 2) % 3];
-
-	//		// (a,b)를 거리형 굽힘 페어로 추가 (정렬해도 되고 안 해도 됨. 보통 as-is)
-	//		float rest = glm::length(positions_[a] - positions_[b]);
-	//		bendEdges.emplace_back(Edge{ a, b, rest, 0.0f });
-	//	}
-	//}
-
-	//stretch_edge_size_ = stretchEdges.size();
-	//bend_edge_size_ = bendEdges.size();
-
-	//std::vector<uint32_t> colors(stretch_edge_size_, UINT32_MAX);
-
-	//// 정점→엣지 인접 리스트
-	//std::vector<std::vector<uint32_t>> incident(N);
-	//for (uint32_t e = 0; e < stretch_edge_size_; ++e) {
-	//	incident[stretchEdges[e].i].push_back(e);
-	//	incident[stretchEdges[e].j].push_back(e);
-	//}
-
-	//// 정점별 사용 색 bitset
-	//std::vector<uint64_t> usedMask(N, 0); // 64색까지 비트로 처리 (부족하면 vector<bool> 등)
-
-	//auto first_free_color = [](uint64_t mask) {
-	//	// 가장 낮은 0비트 인덱스
-	//	for (uint32_t c = 0; c < 64; ++c) if (!(mask & (1ull << c))) return c;
-	//	return 64u; // fallback (확장)
-	//	};
-
-	//for (uint32_t e = 0; e < stretch_edge_size_; ++e) {
-	//	uint32_t i = stretchEdges[e].i, j = stretchEdges[e].j;
-	//	uint64_t mask = usedMask[i] | usedMask[j];
-	//	uint32_t c = first_free_color(mask);
-	//	colors[e] = c;
-	//	usedMask[i] |= (1ull << c);
-	//	usedMask[j] |= (1ull << c);
-	//}
-
-	//const uint32_t E = (uint32_t)stretchEdges.size();
-	//const uint32_t color_size_ = 1 + *std::max_element(colors.begin(), colors.end()); // 색 개수
-
-	//color_count_.resize(color_size_, 0);
-	//for (uint32_t e = 0; e < stretch_edge_size_; ++e) color_count_[colors[e]]++;
-
-	//color_offset_.resize(color_size_ + 1, 0); // [c]는 c색 시작 인덱스, [c+1]는 끝
-	//for (uint32_t c = 0; c < color_size_; ++c) color_offset_[c + 1] = color_offset_[c] + color_count_[c];
-
-	//std::vector<Edge> edgesPart(stretch_edge_size_);
-	//std::vector<uint32_t> cur = color_offset_; // 진행 포인터
-
-	//for (uint32_t e = 0; e < stretch_edge_size_; ++e) {
-	//	uint32_t c = colors[e];
-	//	edgesPart[cur[c]++] = stretchEdges[e];
-	//}
-	//stretchEdges.swap(edgesPart); // 이제 색 0..C-1 순으로 연속 배치됨
-
 }
 
 void CpuSim::SimulateClothXPBD_CPU(

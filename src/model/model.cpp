@@ -1,14 +1,17 @@
+
+#include "context.h"
+#include "graphics_context.h"
 #include "vertex.h"
 #include "camera.h"
 
 #include "model.h"
 
-Model::Model(const std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool, uint32_t& model_count, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble)
+Model::Model(const std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, GraphicsContext& graphicsContext, uint32_t& model_count, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble)
 {
     LoadModel(modelPath, vertexIncludeInfo);
 
-    vku::CreateVertexBuffer(physicalDevice, device, queue, commandPool, mesh_data_.vertices, mesh_data_.vertex_buffer, mesh_data_.vertex_buffer_memory);
-    vku::CreateIndexBuffer(physicalDevice, device, queue, commandPool, mesh_data_.indices, mesh_data_.index_buffer, mesh_data_.index_buffer_memory);
+    vku::CreateVertexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, mesh_data_.vertices, mesh_data_.vertex_buffer, mesh_data_.vertex_buffer_memory);
+    vku::CreateIndexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, mesh_data_.indices, mesh_data_.index_buffer, mesh_data_.index_buffer_memory);
 
     model_count++;
     color_use = colorUse;
@@ -17,12 +20,12 @@ Model::Model(const std::string& modelPath, vku::VertexIncludeInfo vertexIncludeI
     ApplyTransform(initRotation, initPos);
 }
 
-Model::Model(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool, uint32_t& model_count, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble)
+Model::Model(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, GraphicsContext& graphicsContext, uint32_t& model_count, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble)
 {
     mesh_data_ = std::move(meshData);
 
-    vku::CreateVertexBuffer(physicalDevice, device, queue, commandPool, mesh_data_.vertices, mesh_data_.vertex_buffer, mesh_data_.vertex_buffer_memory);
-    vku::CreateIndexBuffer(physicalDevice, device, queue, commandPool, mesh_data_.indices, mesh_data_.index_buffer, mesh_data_.index_buffer_memory);
+    vku::CreateVertexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, mesh_data_.vertices, mesh_data_.vertex_buffer, mesh_data_.vertex_buffer_memory);
+    vku::CreateIndexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, mesh_data_.indices, mesh_data_.index_buffer, mesh_data_.index_buffer_memory);
 
     model_count++;
 

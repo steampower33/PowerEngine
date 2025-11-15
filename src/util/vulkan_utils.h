@@ -13,6 +13,7 @@ namespace vku
 	struct TestScene {
 		bool sphereCollision = false;
 		bool pinnedCorner = false;
+		bool topPinnedCorner = false;
 	};
 
 	struct VertexIncludeInfo {

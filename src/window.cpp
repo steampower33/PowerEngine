@@ -1,7 +1,7 @@
-#include "context.h"
+
 #include "camera.h"
 #include "mouse_interactor.h"
-#include "gui.h"
+#include "renderer.h"
 
 #include "window.h"
 
@@ -27,11 +27,31 @@ Window::Window()
 		std::cerr << "Failure creating glfw window " << std::endl;
 	}
 
-	ctx_ = std::make_unique<Context>(glfw_window_, init_width_, init_height_);
 	camera_ = std::make_unique<Camera>();
 	mouse_interactor_ = std::make_unique<MouseInteractor>();
-	gui_ = std::make_unique<GUI>(ctx_, glfw_window_);
+	renderer_ = std::make_unique<Renderer>(glfw_window_, init_width_, init_height_);
+}
 
+void Window::mainloop()
+{
+	double lastTime = glfwGetTime();
+
+	while (!glfwWindowShouldClose(glfw_window_)) {
+		glfwPollEvents();
+
+		double current = glfwGetTime();
+		float dt = static_cast<float>(current - lastTime);
+		lastTime = current;
+
+		ProcessKeyboard(dt);
+
+		key_timeout_ -= dt;
+
+		renderer_->Update(*camera_, *mouse_interactor_, dt);
+		renderer_->Draw();
+	}
+
+	renderer_->WaitIdle();
 }
 
 // --- static Æ®·¥ÆÞ¸°µé ---
@@ -133,29 +153,6 @@ Window::~Window()
 	glfwDestroyWindow(glfw_window_);
 
 	glfwTerminate();
-}
-
-void Window::mainloop()
-{
-	double lastTime = glfwGetTime();
-
-	while (!glfwWindowShouldClose(glfw_window_)) {
-		glfwPollEvents();
-
-		double current = glfwGetTime();
-		float dt = static_cast<float>(current - lastTime);
-		lastTime = current;
-
-		ProcessKeyboard(dt);
-
-		key_timeout_ -= dt;
-
-		gui_->UpdateImgui(ctx_->gpu_sim_, ctx_->test_scene_, ctx_);
-		ctx_->Update(*camera_, *mouse_interactor_, dt);
-		ctx_->Draw(print_timestamp_);
-	}
-
-	ctx_->WaitIdle();
 }
 
 void Window::ProcessKeyboard(float dt) {

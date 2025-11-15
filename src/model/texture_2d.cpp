@@ -1,13 +1,14 @@
 #include "context.h"
+#include "graphics_context.h"
 #include "vulkan_utils.h"
 
 #include "texture_2d.h"
 
-Texture2D::Texture2D(const std::string texturePath, vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool)
+Texture2D::Texture2D(const std::string texturePath, Context& context, GraphicsContext& graphicsContext)
 {
-    CreateTextureImage(texturePath, physicalDevice, device, queue, commandPool);
-    CreateTextureImageView(device);
-    CreateTextureSampler(physicalDevice, device);
+    CreateTextureImage(texturePath, context.physical_device_, context.device_, context.queue_, context.command_pool_);
+    CreateTextureImageView(context.device_);
+    CreateTextureSampler(context.physical_device_, context.device_);
 }
 
 void Texture2D::CreateTextureImage(const std::string& texturePath, vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool) {

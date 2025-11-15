@@ -22,18 +22,6 @@ void main(){
     vi += (sim.gravity.xyz + wind) * sim.dt;
     vec3 xpi = xi + vi * sim.dt;
 
-    const float thickness=0.001, friction=0.01;
-    float d = length(xpi - sim.sphereCenter.xyz);
-    if (d < sim.sphereRadius + thickness){
-        vec3 p = mix(xpi, xi, friction);
-        vec3 r = p - sim.sphereCenter.xyz;
-        float d = length(r);
-        xpi = sim.sphereCenter.xyz + r * ((sim.sphereRadius + thickness) / d);
-    }
-    if (xpi.y < thickness){
-        vec3 p = mix(xpi, xi, friction);
-        xpi = vec3(p.x, thickness, p.z);
-    }
     xp[i] = vec4(xpi,1.0);
     v[i] = vec4(vi,0.0);
 }

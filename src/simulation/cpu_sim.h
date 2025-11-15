@@ -1,18 +1,20 @@
+#pragma once
 
-class Texture2D;
+class Context;
 class Swapchain;
+class ModelManager;
+class Texture2D;
+class TextureManager;
 
 class CpuSim {
 
 public:
 	CpuSim(
-		vk::raii::PhysicalDevice& physicalDevice,
-		vk::raii::Device& device,
-		vk::raii::Queue& queue,
-		vk::raii::CommandPool& commandPool,
-		std::unique_ptr<Swapchain>& swapchain,
-		uint32_t Nx, uint32_t Ny, float spacing, std::unique_ptr<Texture2D>& texture,
-		vk::raii::DescriptorSetLayout& globalSetLayout);
+		Context& context,
+		Swapchain& swapchain,
+		TextureManager& textureManager,
+		vk::raii::DescriptorSetLayout& globalSetLayout,
+		uint32_t Nx, uint32_t Ny, float spacing);
 	CpuSim(const CpuSim& rhs) = delete;
 	CpuSim(CpuSim&& rhs) = delete;
 	CpuSim& operator=(const CpuSim& rhs) = delete;

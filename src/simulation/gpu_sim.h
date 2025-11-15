@@ -1,19 +1,21 @@
+#pragma once
 
-class Texture2D;
+class Context;
 class Swapchain;
+class Texture2D;
+class TextureManager;
 class Model;
+class ModelManager;
 
 class GpuSim
 {
 public:
 	GpuSim(
-		vk::raii::PhysicalDevice& physicalDevice,
-		vk::raii::Device& device,
-		vk::raii::Queue& queue,
-		vk::raii::CommandPool& commandPool,
-		std::unique_ptr<Swapchain>& swapchain,
-		uint32_t Nx, uint32_t Ny, float spacing, std::unique_ptr<Texture2D>& texture,
-		vk::raii::DescriptorSetLayout& globalSetLayout);
+		Context& context,
+		Swapchain& swapchain,
+		TextureManager& textureManager,
+		vk::raii::DescriptorSetLayout& globalSetLayout,
+		uint32_t Nx, uint32_t Ny, float spacing);
 	GpuSim(const GpuSim& rhs) = delete;
 	GpuSim(GpuSim&& rhs) = delete;
 	GpuSim& operator=(const GpuSim& rhs) = delete;
@@ -24,6 +26,8 @@ public:
 	void ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& timestampSteps, vku::TestScene& testScene);
 	void GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset);
 	void UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene);
+
+	uint32_t iter_contraint_count_ = 10;
 
 	uint32_t Nx_ = 0;
 	uint32_t Ny_ = 0;
@@ -58,11 +62,15 @@ public:
 			alignas(4)  float damping = 0.2f;
 			alignas(4)  float relaxationFactor = 0.2f;
 			alignas(4)  int   numBends;
-			alignas(4)  float pad1;
-			alignas(4)  float pad2;
+			alignas(4)  uint32_t numColliders = 1;
+			alignas(4)  float collisionMargin = 0.1f;
 			alignas(16) glm::vec4 sphereCenter;
 			alignas(16) glm::vec4 windDir = glm::vec4(0.0f, 0.0f, -1.0f, 0.0f);
 			alignas(16) glm::vec4 gravity = glm::vec4(0.0f, -9.8f, 0.0f, 0.0f);
+			alignas(4) float thickness = 0.004f;
+			alignas(4) float friction = 0.01f;
+			alignas(4) float pad1;
+			alignas(4) float pad2;
 		} sim_params;
 
 		static_assert(sizeof(SimParams) % 16 == 0, "std140 must be 16-byte aligned.");
@@ -91,11 +99,11 @@ public:
 		struct Pipelines {
 			vk::raii::Pipeline clear_lambdas{ nullptr };
 			vk::raii::Pipeline integrate{ nullptr };
-			vk::raii::Pipeline clear_deltas{ nullptr };
+			vk::raii::Pipeline solve_coloring{ nullptr };
 			vk::raii::Pipeline solve_atomic{ nullptr };
 			vk::raii::Pipeline solve_bend{ nullptr };
 			vk::raii::Pipeline apply_deltas{ nullptr };
-			vk::raii::Pipeline solve_coloring{ nullptr };
+			vk::raii::Pipeline collide_sdf{ nullptr };
 			vk::raii::Pipeline update_velocity{ nullptr };
 		} pipelines;
 
@@ -113,11 +121,13 @@ public:
 		struct Pipelines {
 			vk::raii::Pipeline cloth_solid{ nullptr };
 			vk::raii::Pipeline cloth_wireframe{ nullptr };
+			vk::raii::Pipeline cloth_point{ nullptr };
 		} pipelines;
 
 	} graphics_;
 
 	bool is_wireframe_ = false;
+	bool is_point_ = false;
 
 	std::vector<glm::vec4> positions_;
 	vk::raii::Buffer positions_ssbo_{ nullptr };
@@ -198,4 +208,14 @@ public:
 	};
 	static_assert(sizeof(Bend) == 32, "Bend must be 32 bytes");
 	uint32_t bends_size_ = 0;
+
+	struct SDFCollider {
+		int   type;       // 0: sphere, 1: plane, 2: capsule ...
+		glm::vec3  center;
+		float radius;
+		glm::vec3  normal;     // plane normal 등
+		glm::vec3  velocity;   // 간단히 전체 rigid body 속도 넣어도 됨
+		float pad;
+	};
+	std::vector<SDFCollider> sdfColliders;
 };

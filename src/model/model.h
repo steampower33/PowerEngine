@@ -1,16 +1,18 @@
 #pragma once
 
+class Context;
+class GraphicsContext;
 struct Vertex;
 struct Camera;
 
 #include "vulkan_utils.h"
-#include "./model/mesh_data.h"
+#include "mesh_data.h"
 
 class Model
 {
 public:
-	Model(const std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool, uint32_t& model_count, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble);
-	Model(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool, uint32_t& model_count, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble);
+	Model(const std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, GraphicsContext& graphicsContext, uint32_t& model_count, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble);
+	Model(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, GraphicsContext& graphicsContext, uint32_t& model_count, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble);
 	Model(const Model& rhs) = delete;
 	Model(Model&& rhs) = delete;
 	~Model() = default;
