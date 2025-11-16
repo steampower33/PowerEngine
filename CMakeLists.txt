@@ -60,14 +60,10 @@ if (MSVC)
     $<$<CONFIG:MinSizeRel>:/O1 /DNDEBUG>                 # MinSizeRel
   )
   add_custom_command(TARGET PowerEngine POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:PowerEngine>/assets/textures"
-  COMMAND ${CMAKE_COMMAND} -E copy_directory 
-  "${CMAKE_SOURCE_DIR}/assets/textures"
-  "$<TARGET_FILE_DIR:PowerEngine>/assets/textures"
-  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:PowerEngine>/assets/models"
+  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:PowerEngine>/assets/"
   COMMAND ${CMAKE_COMMAND} -E copy_directory
-  "${CMAKE_SOURCE_DIR}/assets/models"
-  "$<TARGET_FILE_DIR:PowerEngine>/assets/models"
+  "${CMAKE_SOURCE_DIR}/assets/"
+  "$<TARGET_FILE_DIR:PowerEngine>/assets/"
   COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:PowerEngine>/shaders"
   COMMAND ${CMAKE_COMMAND} -E copy_directory
   "${CMAKE_SOURCE_DIR}/shaders"

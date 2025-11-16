@@ -364,7 +364,7 @@ void GraphicsContext::UpdateGraphicsUBO(Camera& camera)
 			auto* dst = static_cast<std::byte*>(graphics_.object_ubo_mapped) + objOff;
 
 			graphics_.object_ubo_data.model = model_manager_.models[i]->world_;
-			graphics_.object_ubo_data.color_use = model_manager_.models[i]->color_use;
+			graphics_.object_ubo_data.color_use = model_manager_.models[i]->color_use_;
 
 			std::memcpy(dst, &graphics_.object_ubo_data, sizeof(Graphics::ObjectUboData));
 		}
@@ -473,8 +473,6 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 
 		for (uint32_t i = 0; i < model_manager_.model_count_; ++i) {
 			uint32_t objectOffset = baseObjectOffset + i * static_cast<uint32_t>(graphics_.object_slot_size);
-
-			std::array<uint32_t, 2> dynOffsets{ globalOffset, objectOffset };
 
 			// Object set
 			cmd.bindDescriptorSets(
@@ -697,8 +695,8 @@ void GraphicsContext::CreateDescriptorSets()
 
 		vk::DescriptorBufferInfo objectUboBufferInfo{ *graphics_.object_ubo, 0, sizeof(Graphics::ObjectUboData) };
 		vk::DescriptorImageInfo imageInfo{
-			.sampler = *texture_manager_.texture_->texture_sampler_,
-			.imageView = *texture_manager_.texture_->texture_image_view_,
+			.sampler = *texture_manager_.vulkan_title_image_->texture_sampler_,
+			.imageView = *texture_manager_.vulkan_title_image_->texture_image_view_,
 			.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
 		};
 		std::array descriptorWrites{

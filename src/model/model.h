@@ -20,7 +20,7 @@ public:
 	Model& operator=(const Model& rhs) = delete;
 	Model& operator=(Model&& rhs) = delete;
 
-	glm::vec4 color_use{ 0.0f };
+	glm::vec4 color_use_{ 0.0f };
 
 	void LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo& vertexIncludeInfo);
 

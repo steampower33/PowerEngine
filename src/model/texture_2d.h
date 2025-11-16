@@ -27,5 +27,5 @@ public:
 	void EndSingleTimeCommands(vk::raii::Queue& queue, const vk::raii::CommandBuffer& commandBuffer);
 	void CreateTextureImageView(vk::raii::Device& device);
 	void CreateTextureSampler(vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device);
-
+	
 };

@@ -81,8 +81,8 @@ CpuSim::CpuSim(
 		{
 			vk::DescriptorBufferInfo positions(pos_ssbo_[i], 0, VK_WHOLE_SIZE);
 			vk::DescriptorImageInfo imageInfo{
-				.sampler = *textureManager.texture_->texture_sampler_,
-				.imageView = *textureManager.texture_->texture_image_view_,
+				.sampler = *textureManager.vulkan_title_image_->texture_sampler_,
+				.imageView = *textureManager.vulkan_title_image_->texture_image_view_,
 				.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
 			};
 			std::array descriptorWrites{
