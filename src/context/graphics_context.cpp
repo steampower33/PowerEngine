@@ -31,7 +31,7 @@ GraphicsContext::GraphicsContext(GLFWwindow* glfwWindow, Context& context, Swapc
 
 	CreateDepthResources();
 
-	cpu_sim_ = std::make_unique<CpuSim>(context_, swapchain_, texture_manager_, graphics_.global_set_layout, Nx_, Ny_, spacing_);
+	//cpu_sim_ = std::make_unique<CpuSim>(context_, swapchain_, texture_manager_, graphics_.global_set_layout, Nx_, Ny_, spacing_);
 	gpu_sim_ = std::make_unique<GpuSim>(context_, swapchain_, texture_manager_, graphics_.global_set_layout, Nx_, Ny_, spacing_);
 }
 
@@ -365,6 +365,12 @@ void GraphicsContext::UpdateGraphicsUBO(Camera& camera)
 
 			graphics_.object_ubo_data.model = model_manager_.models[i]->world_;
 			graphics_.object_ubo_data.color_use = model_manager_.models[i]->color_use_;
+			graphics_.object_ubo_data.albedo = model_manager_.models[i]->texture_idx_.albedo;
+			graphics_.object_ubo_data.metallic = model_manager_.models[i]->texture_idx_.metallic;
+			graphics_.object_ubo_data.normal = model_manager_.models[i]->texture_idx_.normal;
+			graphics_.object_ubo_data.roughness = model_manager_.models[i]->texture_idx_.roughness;
+			graphics_.object_ubo_data.ao = model_manager_.models[i]->texture_idx_.ao;
+			graphics_.object_ubo_data.height = model_manager_.models[i]->texture_idx_.height;
 
 			std::memcpy(dst, &graphics_.object_ubo_data, sizeof(Graphics::ObjectUboData));
 		}
@@ -569,17 +575,44 @@ void GraphicsContext::CreateDescriptorSetLayout()
 		graphics_.global_set_layout = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
 	}
 
-	// Object UBO + Sampler - Graphics
+	// Object UBO + Bindless - Graphics
 	{
 		std::array layoutBindings{
-			vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, nullptr),
-			vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr)
+			vk::DescriptorSetLayoutBinding(
+				0, 
+				vk::DescriptorType::eUniformBufferDynamic, 
+				1, 
+				vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 
+				nullptr
+			),
+			vk::DescriptorSetLayoutBinding(
+				1, 
+				vk::DescriptorType::eCombinedImageSampler, 
+				texture_manager_.max_texture_size, 
+				vk::ShaderStageFlagBits::eFragment, 
+				nullptr
+			)
 		};
 		counts_.ubo_dynamic += 1;
-		counts_.sampler += 1;
+		counts_.sampler += texture_manager_.max_texture_size;
 		counts_.layout += 1;
 
-		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
+		std::array<vk::DescriptorBindingFlags, 2> bindingFlags{
+			vk::DescriptorBindingFlags{}, // binding 0: ¾øÀ½
+			vk::DescriptorBindingFlagBits::ePartiallyBound |
+			vk::DescriptorBindingFlagBits::eVariableDescriptorCount
+		};
+
+		vk::DescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{
+			.bindingCount = static_cast<uint32_t>(bindingFlags.size()),
+			.pBindingFlags = bindingFlags.data()
+		};
+
+		vk::DescriptorSetLayoutCreateInfo layoutInfo{
+			.pNext = &flagsInfo,
+			.bindingCount = static_cast<uint32_t>(layoutBindings.size()), 
+			.pBindings = layoutBindings.data() 
+		};
 		graphics_.object_set_layout = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
 	}
 
@@ -684,7 +717,16 @@ void GraphicsContext::CreateDescriptorSets()
 
 	// Object UBO + Sampler
 	{
+		// Create
+		uint32_t maxTextures = texture_manager_.max_texture_size;
+
+		vk::DescriptorSetVariableDescriptorCountAllocateInfo countInfo{
+			.descriptorSetCount = 1,
+			.pDescriptorCounts = &maxTextures
+		};
+
 		vk::DescriptorSetAllocateInfo allocInfo{
+			.pNext = &countInfo,
 			.descriptorPool = *descriptor_pool_,
 			.descriptorSetCount = 1,
 			.pSetLayouts = &*graphics_.object_set_layout
@@ -693,12 +735,17 @@ void GraphicsContext::CreateDescriptorSets()
 		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
 		graphics_.object_set = std::move(sets.front());
 
+		// Update
 		vk::DescriptorBufferInfo objectUboBufferInfo{ *graphics_.object_ubo, 0, sizeof(Graphics::ObjectUboData) };
-		vk::DescriptorImageInfo imageInfo{
-			.sampler = *texture_manager_.vulkan_title_image_->texture_sampler_,
-			.imageView = *texture_manager_.vulkan_title_image_->texture_image_view_,
-			.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
-		};
+
+		std::vector<vk::DescriptorImageInfo> imageInfos;
+		for (auto& tex : texture_manager_.textures_) {
+			imageInfos.push_back(vk::DescriptorImageInfo{
+				.sampler = *tex->texture_sampler_,
+				.imageView = *tex->texture_image_view_,
+				.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
+				});
+		}
 		std::array descriptorWrites{
 			vk::WriteDescriptorSet{
 				.dstSet = *graphics_.object_set,
@@ -712,9 +759,9 @@ void GraphicsContext::CreateDescriptorSets()
 				.dstSet = *graphics_.object_set,
 				.dstBinding = 1,
 				.dstArrayElement = 0,
-				.descriptorCount = 1,
+				.descriptorCount = static_cast<uint32_t>(imageInfos.size()),
 				.descriptorType = vk::DescriptorType::eCombinedImageSampler,
-				.pImageInfo = &imageInfo
+				.pImageInfo = imageInfos.data(),
 			}
 		};
 		context_.device_.updateDescriptorSets(descriptorWrites, {});

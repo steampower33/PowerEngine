@@ -6,13 +6,16 @@ class GraphicsContext;
 class Texture2D
 {
 public:
-	Texture2D(const std::string texturePath, Context& context, GraphicsContext& graphicsContext);
+	Texture2D(std::string path, std::string filename, Context& context);
 	Texture2D(const Texture2D& rhs) = delete;
 	Texture2D(Texture2D&& rhs) = delete;
-	~Texture2D() = default;
+	~Texture2D();
 
 	Texture2D& operator=(const Texture2D& rhs) = delete;
 	Texture2D& operator=(Texture2D&& rhs) = delete;
+
+	std::string path_;
+	std::string filename_;
 
 	vk::raii::Image texture_image_ = nullptr;
 	vk::raii::DeviceMemory texture_image_memory_ = nullptr;

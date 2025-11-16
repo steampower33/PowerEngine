@@ -139,27 +139,33 @@ void Context::PickPhysicalDevice() {
 							[requiredDeviceExtension](auto const& availableDeviceExtension)
 							{ return strcmp(availableDeviceExtension.extensionName, requiredDeviceExtension) == 0; });
 					});
-
 			auto features = device.template getFeatures2<
 				vk::PhysicalDeviceFeatures2,
 				vk::PhysicalDeviceVulkan13Features,
 				vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT,
 				vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR,
-				vk::PhysicalDeviceShaderAtomicFloatFeaturesEXT>();
-			bool supportsRequiredFeatures = features.template get<vk::PhysicalDeviceFeatures2>().features.samplerAnisotropy &&
-				features.template get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering &&
-				features.template get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>().extendedDynamicState &&
-				features.template get<vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>().timelineSemaphore;
+				vk::PhysicalDeviceShaderAtomicFloatFeaturesEXT,
+				vk::PhysicalDeviceDescriptorIndexingFeaturesEXT>();
 
-			auto atomicFeats = features.template get<vk::PhysicalDeviceShaderAtomicFloatFeaturesEXT>();
-			bool bufF32Atomics = atomicFeats.shaderBufferFloat32Atomics;      // SSBO float32 원자연산
-			bool bufF32AtomicAdd = atomicFeats.shaderBufferFloat32AtomicAdd;    // SSBO float32 atomicAdd
-			bool sharedF32Atomics = atomicFeats.shaderSharedFloat32Atomics;      // shared memory float32 원자
-			bool sharedF32AtomicAdd = atomicFeats.shaderSharedFloat32AtomicAdd;    // shared memory float32 add
+			const auto& coreFeats = features.template get<vk::PhysicalDeviceFeatures2>().features;
+			const auto& v13Feats = features.template get<vk::PhysicalDeviceVulkan13Features>();
+			const auto& dynState = features.template get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>();
+			const auto& timeline = features.template get<vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>();
+			const auto& indexing = features.template get<vk::PhysicalDeviceDescriptorIndexingFeaturesEXT>();
 
-			bool supportsRequiredAtomicFeatures = bufF32Atomics && bufF32AtomicAdd && sharedF32Atomics && sharedF32AtomicAdd;
+			bool supportsRequiredFeatures =
+				coreFeats.samplerAnisotropy &&
+				v13Feats.dynamicRendering &&
+				dynState.extendedDynamicState &&
+				timeline.timelineSemaphore &&
 
-			return supportsVulkan1_3 && supportsGraphics && supportsAllRequiredExtensions && supportsRequiredFeatures && supportsRequiredAtomicFeatures;
+				// 여기부터 descriptor indexing 관련
+				indexing.runtimeDescriptorArray &&
+				indexing.shaderSampledImageArrayNonUniformIndexing &&
+				indexing.descriptorBindingPartiallyBound &&
+				indexing.descriptorBindingVariableDescriptorCount;
+
+			return supportsRequiredFeatures;
 		});
 	if (devIter != devices.end())
 	{
@@ -192,34 +198,46 @@ void Context::CreateLogicalDevice() {
 		throw std::runtime_error("Could not find a queue for graphics and present -> terminating");
 	}
 
-	// query for Vulkan 1.3 features
-	vk::StructureChain<vk::PhysicalDeviceFeatures2,
+	vk::StructureChain<
+		vk::PhysicalDeviceFeatures2,
 		vk::PhysicalDeviceVulkan13Features,
 		vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT,
 		vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR,
-		vk::PhysicalDeviceShaderAtomicFloatFeaturesEXT>
-		featureChain = {
-			{
-				.features = {
-					.sampleRateShading = vk::True,
-					.fillModeNonSolid = vk::True,
-					.samplerAnisotropy = vk::True,
-				},
+		vk::PhysicalDeviceShaderAtomicFloatFeaturesEXT,
+		vk::PhysicalDeviceDescriptorIndexingFeaturesEXT> featureChain = {
+		// 0: core features2
+		{
+			.features = {
+				.sampleRateShading = vk::True,
+				.fillModeNonSolid = vk::True,
+				.samplerAnisotropy = vk::True,
 			},
-			{
-				.synchronization2 = vk::True,
-				.dynamicRendering = vk::True
-			},
-			 {
-				.extendedDynamicState = vk::True
-			},
-			{
-				.timelineSemaphore = true
-			},
-			{
-				.shaderBufferFloat32Atomics = vk::True,
-				.shaderBufferFloat32AtomicAdd = vk::True
-			}
+		},
+		// 1: Vulkan 1.3
+		{
+			.synchronization2 = vk::True,
+			.dynamicRendering = vk::True
+		},
+		// 2: Extended dynamic state
+		{
+			.extendedDynamicState = vk::True
+		},
+		// 3: Timeline semaphore
+		{
+			.timelineSemaphore = vk::True
+		},
+		// 4: Atomic float
+		{
+			.shaderBufferFloat32Atomics = vk::True,
+			.shaderBufferFloat32AtomicAdd = vk::True
+		},
+		// 5: Descriptor indexing
+		{
+			.shaderSampledImageArrayNonUniformIndexing = vk::True,
+			.descriptorBindingPartiallyBound = vk::True,
+			.descriptorBindingVariableDescriptorCount = vk::True,
+			.runtimeDescriptorArray = vk::True,
+		}
 	};
 
 	// create a Device

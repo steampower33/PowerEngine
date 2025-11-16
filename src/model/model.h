@@ -34,6 +34,15 @@ public:
 
 	MeshData mesh_data_;
 
+	struct TextureIdx {
+		uint32_t albedo = 0;
+		uint32_t metallic = 0;
+		uint32_t normal = 0;
+		uint32_t roughness = 0;
+		uint32_t ao = 0;
+		uint32_t height = 0;
+	} texture_idx_;
+
 	void ApplyTransform(const glm::quat& rotationDelta, const glm::vec3& translationDelta);
 
 };

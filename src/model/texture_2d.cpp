@@ -4,11 +4,19 @@
 
 #include "texture_2d.h"
 
-Texture2D::Texture2D(const std::string texturePath, Context& context, GraphicsContext& graphicsContext)
+Texture2D::Texture2D(std::string path, std::string filename, Context& context)
 {
-    CreateTextureImage(texturePath, context.physical_device_, context.device_, context.queue_, context.command_pool_);
+    path_ = path;
+    filename_ = filename;
+    std::string fullPath = path_ + "/" + filename_;
+    CreateTextureImage(fullPath, context.physical_device_, context.device_, context.queue_, context.command_pool_);
     CreateTextureImageView(context.device_);
     CreateTextureSampler(context.physical_device_, context.device_);
+}
+
+Texture2D::~Texture2D()
+{
+
 }
 
 void Texture2D::CreateTextureImage(const std::string& texturePath, vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool) {

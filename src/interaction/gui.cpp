@@ -5,6 +5,7 @@
 #include "vulkan_utils.h"
 #include "gpu_sim.h"
 #include "graphics_context.h"
+#include "texture_manager.h"
 
 #include "gui.h"
 
@@ -164,71 +165,78 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 			}
 			count_ = graphicsContext.time_count_;
 		}
-		ImGui::End();
-	}
 
-	ImGui::SetNextWindowSize(ImVec2(500, 500));
-	ImGui::SetNextWindowPos(ImVec2(5, 350), ImGuiCond_Once);
-	if (ImGui::Begin("Simulation", nullptr, wf))
-	{
-		ImGui::Checkbox("Draw Wireframe", &graphicsContext.gpu_sim_->is_wireframe_);
-		ImGui::Checkbox("Draw Point", &graphicsContext.gpu_sim_->is_point_);
-
-		ImGuiIO& io = ImGui::GetIO(); (void)io;
-		ImGui::Text("Avr %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-
-		if (ImGui::BeginTable("sim_tbl", 2,
-			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+		if (ImGui::CollapsingHeader("Rendering", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			row("DevidingDt", [&] { ImGui::DragFloat("##DevidingDt", &graphicsContext.gpu_sim_->deviding_dt_, 1.0f, 1.0f, 240.0f); });
-			row("Iterations", [&] { ImGui::DragInt("##Iterations", &graphicsContext.gpu_sim_->iterations_, 1, 1, 40); });
-			row("BendCompliance", [&] { ImGui::DragFloat("##BendCompliance", &graphicsContext.gpu_sim_->bendCompliance, 0.1f, 0.0f, 1.0f); });
-			row("Damping", [&] { ImGui::SliderFloat("##Damping", &graphicsContext.gpu_sim_->compute_.sim_params.damping, 0.f, 2.f, "%.3f"); });
-			row("Relaxation Factor", [&] { ImGui::SliderFloat("##RelaxationFactor", &graphicsContext.gpu_sim_->compute_.sim_params.relaxationFactor, 0.f, 2.f, "%.3f"); });
-			row("Max Speed", [&] { ImGui::SliderFloat("##MaxSpeed", &graphicsContext.gpu_sim_->compute_.sim_params.maxSpeed, 0.f, 500.f, "%.3f"); });
-			row("CollisionMargin", [&] { ImGui::SliderFloat("##CollisionMargin", &graphicsContext.gpu_sim_->compute_.sim_params.collisionMargin, 0.0f, 1.0f, "%.3f"); });
-			row("Thickness", [&] { ImGui::DragFloat("##Thickness", &graphicsContext.gpu_sim_->compute_.sim_params.thickness, 0.001f, 0.0f, 1.0f, "%.3f"); });
-			row("Friction", [&] { ImGui::DragFloat("##Friction", &graphicsContext.gpu_sim_->compute_.sim_params.friction, 0.001f, 0.0f, 1.0f, "%.3f"); });
+			if (ImGui::BeginTable("RenderingTable", 2,
+				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+			{
+				int chooseTexIdx = graphicsContext.graphics_.object_ubo_data.chooseTexIdx;
+				row("ChooseTexIdx", [&] { ImGui::SliderInt("##ChooseTexIdx", &chooseTexIdx, 0, graphicsContext.texture_manager_.max_texture_size); });
+				graphicsContext.graphics_.object_ubo_data.chooseTexIdx = chooseTexIdx;
+				ImGui::EndTable();
+			}
 
-			bool windEnabled = (graphicsContext.gpu_sim_->compute_.sim_params.windTest != 0);
-			row("Wind", [&] {
-				if (ImGui::Checkbox("##Wind", &windEnabled)) {
-					graphicsContext.gpu_sim_->compute_.sim_params.windTest = windEnabled ? 1 : 0;
-				} });
+		}
+	
+		if (ImGui::CollapsingHeader("Simulation", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			ImGui::Checkbox("Draw Wireframe", &graphicsContext.gpu_sim_->is_wireframe_);
+			ImGui::Checkbox("Draw Point", &graphicsContext.gpu_sim_->is_point_);
 
-				row("Wind Dir", [&] {
-					ImGui::DragFloat3("##WindDir", &graphicsContext.gpu_sim_->compute_.sim_params.windDir[0], 0.1f, -1.0f, 1.0f); });
+			ImGuiIO& io = ImGui::GetIO(); (void)io;
+			ImGui::Text("Avr %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
-				row("Wind Strength", [&] {
-					ImGui::DragFloat("##WindStrength", &graphicsContext.gpu_sim_->compute_.sim_params.windStrength, 0.1f, 0.0f, 5.0f); });
+			if (ImGui::BeginTable("SimulationTable", 2,
+				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+			{
+				row("DevidingDt", [&] { ImGui::DragFloat("##DevidingDt", &graphicsContext.gpu_sim_->deviding_dt_, 1.0f, 1.0f, 240.0f); });
+				row("Iterations", [&] { ImGui::DragInt("##Iterations", &graphicsContext.gpu_sim_->iterations_, 1, 1, 40); });
+				row("BendCompliance", [&] { ImGui::DragFloat("##BendCompliance", &graphicsContext.gpu_sim_->bendCompliance, 0.1f, 0.0f, 1.0f); });
+				row("Damping", [&] { ImGui::SliderFloat("##Damping", &graphicsContext.gpu_sim_->compute_.sim_params.damping, 0.f, 2.f, "%.3f"); });
+				row("Relaxation Factor", [&] { ImGui::SliderFloat("##RelaxationFactor", &graphicsContext.gpu_sim_->compute_.sim_params.relaxationFactor, 0.f, 2.f, "%.3f"); });
+				row("Max Speed", [&] { ImGui::SliderFloat("##MaxSpeed", &graphicsContext.gpu_sim_->compute_.sim_params.maxSpeed, 0.f, 500.f, "%.3f"); });
+				row("CollisionMargin", [&] { ImGui::SliderFloat("##CollisionMargin", &graphicsContext.gpu_sim_->compute_.sim_params.collisionMargin, 0.0f, 1.0f, "%.3f"); });
+				row("Thickness", [&] { ImGui::DragFloat("##Thickness", &graphicsContext.gpu_sim_->compute_.sim_params.thickness, 0.001f, 0.0f, 1.0f, "%.3f"); });
+				row("Friction", [&] { ImGui::DragFloat("##Friction", &graphicsContext.gpu_sim_->compute_.sim_params.friction, 0.001f, 0.0f, 1.0f, "%.3f"); });
+
+				bool windEnabled = (graphicsContext.gpu_sim_->compute_.sim_params.windTest != 0);
+				row("Wind", [&] {
+					if (ImGui::Checkbox("##Wind", &windEnabled)) {
+						graphicsContext.gpu_sim_->compute_.sim_params.windTest = windEnabled ? 1 : 0;
+					} });
+
+					row("Wind Dir", [&] {
+						ImGui::DragFloat3("##WindDir", &graphicsContext.gpu_sim_->compute_.sim_params.windDir[0], 0.1f, -1.0f, 1.0f); });
+
+					row("Wind Strength", [&] {
+						ImGui::DragFloat("##WindStrength", &graphicsContext.gpu_sim_->compute_.sim_params.windStrength, 0.1f, 0.0f, 5.0f); });
+
+					ImGui::EndTable();
+			}
+		}
+
+		if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			if (ImGui::BeginTable("SceneTable", 2,
+				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+			{
+
+				row("SphereCollision", [&] {
+					ImGui::Checkbox("##SphereCollision", &graphicsContext.test_scene_.sphereCollision); });
+				row("PinnedCorner", [&] {
+					ImGui::Checkbox("##PinnedCorner", &graphicsContext.test_scene_.pinnedCorner); });
+				row("TopPinnedCorner", [&] {
+					ImGui::Checkbox("##TopPinnedCorner", &graphicsContext.test_scene_.topPinnedCorner); });
 
 				ImGui::EndTable();
+			}
 		}
 
 		ImGui::End();
 	}
 
-	ImGui::SetNextWindowSize(ImVec2(300, 0));
-	ImGui::SetNextWindowPos(ImVec2(swapchain.swapchain_extent_.width - 300.0f - 5.0f, 5), ImGuiCond_Once);
-	if (ImGui::Begin("Scene", nullptr, wf))
-	{
-		if (ImGui::BeginTable("scene_tbl", 2,
-			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
-		{
-
-			row("SphereCollision", [&] {
-				ImGui::Checkbox("##SphereCollision", &graphicsContext.test_scene_.sphereCollision); });
-			row("PinnedCorner", [&] {
-				ImGui::Checkbox("##PinnedCorner", &graphicsContext.test_scene_.pinnedCorner); });
-			row("TopPinnedCorner", [&] {
-				ImGui::Checkbox("##TopPinnedCorner", &graphicsContext.test_scene_.topPinnedCorner); });
-
-			ImGui::EndTable();
-		}
-		ImGui::End();
-	}
-
-	//ImGui::ShowDemoWindow();
+	ImGui::ShowDemoWindow();
 
 	ImGui::Render();
 }

@@ -9,6 +9,14 @@ layout(set=0, binding=0) uniform GlobalUBO {
 layout(set=1, binding=0) uniform ObjectUBO { 
     mat4 model; 
     vec4 color_use; 
+	uint albedo;
+	uint ao;
+	uint roughness;
+	uint metallic;
+	uint height;
+	uint normal;
+	uint pad0;
+	uint pad1;
 } object;
 
 layout(location = 0) in vec3 inPos;

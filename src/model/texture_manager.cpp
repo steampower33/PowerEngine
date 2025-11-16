@@ -5,53 +5,58 @@
 
 namespace fs = std::filesystem;
 
-TextureManager::TextureManager(Context& context, GraphicsContext& graphicsContext)
+TextureManager::TextureManager(Context& context)
+    : context_(context)
 {
-	vulkan_title_image_ = std::make_unique<Texture2D>("assets/vulkan_cloth_rgba.ktx", context, graphicsContext);
+    std::unique_ptr<Texture2D> texture = std::make_unique<Texture2D>("assets", "vulkan_cloth_rgba.ktx", context);
+    textures_.push_back(std::move(texture));
 
-    std::string folder = "assets/worm";
-    
-    ConvertPbrPngsInFolderToKtx(folder);
+    std::string wormPath = "assets/worm";
+    ConvertPbrPngsInFolderToKtx(wormPath);
+}
 
-    auto setTexture = [&](std::string filename, std::unique_ptr<Texture2D>& texture)
+uint32_t TextureManager::CreateTexture2D(std::string path, std::string keyword)
+{
+    auto CreateTexture = [&](std::string path, std::string filename)
         {
-            std::string texPath = folder + "/" + filename;
+            std::string texPath = path + "/" + filename;
             std::cout << "Load " << texPath << std::endl;
             fs::path p(texPath);
             p.replace_extension(".ktx");
-            texture = std::make_unique<Texture2D>(p.string(), context, graphicsContext);
+            std::unique_ptr<Texture2D> texture = std::make_unique<Texture2D>(path, filename, context_);
+            uint32_t idx = textures_.size();
+            textures_.push_back(std::move(texture));
+            return idx;
         };
 
-    for (const auto& entry : std::filesystem::directory_iterator(folder)) {
+    for (const auto& entry : std::filesystem::directory_iterator(path)) {
         if (!entry.is_regular_file()) continue;
 
-        std::string filename = entry.path().filename().string();
+        std::filesystem::path p(entry.path());
+
+        //std::cout << "전체 경로: " << p << "\n";
+        //std::cout << "파일 이름: " << p.filename() << "\n";
+        //std::cout << "확장자: " << p.extension() << "\n";
+        //std::cout << "부모 폴더: " << p.parent_path() << "\n";
+        //std::cout << "이름(확장자 제외): " << p.stem() << "\n";
+
+        std::string parentPath = p.parent_path().string();
+        std::string filename = p.filename().string();
 
         if (filename.find("ktx") == std::string::npos) continue;
 
-        if (filename.find("albedo") != std::string::npos)
-            setTexture(filename, worm_albedo_);
-        if (filename.find("ao") != std::string::npos)
-            setTexture(filename, worm_ao_);
-        if (filename.find("roughness") != std::string::npos)
-            setTexture(filename, worm_roughness_);
-        if (filename.find("metallic") != std::string::npos)
-            setTexture(filename, worm_metallic_);
-        if (filename.find("height") != std::string::npos)
-            setTexture(filename, worm_height_);
-        if (filename.find("normal") != std::string::npos)
-            setTexture(filename, worm_normal_);
-
+        if (filename.find(keyword) != std::string::npos)
+            return CreateTexture(parentPath, filename);
 
     }
-
+    
+    return 0;
 }
 
 TextureManager::~TextureManager()
 {
 
 }
-
 
 // 개별 PNG를 KTX로 변환
 void TextureManager::CreateKtxFromPng(const fs::path& pngPath, const fs::path& ktxPath)

@@ -30,10 +30,27 @@ CpuSim::CpuSim(
 			vk::DescriptorSetLayoutBinding{ 1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment },
 		};
 		counts_.sb += 1 * MAX_FRAMES_IN_FLIGHT;
-		counts_.sampler += 1 * MAX_FRAMES_IN_FLIGHT;
+		counts_.sampler += textureManager.max_texture_size;
 		counts_.layout += 1 * MAX_FRAMES_IN_FLIGHT;
 
-		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
+
+		std::array<vk::DescriptorBindingFlags, 2> bindingFlags{
+			vk::DescriptorBindingFlags{}, // binding 0: ¾øÀ½
+			vk::DescriptorBindingFlagBits::ePartiallyBound |
+			vk::DescriptorBindingFlagBits::eVariableDescriptorCount
+		};
+
+		vk::DescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{
+			.bindingCount = static_cast<uint32_t>(bindingFlags.size()),
+			.pBindingFlags = bindingFlags.data()
+		};
+
+		vk::DescriptorSetLayoutCreateInfo layoutInfo{
+			.pNext = &flagsInfo,
+			.bindingCount = static_cast<uint32_t>(layoutBindings.size()),
+			.pBindings = layoutBindings.data()
+		};
+
 		sim_cpu_descriptor_set_layout_ = vk::raii::DescriptorSetLayout(context.device_, layoutInfo);
 
 	}
@@ -80,11 +97,15 @@ CpuSim::CpuSim(
 		for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 		{
 			vk::DescriptorBufferInfo positions(pos_ssbo_[i], 0, VK_WHOLE_SIZE);
-			vk::DescriptorImageInfo imageInfo{
-				.sampler = *textureManager.vulkan_title_image_->texture_sampler_,
-				.imageView = *textureManager.vulkan_title_image_->texture_image_view_,
-				.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
-			};
+
+			std::vector<vk::DescriptorImageInfo> imageInfos;
+			for (auto& tex : textureManager.textures_) {
+				imageInfos.push_back(vk::DescriptorImageInfo{
+					.sampler = *tex->texture_sampler_,
+					.imageView = *tex->texture_image_view_,
+					.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
+					});
+			}
 			std::array descriptorWrites{
 				vk::WriteDescriptorSet{
 					.dstSet = *sim_cpu_descriptor_set_[i],
@@ -98,9 +119,9 @@ CpuSim::CpuSim(
 					.dstSet = *sim_cpu_descriptor_set_[i],
 					.dstBinding = 1,
 					.dstArrayElement = 0,
-					.descriptorCount = 1,
+					.descriptorCount = static_cast<uint32_t>(imageInfos.size()),
 					.descriptorType = vk::DescriptorType::eCombinedImageSampler,
-					.pImageInfo = &imageInfo
+					.pImageInfo = imageInfos.data(),
 				}
 			};
 

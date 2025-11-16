@@ -98,6 +98,14 @@ public:
 		struct ObjectUboData {
 			glm::mat4 model;
 			glm::vec4 color_use;
+			uint32_t albedo = 0;
+			uint32_t ao = 0;
+			uint32_t roughness = 0;
+			uint32_t metallic = 0;
+			uint32_t height = 0;
+			uint32_t normal = 0;
+			uint32_t chooseTexIdx = 0;
+			uint32_t pad1 = 0;
 		} object_ubo_data;
 		vk::raii::Buffer object_ubo{ nullptr };
 		vk::raii::DeviceMemory object_ubo_memory{ nullptr };
