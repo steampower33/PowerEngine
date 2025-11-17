@@ -13,7 +13,8 @@ GpuSim::GpuSim(
 	Swapchain& swapchain,
 	TextureManager& textureManager,
 	vk::raii::DescriptorSetLayout& globalSetLayout,
-	uint32_t Nx, uint32_t Ny, float spacing)
+	uint32_t Nx, uint32_t Ny, float spacing,
+	std::vector<vk::Format>& formats)
 {
 	// Descriptor Set Layout
 	{
@@ -672,15 +673,22 @@ GpuSim::GpuSim(
 			.depthBoundsTestEnable = vk::False,
 			.stencilTestEnable = vk::False
 		};
-		vk::PipelineColorBlendAttachmentState colorBlendAttachment;
-		colorBlendAttachment.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
-		colorBlendAttachment.blendEnable = vk::False;
+
+		std::array<vk::PipelineColorBlendAttachmentState, 3> colorBlendAttachments{};
+		for (auto& a : colorBlendAttachments) {
+			a.colorWriteMask =
+				vk::ColorComponentFlagBits::eR |
+				vk::ColorComponentFlagBits::eG |
+				vk::ColorComponentFlagBits::eB |
+				vk::ColorComponentFlagBits::eA;
+			a.blendEnable = vk::False;  // G-buffer라 blending 불필요
+		}
 
 		vk::PipelineColorBlendStateCreateInfo colorBlending{
 			.logicOpEnable = vk::False,
 			.logicOp = vk::LogicOp::eCopy,
-			.attachmentCount = 1,
-			.pAttachments = &colorBlendAttachment
+			.attachmentCount = colorBlendAttachments.size(),
+			.pAttachments = colorBlendAttachments.data()
 		};
 
 		std::vector dynamicStates = {
@@ -726,8 +734,8 @@ GpuSim::GpuSim(
 				.offset = 0,
 				.size = static_cast<uint32_t>(sizeof(ClothPC))
 			};
-			cloth_pc_.Nx = Nx_ + 1;
-			cloth_pc_.Ny = Ny_ + 1;
+			cloth_pc_.nx1 = Nx_ + 1;
+			cloth_pc_.ny1 = Ny_ + 1;
 
 			// Pipeline Layout
 			std::array<vk::DescriptorSetLayout, 2> setLayouts(*globalSetLayout, *graphics_.cloth_set_layout);
@@ -754,7 +762,7 @@ GpuSim::GpuSim(
 				.pDynamicState = &dynamicState,
 				.layout = graphics_.pipeline_layouts.cloth_solid,
 				.renderPass = nullptr },
-			  {.colorAttachmentCount = 1, .pColorAttachmentFormats = &swapchain.swapchain_surface_format_.format, .depthAttachmentFormat = depthFormat }
+			  {.colorAttachmentCount = static_cast<uint32_t>(formats.size()), .pColorAttachmentFormats = formats.data(), .depthAttachmentFormat = depthFormat}
 			};
 			graphics_.pipelines.cloth_solid = vk::raii::Pipeline(context.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 

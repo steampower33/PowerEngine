@@ -3,6 +3,7 @@
 #include "graphics_context.h"
 #include "vertex.h"
 #include "camera.h"
+#include "geometry_generator.h"
 
 #include "model.h"
 
@@ -54,11 +55,9 @@ void Model::LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo
             // 1) geometry attribute 존재 여부 확인
             bool hasUV = primitive.attributes.find("TEXCOORD_0") != primitive.attributes.end();
             bool hasNormals = primitive.attributes.find("NORMAL") != primitive.attributes.end();
-            bool hasTangents = primitive.attributes.find("TANGENT") != primitive.attributes.end();
 
             // 2) VertexIncludeInfo 까지 결합
             bool loadNormal = vertexIncludeInfo.normal && hasNormals;
-            bool loadTangent = vertexIncludeInfo.tangent && hasTangents;
 
             // 3) Accessors
             const auto& posAccessor = model.accessors[primitive.attributes.at("POSITION")];
@@ -91,13 +90,6 @@ void Model::LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo
             const tinygltf::BufferView* tangentBufferView = nullptr;
             const tinygltf::Buffer* tangentBuffer = nullptr;
 
-            if (loadTangent)
-            {
-                tangentAccessor = &model.accessors[primitive.attributes.at("TANGENT")];
-                tangentBufferView = &model.bufferViews[tangentAccessor->bufferView];
-                tangentBuffer = &model.buffers[tangentBufferView->buffer];
-            }
-
             uint32_t baseVert = mesh_data_.vertices.size();
 
             // ------------------------
@@ -105,75 +97,36 @@ void Model::LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo
             // ------------------------
             for (size_t i = 0; i < posAccessor.count; i++)
             {
-                if (loadTangent)
+                Vertex v{};
+
+                // pos
+                const float* p = reinterpret_cast<const float*>(
+                    &posBuffer.data[posBufferView.byteOffset + posAccessor.byteOffset + i * sizeof(glm::vec3)]
+                    );
+                v.pos = glm::vec3(p[0], p[1], p[2]);
+
+                // uv
+                if (hasUV)
                 {
-                    Vertex v;
-                    const float* p = reinterpret_cast<const float*>(
-                        &posBuffer.data[posBufferView.byteOffset + posAccessor.byteOffset + i * sizeof(glm::vec3)]
+                    const float* uvp = reinterpret_cast<const float*>(
+                        &uvBuffer->data[uvBufferView->byteOffset + uvAccessor->byteOffset + i * sizeof(glm::vec2)]
                         );
-                    v.pos = glm::vec3(p[0], p[1], p[2]);
+                    v.uv = glm::vec2(uvp[0], uvp[1]);
+                }
 
-                    if (hasUV)
-                    {
-                        const float* uvp = reinterpret_cast<const float*>(
-                            &uvBuffer->data[uvBufferView->byteOffset + uvAccessor->byteOffset + i * sizeof(glm::vec2)]
-                            );
-                        v.uv = glm::vec2(uvp[0], uvp[1]);
-                    }
-
+                // normal
+                if (loadNormal)
+                {
                     const float* np = reinterpret_cast<const float*>(
                         &normalBuffer->data[normalBufferView->byteOffset + normalAccessor->byteOffset + i * sizeof(glm::vec3)]
                         );
                     v.normal = glm::vec3(np[0], np[1], np[2]);
-
-                    const float* tp = reinterpret_cast<const float*>(
-                        &tangentBuffer->data[tangentBufferView->byteOffset + tangentAccessor->byteOffset + i * sizeof(glm::vec4)]
-                        );
-                    v.tangent = glm::vec4(tp[0], tp[1], tp[2], tp[3]);
-
-                    mesh_data_.vertices.push_back(v);
                 }
-                else if (loadNormal)
-                {
-                    Vertex v;
-                    const float* p = reinterpret_cast<const float*>(
-                        &posBuffer.data[posBufferView.byteOffset + posAccessor.byteOffset + i * sizeof(glm::vec3)]
-                        );
-                    v.pos = glm::vec3(p[0], p[1], p[2]);
 
-                    if (hasUV)
-                    {
-                        const float* uvp = reinterpret_cast<const float*>(
-                            &uvBuffer->data[uvBufferView->byteOffset + uvAccessor->byteOffset + i * sizeof(glm::vec2)]
-                            );
-                        v.uv = glm::vec2(uvp[0], uvp[1]);
-                    }
+                // tangent은 나중에 CalculateTangents에서 채우므로 일단 0
+                v.tangent = glm::vec4(0.0f);
 
-                    const float* np = reinterpret_cast<const float*>(
-                        &normalBuffer->data[normalBufferView->byteOffset + normalAccessor->byteOffset + i * sizeof(glm::vec3)]
-                        );
-                    v.normal = glm::vec3(np[0], np[1], np[2]);
-
-                    mesh_data_.vertices.push_back(v);
-                }
-                else
-                {
-                    Vertex v;
-                    const float* p = reinterpret_cast<const float*>(
-                        &posBuffer.data[posBufferView.byteOffset + posAccessor.byteOffset + i * sizeof(glm::vec3)]
-                        );
-                    v.pos = glm::vec3(p[0], p[1], p[2]);
-
-                    if (hasUV)
-                    {
-                        const float* uvp = reinterpret_cast<const float*>(
-                            &uvBuffer->data[uvBufferView->byteOffset + uvAccessor->byteOffset + i * sizeof(glm::vec2)]
-                            );
-                        v.uv = glm::vec2(uvp[0], uvp[1]);
-                    }
-
-                    mesh_data_.vertices.push_back(v);
-                }
+                mesh_data_.vertices.push_back(v);
             }
 
             // ------------------------
@@ -200,6 +153,11 @@ void Model::LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo
                 mesh_data_.indices.push_back(baseVert + raw);
             }
             mesh_data_.indices_count = mesh_data_.indices.size();
+
+            // 로딩이 전부 끝난 뒤, 필요하면 탄젠트 계산
+            if (vertexIncludeInfo.tangent) {
+                GeometryGenerator::CalculateTangents(mesh_data_);
+            }
         }
     }
 }

@@ -143,6 +143,37 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 	ImGui::SetNextWindowPos(ImVec2(5, 5), ImGuiCond_Once);
 	if (ImGui::Begin("Stat", nullptr, wf))
 	{
+		if (ImGui::CollapsingHeader("Rendering", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			if (ImGui::BeginTable("RenderingTable", 2,
+				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+			{
+				int chooseTexIdx = graphicsContext.ubo_data_.object.chooseTexIdx;
+				row("ChooseTexIdx", [&] { ImGui::SliderInt("##ChooseTexIdx", &chooseTexIdx, 0, graphicsContext.texture_manager_.max_texture_size); });
+				graphicsContext.ubo_data_.object.chooseTexIdx = chooseTexIdx;
+
+				ImGui::EndTable();
+			}
+		}
+
+		if (ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+
+			if (ImGui::BeginTable("LightTable", 2,
+				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+			{
+				row("Pos", [&] { ImGui::DragFloat3("##Pos", &graphicsContext.ubo_data_.light.spotPos_range[0], 0.1f); });
+				row("Range", [&] { ImGui::DragFloat("##Range", &graphicsContext.ubo_data_.light.spotPos_range[3], 0.1f); });
+				row("Dir", [&] { ImGui::DragFloat3("##Dir", &graphicsContext.ubo_data_.light.spotDir_inner[0], 0.1f); });
+				row("Color", [&] { ImGui::DragFloat3("##Color", &graphicsContext.ubo_data_.light.spotColor_outer[0], 0.1f); });
+				row("Inner", [&] { ImGui::DragFloat("##Inner", &graphicsContext.ubo_data_.light.spotDir_inner[3], 0.1f); });
+				row("Outer", [&] { ImGui::DragFloat("##Outer", &graphicsContext.ubo_data_.light.spotColor_outer[3], 0.1f); });
+
+
+				ImGui::EndTable();
+			}
+		}
+
 		is_print_timestamps = ImGui::CollapsingHeader("Solver timing", ImGuiTreeNodeFlags_DefaultOpen);
 		if (is_print_timestamps)
 		{
@@ -164,19 +195,6 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 				ImGui::EndTable();
 			}
 			count_ = graphicsContext.time_count_;
-		}
-
-		if (ImGui::CollapsingHeader("Rendering", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			if (ImGui::BeginTable("RenderingTable", 2,
-				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
-			{
-				int chooseTexIdx = graphicsContext.graphics_.object_ubo_data.chooseTexIdx;
-				row("ChooseTexIdx", [&] { ImGui::SliderInt("##ChooseTexIdx", &chooseTexIdx, 0, graphicsContext.texture_manager_.max_texture_size); });
-				graphicsContext.graphics_.object_ubo_data.chooseTexIdx = chooseTexIdx;
-				ImGui::EndTable();
-			}
-
 		}
 	
 		if (ImGui::CollapsingHeader("Simulation", ImGuiTreeNodeFlags_DefaultOpen))
@@ -236,7 +254,7 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 		ImGui::End();
 	}
 
-	ImGui::ShowDemoWindow();
+	//ImGui::ShowDemoWindow();
 
 	ImGui::Render();
 }

@@ -14,7 +14,7 @@ ModelManager::ModelManager(Context& context, GraphicsContext& graphicsContext, T
 		glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
 		glm::vec3 initPos = glm::vec3(0.0f, 1.0f, 0.0f);
 		glm::vec4 initColor = glm::vec4(244.0f / 255.0f, 114 / 255.0f, 43 / 255.0f, 0.0);
-		std::unique_ptr<Model> model = std::make_unique<Model>("assets/sphere.gltf", vku::VertexIncludeInfo{ true, false }, context, graphicsContext, model_count_, initPos, angleQuat, initColor, true);
+		std::unique_ptr<Model> model = std::make_unique<Model>("assets/sphere.gltf", vku::VertexIncludeInfo{ true, true }, context, graphicsContext, model_count_, initPos, angleQuat, initColor, true);
 		model->texture_idx_.albedo = textureManager.CreateTexture2D("assets/worm", "albedo");
 		model->texture_idx_.metallic = textureManager.CreateTexture2D("assets/worm", "metallic");
 		model->texture_idx_.normal = textureManager.CreateTexture2D("assets/worm", "normal");
@@ -30,7 +30,7 @@ ModelManager::ModelManager(Context& context, GraphicsContext& graphicsContext, T
 		glm::vec3 initPos = glm::vec3(0.0f, 0.0f, 0.0f);
 		float color = 62.0f / 255.0f;
 		glm::vec4 initColor = glm::vec4(color, color, color, 1.0);
-		std::unique_ptr<Model> model = std::make_unique<Model>(plane, vku::VertexIncludeInfo{ true, false }, context, graphicsContext, model_count_, initPos, angleQuat, initColor, false);
+		std::unique_ptr<Model> model = std::make_unique<Model>(plane, vku::VertexIncludeInfo{ true, true }, context, graphicsContext, model_count_, initPos, angleQuat, initColor, false);
 		models.emplace_back(std::move(model));
 	}
 }

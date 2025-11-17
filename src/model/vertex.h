@@ -12,7 +12,7 @@ struct Vertex {
     glm::vec3 pos = {};
     glm::vec2 uv = {};
     glm::vec3 normal = {};
-    glm::vec4 tangent = glm::vec4(0, 0, 0, 1);
+    glm::vec4 tangent = glm::vec4(0.0, 0.0, 0.0, 1.0);
 
     // 1) 바인딩 + 어트리뷰트 자동 생성기
     static VertexInputDescription GetInputDescription(const vku::VertexIncludeInfo& include)

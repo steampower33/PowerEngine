@@ -15,7 +15,8 @@ public:
 		Swapchain& swapchain,
 		TextureManager& textureManager,
 		vk::raii::DescriptorSetLayout& globalSetLayout,
-		uint32_t Nx, uint32_t Ny, float spacing);
+		uint32_t Nx, uint32_t Ny, float spacing,
+		std::vector<vk::Format>& formats);
 	GpuSim(const GpuSim& rhs) = delete;
 	GpuSim(GpuSim&& rhs) = delete;
 	GpuSim& operator=(const GpuSim& rhs) = delete;
@@ -42,8 +43,8 @@ public:
 
 	// |===== Push Constant =====|
 	struct ClothPC {
-		uint32_t Nx;
-		uint32_t Ny;
+		uint32_t nx1;
+		uint32_t ny1;
 	} cloth_pc_;
 	static_assert(sizeof(ClothPC) % 4 == 0, "push constant must be multiple of 4 bytes");
 
