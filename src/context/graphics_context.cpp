@@ -205,12 +205,17 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 	}
 	else if (cpu_or_gpu_ == CpuOrGpu::GPU)
 	{
-		gpu_sim_->GraphicsRecord(current_frame_, cmd, sets_.global, globalOffset);
+		gpu_sim_->GraphicsRecord(current_frame_, cmd, sets_.global, globalOffset, polygon_mode_);
 	}
 
 	// Model
 	{
-		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.model);
+		if (polygon_mode_ == vku::PolygonMode::SOLID)
+			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.model_solid);
+		else if (polygon_mode_ == vku::PolygonMode::WIREFRAME)
+			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.model_wireframe);
+		else if (polygon_mode_ == vku::PolygonMode::POINT)
+			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.model_point);
 
 		// Global Set
 		cmd.bindDescriptorSets(
@@ -613,7 +618,7 @@ void GraphicsContext::CreateDescriptorSetLayout()
 				1, 
 				vk::DescriptorType::eCombinedImageSampler, 
 				texture_manager_.max_texture_size, 
-				vk::ShaderStageFlagBits::eFragment, 
+				vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
 				nullptr
 			)
 		};
@@ -955,15 +960,21 @@ void GraphicsContext::CreateGraphicsPipelines()
 		.viewportCount = 1,
 		.scissorCount = 1
 	};
-	vk::PipelineRasterizationStateCreateInfo rasterizer{
+	vk::PipelineRasterizationStateCreateInfo rasterizerSolid{
 		.depthClampEnable = vk::False,
 		.rasterizerDiscardEnable = vk::False,
 		.polygonMode = vk::PolygonMode::eFill,
 		.cullMode = vk::CullModeFlagBits::eBack,
 		.frontFace = vk::FrontFace::eCounterClockwise,
-		.depthBiasEnable = vk::False
+		.depthBiasEnable = vk::False,
+		.lineWidth = 1.0f
 	};
-	rasterizer.lineWidth = 1.0f;
+	vk::PipelineRasterizationStateCreateInfo rasterizerWireframe = rasterizerSolid;
+	rasterizerWireframe.polygonMode = vk::PolygonMode::eLine;
+	rasterizerWireframe.cullMode = vk::CullModeFlagBits::eNone;
+	vk::PipelineRasterizationStateCreateInfo rasterizerPoint = rasterizerWireframe;
+	rasterizerPoint.polygonMode = vk::PolygonMode::ePoint;
+
 	vk::PipelineMultisampleStateCreateInfo multisampling{
 		.rasterizationSamples = msaa_samples_,
 		.sampleShadingEnable = vk::False
@@ -1037,22 +1048,83 @@ void GraphicsContext::CreateGraphicsPipelines()
 		pipeline_layouts_.model = vk::raii::PipelineLayout(context_.device_, pipelineLayoutInfo);
 
 		// Pipeline
-		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
-		  {.stageCount = 2,
-			.pStages = stages.data(),
-			.pVertexInputState = &vertexInputInfo,
-			.pInputAssemblyState = &inputAssembly,
-			.pViewportState = &viewportState,
-			.pRasterizationState = &rasterizer,
-			.pMultisampleState = &multisampling,
-			.pDepthStencilState = &depthStencil,
-			.pColorBlendState = &colorBlending,
-			.pDynamicState = &dynamicState,
-			.layout = pipeline_layouts_.model,
-			.renderPass = nullptr },
-		  {.colorAttachmentCount = static_cast<uint32_t>(geometry_buffers_.formats.size()), .pColorAttachmentFormats = geometry_buffers_.formats.data(), .depthAttachmentFormat = depthFormat}
-		};
-		pipelines_.model = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+		{
+			vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = 
+			{
+				{
+					.stageCount = 2,
+					.pStages = stages.data(),
+					.pVertexInputState = &vertexInputInfo,
+					.pInputAssemblyState = &inputAssembly,
+					.pViewportState = &viewportState,
+					.pRasterizationState = &rasterizerSolid,
+					.pMultisampleState = &multisampling,
+					.pDepthStencilState = &depthStencil,
+					.pColorBlendState = &colorBlending,
+					.pDynamicState = &dynamicState,
+					.layout = pipeline_layouts_.model,
+					.renderPass = nullptr 
+				},
+				{
+				  .colorAttachmentCount = static_cast<uint32_t>(geometry_buffers_.formats.size()), 
+				  .pColorAttachmentFormats = geometry_buffers_.formats.data(), 
+				  .depthAttachmentFormat = depthFormat
+				}
+			};
+			pipelines_.model_solid = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+		}
+
+		{
+			vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain =
+			{
+				{
+					.stageCount = 2,
+					.pStages = stages.data(),
+					.pVertexInputState = &vertexInputInfo,
+					.pInputAssemblyState = &inputAssembly,
+					.pViewportState = &viewportState,
+					.pRasterizationState = &rasterizerWireframe,
+					.pMultisampleState = &multisampling,
+					.pDepthStencilState = &depthStencil,
+					.pColorBlendState = &colorBlending,
+					.pDynamicState = &dynamicState,
+					.layout = pipeline_layouts_.model,
+					.renderPass = nullptr
+				},
+				{
+				  .colorAttachmentCount = static_cast<uint32_t>(geometry_buffers_.formats.size()),
+				  .pColorAttachmentFormats = geometry_buffers_.formats.data(),
+				  .depthAttachmentFormat = depthFormat
+				}
+			};
+			pipelines_.model_wireframe = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+		}
+
+		{
+			vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain =
+			{
+				{
+					.stageCount = 2,
+					.pStages = stages.data(),
+					.pVertexInputState = &vertexInputInfo,
+					.pInputAssemblyState = &inputAssembly,
+					.pViewportState = &viewportState,
+					.pRasterizationState = &rasterizerPoint,
+					.pMultisampleState = &multisampling,
+					.pDepthStencilState = &depthStencil,
+					.pColorBlendState = &colorBlending,
+					.pDynamicState = &dynamicState,
+					.layout = pipeline_layouts_.model,
+					.renderPass = nullptr
+				},
+				{
+				  .colorAttachmentCount = static_cast<uint32_t>(geometry_buffers_.formats.size()),
+				  .pColorAttachmentFormats = geometry_buffers_.formats.data(),
+				  .depthAttachmentFormat = depthFormat
+				}
+			};
+			pipelines_.model_point = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+		}
 	}
 
 	// Lighting pipeline
@@ -1108,14 +1180,14 @@ void GraphicsContext::CreateGraphicsPipelines()
 
 		vk::Format swapchainFormat = swapchain_.swapchain_surface_format_.format;
 
-		rasterizer.cullMode = vk::CullModeFlagBits::eNone;
+		rasterizerSolid.cullMode = vk::CullModeFlagBits::eNone;
 		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
 			{.stageCount = 2,
 			  .pStages = stages.data(),
 			  .pVertexInputState = &vertexInputInfo,
 			  .pInputAssemblyState = &inputAssembly,
 			  .pViewportState = &viewportState,
-			  .pRasterizationState = &rasterizer,
+			  .pRasterizationState = &rasterizerSolid,
 			  .pMultisampleState = &multisampling,
 			  .pDepthStencilState = nullptr,          // 라이트 패스에서 depth 안 쓰면 nullptr
 			  .pColorBlendState = &lightingColorBlending,

@@ -199,8 +199,10 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 	
 		if (ImGui::CollapsingHeader("Simulation", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			ImGui::Checkbox("Draw Wireframe", &graphicsContext.gpu_sim_->is_wireframe_);
-			ImGui::Checkbox("Draw Point", &graphicsContext.gpu_sim_->is_point_);
+			const char* items[] = { "Solid", "Wireframe", "Point" };
+			int item_current = graphicsContext.polygon_mode_;
+			ImGui::ListBox("PolygonMode", &item_current, items, IM_ARRAYSIZE(items), 3);
+			graphicsContext.polygon_mode_ = vku::PolygonMode(item_current);
 
 			ImGuiIO& io = ImGui::GetIO(); (void)io;
 			ImGui::Text("Avr %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);

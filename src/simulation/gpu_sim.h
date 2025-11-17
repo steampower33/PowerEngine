@@ -25,7 +25,7 @@ public:
 
 	void UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& model);
 	void ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& timestampSteps, vku::TestScene& testScene);
-	void GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset);
+	void GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset, vku::PolygonMode mode);
 	void UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene);
 
 	uint32_t iter_contraint_count_ = 10;
@@ -117,7 +117,7 @@ public:
 		vk::raii::DescriptorSet cloth_set{ nullptr };
 
 		struct PipelineLayouts {
-			vk::raii::PipelineLayout cloth_solid{ nullptr };
+			vk::raii::PipelineLayout cloth{ nullptr };
 		} pipeline_layouts;
 
 		struct Pipelines {
@@ -127,9 +127,6 @@ public:
 		} pipelines;
 
 	} graphics_;
-
-	bool is_wireframe_ = false;
-	bool is_point_ = false;
 
 	std::vector<glm::vec4> positions_;
 	vk::raii::Buffer positions_ssbo_{ nullptr };

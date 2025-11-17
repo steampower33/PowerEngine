@@ -124,7 +124,7 @@ void Model::LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo
                 }
 
                 // tangent은 나중에 CalculateTangents에서 채우므로 일단 0
-                v.tangent = glm::vec4(0.0f);
+                v.tangent = glm::vec3(0.0f);
 
                 mesh_data_.vertices.push_back(v);
             }

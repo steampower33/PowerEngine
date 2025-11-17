@@ -18,7 +18,7 @@ layout(set=1, binding=0) uniform ObjectUBO {
 	uint height;
 	uint normal;
 	uint chooseTexIdx;
-	uint pad1;
+	uint heightScale;
 } object;
 
 layout(set=1, binding=1) uniform sampler2D tex[];
@@ -26,7 +26,7 @@ layout(set=1, binding=1) uniform sampler2D tex[];
 layout(location = 0) in vec2 vUV;
 layout(location = 1) in vec3 vNormalWorld;   // 월드 공간 노멀
 layout(location = 2) in vec3 vPosWorld;      // 월드 위치
-layout(location = 3) in vec4 vTangentWorld;
+layout(location = 3) in vec3 vTangentWorld;
 
 layout(location = 0) out vec4 outAlbedoMetal;
 layout(location = 1) out vec4 outNormalRough;
@@ -52,7 +52,7 @@ void main() {
         vec3 normal = texture(tex[nonuniformEXT(normalIndex)], vUV).xyz * 2.0 - 1.0;
 
         vec3 N = vNormalWorld;
-        vec3 T = normalize(vTangentWorld.xyz - dot(vTangentWorld.xyz, N) * N);
+        vec3 T = normalize(vTangentWorld - dot(vTangentWorld, N) * N);
         vec3 B = cross(N, T);
         
         mat3x3 TBN = mat3x3(T, B, N);

@@ -21,6 +21,12 @@ namespace vku
 		bool tangent = false;
 	};
 
+	enum PolygonMode {
+		SOLID,
+		WIREFRAME,
+		POINT
+	};
+
 	inline vk::SampleCountFlagBits GetMaxUsableSampleCount(vk::PhysicalDeviceProperties physicalDeviceProperties) {
 		vk::SampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts & physicalDeviceProperties.limits.framebufferDepthSampleCounts;
 		if (counts & vk::SampleCountFlagBits::e64) { return vk::SampleCountFlagBits::e64; }

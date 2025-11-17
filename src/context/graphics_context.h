@@ -121,7 +121,7 @@ public:
 			uint32_t height = 0;
 			uint32_t normal = 0;
 			uint32_t chooseTexIdx = 0;
-			uint32_t pad1 = 0;
+			float heightScale = 1.0f;
 		} object;
 
 		struct Light {
@@ -157,9 +157,13 @@ public:
 	} pipeline_layouts_;
 
 	struct Pipelines {
-		vk::raii::Pipeline model{ nullptr };
+		vk::raii::Pipeline model_solid{ nullptr };
+		vk::raii::Pipeline model_wireframe{ nullptr };
+		vk::raii::Pipeline model_point{ nullptr };
 		vk::raii::Pipeline lighting{ nullptr };
 	} pipelines_;
+
+	vku::PolygonMode polygon_mode_ = vku::PolygonMode::SOLID;
 
 	struct GeometryBuffers {
 		std::vector<vk::Format> formats;

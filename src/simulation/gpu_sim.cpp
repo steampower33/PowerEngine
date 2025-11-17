@@ -745,7 +745,7 @@ GpuSim::GpuSim(
 				.pushConstantRangeCount = 1,
 				.pPushConstantRanges = &pcRange
 			};
-			graphics_.pipeline_layouts.cloth_solid = vk::raii::PipelineLayout(context.device_, pipelineLayoutInfo);
+			graphics_.pipeline_layouts.cloth = vk::raii::PipelineLayout(context.device_, pipelineLayoutInfo);
 
 			// Pipeline
 			vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
@@ -760,17 +760,17 @@ GpuSim::GpuSim(
 				.pDepthStencilState = &depthStencil,
 				.pColorBlendState = &colorBlending,
 				.pDynamicState = &dynamicState,
-				.layout = graphics_.pipeline_layouts.cloth_solid,
+				.layout = graphics_.pipeline_layouts.cloth,
 				.renderPass = nullptr },
 			  {.colorAttachmentCount = static_cast<uint32_t>(formats.size()), .pColorAttachmentFormats = formats.data(), .depthAttachmentFormat = depthFormat}
 			};
 			graphics_.pipelines.cloth_solid = vk::raii::Pipeline(context.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 
-			rasterizer.polygonMode = vk::PolygonMode::eLine,
+			rasterizer.polygonMode = vk::PolygonMode::eLine;
 
 			graphics_.pipelines.cloth_wireframe = vk::raii::Pipeline(context.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 
-			rasterizer.polygonMode = vk::PolygonMode::ePoint,
+			rasterizer.polygonMode = vk::PolygonMode::ePoint;
 			graphics_.pipelines.cloth_point = vk::raii::Pipeline(context.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 		}
 	}
@@ -792,13 +792,13 @@ void GpuSim::UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& mod
 	std::memcpy(dst, &compute_.sim_params, sizeof(Compute::SimParams));
 }
 
-void GpuSim::GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset)
+void GpuSim::GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset, vku::PolygonMode mode)
 {
 	// Cloth
 	{
-		if (is_wireframe_)
+		if (mode == vku::PolygonMode::WIREFRAME)
 			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphics_.pipelines.cloth_wireframe);
-		else if (is_point_)
+		else if (mode == vku::PolygonMode::POINT)
 			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphics_.pipelines.cloth_point);
 		else
 			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphics_.pipelines.cloth_solid);
@@ -806,21 +806,21 @@ void GpuSim::GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer
 		// Global Set
 		cmd.bindDescriptorSets(
 			vk::PipelineBindPoint::eGraphics,
-			graphics_.pipeline_layouts.cloth_solid,
+			graphics_.pipeline_layouts.cloth,
 			0,
 			{ *globalSet },
 			{ globalOffset }
 		);
 		cmd.bindDescriptorSets(
 			vk::PipelineBindPoint::eGraphics,
-			graphics_.pipeline_layouts.cloth_solid,
+			graphics_.pipeline_layouts.cloth,
 			1,
 			{ *graphics_.cloth_set },
 			{ }
 		);
 
 		cmd.pushConstants<ClothPC>(
-			*graphics_.pipeline_layouts.cloth_solid,
+			*graphics_.pipeline_layouts.cloth,
 			vk::ShaderStageFlagBits::eVertex,
 			/*offset=*/0,
 			cloth_pc_

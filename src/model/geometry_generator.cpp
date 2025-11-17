@@ -305,6 +305,6 @@ void GeometryGenerator::CalculateTangents(MeshData& meshData)
         if (glm::length2(t) > 0.0f)
             t = glm::normalize(t);
 
-        meshData.vertices[i].tangent = glm::vec4(t, 1.0f);
+        meshData.vertices[i].tangent = t;
     }
 }
