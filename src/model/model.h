@@ -20,7 +20,7 @@ public:
 	Model& operator=(const Model& rhs) = delete;
 	Model& operator=(Model&& rhs) = delete;
 
-	glm::vec4 color_use_{ 0.0f };
+	glm::vec4 albedo_use_{ 0.0f };
 
 	void LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo& vertexIncludeInfo);
 
@@ -42,6 +42,12 @@ public:
 		uint32_t ao = 0;
 		uint32_t height = 0;
 	} texture_idx_;
+
+	struct Factor {
+		float metallic = 0.0f;
+		float roughness = 0.7f;
+		float ao = 1.0f;
+	} factors_;
 
 	void ApplyTransform(const glm::quat& rotationDelta, const glm::vec3& translationDelta);
 

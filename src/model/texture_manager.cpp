@@ -8,11 +8,127 @@ namespace fs = std::filesystem;
 TextureManager::TextureManager(Context& context)
     : context_(context)
 {
+    ConvertFileToKtx("assets/Metal");
+    ConvertFileToKtx("assets/lut");
+
     std::unique_ptr<Texture2D> texture = std::make_unique<Texture2D>("assets", "vulkan_cloth_rgba.ktx", context);
     textures_.push_back(std::move(texture));
-
-    ConvertPbrPngsInFolderToKtx("assets/worm");
 }
+
+TextureManager::~TextureManager()
+{
+
+}
+
+// PBR 관련 키워드가 파일명에 들어있는지 체크
+bool TextureManager::IsRightTextureName(const std::string& name)
+{
+    std::string lower = name;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+        [](unsigned char c) { return std::tolower(c); });
+
+    for (const char* kw : keywords_) {
+        if (lower.find(kw) != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// png, jpg -> ktx
+void TextureManager::ConvertFileToKtx(const std::string& folderPath)
+{
+    fs::path folder(folderPath);
+
+    if (!fs::exists(folder) || !fs::is_directory(folder)) {
+        throw std::runtime_error("Folder does not exist or is not a directory: " + folderPath);
+    }
+
+    for (const auto& entry : fs::directory_iterator(folder)) {
+        if (!entry.is_regular_file()) continue;
+
+        fs::path pngPath = entry.path();
+        if (pngPath.extension() != ".png" && 
+            pngPath.extension() != ".jpg")
+            continue;
+
+        const std::string filename = pngPath.filename().string();
+        if (!IsRightTextureName(filename)) {
+            continue;
+        }
+
+        fs::path ktxPath = pngPath;
+        ktxPath.replace_extension(".ktx2");
+
+        if (fs::exists(ktxPath)) {
+            std::cout << "[KTX] exists, skip: " << ktxPath.string() << std::endl;
+            continue;
+        }
+
+        std::cout << "[KTX] create: " << pngPath.string()
+            << " -> " << ktxPath.string() << std::endl;
+
+        CreateKtxFromFile(pngPath, ktxPath);
+    }
+}
+
+void TextureManager::CreateKtxFromFile(const fs::path& pngPath, const fs::path& ktxPath)
+{
+    std::string filename = pngPath.filename().string();
+    std::string lower = filename;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+        [](unsigned char c) { return (char)std::tolower(c); });
+
+    bool isAlbedo =
+        lower.find("color") != std::string::npos ||
+        lower.find("albedo") != std::string::npos ||
+        lower.find("basecolor") != std::string::npos ||
+        lower.find("base_color") != std::string::npos;
+
+    bool isLut =
+        lower.find("lut") != std::string::npos;
+
+    std::string fmt;
+    std::string tf;
+    bool genMipmap = true;
+
+    if (isAlbedo) {
+        fmt = "R8G8B8A8_SRGB";
+        tf = "srgb";
+    }
+    else if (isLut) {
+        fmt = "R8G8B8A8_UNORM";
+        tf = "linear";
+        genMipmap = false;
+    }
+    else {
+        fmt = "R8G8B8A8_UNORM";
+        tf = "linear";
+    }
+
+    std::string cmd = "ktx create "
+        "--format " + fmt + " "
+        "--assign-tf " + tf + " ";
+
+    if (!isLut) {
+        cmd += "--assign-primaries bt709 ";
+    }
+
+    if (genMipmap) {
+        cmd += "--generate-mipmap ";
+    }
+
+    cmd += "\"" + pngPath.string() + "\" "
+        "\"" + ktxPath.string() + "\"";
+
+    std::cout << "[KTX] " << cmd << std::endl;
+
+    int result = std::system(cmd.c_str());
+    if (result != 0) {
+        throw std::runtime_error("ktx2 create failed for: " + pngPath.string());
+    }
+}
+
 
 uint32_t TextureManager::CreateTexture2D(std::string path, std::string keyword)
 {
@@ -41,110 +157,13 @@ uint32_t TextureManager::CreateTexture2D(std::string path, std::string keyword)
         std::string parentPath = p.parent_path().string();
         std::string filename = p.filename().string();
 
-        if (p.extension() != ".ktx") continue;
+        if (p.extension() != ".ktx" && p.extension() != ".ktx2") continue;
 
+        std::for_each(filename.begin(), filename.end(), [](auto& c) {c = tolower(c); });
         if (filename.find(keyword) != std::string::npos)
             return CreateTexture(parentPath, filename);
 
     }
-    
+
     return 0;
-}
-
-TextureManager::~TextureManager()
-{
-
-}
-
-// 개별 PNG를 KTX로 변환
-void TextureManager::CreateKtxFromPng(const fs::path& pngPath, const fs::path& ktxPath)
-{
-    std::string filename = pngPath.filename().string();
-    std::string lower = filename;
-    std::transform(lower.begin(), lower.end(), lower.begin(),
-        [](unsigned char c) { return (char)std::tolower(c); });
-
-    bool isAlbedo =
-        lower.find("albedo") != std::string::npos ||
-        lower.find("basecolor") != std::string::npos ||
-        lower.find("base_color") != std::string::npos;
-
-    std::string fmt;
-    std::string tf;
-
-    if (isAlbedo) {
-        // 색상 텍스쳐
-        fmt = "R8G8B8A8_SRGB";
-        tf = "srgb";
-    }
-    else {
-        // 데이터 텍스쳐 (normal, roughness, metallic ...)
-        fmt = "R8G8B8A8_UNORM";
-        tf = "linear";
-    }
-
-    std::string cmd = "ktx create "
-        "--format " + fmt + " "
-        "--assign-tf " + tf + " "
-        "--assign-primaries bt709 "
-        "--generate-mipmap "  // 혹은 --genmipmap 류의 옵션
-        "\"" + pngPath.string() + "\" "
-        "\"" + ktxPath.string() + "\"";
-
-    std::cout << "[KTX] " << cmd << std::endl;
-
-    int result = std::system(cmd.c_str());
-    if (result != 0) {
-        throw std::runtime_error("ktx create failed for: " + pngPath.string());
-    }
-}
-
-// PBR 관련 키워드가 파일명에 들어있는지 체크
-bool TextureManager::IsPbrTextureName(const std::string& name)
-{
-    std::string lower = name;
-    std::transform(lower.begin(), lower.end(), lower.begin(),
-        [](unsigned char c) { return std::tolower(c); });
-
-    for (const char* kw : keywords) {
-        if (lower.find(kw) != std::string::npos) {
-            return true;
-        }
-    }
-    return false;
-}
-
-// 폴더 안의 PBR 관련 PNG -> KTX 자동 변환
-void TextureManager::ConvertPbrPngsInFolderToKtx(const std::string& folderPath)
-{
-    fs::path folder(folderPath);
-
-    if (!fs::exists(folder) || !fs::is_directory(folder)) {
-        throw std::runtime_error("Folder does not exist or is not a directory: " + folderPath);
-    }
-
-    for (const auto& entry : fs::directory_iterator(folder)) {
-        if (!entry.is_regular_file()) continue;
-
-        fs::path pngPath = entry.path();
-        if (pngPath.extension() != ".png") continue;
-
-        const std::string filename = pngPath.filename().string();
-        if (!IsPbrTextureName(filename)) {
-            continue; // PBR 관련 이름 아니면 무시
-        }
-
-        fs::path ktxPath = pngPath;
-        ktxPath.replace_extension(".ktx");
-
-        if (fs::exists(ktxPath)) {
-            std::cout << "[KTX] exists, skip: " << ktxPath.string() << std::endl;
-            continue;
-        }
-
-        std::cout << "[KTX] create: " << pngPath.string()
-            << " -> " << ktxPath.string() << std::endl;
-
-        CreateKtxFromPng(pngPath, ktxPath);
-    }
 }

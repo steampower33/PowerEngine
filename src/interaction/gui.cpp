@@ -146,9 +146,41 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 			if (ImGui::BeginTable("RenderingTable", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
-				//int chooseTexIdx = graphicsContext.ubo_data_.object.chooseTexIdx;
-				//row("ChooseTexIdx", [&] { ImGui::SliderInt("##ChooseTexIdx", &chooseTexIdx, 0, graphicsContext.texture_manager_.max_texture_size); });
-				//graphicsContext.ubo_data_.object.chooseTexIdx = chooseTexIdx;
+				row("Metalness", [&] { ImGui::SliderFloat("##Metalness", &graphicsContext.ubo_data_.object.metalnessFactor, 0.0f, 1.0f); });
+				row("Roughness", [&] { ImGui::SliderFloat("##Roughness", &graphicsContext.ubo_data_.object.roughnessFactor, 0.0f, 1.0f); });
+				row("AO", [&] { ImGui::SliderFloat("##AO", &graphicsContext.ubo_data_.object.aoFactor, 0.0f, 1.0f); });
+				row("Height", [&] { ImGui::SliderFloat("##Height", &graphicsContext.ubo_data_.object.heightFactor, 0.0f, 1.0f); });
+
+				row("AlbedoEnable", [&] { 
+					bool enable = (graphicsContext.ubo_data_.object.albedoEnable == 1) ? true : false;
+					ImGui::Checkbox("##AlbedoEnable", &enable);
+					graphicsContext.ubo_data_.object.albedoEnable = (enable) ? true : false;
+					});
+				row("MetalnessEnable", [&] {
+					bool enable = (graphicsContext.ubo_data_.object.metalnessEnable == 1) ? true : false;
+					ImGui::Checkbox("##MetalnessEnable", &enable);
+					graphicsContext.ubo_data_.object.metalnessEnable = (enable) ? true : false;
+					});
+				row("NormalEnable", [&] {
+					bool enable = (graphicsContext.ubo_data_.object.normalEnable == 1) ? true : false;
+					ImGui::Checkbox("##NormalEnable", &enable);
+					graphicsContext.ubo_data_.object.normalEnable = (enable) ? true : false;
+					});
+				row("RoughtnessEnable", [&] {
+					bool enable = (graphicsContext.ubo_data_.object.roughtnessEnable == 1) ? true : false;
+					ImGui::Checkbox("##RoughtnessEnable", &enable);
+					graphicsContext.ubo_data_.object.roughtnessEnable = (enable) ? true : false;
+					});
+				row("AOEnable", [&] {
+					bool enable = (graphicsContext.ubo_data_.object.aoEnable == 1) ? true : false;
+					ImGui::Checkbox("##AOEnable", &enable);
+					graphicsContext.ubo_data_.object.aoEnable = (enable) ? true : false;
+					});
+				row("HeightEnable", [&] {
+					bool enable = (graphicsContext.ubo_data_.object.heightEnable == 1) ? true : false;
+					ImGui::Checkbox("##HeightEnable", &enable);
+					graphicsContext.ubo_data_.object.heightEnable = (enable) ? true : false;
+					});
 
 				ImGui::EndTable();
 			}

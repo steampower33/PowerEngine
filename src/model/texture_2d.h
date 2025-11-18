@@ -17,6 +17,8 @@ public:
 	std::string path_;
 	std::string filename_;
 
+	uint32_t mip_levels_;
+
 	vk::raii::Image texture_image_ = nullptr;
 	vk::raii::DeviceMemory texture_image_memory_ = nullptr;
 	vk::raii::ImageView texture_image_view_ = nullptr;
@@ -25,7 +27,7 @@ public:
 
 	void CreateTextureImage(const std::string& texturePath, vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool);
 	void TransitionImageLayout(vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool, const vk::raii::Image& image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
-	void CopyBufferToImage(vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool, const vk::raii::Buffer& buffer, vk::raii::Image& image, uint32_t width, uint32_t height);
+	void CopyBufferToImage(vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool, const vk::raii::Buffer& buffer, vk::raii::Image& image, uint32_t width, uint32_t height, ktxTexture* kTexture);
 	std::unique_ptr<vk::raii::CommandBuffer> BeginSingleTimeCommands(vk::raii::Device& device, vk::raii::CommandPool& commandPool);
 	void EndSingleTimeCommands(vk::raii::Queue& queue, const vk::raii::CommandBuffer& commandBuffer);
 	void CreateTextureImageView(vk::raii::Device& device);

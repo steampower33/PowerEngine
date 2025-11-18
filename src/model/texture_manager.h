@@ -17,17 +17,21 @@ public:
 
 	const uint32_t max_texture_size = 32;
 
-	const char* keywords[6] = {
+	const char* keywords_[10] = {
+		"color",
 		"albedo",
 		"metallic",
+		"metalness",
 		"normal",
 		"roughness",
 		"ao",
 		"height",
+		"displacement",
+		"lut",
 	};
 
+	void ConvertFileToKtx(const std::string& folderPath);
+	bool IsRightTextureName(const std::string& name);
+	void CreateKtxFromFile(const std::filesystem::path& pngPath, const std::filesystem::path& ktxPath);
 	uint32_t CreateTexture2D(std::string path, std::string keyword);
-	void ConvertPbrPngsInFolderToKtx(const std::string& folderPath);
-	bool IsPbrTextureName(const std::string& name);
-	void CreateKtxFromPng(const std::filesystem::path& pngPath, const std::filesystem::path& ktxPath);
 };

@@ -3,25 +3,7 @@
 #extension GL_KHR_vulkan_glsl : enable
 #extension GL_EXT_nonuniform_qualifier : require
 
-layout(set=0, binding=0) uniform GlobalUBO { 
-    mat4 view;
-    mat4 proj;
-} global;
-
-layout(set=1, binding=0) uniform ObjectUBO { 
-    mat4 model; 
-    vec4 color_use; 
-	uint albedo;
-	uint ao;
-	uint roughness;
-	uint metallic;
-	uint height;
-	uint normal;
-	uint pad0;
-	uint pad1;
-} object;
-
-layout(set=1, binding=1) uniform sampler2D tex[];
+#include "../common/model_common.glsl"
 
 layout(location = 0) in vec2 vUV;
 layout(location = 1) in vec3 vNormalWorld;   // 월드 공간 노멀
@@ -33,19 +15,19 @@ layout(location = 1) out vec4 outNormalRough;
 layout(location = 2) out vec4 outHeightAO;
 
 void main() {
-    int albedoIndex    = int(object.albedo);
-    int normalIndex    = int(object.normal);
-    int metallicIndex  = int(object.metallic);
-    int roughnessIndex = int(object.roughness);
-    int heightIndex    = int(object.height);
-    int aoIndex        = int(object.ao);
+    int albedoIndex    = int(object.albedoIdx);
+    int normalIndex    = int(object.normalIdx);
+    int metalnessIndex  = int(object.metalnessIdx);
+    int roughnessIndex = int(object.roughnessIdx);
+    int heightIndex    = int(object.heightIdx);
+    int aoIndex        = int(object.aoIdx);
 
-    vec4 albedo    = (albedoIndex == 0u) ? vec4(object.color_use.xyz, 0.0): texture(tex[nonuniformEXT(albedoIndex)], vUV);
+    vec4 albedo    = (object.albedoEnable == 0u) ? vec4(object.albedo_use.xyz, 0.0): texture(tex[nonuniformEXT(albedoIndex)], vUV);
     vec3 normalTS  = vNormalWorld;
-    float metallic = (metallicIndex == 0u) ? 0.0 : texture(tex[nonuniformEXT(metallicIndex)], vUV).r;
-    float rough    = (roughnessIndex == 0u) ? 0.0 : texture(tex[nonuniformEXT(roughnessIndex)], vUV).r;
-    float height   = (heightIndex == 0u) ? 0.0 : texture(tex[nonuniformEXT(heightIndex)], vUV).r;
-    float ao       = (aoIndex == 0u) ? 0.0 : texture(tex[nonuniformEXT(aoIndex)], vUV).r;
+    float metallic = (object.metalnessEnable == 0u) ? object.metallicFactor : texture(tex[nonuniformEXT(metalnessIndex)], vUV).r;
+    float rough    = (object.roughtnessEnable == 0u) ? object.roughnessFactor : texture(tex[nonuniformEXT(roughnessIndex)], vUV).r;
+    float ao       = (object.aoEnable == 0u) ? object.aoFactor : texture(tex[nonuniformEXT(aoIndex)], vUV).r;
+    float height   = (object.heightEnable == 0u) ? object.heightFactor : texture(tex[nonuniformEXT(heightIndex)], vUV).r;
 
     if (normalIndex != 0u) // NormalWorld를 교체
     {
@@ -59,11 +41,8 @@ void main() {
         normalTS = normalize(normal * TBN);
     }
 
-    // sRGB → linear 필요하면 여기서 변환
-    vec3 albedoLinear = pow(albedo.rgb, vec3(2.2));
-
     // RT0: albedo.rgb + metallic 
-    outAlbedoMetal = vec4(albedoLinear, metallic);
+    outAlbedoMetal = vec4(albedo.xyz, metallic);
 
     // RT1: world-normal + roughness (여기선 예시로 그냥 tangent-space normal)
     vec3 n = normalize(normalTS);

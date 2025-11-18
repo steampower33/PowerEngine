@@ -97,16 +97,40 @@ public:
 
 		struct Object {
 			glm::mat4 model;
-			glm::vec4 color_use;
-			uint32_t albedo = 0;
-			uint32_t ao = 0;
-			uint32_t roughness = 0;
-			uint32_t metallic = 0;
-			uint32_t height = 0;
-			uint32_t normal = 0;
-			uint32_t pad0 = 0;
-			uint32_t pad1 = 0;
+
+			glm::vec4 albedo_use;
+
+			uint32_t albedoIdx = 0;
+			uint32_t metalnessIdx = 0;
+			uint32_t normalIdx = 0;
+			uint32_t roughnessIdx = 0;
+
+			uint32_t aoIdx = 0;
+			uint32_t heightIdx = 0;
+			float metalnessFactor = 0.0f;
+			float roughnessFactor = 0.5f;
+
+			float aoFactor = 0.0f;
+			float heightFactor = 0.0f;
+			uint32_t envIdx = 0;
+			uint32_t radianceIdx = 0;
+
+			uint32_t irradianceIdx = 0;
+			uint32_t p0 = 0;
+			uint32_t p1 = 0;
+			uint32_t p2 = 0;
+
+			uint32_t albedoEnable = 1;
+			uint32_t metalnessEnable = 1;
+			uint32_t normalEnable = 1;
+			uint32_t roughtnessEnable = 1;
+
+			uint32_t aoEnable = 1;
+			uint32_t heightEnable = 1;
+			uint32_t p3;
+			uint32_t p4;
 		} object;
+		static_assert(sizeof(UBOData::Object) % 16 == 0, "std140 must be 16-byte aligned.");
 
 		struct Light {
 			glm::vec4 cameraPos{};

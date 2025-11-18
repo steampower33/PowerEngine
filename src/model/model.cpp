@@ -15,7 +15,7 @@ Model::Model(const std::string& modelPath, vku::VertexIncludeInfo vertexIncludeI
     vku::CreateIndexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, mesh_data_.indices, mesh_data_.index_buffer, mesh_data_.index_buffer_memory);
 
     model_count++;
-    color_use_ = colorUse;
+    albedo_use_ = colorUse;
     moveble_ = moveble;
 
     ApplyTransform(initRotation, initPos);
@@ -30,7 +30,7 @@ Model::Model(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Conte
 
     model_count++;
 
-    color_use_ = colorUse;
+    albedo_use_ = colorUse;
     moveble_ = moveble;
 
     ApplyTransform(initRotation, initPos);

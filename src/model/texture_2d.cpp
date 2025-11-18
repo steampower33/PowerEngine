@@ -34,15 +34,16 @@ void Texture2D::CreateTextureImage(const std::string& texturePath, vk::raii::Phy
     // Get texture dimensions and data
     uint32_t texWidth = kTexture->baseWidth;
     uint32_t texHeight = kTexture->baseHeight;
-    ktx_size_t imageSize = ktxTexture_GetImageSize(kTexture, 0);
+    ktx_size_t dataSize = ktxTexture_GetDataSize(kTexture);
     ktx_uint8_t* ktxTextureData = ktxTexture_GetData(kTexture);
+    mip_levels_ = kTexture->numLevels;
 
     vk::raii::Buffer stagingBuffer({});
     vk::raii::DeviceMemory stagingBufferMemory({});
-    vku::CreateBuffer(physicalDevice, device, imageSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBuffer, stagingBufferMemory);
+    vku::CreateBuffer(physicalDevice, device, dataSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBuffer, stagingBufferMemory);
 
-    void* data = stagingBufferMemory.mapMemory(0, imageSize);
-    memcpy(data, ktxTextureData, imageSize);
+    void* data = stagingBufferMemory.mapMemory(0, dataSize);
+    memcpy(data, ktxTextureData, dataSize);
     stagingBufferMemory.unmapMemory();
 
     // Determine the Vulkan format from KTX format
@@ -70,7 +71,7 @@ void Texture2D::CreateTextureImage(const std::string& texturePath, vk::raii::Phy
         vk::MemoryPropertyFlagBits::eDeviceLocal, texture_image_, texture_image_memory_);
 
     TransitionImageLayout(device, queue, commandPool, texture_image_, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
-    CopyBufferToImage(device, queue, commandPool, stagingBuffer, texture_image_, texWidth, texHeight);
+    CopyBufferToImage(device, queue, commandPool, stagingBuffer, texture_image_, texWidth, texHeight, kTexture);
     TransitionImageLayout(device, queue, commandPool, texture_image_, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
 
     ktxTexture_Destroy(kTexture);
@@ -80,10 +81,16 @@ void Texture2D::TransitionImageLayout(vk::raii::Device& device, vk::raii::Queue&
     auto commandBuffer = BeginSingleTimeCommands(device, commandPool);
 
     vk::ImageMemoryBarrier barrier{
-        .oldLayout = oldLayout,
-        .newLayout = newLayout,
-        .image = *image,
-        .subresourceRange = { vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 }
+    .oldLayout = oldLayout,
+    .newLayout = newLayout,
+    .image = *image,
+    .subresourceRange = {
+        vk::ImageAspectFlagBits::eColor,
+        0,
+        mip_levels_,
+        0,
+        1
+    }
     };
 
     vk::PipelineStageFlags sourceStage;
@@ -110,17 +117,38 @@ void Texture2D::TransitionImageLayout(vk::raii::Device& device, vk::raii::Queue&
     EndSingleTimeCommands(queue, *commandBuffer);
 }
 
-void Texture2D::CopyBufferToImage(vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool, const vk::raii::Buffer& buffer, vk::raii::Image& image, uint32_t width, uint32_t height) {
+void Texture2D::CopyBufferToImage(vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool, const vk::raii::Buffer& buffer, vk::raii::Image& image, uint32_t width, uint32_t height, ktxTexture* kTexture)
+{
     std::unique_ptr<vk::raii::CommandBuffer> commandBuffer = BeginSingleTimeCommands(device, commandPool);
-    vk::BufferImageCopy region{
-        .bufferOffset = 0,
-        .bufferRowLength = 0,
-        .bufferImageHeight = 0,
-        .imageSubresource = { vk::ImageAspectFlagBits::eColor, 0, 0, 1 },
-        .imageOffset = {0, 0, 0},
-        .imageExtent = {width, height, 1}
-    };
-    commandBuffer->copyBufferToImage(*buffer, *image, vk::ImageLayout::eTransferDstOptimal, { region });
+
+    std::vector<vk::BufferImageCopy> regions;
+    regions.reserve(mip_levels_);
+
+    for (uint32_t level = 0; level < mip_levels_; ++level) {
+        ktx_size_t offset = 0;
+        KTX_error_code res = ktxTexture_GetImageOffset(kTexture, level, 0, 0, &offset);
+        if (res != KTX_SUCCESS) {
+            throw std::runtime_error("failed to get KTX image offset!");
+        }
+
+        vk::BufferImageCopy region{};
+        region.bufferOffset = offset;
+        region.bufferRowLength = 0;
+        region.bufferImageHeight = 0;
+        region.imageSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
+        region.imageSubresource.mipLevel = level;
+        region.imageSubresource.baseArrayLayer = 0;
+        region.imageSubresource.layerCount = 1;
+        region.imageOffset = { 0, 0, 0 };
+        region.imageExtent = {
+            std::max(1u, width >> level),
+            std::max(1u, height >> level),
+            1
+        };
+        regions.push_back(region);
+    }
+
+    commandBuffer->copyBufferToImage(*buffer, *image, vk::ImageLayout::eTransferDstOptimal, regions);
     EndSingleTimeCommands(queue, *commandBuffer);
 }
 
@@ -141,7 +169,9 @@ void Texture2D::CreateTextureSampler(vk::raii::PhysicalDevice& physicalDevice, v
         .anisotropyEnable = vk::True,
         .maxAnisotropy = properties.limits.maxSamplerAnisotropy,
         .compareEnable = vk::False,
-        .compareOp = vk::CompareOp::eAlways
+        .compareOp = vk::CompareOp::eAlways,
+        .minLod = 0.0f,
+        .maxLod = float(mip_levels_ - 1),
     };
     texture_sampler_ = vk::raii::Sampler(device, samplerInfo);
 }

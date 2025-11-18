@@ -51,8 +51,6 @@ public:
 	vk::raii::DeviceMemory index_buffer_memory_{ nullptr };
 
 	struct Data {
-
-
 		std::vector<glm::vec4> positions;
 		std::vector<glm::vec4> velocities;
 		std::vector<float> inverse_mass;

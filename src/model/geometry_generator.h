@@ -7,7 +7,6 @@ public:
 
 	static MeshData MakeSquare(const float scale = 1.0f);
 	static MeshData MakeBox(const float scale = 1.0f);
-	static MeshData MakeBoundsBox();
 	static MeshData MakeCylinder(
 		const float bottomRadius,
 		const float topRadius, float height,

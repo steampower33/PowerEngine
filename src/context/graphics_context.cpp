@@ -76,13 +76,16 @@ void GraphicsContext::UpdateGraphicsUBO(Camera& camera)
 			auto* dst = static_cast<std::byte*>(ubo_mapped_.object) + objOff;
 
 			ubo_data_.object.model = model_manager_.models[i]->world_;
-			ubo_data_.object.color_use = model_manager_.models[i]->color_use_;
-			ubo_data_.object.albedo = model_manager_.models[i]->texture_idx_.albedo;
-			ubo_data_.object.metallic = model_manager_.models[i]->texture_idx_.metallic;
-			ubo_data_.object.normal = model_manager_.models[i]->texture_idx_.normal;
-			ubo_data_.object.roughness = model_manager_.models[i]->texture_idx_.roughness;
-			ubo_data_.object.ao = model_manager_.models[i]->texture_idx_.ao;
-			ubo_data_.object.height = model_manager_.models[i]->texture_idx_.height;
+			ubo_data_.object.albedo_use = model_manager_.models[i]->albedo_use_;
+			ubo_data_.object.albedoIdx = model_manager_.models[i]->texture_idx_.albedo;
+			ubo_data_.object.metalnessIdx = model_manager_.models[i]->texture_idx_.metallic;
+			ubo_data_.object.normalIdx = model_manager_.models[i]->texture_idx_.normal;
+			ubo_data_.object.roughnessIdx = model_manager_.models[i]->texture_idx_.roughness;
+			ubo_data_.object.aoIdx = model_manager_.models[i]->texture_idx_.ao;
+			ubo_data_.object.heightIdx = model_manager_.models[i]->texture_idx_.height;
+			ubo_data_.object.metalnessFactor = model_manager_.models[i]->factors_.metallic;
+			ubo_data_.object.roughnessFactor = model_manager_.models[i]->factors_.roughness;
+			ubo_data_.object.aoFactor = model_manager_.models[i]->factors_.ao;
 
 			std::memcpy(dst, &ubo_data_.object, sizeof(UBOData::Object));
 		}
@@ -90,7 +93,6 @@ void GraphicsContext::UpdateGraphicsUBO(Camera& camera)
 
 	// Light
 	{
-
 		ubo_data_.light.cameraPos = glm::vec4(camera.position, 0.0f);
 		ubo_data_.light.invViewProj = glm::inverse(ubo_data_.global.proj * ubo_data_.global.view);
 
@@ -753,7 +755,7 @@ void GraphicsContext::CreateUniformBuffers()
 		ubo_mapped_.object = nullptr;
 
 		auto limits = context_.physical_device_.getProperties().limits;
-		ubo_size_.object = (sizeof(UBOData::Global) + limits.minUniformBufferOffsetAlignment - 1)
+		ubo_size_.object = (sizeof(UBOData::Object) + limits.minUniformBufferOffsetAlignment - 1)
 			& ~(limits.minUniformBufferOffsetAlignment - 1);
 		vk::DeviceSize totalSize = ubo_size_.object * MAX_FRAMES_IN_FLIGHT * model_manager_.kMaxObjects;
 
@@ -835,7 +837,7 @@ void GraphicsContext::CreateDescriptorSets()
 		sets_.object = std::move(sets.front());
 
 		// Update
-		vk::DescriptorBufferInfo objectUboBufferInfo{ *ubos_.object, 0, sizeof(UBOData::Global) };
+		vk::DescriptorBufferInfo objectUboBufferInfo{ *ubos_.object, 0, sizeof(UBOData::Object) };
 
 		std::vector<vk::DescriptorImageInfo> imageInfos;
 		for (auto& tex : texture_manager_.textures_) {
