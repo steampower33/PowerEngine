@@ -11,8 +11,8 @@ TextureManager::TextureManager(Context& context)
     ConvertFileToKtx("assets/Metal");
     ConvertFileToKtx("assets/lut");
 
-    std::unique_ptr<Texture> texture = std::make_unique<Texture>("assets", "vulkan_cloth_rgba.ktx", context);
-    textures_.push_back(std::move(texture));
+    vulkan_thumbnail_index_ = CreateTexture("assets", "vulkan_cloth_rgba");
+    brdf_lut_index_ = CreateTexture("assets/lut", "lut_ggx");
 }
 
 TextureManager::~TextureManager()

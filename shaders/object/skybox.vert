@@ -10,16 +10,29 @@ layout(location = 2) in vec3 inNormal;
 layout(location = 0) out vec3 vDir;
 
 layout(set = 0, binding = 0) uniform GlobalUBO {
-    mat4 view;
-    mat4 proj;
+    mat4x4 view;
+    mat4x4 proj;
+
+    uint vulkanThumbnailIndex;
+    uint p0;
+    uint p1;
+    uint p2;
 } global;
 
 layout(set = 1, binding = 0) uniform SkyboxUBO {
     mat4x4 model;
+    mat4x4 inverseView;
+    mat4x4 inverseProj;
+
     uint envIdx;
     uint radianceIdx;
     uint irradianceIdx;
+    uint specularMipLevels;
+
+    uint brdfLUTIndex;
     uint p0;
+    uint p1;
+    uint p2;
 } skybox;
 
 void main() {

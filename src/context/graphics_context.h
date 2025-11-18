@@ -97,6 +97,11 @@ public:
 		struct Global {
 			glm::mat4 view;
 			glm::mat4 proj;
+
+			uint32_t vulkanThumbnailIndex;
+			uint32_t p1;
+			uint32_t p2;
+			uint32_t p3;
 		} global;
 		static_assert(sizeof(UBOData::Global) % 16 == 0, "std140 must be 16-byte aligned.");
 
@@ -106,13 +111,13 @@ public:
 			glm::vec4 albedo_use;
 
 			uint32_t albedoIdx = 0;
-			uint32_t metalnessIdx = 0;
+			uint32_t metallicIdx = 0;
 			uint32_t normalIdx = 0;
 			uint32_t roughnessIdx = 0;
 
 			uint32_t aoIdx = 0;
 			uint32_t heightIdx = 0;
-			float metalnessFactor = 0.0f;
+			float metallicFactor = 0.0f;
 			float roughnessFactor = 0.5f;
 
 			float aoFactor = 0.0f;
@@ -121,7 +126,7 @@ public:
 			uint32_t p1 = 0;
 
 			uint32_t albedoEnable = 1;
-			uint32_t metalnessEnable = 1;
+			uint32_t metallicEnable = 1;
 			uint32_t normalEnable = 1;
 			uint32_t roughtnessEnable = 1;
 
@@ -134,20 +139,27 @@ public:
 
 		struct Light {
 			glm::vec4 cameraPos{};
-			glm::vec4 spotPos_range{0.0f, 10.0f, 0.0f, 30.0f}; // xyz: 위치(월드), w: range(최대 거리)
-			glm::vec4 spotDir_inner{0.0f, -1.0f, 0.0f, 0.0f}; // xyz: 방향(월드, normalized), w: innerConeCos
-			glm::vec4 spotColor_outer{1.0f, 1.0f, 1.0f, 0.0f}; // rgb: color, w: outerConeCos
+			glm::vec4 spotPos_range{ 0.0f, 10.0f, 0.0f, 30.0f }; // xyz: 위치(월드), w: range(최대 거리)
+			glm::vec4 spotDir_inner{ 0.0f, -1.0f, 0.0f, 0.0f }; // xyz: 방향(월드, normalized), w: innerConeCos
+			glm::vec4 spotColor_outer{ 1.0f, 1.0f, 1.0f, 0.0f }; // rgb: color, w: outerConeCos
 			glm::mat4 invViewProj{};
 		} light;
 		static_assert(sizeof(UBOData::Light) % 16 == 0, "std140 must be 16-byte aligned.");
 
 		struct SkyBox {
 			glm::mat4 model;
+			glm::mat4 inverseView;
+			glm::mat4 inverseProj;
 
 			uint32_t envIdx = 0;
 			uint32_t radianceIdx = 0;
 			uint32_t irradianceIdx = 0;
-			uint32_t p0;
+			uint32_t specularMipLevels = 0;
+
+			uint32_t brdfLUTIndex = 0;
+			uint32_t p0 = 0;
+			uint32_t p1 = 0;
+			uint32_t p2 = 0;
 		} skybox;
 		static_assert(sizeof(UBOData::SkyBox) % 16 == 0, "std140 must be 16-byte aligned.");
 

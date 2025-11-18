@@ -16,7 +16,9 @@ void main() {
     
     vec3 albedoLinear = pow(albedo.rgb, vec3(2.2));
 
-    outAlbedoMetal = vec4(albedoLinear, 0.0);
-    outNormalRough = vec4(vWorldNormal * 0.5 + 0.5, 0.7); // [-1,1] -> [0,1]
-    outHeightAO = vec4(0.0, 0.0, 0.0, 1.0);
+    float metallic = 0.5;
+    float ao = 1.0;
+    outAlbedoMetal = vec4(albedoLinear, metallic);
+    outNormalRough = vec4(vWorldNormal * 0.5 + 0.5, 1.0 - metallic); // [-1,1] -> [0,1]
+    outHeightAO = vec4(0.0, ao, 0.0, 0.0);
 }

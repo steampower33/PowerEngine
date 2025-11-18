@@ -12,13 +12,16 @@ public:
 	TextureManager& operator=(TextureManager&& rhs) = delete;
 	~TextureManager();
 
+	Context& context_;
+
 	const uint32_t max_texture_size = 32;
 	std::vector<std::unique_ptr<Texture>> textures_;
 
 	const uint32_t env_texture_size = 3;
 	std::vector<std::unique_ptr<Texture>> env_textures_;
 	
-	Context& context_;
+	uint32_t vulkan_thumbnail_index_ = 0;
+	uint32_t brdf_lut_index_ = 0;
 
 	const char* keywords_[10] = {
 		"color",

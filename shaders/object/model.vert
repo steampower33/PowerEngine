@@ -23,11 +23,11 @@ void main() {
     mat3 normalMat = transpose(inverse(mat3(object.model)));
     vNormalWorld = normalize(normalMat * inNormal);    
 
-    if (object.heightIdx != 0u)
+    if (object.heightEnable == 1u)
     {
         float height = texture(tex[nonuniformEXT(object.heightIdx)], inUV).r;
         height = height * 2.0 - 1.0;
-        worldPos += vec4(vNormalWorld * height * 0.01, 0.0);
+        worldPos += vec4(vNormalWorld * height * object.heightFactor, 0.0);
     }
     gl_Position = global.proj * global.view * worldPos;
 

@@ -505,8 +505,8 @@ GpuSim::GpuSim(
 
 			vk::DescriptorBufferInfo positions(ssbos_.positions, 0, VK_WHOLE_SIZE);
 			vk::DescriptorImageInfo imageInfo{
-					.sampler = *textureManager.textures_[0]->texture_sampler_,
-					.imageView = *textureManager.textures_[0]->texture_image_view_,
+					.sampler = *textureManager.textures_[textureManager.vulkan_thumbnail_index_]->texture_sampler_,
+					.imageView = *textureManager.textures_[textureManager.vulkan_thumbnail_index_]->texture_image_view_,
 					.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
 			};
 			std::array descriptorWrites{

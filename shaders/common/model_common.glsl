@@ -2,17 +2,22 @@
 #define PARAMS_GLSL
 
 layout(set = 0, binding = 0) uniform GlobalUBO {
-    mat4 view;
-    mat4 proj;
+    mat4x4 view;
+    mat4x4 proj;
+
+    uint vulkanThumbnailIndex;
+    uint p0;
+    uint p1;
+    uint p2;
 } global;
 
 layout(set = 1, binding = 0) uniform ObjectUBO {
-    mat4 model;
+    mat4x4 model;
 
     vec4 albedo_use;
 
     uint albedoIdx;
-    uint metalnessIdx;
+    uint metallicIdx;
     uint normalIdx;
     uint roughnessIdx;
 
@@ -27,7 +32,7 @@ layout(set = 1, binding = 0) uniform ObjectUBO {
     uint p1;
 
     uint albedoEnable;
-    uint metalnessEnable;
+    uint metallicEnable;
     uint normalEnable;
     uint roughtnessEnable;
 

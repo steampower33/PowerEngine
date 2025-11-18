@@ -78,12 +78,12 @@ void GraphicsContext::UpdateGraphicsUBO(Camera& camera)
 			ubo_data_.object.model = model_manager_.models[i]->world_;
 			ubo_data_.object.albedo_use = model_manager_.models[i]->albedo_use_;
 			ubo_data_.object.albedoIdx = model_manager_.models[i]->texture_idx_.albedo;
-			ubo_data_.object.metalnessIdx = model_manager_.models[i]->texture_idx_.metallic;
+			ubo_data_.object.metallicIdx = model_manager_.models[i]->texture_idx_.metallic;
 			ubo_data_.object.normalIdx = model_manager_.models[i]->texture_idx_.normal;
 			ubo_data_.object.roughnessIdx = model_manager_.models[i]->texture_idx_.roughness;
 			ubo_data_.object.aoIdx = model_manager_.models[i]->texture_idx_.ao;
 			ubo_data_.object.heightIdx = model_manager_.models[i]->texture_idx_.height;
-			ubo_data_.object.metalnessFactor = model_manager_.models[i]->factors_.metallic;
+			ubo_data_.object.metallicFactor = model_manager_.models[i]->factors_.metallic;
 			ubo_data_.object.roughnessFactor = model_manager_.models[i]->factors_.roughness;
 			ubo_data_.object.aoFactor = model_manager_.models[i]->factors_.ao;
 
@@ -255,42 +255,6 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 		}
 	}
 
-	// Skybox
-	{
-		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.skybox);
-
-		// Global Set
-		cmd.bindDescriptorSets(
-			vk::PipelineBindPoint::eGraphics,
-			pipeline_layouts_.skybox,
-			0,
-			{ *sets_.global },
-			{ globalOffset }
-		);
-
-		// Skybox
-		uint32_t skyboxOffset = static_cast<uint32_t>(current_frame_ * ubo_size_.skybox);
-		cmd.bindDescriptorSets(
-			vk::PipelineBindPoint::eGraphics,
-			pipeline_layouts_.skybox,
-			1,
-			{ *sets_.skybox },
-			{ skyboxOffset } 
-		);
-
-		// texEnv
-		cmd.bindDescriptorSets(
-			vk::PipelineBindPoint::eGraphics,
-			pipeline_layouts_.skybox,
-			2,
-			{ *sets_.texEnv },
-			{ }
-		);
-		cmd.bindVertexBuffers(0, { model_manager_.skybox_->mesh_data_.vertex_buffer }, { 0 });
-		cmd.bindIndexBuffer(*model_manager_.skybox_->mesh_data_.index_buffer, 0, vk::IndexType::eUint32);
-		cmd.drawIndexed(model_manager_.skybox_->mesh_data_.indices_count, 1, 0, 0, 0);
-	}
-
 	cmd.endRendering();
 
 	auto toShaderRead = [&](vk::raii::Image& img) {
@@ -383,8 +347,62 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 		{ skyboxOffset }
 	);
 
+	// tex2D
+	cmd.bindDescriptorSets(
+		vk::PipelineBindPoint::eGraphics,
+		pipeline_layouts_.lighting,
+		2,
+		{ *sets_.tex2D },
+		{ }
+	);
+
+	// texEnv
+	cmd.bindDescriptorSets(
+		vk::PipelineBindPoint::eGraphics,
+		pipeline_layouts_.lighting,
+		3,
+		{ *sets_.texEnv },
+		{ }
+	);
+
 	// fullscreen triangle
 	cmd.draw(3, 1, 0, 0);
+
+	//// Skybox
+	//{
+	//	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.skybox);
+
+	//	// Global Set
+	//	cmd.bindDescriptorSets(
+	//		vk::PipelineBindPoint::eGraphics,
+	//		pipeline_layouts_.skybox,
+	//		0,
+	//		{ *sets_.global },
+	//		{ globalOffset }
+	//	);
+
+	//	// Skybox
+	//	uint32_t skyboxOffset = static_cast<uint32_t>(current_frame_ * ubo_size_.skybox);
+	//	cmd.bindDescriptorSets(
+	//		vk::PipelineBindPoint::eGraphics,
+	//		pipeline_layouts_.skybox,
+	//		1,
+	//		{ *sets_.skybox },
+	//		{ skyboxOffset }
+	//	);
+
+	//	// texEnv
+	//	cmd.bindDescriptorSets(
+	//		vk::PipelineBindPoint::eGraphics,
+	//		pipeline_layouts_.skybox,
+	//		2,
+	//		{ *sets_.texEnv },
+	//		{ }
+	//	);
+	//	cmd.bindVertexBuffers(0, { model_manager_.skybox_->mesh_data_.vertex_buffer }, { 0 });
+	//	cmd.bindIndexBuffer(*model_manager_.skybox_->mesh_data_.index_buffer, 0, vk::IndexType::eUint32);
+	//	cmd.drawIndexed(model_manager_.skybox_->mesh_data_.indices_count, 1, 0, 0, 0);
+	//}
 
 	// --- ImGui는 여기서 ---
 	ImDrawData* draw_data = ImGui::GetDrawData();
@@ -864,6 +882,8 @@ void GraphicsContext::CreateUniformBuffers()
 		ubos_.global = std::move(buffer);
 		ubo_memories_.global = std::move(bufferMem);
 		ubo_mapped_.global = ubo_memories_.global.mapMemory(0, totalSize);
+
+		ubo_data_.global.vulkanThumbnailIndex = texture_manager_.vulkan_thumbnail_index_;
 	}
 
 	// Object
@@ -922,10 +942,14 @@ void GraphicsContext::CreateUniformBuffers()
 		ubo_memories_.skybox = std::move(bufferMem);
 		ubo_mapped_.skybox = ubo_memories_.skybox.mapMemory(0, totalSize);
 
+		ubo_data_.skybox.model = model_manager_.skybox_->world_;
+		ubo_data_.skybox.inverseView = glm::inverse(ubo_data_.global.view);
+		ubo_data_.skybox.inverseProj = glm::inverse(ubo_data_.global.proj);
 		ubo_data_.skybox.envIdx = model_manager_.skybox_->texture_idx_.env;
 		ubo_data_.skybox.radianceIdx = model_manager_.skybox_->texture_idx_.radiance;
 		ubo_data_.skybox.irradianceIdx = model_manager_.skybox_->texture_idx_.irradiance;
-		ubo_data_.skybox.model = model_manager_.skybox_->world_;
+		ubo_data_.skybox.brdfLUTIndex = texture_manager_.brdf_lut_index_;
+		ubo_data_.skybox.specularMipLevels = texture_manager_.textures_[model_manager_.skybox_->texture_idx_.radiance]->mip_levels_;
 
 		auto* dst = static_cast<std::byte*>(ubo_mapped_.skybox);
 		std::memcpy(dst, &ubo_data_.skybox, ubo_size_.skybox);
@@ -1401,9 +1425,11 @@ void GraphicsContext::CreateGraphicsPipelines()
 			.pAttachments = &lightingBlendAttachment
 		};
 
-		std::array<vk::DescriptorSetLayout, 2> setLayouts{
+		std::array<vk::DescriptorSetLayout, 4> setLayouts{
 			*set_layouts_.lighting,
-			*set_layouts_.skybox
+			*set_layouts_.skybox,
+			*set_layouts_.tex2D,
+			*set_layouts_.texEnv
 		};
 		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
 			.setLayoutCount = static_cast<uint32_t>(setLayouts.size()),
@@ -1475,7 +1501,7 @@ void GraphicsContext::CreateGraphicsPipelines()
 		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = setLayouts.size(), .pSetLayouts = setLayouts.data(), .pushConstantRangeCount = 0 };
 		pipeline_layouts_.skybox = vk::raii::PipelineLayout(context_.device_, pipelineLayoutInfo);
 
-		vk::PipelineRasterizationStateCreateInfo rasterizerSkybox{
+		vk::PipelineRasterizationStateCreateInfo skyboxRasterizer{
 			.depthClampEnable = vk::False,
 			.rasterizerDiscardEnable = vk::False,
 			.polygonMode = vk::PolygonMode::eFill,
@@ -1484,6 +1510,33 @@ void GraphicsContext::CreateGraphicsPipelines()
 			.depthBiasEnable = vk::False,
 			.lineWidth = 1.0f
 		};
+
+		vk::PipelineDepthStencilStateCreateInfo skyboxDepthStencil{
+			.depthTestEnable = vk::True,
+			.depthWriteEnable = vk::False,
+			.depthCompareOp = vk::CompareOp::eLessOrEqual,
+			.depthBoundsTestEnable = vk::False,
+			.stencilTestEnable = vk::False
+		};
+
+		// color blend: attachment 1개
+		vk::PipelineColorBlendAttachmentState skyboxBlendAttachment{};
+		skyboxBlendAttachment.blendEnable = vk::False;
+		skyboxBlendAttachment.colorWriteMask =
+			vk::ColorComponentFlagBits::eR |
+			vk::ColorComponentFlagBits::eG |
+			vk::ColorComponentFlagBits::eB |
+			vk::ColorComponentFlagBits::eA;
+
+		vk::PipelineColorBlendStateCreateInfo skyboxColorBlending{
+			.logicOpEnable = vk::False,
+			.logicOp = vk::LogicOp::eCopy,
+			.attachmentCount = 1,
+			.pAttachments = &skyboxBlendAttachment
+		};
+
+
+		vk::Format swapchainFormat = swapchain_.swapchain_surface_format_.format;
 
 		// Pipeline
 		{
@@ -1495,17 +1548,17 @@ void GraphicsContext::CreateGraphicsPipelines()
 					.pVertexInputState = &vertexInputInfo,
 					.pInputAssemblyState = &inputAssembly,
 					.pViewportState = &viewportState,
-					.pRasterizationState = &rasterizerSkybox,
+					.pRasterizationState = &skyboxRasterizer,
 					.pMultisampleState = &multisampling,
-					.pDepthStencilState = &depthStencil,
-					.pColorBlendState = &colorBlending,
+					.pDepthStencilState = &skyboxDepthStencil,
+					.pColorBlendState = &skyboxColorBlending,
 					.pDynamicState = &dynamicState,
 					.layout = pipeline_layouts_.skybox,
 					.renderPass = nullptr
 				},
 				{
-				  .colorAttachmentCount = static_cast<uint32_t>(geometry_buffers_.formats.size()),
-				  .pColorAttachmentFormats = geometry_buffers_.formats.data(),
+				  .colorAttachmentCount = static_cast<uint32_t>(1),
+				  .pColorAttachmentFormats = &swapchainFormat,
 				  .depthAttachmentFormat = depthFormat
 				}
 			};

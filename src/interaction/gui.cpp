@@ -146,7 +146,7 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 			if (ImGui::BeginTable("RenderingTable", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
-				row("Metalness", [&] { ImGui::SliderFloat("##Metalness", &graphicsContext.ubo_data_.object.metalnessFactor, 0.0f, 1.0f); });
+				row("Meltallic", [&] { ImGui::SliderFloat("##Meltallic", &graphicsContext.ubo_data_.object.metallicFactor, 0.0f, 1.0f); });
 				row("Roughness", [&] { ImGui::SliderFloat("##Roughness", &graphicsContext.ubo_data_.object.roughnessFactor, 0.0f, 1.0f); });
 				row("AO", [&] { ImGui::SliderFloat("##AO", &graphicsContext.ubo_data_.object.aoFactor, 0.0f, 1.0f); });
 				row("Height", [&] { ImGui::SliderFloat("##Height", &graphicsContext.ubo_data_.object.heightFactor, 0.0f, 1.0f); });
@@ -157,9 +157,9 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 					graphicsContext.ubo_data_.object.albedoEnable = (enable) ? true : false;
 					});
 				row("MetalnessEnable", [&] {
-					bool enable = (graphicsContext.ubo_data_.object.metalnessEnable == 1) ? true : false;
+					bool enable = (graphicsContext.ubo_data_.object.metallicEnable == 1) ? true : false;
 					ImGui::Checkbox("##MetalnessEnable", &enable);
-					graphicsContext.ubo_data_.object.metalnessEnable = (enable) ? true : false;
+					graphicsContext.ubo_data_.object.metallicEnable = (enable) ? true : false;
 					});
 				row("NormalEnable", [&] {
 					bool enable = (graphicsContext.ubo_data_.object.normalEnable == 1) ? true : false;

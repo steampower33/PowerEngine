@@ -1,4 +1,6 @@
 #version 450
+#extension GL_KHR_vulkan_glsl : enable
+#extension GL_EXT_nonuniform_qualifier : require
 
 layout(set = 0, binding = 0) uniform LightUBO {
     vec4 cameraPos;
@@ -14,13 +16,26 @@ layout(set = 0, binding = 3) uniform sampler2D gHeightAo;
 layout(set = 0, binding = 4) uniform sampler2D gDepth;
 
 layout(set = 1, binding = 0) uniform SkyboxUBO {
+    mat4x4 model;
+    mat4x4 inverseView;
+    mat4x4 inverseProj;
+
     uint envIdx;
     uint radianceIdx;
     uint irradianceIdx;
+    uint specularMipLevels;
+
+    uint brdfLUTIndex;
     uint p0;
+    uint p1;
+    uint p2;
 } skybox;
 
+layout(set = 2, binding = 0) uniform sampler2D tex[];
+layout(set = 3, binding = 0) uniform samplerCube envTex[];
+
 layout(location = 0) in vec2 vUV;
+
 layout(location = 0) out vec4 outColor;
 
 vec3 reconstructWorldPos(vec2 uv, float depth01)
@@ -36,57 +51,73 @@ vec3 reconstructWorldPos(vec2 uv, float depth01)
     return world.xyz / world.w;
 }
 
+vec3 FresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
+{
+    // Epic / Filament 스타일
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) *
+                pow(1.0 - cosTheta, 5.0);
+}
+
 void main()
 {
+    float depth = texture(gDepth, vUV).r;
+    
+    // worldPos 복원
+    vec3 worldPos = reconstructWorldPos(vUV, depth);
+    
+    if (depth >= 1.0 - 1e-5) {
+        vec3 sky = texture(envTex[nonuniformEXT(skybox.radianceIdx)], worldPos).rgb; // or 별도 skyboxCube
+        outColor = vec4(sky, 1.0);
+        return;
+    }
+    
     vec4 am = texture(gAlbedoMetal, vUV);
     vec4 nr = texture(gNormalRough, vUV);
     vec4 ha = texture(gHeightAo, vUV);
-    float depth01 = texture(gDepth, vUV).r;
 
-    // G-buffer
     vec3 albedo    = am.rgb;
     float metallic = am.a;
 
-    vec3 normal    = normalize(nr.rgb * 2.0 - 1.0);
-    float rough    = nr.a;
-    float height   = ha.r;
-    float ao       = ha.g;
+    vec3 normal = normalize(nr.rgb * 2.0 - 1.0);
+    float roughness = nr.a;
+    float height = ha.r;
+    float ao = ha.g;
 
-    // worldPos 복원
-    vec3 worldPos = reconstructWorldPos(vUV, depth01);
-
-    // 스팟 라이트 파라미터 (world space)
-    vec3 camPos  = light.cameraPos.xyz;
-    vec3 spotPos = light.spotPos_range.xyz;
-    float spotRange = light.spotPos_range.w;
-
-    vec3 spotDir    = normalize(light.spotDir_inner.xyz);
-    float cosInner  = light.spotDir_inner.w;
-    vec3 spotColor  = light.spotColor_outer.rgb;
-    float cosOuter  = light.spotColor_outer.a;
+    vec3 cameraPos   = light.cameraPos.xyz;
 
     // 기본 벡터 계산
     vec3 N = normalize(normal);
-    vec3 L = normalize(spotPos - worldPos);
-    vec3 V = normalize(camPos - worldPos);
+    vec3 V = normalize(cameraPos - worldPos);
+    float NdotV = max(dot(N, V), 0.0);
 
-    float NdotL = max(dot(N, L), 0.0);
+    vec3 F0 = mix(vec3(0.04), albedo, metallic);  // 금속이면 albedo가 F0
+    vec3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
+    vec3 kS = F;
+    vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
 
-    // 각도 기반 스팟 falloff
-    float cosTheta = dot(-L, spotDir); // L은 표면→라이트, 스팟 방향은 라이트→아래
-    float spotFactor = smoothstep(cosOuter, cosInner, cosTheta);
+    vec3 diffuseIrr = texture(envTex[nonuniformEXT(skybox.irradianceIdx)], N).rgb;
+    vec3 diffuseIBL = diffuseIrr * albedo;
 
-    // 거리 감쇠
-    float dist = length(spotPos - worldPos);
-    float rangeFactor = clamp(1.0 - dist / spotRange, 0.0, 1.0);
+    vec3 R = reflect(-V, N);
 
-    float intensity = NdotL * spotFactor * rangeFactor;
+    float maxMip = float(skybox.specularMipLevels); // push constant or #define
+    float lod = roughness * maxMip;
 
-    vec3 diffuse = albedo * spotColor * intensity;
+    vec3 prefilteredColor = textureLod(envTex[nonuniformEXT(skybox.radianceIdx)], R, lod).rgb;
 
-    // 아주 간단한 ambient
-    vec3 ambient = albedo * 0.05 * ao;
+    // (N·V, roughness) 로 LUT 샘플링
+    vec2 brdf = texture(tex[nonuniformEXT(skybox.brdfLUTIndex)], vec2(NdotV, roughness)).rg;
 
-//    outColor = vec4(diffuse + ambient, 1.0);
-    outColor = vec4(albedo, 1.0);
+    // F는 위에서 구한 FresnelSchlickRoughness 사용
+    vec3 specularIBL = prefilteredColor * (F * brdf.x + brdf.y);
+
+    vec3 ambient = kD * diffuseIBL + specularIBL;
+    ambient *= ao;
+    
+    vec3 color = ambient;
+
+    // 톤매핑 & 감마
+    color = pow(color, vec3(1.0/2.2));   // sRGB
+
+    outColor = vec4(color, 1.0);
 }

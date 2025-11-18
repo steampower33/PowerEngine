@@ -3,27 +3,29 @@
 #extension GL_EXT_nonuniform_qualifier : require
 
 layout(set = 1, binding = 0) uniform SkyboxUBO {
-    mat4 model;
+    mat4x4 model;
+    mat4x4 inverseView;
+    mat4x4 inverseProj;
+
     uint envIdx;
     uint radianceIdx;
     uint irradianceIdx;
+    uint specularMipLevels;
+
+    uint brdfLUTIndex;
     uint p0;
+    uint p1;
+    uint p2;
 } skybox;
 
-// IBL용 env cube map 배열이라고 가정
 layout(set = 2, binding = 0) uniform samplerCube envTex[];
 
 layout(location = 0) in vec3 vDir;
 
-layout(location = 0) out vec4 outAlbedoMetal;
-layout(location = 1) out vec4 outNormalRough;
-layout(location = 2) out vec4 outHeightAO;
+layout(location = 0) out vec4 outColor;
 
 void main() {
-    int envIndex = int(skybox.envIdx);
+    vec3 color = texture(envTex[nonuniformEXT(skybox.envIdx)], vDir).rgb;
 
-    vec3 color = texture(envTex[nonuniformEXT(envIndex)], vDir).rgb;
-
-    outAlbedoMetal = vec4(color, 0.0);
-//    outAlbedoMetal = vec4(0.5, 0.5, 0.5, 0.0);
+    outColor = vec4(color, 0.0);
 }
