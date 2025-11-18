@@ -33,7 +33,7 @@ GraphicsContext::GraphicsContext(GLFWwindow* glfwWindow, Context& context, Swapc
 	CreateSyncObjects();
 
 	//cpu_sim_ = std::make_unique<CpuSim>(context_, swapchain_, texture_manager_, set_layouts_.global, Nx_, Ny_, spacing_);
-	gpu_sim_ = std::make_unique<GpuSim>(context_, swapchain_, texture_manager_, set_layouts_.global, Nx_, Ny_, spacing_, geometry_buffers_.formats);
+	gpu_sim_ = std::make_unique<GpuSim>(context_, swapchain_, texture_manager_, set_layouts_.global, geometry_buffers_.formats);
 }
 
 void GraphicsContext::Update(Camera& camera)
@@ -440,7 +440,7 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 
 			for (uint32_t it = 0; it < gpu_sim_->iterations_; ++it)
 			{
-				uint32_t base = 4 + it * gpu_sim_->iter_contraint_count_;
+				uint32_t base = 4 + it * gpu_sim_->timestamp_count_;
 				tSolveStretch += delta_ms(base + 0, base + 1);
 				tSolveDiag += delta_ms(base + 2, base + 3);
 				tSolveBend += delta_ms(base + 4, base + 5);
@@ -449,7 +449,7 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 			}
 
 			// 3) Update Velocity
-			uint32_t lastBase = 4 + gpu_sim_->iter_contraint_count_ * gpu_sim_->iterations_;
+			uint32_t lastBase = 4 + gpu_sim_->timestamp_count_ * gpu_sim_->iterations_;
 			double tUpdate = delta_ms(lastBase + 0, lastBase + 1);
 
 			// 4) Ãâ·Â
@@ -729,8 +729,8 @@ void GraphicsContext::CreateUniformBuffers()
 {
 	// Global
 	{
-		ubo_.global.clear();
-		ubo_memory_.global.clear();
+		ubos_.global.clear();
+		ubo_memories_.global.clear();
 		ubo_mapped_.global = nullptr;
 
 		auto limits = context_.physical_device_.getProperties().limits;
@@ -741,15 +741,15 @@ void GraphicsContext::CreateUniformBuffers()
 		vk::raii::Buffer buffer({});
 		vk::raii::DeviceMemory bufferMem({});
 		vku::CreateBuffer(context_.physical_device_, context_.device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
-		ubo_.global = std::move(buffer);
-		ubo_memory_.global = std::move(bufferMem);
-		ubo_mapped_.global = ubo_memory_.global.mapMemory(0, totalSize);
+		ubos_.global = std::move(buffer);
+		ubo_memories_.global = std::move(bufferMem);
+		ubo_mapped_.global = ubo_memories_.global.mapMemory(0, totalSize);
 	}
 
 	// Object
 	{
-		ubo_.object.clear();
-		ubo_memory_.object.clear();
+		ubos_.object.clear();
+		ubo_memories_.object.clear();
 		ubo_mapped_.object = nullptr;
 
 		auto limits = context_.physical_device_.getProperties().limits;
@@ -760,15 +760,15 @@ void GraphicsContext::CreateUniformBuffers()
 		vk::raii::Buffer buffer({});
 		vk::raii::DeviceMemory bufferMem({});
 		vku::CreateBuffer(context_.physical_device_, context_.device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
-		ubo_.object = std::move(buffer);
-		ubo_memory_.object = std::move(bufferMem);
-		ubo_mapped_.object = ubo_memory_.object.mapMemory(0, totalSize);
+		ubos_.object = std::move(buffer);
+		ubo_memories_.object = std::move(bufferMem);
+		ubo_mapped_.object = ubo_memories_.object.mapMemory(0, totalSize);
 	}
 
 	// Light
 	{
-		ubo_.light.clear();
-		ubo_memory_.light.clear();
+		ubos_.light.clear();
+		ubo_memories_.light.clear();
 		ubo_mapped_.light = nullptr;
 
 		auto limits = context_.physical_device_.getProperties().limits;
@@ -779,9 +779,9 @@ void GraphicsContext::CreateUniformBuffers()
 		vk::raii::Buffer buffer({});
 		vk::raii::DeviceMemory bufferMem({});
 		vku::CreateBuffer(context_.physical_device_, context_.device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
-		ubo_.light = std::move(buffer);
-		ubo_memory_.light = std::move(bufferMem);
-		ubo_mapped_.light = ubo_memory_.light.mapMemory(0, totalSize);
+		ubos_.light = std::move(buffer);
+		ubo_memories_.light = std::move(bufferMem);
+		ubo_mapped_.light = ubo_memories_.light.mapMemory(0, totalSize);
 	}
 
 }
@@ -799,7 +799,7 @@ void GraphicsContext::CreateDescriptorSets()
 		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
 		sets_.global = std::move(sets.front());
 
-		vk::DescriptorBufferInfo globalUboBufferInfo{ *ubo_.global, 0, sizeof(UBOData::Global) };
+		vk::DescriptorBufferInfo globalUboBufferInfo{ *ubos_.global, 0, sizeof(UBOData::Global) };
 
 		std::array descriptorWrites{
 			 vk::WriteDescriptorSet{
@@ -835,7 +835,7 @@ void GraphicsContext::CreateDescriptorSets()
 		sets_.object = std::move(sets.front());
 
 		// Update
-		vk::DescriptorBufferInfo objectUboBufferInfo{ *ubo_.object, 0, sizeof(UBOData::Global) };
+		vk::DescriptorBufferInfo objectUboBufferInfo{ *ubos_.object, 0, sizeof(UBOData::Global) };
 
 		std::vector<vk::DescriptorImageInfo> imageInfos;
 		for (auto& tex : texture_manager_.textures_) {
@@ -877,7 +877,7 @@ void GraphicsContext::CreateDescriptorSets()
 		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
 		sets_.lighting = std::move(sets.front());
 		
-		vk::DescriptorBufferInfo lightUboBufferInfo{ *ubo_.light, 0, sizeof(UBOData::Light) };
+		vk::DescriptorBufferInfo lightUboBufferInfo{ *ubos_.light, 0, sizeof(UBOData::Light) };
 
 		std::array<vk::DescriptorImageInfo, 4> gbufferInfos{
 			vk::DescriptorImageInfo{

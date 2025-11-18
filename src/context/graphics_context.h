@@ -63,35 +63,19 @@ public:
 	std::unique_ptr<CpuSim> cpu_sim_;
 	std::unique_ptr<GpuSim> gpu_sim_;
 
-	// |===== Particle Info =====|
-	const uint32_t Nx_ = 64;
-	const uint32_t Ny_ = 64;
-	const float spacing_ = 0.05;
-
-	uint32_t particles_size_ = Nx_ * Ny_;
-	uint32_t indices_size_ = 0;
-	uint32_t edges_size_ = 0;
-
-	// |===== Push Constant =====|
-	struct ClothPC {
-		uint32_t Nx;
-		uint32_t Ny;
-	} cloth_pc_;
-	static_assert(sizeof(ClothPC) % 4 == 0, "push constant must be multiple of 4 bytes");
-
 	vku::Counts counts_;
 
 	struct UBO {
 		vk::raii::Buffer global{ nullptr };
 		vk::raii::Buffer object{ nullptr };
 		vk::raii::Buffer light{ nullptr };
-	} ubo_;
+	} ubos_;
 
-	struct UBOMem {
+	struct UBOMemory {
 		vk::raii::DeviceMemory global{ nullptr };
 		vk::raii::DeviceMemory object{ nullptr };
 		vk::raii::DeviceMemory light{ nullptr };
-	} ubo_memory_;
+	} ubo_memories_;
 
 	struct UBOMapped {
 		void* global{ nullptr };
@@ -120,8 +104,8 @@ public:
 			uint32_t metallic = 0;
 			uint32_t height = 0;
 			uint32_t normal = 0;
-			uint32_t chooseTexIdx = 0;
-			float heightScale = 1.0f;
+			uint32_t pad0 = 0;
+			uint32_t pad1 = 0;
 		} object;
 
 		struct Light {
@@ -134,29 +118,29 @@ public:
 
 	} ubo_data_;
 
-	struct CommandBuffers {
+	struct CommandBuffer {
 		std::vector<vk::raii::CommandBuffer> compute;
 		std::vector<vk::raii::CommandBuffer> graphics;
 	} cmds_;
 
-	struct SetLayouts {
+	struct SetLayout {
 		vk::raii::DescriptorSetLayout global{ nullptr };
 		vk::raii::DescriptorSetLayout object{ nullptr };
 		vk::raii::DescriptorSetLayout lighting{ nullptr };
 	} set_layouts_;
 
-	struct Sets {
+	struct Set {
 		vk::raii::DescriptorSet global{ nullptr };
 		vk::raii::DescriptorSet object{ nullptr };
 		vk::raii::DescriptorSet lighting{ nullptr };
 	} sets_;
 
-	struct PipelineLayouts {
+	struct PipelineLayout {
 		vk::raii::PipelineLayout model{ nullptr };
 		vk::raii::PipelineLayout lighting{ nullptr };
 	} pipeline_layouts_;
 
-	struct Pipelines {
+	struct Pipeline {
 		vk::raii::Pipeline model_solid{ nullptr };
 		vk::raii::Pipeline model_wireframe{ nullptr };
 		vk::raii::Pipeline model_point{ nullptr };
@@ -165,7 +149,7 @@ public:
 
 	vku::PolygonMode polygon_mode_ = vku::PolygonMode::SOLID;
 
-	struct GeometryBuffers {
+	struct GeometryBuffer {
 		std::vector<vk::Format> formats;
 
 		vk::raii::Sampler sampler{ nullptr };

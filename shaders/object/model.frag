@@ -17,8 +17,8 @@ layout(set=1, binding=0) uniform ObjectUBO {
 	uint metallic;
 	uint height;
 	uint normal;
-	uint chooseTexIdx;
-	uint heightScale;
+	uint pad0;
+	uint pad1;
 } object;
 
 layout(set=1, binding=1) uniform sampler2D tex[];

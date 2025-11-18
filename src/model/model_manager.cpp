@@ -15,12 +15,12 @@ ModelManager::ModelManager(Context& context, GraphicsContext& graphicsContext, T
 		glm::vec3 initPos = glm::vec3(0.0f, 1.0f, 0.0f);
 		glm::vec4 initColor = glm::vec4(244.0f / 255.0f, 114 / 255.0f, 43 / 255.0f, 0.0);
 		std::unique_ptr<Model> model = std::make_unique<Model>("assets/sphere.gltf", vku::VertexIncludeInfo{ true, true }, context, graphicsContext, model_count_, initPos, angleQuat, initColor, true);
-		model->texture_idx_.albedo = textureManager.CreateTexture2D("assets/worm", "albedo");
-		model->texture_idx_.metallic = textureManager.CreateTexture2D("assets/worm", "metallic");
-		model->texture_idx_.normal = textureManager.CreateTexture2D("assets/worm", "normal");
-		model->texture_idx_.roughness = textureManager.CreateTexture2D("assets/worm", "roughness");
-		model->texture_idx_.ao = textureManager.CreateTexture2D("assets/worm", "ao");
-		model->texture_idx_.height = textureManager.CreateTexture2D("assets/worm", "height");
+		model->texture_idx_.albedo = textureManager.CreateTexture2D("assets/worm", "_albedo");
+		model->texture_idx_.metallic = textureManager.CreateTexture2D("assets/worm", "_metallic");
+		model->texture_idx_.normal = textureManager.CreateTexture2D("assets/worm", "_normal");
+		model->texture_idx_.roughness = textureManager.CreateTexture2D("assets/worm", "_roughness");
+		model->texture_idx_.ao = textureManager.CreateTexture2D("assets/worm", "_ao");
+		model->texture_idx_.height = textureManager.CreateTexture2D("assets/worm", "_height");
 		models.emplace_back(std::move(model));
 	}
 

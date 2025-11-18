@@ -11,8 +11,7 @@ TextureManager::TextureManager(Context& context)
     std::unique_ptr<Texture2D> texture = std::make_unique<Texture2D>("assets", "vulkan_cloth_rgba.ktx", context);
     textures_.push_back(std::move(texture));
 
-    std::string wormPath = "assets/worm";
-    ConvertPbrPngsInFolderToKtx(wormPath);
+    ConvertPbrPngsInFolderToKtx("assets/worm");
 }
 
 uint32_t TextureManager::CreateTexture2D(std::string path, std::string keyword)
@@ -22,7 +21,6 @@ uint32_t TextureManager::CreateTexture2D(std::string path, std::string keyword)
             std::string texPath = path + "/" + filename;
             std::cout << "Load " << texPath << std::endl;
             fs::path p(texPath);
-            p.replace_extension(".ktx");
             std::unique_ptr<Texture2D> texture = std::make_unique<Texture2D>(path, filename, context_);
             uint32_t idx = textures_.size();
             textures_.push_back(std::move(texture));
@@ -43,7 +41,7 @@ uint32_t TextureManager::CreateTexture2D(std::string path, std::string keyword)
         std::string parentPath = p.parent_path().string();
         std::string filename = p.filename().string();
 
-        if (filename.find("ktx") == std::string::npos) continue;
+        if (p.extension() != ".ktx") continue;
 
         if (filename.find(keyword) != std::string::npos)
             return CreateTexture(parentPath, filename);
@@ -61,10 +59,35 @@ TextureManager::~TextureManager()
 // 개별 PNG를 KTX로 변환
 void TextureManager::CreateKtxFromPng(const fs::path& pngPath, const fs::path& ktxPath)
 {
+    std::string filename = pngPath.filename().string();
+    std::string lower = filename;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+        [](unsigned char c) { return (char)std::tolower(c); });
+
+    bool isAlbedo =
+        lower.find("albedo") != std::string::npos ||
+        lower.find("basecolor") != std::string::npos ||
+        lower.find("base_color") != std::string::npos;
+
+    std::string fmt;
+    std::string tf;
+
+    if (isAlbedo) {
+        // 색상 텍스쳐
+        fmt = "R8G8B8A8_SRGB";
+        tf = "srgb";
+    }
+    else {
+        // 데이터 텍스쳐 (normal, roughness, metallic ...)
+        fmt = "R8G8B8A8_UNORM";
+        tf = "linear";
+    }
+
     std::string cmd = "ktx create "
-        "--format R8G8B8A8_UNORM "
-        "--assign-tf linear "
+        "--format " + fmt + " "
+        "--assign-tf " + tf + " "
         "--assign-primaries bt709 "
+        "--generate-mipmap "  // 혹은 --genmipmap 류의 옵션
         "\"" + pngPath.string() + "\" "
         "\"" + ktxPath.string() + "\"";
 
