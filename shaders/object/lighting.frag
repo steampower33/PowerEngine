@@ -13,6 +13,13 @@ layout(set = 0, binding = 2) uniform sampler2D gNormalRough;
 layout(set = 0, binding = 3) uniform sampler2D gHeightAo;
 layout(set = 0, binding = 4) uniform sampler2D gDepth;
 
+layout(set = 1, binding = 0) uniform SkyboxUBO {
+    uint envIdx;
+    uint radianceIdx;
+    uint irradianceIdx;
+    uint p0;
+} skybox;
+
 layout(location = 0) in vec2 vUV;
 layout(location = 0) out vec4 outColor;
 
@@ -80,5 +87,6 @@ void main()
     // 아주 간단한 ambient
     vec3 ambient = albedo * 0.05 * ao;
 
-    outColor = vec4(diffuse + ambient, 1.0);
+//    outColor = vec4(diffuse + ambient, 1.0);
+    outColor = vec4(albedo, 1.0);
 }

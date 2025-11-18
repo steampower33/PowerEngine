@@ -2,7 +2,7 @@
 
 class Context;
 class Swapchain;
-class Texture2D;
+class Texture;
 class TextureManager;
 class Model;
 class ModelManager;

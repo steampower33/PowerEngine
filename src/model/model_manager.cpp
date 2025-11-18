@@ -3,6 +3,7 @@
 #include "graphics_context.h"
 #include "geometry_generator.h"
 #include "texture_manager.h"
+#include "skybox.h"
 
 #include "model_manager.h"
 
@@ -18,12 +19,12 @@ ModelManager::ModelManager(Context& context, GraphicsContext& graphicsContext, T
 		glm::vec3 initPos = glm::vec3(0.0f, 1.0f, 0.0f);
 		glm::vec4 initColor = glm::vec4(244.0f / 255.0f, 114 / 255.0f, 43 / 255.0f, 0.0);
 		std::unique_ptr<Model> model = std::make_unique<Model>(sphere, vku::VertexIncludeInfo{ true, true }, context, graphicsContext, model_count_, initPos, angleQuat, initColor, true);
-		model->texture_idx_.albedo = textureManager.CreateTexture2D("assets/Metal", "albedo");
-		model->texture_idx_.metallic = textureManager.CreateTexture2D("assets/Metal", "metallic");
-		model->texture_idx_.normal = textureManager.CreateTexture2D("assets/Metal", "normal");
-		model->texture_idx_.roughness = textureManager.CreateTexture2D("assets/Metal", "roughness");
-		model->texture_idx_.ao = textureManager.CreateTexture2D("assets/Metal", "ao");
-		model->texture_idx_.height = textureManager.CreateTexture2D("assets/Metal", "height");
+		model->texture_idx_.albedo = textureManager.CreateTexture("assets/Metal", "albedo");
+		model->texture_idx_.metallic = textureManager.CreateTexture("assets/Metal", "metallic");
+		model->texture_idx_.normal = textureManager.CreateTexture("assets/Metal", "normal");
+		model->texture_idx_.roughness = textureManager.CreateTexture("assets/Metal", "roughness");
+		model->texture_idx_.ao = textureManager.CreateTexture("assets/Metal", "ao");
+		model->texture_idx_.height = textureManager.CreateTexture("assets/Metal", "height");
 		models.emplace_back(std::move(model));
 	}
 
@@ -35,6 +36,17 @@ ModelManager::ModelManager(Context& context, GraphicsContext& graphicsContext, T
 		glm::vec4 initColor = glm::vec4(color, color, color, 1.0);
 		std::unique_ptr<Model> model = std::make_unique<Model>(plane, vku::VertexIncludeInfo{ true, true }, context, graphicsContext, model_count_, initPos, angleQuat, initColor, false);
 		models.emplace_back(std::move(model));
+	}
+
+	{
+		MeshData box = GeometryGenerator::MakeBox(50.0f);
+
+		std::reverse(box.indices.begin(), box.indices.end());
+		skybox_ = std::make_unique<Skybox>(box, vku::VertexIncludeInfo{ false, false }, context, graphicsContext);
+
+		skybox_->texture_idx_.env = textureManager.CreateTexture("assets/Indoor", "env", true);
+		skybox_->texture_idx_.radiance = textureManager.CreateTexture("assets/Indoor", "radiance_specular", true);
+		skybox_->texture_idx_.irradiance = textureManager.CreateTexture("assets/Indoor", "irradiance_diffuse", true);
 	}
 }
 

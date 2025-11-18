@@ -3,7 +3,7 @@
 class Context;
 class Swapchain;
 class ModelManager;
-class Texture2D;
+class Texture;
 class TextureManager;
 
 class CpuSim {

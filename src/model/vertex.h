@@ -34,14 +34,17 @@ struct Vertex {
         posAttr.format = vk::Format::eR32G32B32Sfloat;
         posAttr.offset = static_cast<uint32_t>(offsetof(Vertex, pos));
         desc.attributes.push_back(posAttr);
-
-        // location 1 : uv (vec2)
-        vk::VertexInputAttributeDescription uvAttr{};
-        uvAttr.location = 1;
-        uvAttr.binding = 0;
-        uvAttr.format = vk::Format::eR32G32Sfloat;
-        uvAttr.offset = static_cast<uint32_t>(offsetof(Vertex, uv));
-        desc.attributes.push_back(uvAttr);
+        
+        if (include.uv)
+        {
+            // location 1 : uv (vec2)
+            vk::VertexInputAttributeDescription uvAttr{};
+            uvAttr.location = 1;
+            uvAttr.binding = 0;
+            uvAttr.format = vk::Format::eR32G32Sfloat;
+            uvAttr.offset = static_cast<uint32_t>(offsetof(Vertex, uv));
+            desc.attributes.push_back(uvAttr);
+        }
 
         // 나머지 location은 include에 따라 선택적으로 추가
         // (원하면 항상 추가해서 고정 레이아웃으로 써도 됨)

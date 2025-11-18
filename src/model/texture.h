@@ -3,21 +3,23 @@
 class Context;
 class GraphicsContext;
 
-class Texture2D
+class Texture
 {
 public:
-	Texture2D(std::string path, std::string filename, Context& context);
-	Texture2D(const Texture2D& rhs) = delete;
-	Texture2D(Texture2D&& rhs) = delete;
-	~Texture2D();
+	Texture(std::string path, std::string filename, Context& context);
+	Texture(const Texture& rhs) = delete;
+	Texture(Texture&& rhs) = delete;
+	~Texture();
 
-	Texture2D& operator=(const Texture2D& rhs) = delete;
-	Texture2D& operator=(Texture2D&& rhs) = delete;
+	Texture& operator=(const Texture& rhs) = delete;
+	Texture& operator=(Texture&& rhs) = delete;
 
 	std::string path_;
 	std::string filename_;
 
 	uint32_t mip_levels_;
+	bool isCubemap = false;
+	uint32_t faces = 1u;
 
 	vk::raii::Image texture_image_ = nullptr;
 	vk::raii::DeviceMemory texture_image_memory_ = nullptr;

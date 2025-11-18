@@ -163,7 +163,7 @@ void Model::LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo
 }
 
 void Model::ApplyTransform(const glm::quat& rotationDelta, const glm::vec3& translationDelta)
-{   // 1. 컴포넌트를 직접 업데이트한다.
+{
 
     // 기존 위치에 이동량을 더한다.
     position_ += translationDelta;

@@ -4,11 +4,12 @@
 #include "gpu_sim.h"
 #include "camera.h"
 #include "vertex.h"
-#include "texture_2d.h"
+#include "texture.h"
 #include "texture_manager.h"
 #include "model.h"
 #include "model_manager.h"
 #include "gui.h"
+#include "skybox.h"
 
 #include "graphics_context.h"
 
@@ -32,7 +33,6 @@ GraphicsContext::GraphicsContext(GLFWwindow* glfwWindow, Context& context, Swapc
 	CreateGraphicsPipelines();
 	CreateSyncObjects();
 
-	//cpu_sim_ = std::make_unique<CpuSim>(context_, swapchain_, texture_manager_, set_layouts_.global, Nx_, Ny_, spacing_);
 	gpu_sim_ = std::make_unique<GpuSim>(context_, swapchain_, texture_manager_, set_layouts_.global, geometry_buffers_.formats);
 }
 
@@ -227,6 +227,15 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 			{ *sets_.global },
 			{ globalOffset }
 		);
+		
+		// tex2D
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			pipeline_layouts_.model,
+			2,
+			{ *sets_.tex2D },
+			{ }
+		);
 
 		for (uint32_t i = 0; i < model_manager_.model_count_; ++i) {
 			uint32_t objectOffset = baseObjectOffset + i * static_cast<uint32_t>(ubo_size_.object);
@@ -237,13 +246,49 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 				pipeline_layouts_.model,
 				1,
 				{ *sets_.object },
-				{ objectOffset }   // ← Set 1에도 동적 바인딩 1개 → 오프셋 1개만
+				{ objectOffset } 
 			);
 
 			cmd.bindVertexBuffers(0, { model_manager_.models[i]->mesh_data_.vertex_buffer }, { 0 });
 			cmd.bindIndexBuffer(*model_manager_.models[i]->mesh_data_.index_buffer, 0, vk::IndexType::eUint32);
 			cmd.drawIndexed(model_manager_.models[i]->mesh_data_.indices_count, 1, 0, 0, 0);
 		}
+	}
+
+	// Skybox
+	{
+		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.skybox);
+
+		// Global Set
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			pipeline_layouts_.skybox,
+			0,
+			{ *sets_.global },
+			{ globalOffset }
+		);
+
+		// Skybox
+		uint32_t skyboxOffset = static_cast<uint32_t>(current_frame_ * ubo_size_.skybox);
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			pipeline_layouts_.skybox,
+			1,
+			{ *sets_.skybox },
+			{ skyboxOffset } 
+		);
+
+		// texEnv
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			pipeline_layouts_.skybox,
+			2,
+			{ *sets_.texEnv },
+			{ }
+		);
+		cmd.bindVertexBuffers(0, { model_manager_.skybox_->mesh_data_.vertex_buffer }, { 0 });
+		cmd.bindIndexBuffer(*model_manager_.skybox_->mesh_data_.index_buffer, 0, vk::IndexType::eUint32);
+		cmd.drawIndexed(model_manager_.skybox_->mesh_data_.indices_count, 1, 0, 0, 0);
 	}
 
 	cmd.endRendering();
@@ -327,6 +372,15 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 		0,
 		{ *sets_.lighting },
 		{ lightOffset }
+	);
+
+	uint32_t skyboxOffset = static_cast<uint32_t>(current_frame_ * ubo_size_.skybox);
+	cmd.bindDescriptorSets(
+		vk::PipelineBindPoint::eGraphics,
+		pipeline_layouts_.lighting,
+		1,
+		{ *sets_.skybox },
+		{ skyboxOffset }
 	);
 
 	// fullscreen triangle
@@ -535,7 +589,6 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 			result = context_.queue_.presentKHR(presentInfo);
 			if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR || context_.framebuffer_resized_) {
 				context_.framebuffer_resized_ = false;
-				RecreateSwapchain();
 			}
 			else if (result != vk::Result::eSuccess) {
 				throw std::runtime_error("failed to present swap chain image!");
@@ -547,7 +600,7 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 				return;
 			}
 			else {
-				throw;
+				throw std::runtime_error("failed to present swap chain image!");
 			}
 		}
 	}
@@ -606,30 +659,21 @@ void GraphicsContext::CreateDescriptorSetLayout()
 		set_layouts_.global = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
 	}
 
-	// Object UBO + Bindless - Graphics
+	// Tex2D
 	{
 		std::array layoutBindings{
 			vk::DescriptorSetLayoutBinding(
-				0, 
-				vk::DescriptorType::eUniformBufferDynamic, 
-				1, 
-				vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 
-				nullptr
-			),
-			vk::DescriptorSetLayoutBinding(
-				1, 
-				vk::DescriptorType::eCombinedImageSampler, 
-				texture_manager_.max_texture_size, 
+				0,
+				vk::DescriptorType::eCombinedImageSampler,
+				texture_manager_.max_texture_size,
 				vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
 				nullptr
 			)
 		};
-		counts_.ubo_dynamic += 1;
 		counts_.sampler += texture_manager_.max_texture_size;
 		counts_.layout += 1;
 
-		std::array<vk::DescriptorBindingFlags, 2> bindingFlags{
-			vk::DescriptorBindingFlags{}, // binding 0: 없음
+		std::array<vk::DescriptorBindingFlags, 1> bindingFlags{
 			vk::DescriptorBindingFlagBits::ePartiallyBound |
 			vk::DescriptorBindingFlagBits::eVariableDescriptorCount
 		};
@@ -641,8 +685,61 @@ void GraphicsContext::CreateDescriptorSetLayout()
 
 		vk::DescriptorSetLayoutCreateInfo layoutInfo{
 			.pNext = &flagsInfo,
-			.bindingCount = static_cast<uint32_t>(layoutBindings.size()), 
-			.pBindings = layoutBindings.data() 
+			.bindingCount = static_cast<uint32_t>(layoutBindings.size()),
+			.pBindings = layoutBindings.data()
+		};
+		set_layouts_.tex2D = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
+	}
+
+	// TexEnv
+	{
+		std::array layoutBindings{
+			vk::DescriptorSetLayoutBinding(
+				0,
+				vk::DescriptorType::eCombinedImageSampler,
+				texture_manager_.max_texture_size,
+				vk::ShaderStageFlagBits::eFragment,
+				nullptr
+			)
+		};
+		counts_.sampler += texture_manager_.env_texture_size;
+		counts_.layout += 1;
+
+		std::array<vk::DescriptorBindingFlags, 1> bindingFlags{
+			vk::DescriptorBindingFlagBits::ePartiallyBound |
+			vk::DescriptorBindingFlagBits::eVariableDescriptorCount
+		};
+
+		vk::DescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{
+			.bindingCount = static_cast<uint32_t>(bindingFlags.size()),
+			.pBindingFlags = bindingFlags.data()
+		};
+
+		vk::DescriptorSetLayoutCreateInfo layoutInfo{
+			.pNext = &flagsInfo,
+			.bindingCount = static_cast<uint32_t>(layoutBindings.size()),
+			.pBindings = layoutBindings.data()
+		};
+		set_layouts_.texEnv = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
+	}
+
+	// Object UBO
+	{
+		std::array layoutBindings{
+			vk::DescriptorSetLayoutBinding(
+				0, 
+				vk::DescriptorType::eUniformBufferDynamic, 
+				1, 
+				vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 
+				nullptr
+			)
+		};
+		counts_.ubo_dynamic += 1;
+		counts_.layout += 1;
+
+		vk::DescriptorSetLayoutCreateInfo layoutInfo{
+			.bindingCount = static_cast<uint32_t>(layoutBindings.size()),
+			.pBindings = layoutBindings.data()
 		};
 		set_layouts_.object = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
 	}
@@ -697,6 +794,27 @@ void GraphicsContext::CreateDescriptorSetLayout()
 		};
 		set_layouts_.lighting =
 			vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
+	}
+
+	// Skybox UBO
+	{
+		std::array layoutBindings{
+			vk::DescriptorSetLayoutBinding(
+				0,
+				vk::DescriptorType::eUniformBufferDynamic,
+				1,
+				vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+				nullptr
+			)
+		};
+		counts_.ubo_dynamic += 1;
+		counts_.layout += 1;
+
+		vk::DescriptorSetLayoutCreateInfo layoutInfo{
+			.bindingCount = static_cast<uint32_t>(layoutBindings.size()),
+			.pBindings = layoutBindings.data()
+		};
+		set_layouts_.skybox = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
 	}
 }
 
@@ -786,6 +904,35 @@ void GraphicsContext::CreateUniformBuffers()
 		ubo_mapped_.light = ubo_memories_.light.mapMemory(0, totalSize);
 	}
 
+	// Skybox
+	{
+		ubos_.skybox.clear();
+		ubo_memories_.skybox.clear();
+		ubo_mapped_.skybox = nullptr;
+
+		auto limits = context_.physical_device_.getProperties().limits;
+		ubo_size_.skybox = (sizeof(UBOData::SkyBox) + limits.minUniformBufferOffsetAlignment - 1)
+			& ~(limits.minUniformBufferOffsetAlignment - 1);
+		vk::DeviceSize totalSize = ubo_size_.skybox * MAX_FRAMES_IN_FLIGHT;
+
+		vk::raii::Buffer buffer({});
+		vk::raii::DeviceMemory bufferMem({});
+		vku::CreateBuffer(context_.physical_device_, context_.device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
+		ubos_.skybox = std::move(buffer);
+		ubo_memories_.skybox = std::move(bufferMem);
+		ubo_mapped_.skybox = ubo_memories_.skybox.mapMemory(0, totalSize);
+
+		ubo_data_.skybox.envIdx = model_manager_.skybox_->texture_idx_.env;
+		ubo_data_.skybox.radianceIdx = model_manager_.skybox_->texture_idx_.radiance;
+		ubo_data_.skybox.irradianceIdx = model_manager_.skybox_->texture_idx_.irradiance;
+		ubo_data_.skybox.model = model_manager_.skybox_->world_;
+
+		auto* dst = static_cast<std::byte*>(ubo_mapped_.skybox);
+		std::memcpy(dst, &ubo_data_.skybox, ubo_size_.skybox);
+
+		dst += ubo_size_.skybox;
+		std::memcpy(dst, &ubo_data_.skybox, ubo_size_.skybox);
+	}
 }
 
 void GraphicsContext::CreateDescriptorSets()
@@ -816,7 +963,7 @@ void GraphicsContext::CreateDescriptorSets()
 		context_.device_.updateDescriptorSets(descriptorWrites, {});
 	}
 
-	// Object UBO + Sampler
+	// Tex2D
 	{
 		// Create
 		uint32_t maxTextures = texture_manager_.max_texture_size;
@@ -830,15 +977,13 @@ void GraphicsContext::CreateDescriptorSets()
 			.pNext = &countInfo,
 			.descriptorPool = *descriptor_pool_,
 			.descriptorSetCount = 1,
-			.pSetLayouts = &*set_layouts_.object
+			.pSetLayouts = &*set_layouts_.tex2D
 		};
 
 		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
-		sets_.object = std::move(sets.front());
+		sets_.tex2D = std::move(sets.front());
 
 		// Update
-		vk::DescriptorBufferInfo objectUboBufferInfo{ *ubos_.object, 0, sizeof(UBOData::Object) };
-
 		std::vector<vk::DescriptorImageInfo> imageInfos;
 		for (auto& tex : texture_manager_.textures_) {
 			imageInfos.push_back(vk::DescriptorImageInfo{
@@ -849,20 +994,82 @@ void GraphicsContext::CreateDescriptorSets()
 		}
 		std::array descriptorWrites{
 			vk::WriteDescriptorSet{
+				.dstSet = *sets_.tex2D,
+				.dstBinding = 0,
+				.dstArrayElement = 0,
+				.descriptorCount = static_cast<uint32_t>(imageInfos.size()),
+				.descriptorType = vk::DescriptorType::eCombinedImageSampler,
+				.pImageInfo = imageInfos.data(),
+			}
+		};
+		context_.device_.updateDescriptorSets(descriptorWrites, {});
+
+	}
+
+	// TexEnv
+	{
+		// Create
+		uint32_t maxTextures = texture_manager_.env_texture_size;
+
+		vk::DescriptorSetVariableDescriptorCountAllocateInfo countInfo{
+			.descriptorSetCount = 1,
+			.pDescriptorCounts = &maxTextures
+		};
+
+		vk::DescriptorSetAllocateInfo allocInfo{
+			.pNext = &countInfo,
+			.descriptorPool = *descriptor_pool_,
+			.descriptorSetCount = 1,
+			.pSetLayouts = &*set_layouts_.texEnv
+		};
+
+		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
+		sets_.texEnv = std::move(sets.front());
+
+		// Update
+		std::vector<vk::DescriptorImageInfo> imageInfos;
+		for (auto& tex : texture_manager_.env_textures_) {
+			imageInfos.push_back(vk::DescriptorImageInfo{
+				.sampler = *tex->texture_sampler_,
+				.imageView = *tex->texture_image_view_,
+				.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
+				});
+		}
+		std::array descriptorWrites{
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.texEnv,
+				.dstBinding = 0,
+				.dstArrayElement = 0,
+				.descriptorCount = static_cast<uint32_t>(imageInfos.size()),
+				.descriptorType = vk::DescriptorType::eCombinedImageSampler,
+				.pImageInfo = imageInfos.data(),
+			}
+		};
+		context_.device_.updateDescriptorSets(descriptorWrites, {});
+	}
+
+	// Object UBO
+	{
+		vk::DescriptorSetAllocateInfo allocInfo{
+			.descriptorPool = *descriptor_pool_,
+			.descriptorSetCount = 1,
+			.pSetLayouts = &*set_layouts_.object
+		};
+
+		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
+		sets_.object = std::move(sets.front());
+
+		// Update
+		vk::DescriptorBufferInfo objectUboBufferInfo{ *ubos_.object, 0, sizeof(UBOData::Object) };
+
+		std::array descriptorWrites{
+			vk::WriteDescriptorSet{
 				.dstSet = *sets_.object,
 				.dstBinding = 0,
 				.dstArrayElement = 0,
 				.descriptorCount = 1,
 				.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
 				.pBufferInfo = &objectUboBufferInfo
-			},
-			vk::WriteDescriptorSet{
-				.dstSet = *sets_.object,
-				.dstBinding = 1,
-				.dstArrayElement = 0,
-				.descriptorCount = static_cast<uint32_t>(imageInfos.size()),
-				.descriptorType = vk::DescriptorType::eCombinedImageSampler,
-				.pImageInfo = imageInfos.data(),
 			}
 		};
 		context_.device_.updateDescriptorSets(descriptorWrites, {});
@@ -948,6 +1155,32 @@ void GraphicsContext::CreateDescriptorSets()
 			}
 		};
 
+		context_.device_.updateDescriptorSets(descriptorWrites, {});
+	}
+
+	// Skybox
+	{
+		vk::DescriptorSetAllocateInfo allocInfo{
+			.descriptorPool = *descriptor_pool_,
+			.descriptorSetCount = 1,
+			.pSetLayouts = &*set_layouts_.skybox
+		};
+
+		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
+		sets_.skybox = std::move(sets.front());
+
+		vk::DescriptorBufferInfo skyboxUboBufferInfo{ *ubos_.skybox, 0, sizeof(UBOData::SkyBox) };
+
+		std::array descriptorWrites{
+			 vk::WriteDescriptorSet{
+				.dstSet = *sets_.skybox,
+				.dstBinding = 0,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
+				.pBufferInfo = &skyboxUboBufferInfo
+			}
+		};
 		context_.device_.updateDescriptorSets(descriptorWrites, {});
 	}
 }
@@ -1036,7 +1269,7 @@ void GraphicsContext::CreateGraphicsPipelines()
 		std::array<vk::PipelineShaderStageCreateInfo, 2> stages{ vertStage, fragStage };
 
 		// Vectex Input
-		auto vdesc = Vertex::GetInputDescription(vku::VertexIncludeInfo{ true, true });
+		auto vdesc = Vertex::GetInputDescription(vku::VertexIncludeInfo{ true, true, true });
 
 		vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
 		vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(vdesc.bindings.size());
@@ -1045,8 +1278,8 @@ void GraphicsContext::CreateGraphicsPipelines()
 		vertexInputInfo.pVertexAttributeDescriptions = vdesc.attributes.data();
 
 		// Pipeline Layout
-		std::array<vk::DescriptorSetLayout, 2> setLayouts(*set_layouts_.global, *set_layouts_.object);
-		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = 2, .pSetLayouts = setLayouts.data(), .pushConstantRangeCount = 0 };
+		std::array<vk::DescriptorSetLayout, 3> setLayouts(*set_layouts_.global, *set_layouts_.object, *set_layouts_.tex2D);
+		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = setLayouts.size(), .pSetLayouts = setLayouts.data(), .pushConstantRangeCount = 0};
 		pipeline_layouts_.model = vk::raii::PipelineLayout(context_.device_, pipelineLayoutInfo);
 
 		// Pipeline
@@ -1168,9 +1401,9 @@ void GraphicsContext::CreateGraphicsPipelines()
 			.pAttachments = &lightingBlendAttachment
 		};
 
-		// pipeline layout: set0 = global, set1 = lighting (G-buffer)
-		std::array<vk::DescriptorSetLayout, 1> setLayouts{
-			*set_layouts_.lighting
+		std::array<vk::DescriptorSetLayout, 2> setLayouts{
+			*set_layouts_.lighting,
+			*set_layouts_.skybox
 		};
 		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
 			.setLayoutCount = static_cast<uint32_t>(setLayouts.size()),
@@ -1204,6 +1437,80 @@ void GraphicsContext::CreateGraphicsPipelines()
 		pipelines_.lighting = vk::raii::Pipeline(
 			context_.device_, nullptr,
 			pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+	}
+
+	// Skybox
+	{
+		auto vertCode = vku::ReadFile("shaders/spv/skybox.vert.spv");
+		auto fragCode = vku::ReadFile("shaders/spv/skybox.frag.spv");
+
+		vk::raii::ShaderModule vertModule = vku::CreateShaderModule(context_.device_, vertCode);
+		vk::raii::ShaderModule fragModule = vku::CreateShaderModule(context_.device_, fragCode);
+
+		vk::PipelineShaderStageCreateInfo vertStage{
+			.stage = vk::ShaderStageFlagBits::eVertex,
+			.module = *vertModule,
+			.pName = "main"
+		};
+		vk::PipelineShaderStageCreateInfo fragStage{
+			.stage = vk::ShaderStageFlagBits::eFragment,
+			.module = *fragModule,
+			.pName = "main"
+		};
+		std::array<vk::PipelineShaderStageCreateInfo, 2> stages{ vertStage, fragStage };
+
+		auto vdesc = Vertex::GetInputDescription(vku::VertexIncludeInfo{ false, false, false });
+
+		vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
+		vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(vdesc.bindings.size());
+		vertexInputInfo.pVertexBindingDescriptions = vdesc.bindings.data();
+		vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(vdesc.attributes.size());
+		vertexInputInfo.pVertexAttributeDescriptions = vdesc.attributes.data();
+
+		// Pipeline Layout
+		std::array<vk::DescriptorSetLayout, 3> setLayouts(
+			*set_layouts_.global, 
+			*set_layouts_.skybox, 
+			*set_layouts_.texEnv);
+		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = setLayouts.size(), .pSetLayouts = setLayouts.data(), .pushConstantRangeCount = 0 };
+		pipeline_layouts_.skybox = vk::raii::PipelineLayout(context_.device_, pipelineLayoutInfo);
+
+		vk::PipelineRasterizationStateCreateInfo rasterizerSkybox{
+			.depthClampEnable = vk::False,
+			.rasterizerDiscardEnable = vk::False,
+			.polygonMode = vk::PolygonMode::eFill,
+			.cullMode = vk::CullModeFlagBits::eBack,
+			.frontFace = vk::FrontFace::eCounterClockwise,
+			.depthBiasEnable = vk::False,
+			.lineWidth = 1.0f
+		};
+
+		// Pipeline
+		{
+			vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain =
+			{
+				{
+					.stageCount = 2,
+					.pStages = stages.data(),
+					.pVertexInputState = &vertexInputInfo,
+					.pInputAssemblyState = &inputAssembly,
+					.pViewportState = &viewportState,
+					.pRasterizationState = &rasterizerSkybox,
+					.pMultisampleState = &multisampling,
+					.pDepthStencilState = &depthStencil,
+					.pColorBlendState = &colorBlending,
+					.pDynamicState = &dynamicState,
+					.layout = pipeline_layouts_.skybox,
+					.renderPass = nullptr
+				},
+				{
+				  .colorAttachmentCount = static_cast<uint32_t>(geometry_buffers_.formats.size()),
+				  .pColorAttachmentFormats = geometry_buffers_.formats.data(),
+				  .depthAttachmentFormat = depthFormat
+				}
+			};
+			pipelines_.skybox = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+		}
 	}
 }
 

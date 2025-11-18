@@ -23,13 +23,8 @@ layout(set = 1, binding = 0) uniform ObjectUBO {
 
     float aoFactor;
     float heightFactor;
-    uint envIdx;
-    uint radianceIdx;
-
-    uint irradianceIdx;
     uint p0;
     uint p1;
-    uint p2;
 
     uint albedoEnable;
     uint metalnessEnable;
@@ -42,6 +37,6 @@ layout(set = 1, binding = 0) uniform ObjectUBO {
     uint p4;
 } object;
 
-layout(set = 1, binding = 1) uniform sampler2D tex[];
+layout(set = 2, binding = 0) uniform sampler2D tex[];
 
 #endif

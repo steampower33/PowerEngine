@@ -17,6 +17,7 @@ namespace vku
 	};
 
 	struct VertexIncludeInfo {
+		bool uv = false;
 		bool normal = false;
 		bool tangent = false;
 	};
@@ -144,18 +145,35 @@ namespace vku
 		throw std::runtime_error("failed to find suitable memory type!");
 	}
 
-	inline void CreateImage(vk::raii::PhysicalDevice& physicalDevice,  vk::raii::Device& device, uint32_t width, uint32_t height, uint32_t mipLevels, vk::SampleCountFlagBits numSamples, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Image& image, vk::raii::DeviceMemory& imageMemory) {
+	inline void CreateImage(
+		vk::raii::PhysicalDevice& physicalDevice,
+		vk::raii::Device& device,
+		uint32_t                   width,
+		uint32_t                   height,
+		uint32_t                   mipLevels,
+		vk::SampleCountFlagBits    numSamples,
+		vk::Format                 format,
+		vk::ImageTiling            tiling,
+		vk::ImageUsageFlags        usage,
+		vk::MemoryPropertyFlags    properties,
+		vk::raii::Image& image,
+		vk::raii::DeviceMemory& imageMemory,
+		vk::ImageCreateFlags       flags = {},
+		uint32_t                   arrayLayers = 1,
+		vk::ImageType              imageType = vk::ImageType::e2D
+	) {
 		vk::ImageCreateInfo imageInfo{
-			   .imageType = vk::ImageType::e2D,
-			   .format = format,
-			   .extent = {width, height, 1},
-			   .mipLevels = mipLevels,
-			   .arrayLayers = 1,
-			   .samples = numSamples,
-			   .tiling = tiling,
-			   .usage = usage,
-			   .sharingMode = vk::SharingMode::eExclusive,
-			   .initialLayout = vk::ImageLayout::eUndefined
+		.flags = flags,
+		.imageType = imageType,
+		.format = format,
+		.extent = { width, height, 1 },
+		.mipLevels = mipLevels,
+		.arrayLayers = arrayLayers,
+		.samples = numSamples,
+		.tiling = tiling,
+		.usage = usage,
+		.sharingMode = vk::SharingMode::eExclusive,
+		.initialLayout = vk::ImageLayout::eUndefined
 		};
 
 		image = vk::raii::Image(device, imageInfo);
@@ -163,18 +181,21 @@ namespace vku
 		vk::MemoryRequirements memRequirements = image.getMemoryRequirements();
 		vk::MemoryAllocateInfo allocInfo{
 			.allocationSize = memRequirements.size,
-			.memoryTypeIndex = FindMemoryType(physicalDevice, memRequirements.memoryTypeBits, properties)
+			.memoryTypeIndex = FindMemoryType(
+				physicalDevice,
+				memRequirements.memoryTypeBits,
+				properties)
 		};
 		imageMemory = vk::raii::DeviceMemory(device, allocInfo);
 		image.bindMemory(imageMemory, 0);
 	}
 
-	inline vk::raii::ImageView CreateImageView(vk::raii::Device& device, vk::raii::Image& image, vk::Format format, vk::ImageAspectFlags aspectFlags, uint32_t mipLevels) {
+	inline vk::raii::ImageView CreateImageView(vk::raii::Device& device, vk::raii::Image& image, vk::Format format, vk::ImageAspectFlags aspectFlags, uint32_t mipLevels, vk::ImageViewType viewType = vk::ImageViewType::e2D, uint32_t faces = 1u) {
 		vk::ImageViewCreateInfo viewInfo{
 				.image = image,
-				.viewType = vk::ImageViewType::e2D,
+				.viewType = viewType,
 				.format = format,
-				.subresourceRange = { aspectFlags, 0, mipLevels, 0, 1 }
+				.subresourceRange = { aspectFlags, 0, mipLevels, 0, faces }
 		};
 		return vk::raii::ImageView(device, viewInfo);
 	}
@@ -385,4 +406,5 @@ namespace vku
 		cmd.pipelineBarrier2(dep);
 
 	}
+
 }

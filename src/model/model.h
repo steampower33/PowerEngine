@@ -15,10 +15,9 @@ public:
 	Model(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, GraphicsContext& graphicsContext, uint32_t& model_count, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble);
 	Model(const Model& rhs) = delete;
 	Model(Model&& rhs) = delete;
-	~Model() = default;
-
 	Model& operator=(const Model& rhs) = delete;
 	Model& operator=(Model&& rhs) = delete;
+	~Model() = default;
 
 	glm::vec4 albedo_use_{ 0.0f };
 

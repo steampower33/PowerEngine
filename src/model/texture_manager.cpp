@@ -1,5 +1,5 @@
 
-#include "texture_2d.h"
+#include "texture.h"
 
 #include "texture_manager.h"
 
@@ -11,7 +11,7 @@ TextureManager::TextureManager(Context& context)
     ConvertFileToKtx("assets/Metal");
     ConvertFileToKtx("assets/lut");
 
-    std::unique_ptr<Texture2D> texture = std::make_unique<Texture2D>("assets", "vulkan_cloth_rgba.ktx", context);
+    std::unique_ptr<Texture> texture = std::make_unique<Texture>("assets", "vulkan_cloth_rgba.ktx", context);
     textures_.push_back(std::move(texture));
 }
 
@@ -130,17 +130,27 @@ void TextureManager::CreateKtxFromFile(const fs::path& pngPath, const fs::path& 
 }
 
 
-uint32_t TextureManager::CreateTexture2D(std::string path, std::string keyword)
+uint32_t TextureManager::CreateTexture(std::string path, std::string keyword, bool isCubemap)
 {
     auto CreateTexture = [&](std::string path, std::string filename)
         {
             std::string texPath = path + "/" + filename;
             std::cout << "Load " << texPath << std::endl;
             fs::path p(texPath);
-            std::unique_ptr<Texture2D> texture = std::make_unique<Texture2D>(path, filename, context_);
-            uint32_t idx = textures_.size();
-            textures_.push_back(std::move(texture));
-            return idx;
+            std::unique_ptr<Texture> texture = std::make_unique<Texture>(path, filename, context_);
+            if (isCubemap)
+            {
+                uint32_t idx = env_textures_.size();
+                env_textures_.push_back(std::move(texture));
+                return idx;
+
+            }
+            else
+            {
+                uint32_t idx = textures_.size();
+                textures_.push_back(std::move(texture));
+                return idx;
+            }
         };
 
     for (const auto& entry : std::filesystem::directory_iterator(path)) {

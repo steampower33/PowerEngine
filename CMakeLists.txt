@@ -183,6 +183,8 @@ set(GLSL_SHADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/cloth.frag
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/lighting.vert
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/lighting.frag
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/skybox.vert
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/skybox.frag
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/clear_lambdas.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/integrate.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_coloring.comp

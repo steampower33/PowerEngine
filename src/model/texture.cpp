@@ -2,9 +2,9 @@
 #include "graphics_context.h"
 #include "vulkan_utils.h"
 
-#include "texture_2d.h"
+#include "texture.h"
 
-Texture2D::Texture2D(std::string path, std::string filename, Context& context)
+Texture::Texture(std::string path, std::string filename, Context& context)
 {
     path_ = path;
     filename_ = filename;
@@ -14,12 +14,12 @@ Texture2D::Texture2D(std::string path, std::string filename, Context& context)
     CreateTextureSampler(context.physical_device_, context.device_);
 }
 
-Texture2D::~Texture2D()
+Texture::~Texture()
 {
 
 }
 
-void Texture2D::CreateTextureImage(const std::string& texturePath, vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool) {
+void Texture::CreateTextureImage(const std::string& texturePath, vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool) {
     // Load KTX2 texture instead of using stb_image
     ktxTexture* kTexture;
     KTX_error_code result = ktxTexture_CreateFromNamedFile(
@@ -66,9 +66,13 @@ void Texture2D::CreateTextureImage(const std::string& texturePath, vk::raii::Phy
 
     texture_image_format_ = textureFormat;
 
+    isCubemap = (kTexture->numFaces == 6);
+    faces = isCubemap ? 6u : 1u;
     vku::CreateImage(physicalDevice, device, texWidth, texHeight, kTexture->numLevels, vk::SampleCountFlagBits::e1, textureFormat, vk::ImageTiling::eOptimal,
         vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
-        vk::MemoryPropertyFlagBits::eDeviceLocal, texture_image_, texture_image_memory_);
+        vk::MemoryPropertyFlagBits::eDeviceLocal, texture_image_, texture_image_memory_,
+        isCubemap ? vk::ImageCreateFlagBits::eCubeCompatible : vk::ImageCreateFlags(),
+        faces);
 
     TransitionImageLayout(device, queue, commandPool, texture_image_, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
     CopyBufferToImage(device, queue, commandPool, stagingBuffer, texture_image_, texWidth, texHeight, kTexture);
@@ -77,7 +81,7 @@ void Texture2D::CreateTextureImage(const std::string& texturePath, vk::raii::Phy
     ktxTexture_Destroy(kTexture);
 }
 
-void Texture2D::TransitionImageLayout(vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool, const vk::raii::Image& image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout) {
+void Texture::TransitionImageLayout(vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool, const vk::raii::Image& image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout) {
     auto commandBuffer = BeginSingleTimeCommands(device, commandPool);
 
     vk::ImageMemoryBarrier barrier{
@@ -89,7 +93,7 @@ void Texture2D::TransitionImageLayout(vk::raii::Device& device, vk::raii::Queue&
         0,
         mip_levels_,
         0,
-        1
+        faces
     }
     };
 
@@ -117,46 +121,64 @@ void Texture2D::TransitionImageLayout(vk::raii::Device& device, vk::raii::Queue&
     EndSingleTimeCommands(queue, *commandBuffer);
 }
 
-void Texture2D::CopyBufferToImage(vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool, const vk::raii::Buffer& buffer, vk::raii::Image& image, uint32_t width, uint32_t height, ktxTexture* kTexture)
+void Texture::CopyBufferToImage(vk::raii::Device& device, vk::raii::Queue& queue, vk::raii::CommandPool& commandPool, const vk::raii::Buffer& buffer, vk::raii::Image& image, uint32_t width, uint32_t height, ktxTexture* kTexture)
 {
     std::unique_ptr<vk::raii::CommandBuffer> commandBuffer = BeginSingleTimeCommands(device, commandPool);
 
     std::vector<vk::BufferImageCopy> regions;
-    regions.reserve(mip_levels_);
+    regions.reserve(mip_levels_ * faces);
 
     for (uint32_t level = 0; level < mip_levels_; ++level) {
-        ktx_size_t offset = 0;
-        KTX_error_code res = ktxTexture_GetImageOffset(kTexture, level, 0, 0, &offset);
-        if (res != KTX_SUCCESS) {
-            throw std::runtime_error("failed to get KTX image offset!");
-        }
+        for (uint32_t face = 0; face < faces; ++face) {
+            ktx_size_t offset = 0;
+            // layer = 0, faceSlice = face
+            KTX_error_code res =
+                ktxTexture_GetImageOffset(kTexture, level, 0, face, &offset);
+            if (res != KTX_SUCCESS) {
+                throw std::runtime_error("failed to get KTX image offset!");
+            }
 
-        vk::BufferImageCopy region{};
-        region.bufferOffset = offset;
-        region.bufferRowLength = 0;
-        region.bufferImageHeight = 0;
-        region.imageSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
-        region.imageSubresource.mipLevel = level;
-        region.imageSubresource.baseArrayLayer = 0;
-        region.imageSubresource.layerCount = 1;
-        region.imageOffset = { 0, 0, 0 };
-        region.imageExtent = {
-            std::max(1u, width >> level),
-            std::max(1u, height >> level),
-            1
-        };
-        regions.push_back(region);
+            vk::BufferImageCopy region{};
+            region.bufferOffset = offset;
+            region.bufferRowLength = 0;
+            region.bufferImageHeight = 0;
+
+            region.imageSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
+            region.imageSubresource.mipLevel = level;
+            region.imageSubresource.baseArrayLayer = face;
+            region.imageSubresource.layerCount = 1;
+
+            region.imageOffset = { 0, 0, 0 };
+            region.imageExtent = {
+                std::max(1u, width >> level),
+                std::max(1u, height >> level),
+                1
+            };
+
+            regions.push_back(region);
+        }
     }
 
     commandBuffer->copyBufferToImage(*buffer, *image, vk::ImageLayout::eTransferDstOptimal, regions);
     EndSingleTimeCommands(queue, *commandBuffer);
 }
 
-void Texture2D::CreateTextureImageView(vk::raii::Device& device) {
-    texture_image_view_ = vku::CreateImageView(device, texture_image_, texture_image_format_, vk::ImageAspectFlagBits::eColor, 1);
+void Texture::CreateTextureImageView(vk::raii::Device& device) {
+    vk::ImageViewType viewType =
+        isCubemap ? vk::ImageViewType::eCube : vk::ImageViewType::e2D;
+
+    texture_image_view_ = vku::CreateImageView(
+        device,
+        texture_image_,
+        texture_image_format_,
+        vk::ImageAspectFlagBits::eColor,
+        mip_levels_,
+        viewType,
+        faces // layerCount
+    );
 }
 
-void Texture2D::CreateTextureSampler(vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device) {
+void Texture::CreateTextureSampler(vk::raii::PhysicalDevice& physicalDevice, vk::raii::Device& device) {
     vk::PhysicalDeviceProperties properties = physicalDevice.getProperties();
     vk::SamplerCreateInfo samplerInfo{
         .magFilter = vk::Filter::eLinear,
@@ -176,7 +198,7 @@ void Texture2D::CreateTextureSampler(vk::raii::PhysicalDevice& physicalDevice, v
     texture_sampler_ = vk::raii::Sampler(device, samplerInfo);
 }
 
-std::unique_ptr<vk::raii::CommandBuffer> Texture2D::BeginSingleTimeCommands(vk::raii::Device& device, vk::raii::CommandPool& commandPool) {
+std::unique_ptr<vk::raii::CommandBuffer> Texture::BeginSingleTimeCommands(vk::raii::Device& device, vk::raii::CommandPool& commandPool) {
     vk::CommandBufferAllocateInfo allocInfo{
         .commandPool = *commandPool,
         .level = vk::CommandBufferLevel::ePrimary,
@@ -192,7 +214,7 @@ std::unique_ptr<vk::raii::CommandBuffer> Texture2D::BeginSingleTimeCommands(vk::
     return commandBuffer;
 }
 
-void Texture2D::EndSingleTimeCommands(vk::raii::Queue& queue, const vk::raii::CommandBuffer& commandBuffer) {
+void Texture::EndSingleTimeCommands(vk::raii::Queue& queue, const vk::raii::CommandBuffer& commandBuffer) {
     commandBuffer.end();
 
     vk::SubmitInfo submitInfo{ .commandBufferCount = 1, .pCommandBuffers = &*commandBuffer };

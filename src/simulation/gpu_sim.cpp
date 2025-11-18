@@ -1,6 +1,6 @@
 #include "context.h"
 #include "swapchain.h"
-#include "texture_2d.h"
+#include "texture.h"
 #include "texture_manager.h"
 #include "model.h"
 #include "model_manager.h"

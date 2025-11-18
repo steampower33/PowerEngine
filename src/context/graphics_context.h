@@ -7,7 +7,7 @@ class Swapchain;
 class CpuSim;
 class GpuSim;
 class Camera;
-class Texture2D;
+class Texture;
 class TextureManager;
 class Model;
 class ModelManager;
@@ -69,24 +69,28 @@ public:
 		vk::raii::Buffer global{ nullptr };
 		vk::raii::Buffer object{ nullptr };
 		vk::raii::Buffer light{ nullptr };
+		vk::raii::Buffer skybox{ nullptr };
 	} ubos_;
 
 	struct UBOMemory {
 		vk::raii::DeviceMemory global{ nullptr };
 		vk::raii::DeviceMemory object{ nullptr };
 		vk::raii::DeviceMemory light{ nullptr };
+		vk::raii::DeviceMemory skybox{ nullptr };
 	} ubo_memories_;
 
 	struct UBOMapped {
 		void* global{ nullptr };
 		void* object{ nullptr };
 		void* light{ nullptr };
+		void* skybox{ nullptr };
 	} ubo_mapped_;
 
 	struct UBOSize {
 		vk::DeviceSize global;
 		vk::DeviceSize object;
 		vk::DeviceSize light;
+		vk::DeviceSize skybox;
 	} ubo_size_;
 
 	struct UBOData {
@@ -94,6 +98,7 @@ public:
 			glm::mat4 view;
 			glm::mat4 proj;
 		} global;
+		static_assert(sizeof(UBOData::Global) % 16 == 0, "std140 must be 16-byte aligned.");
 
 		struct Object {
 			glm::mat4 model;
@@ -112,13 +117,8 @@ public:
 
 			float aoFactor = 0.0f;
 			float heightFactor = 0.0f;
-			uint32_t envIdx = 0;
-			uint32_t radianceIdx = 0;
-
-			uint32_t irradianceIdx = 0;
 			uint32_t p0 = 0;
 			uint32_t p1 = 0;
-			uint32_t p2 = 0;
 
 			uint32_t albedoEnable = 1;
 			uint32_t metalnessEnable = 1;
@@ -139,6 +139,17 @@ public:
 			glm::vec4 spotColor_outer{1.0f, 1.0f, 1.0f, 0.0f}; // rgb: color, w: outerConeCos
 			glm::mat4 invViewProj{};
 		} light;
+		static_assert(sizeof(UBOData::Light) % 16 == 0, "std140 must be 16-byte aligned.");
+
+		struct SkyBox {
+			glm::mat4 model;
+
+			uint32_t envIdx = 0;
+			uint32_t radianceIdx = 0;
+			uint32_t irradianceIdx = 0;
+			uint32_t p0;
+		} skybox;
+		static_assert(sizeof(UBOData::SkyBox) % 16 == 0, "std140 must be 16-byte aligned.");
 
 	} ubo_data_;
 
@@ -150,18 +161,25 @@ public:
 	struct SetLayout {
 		vk::raii::DescriptorSetLayout global{ nullptr };
 		vk::raii::DescriptorSetLayout object{ nullptr };
+		vk::raii::DescriptorSetLayout tex2D{ nullptr };
+		vk::raii::DescriptorSetLayout texEnv{ nullptr };
 		vk::raii::DescriptorSetLayout lighting{ nullptr };
+		vk::raii::DescriptorSetLayout skybox{ nullptr };
 	} set_layouts_;
 
 	struct Set {
 		vk::raii::DescriptorSet global{ nullptr };
 		vk::raii::DescriptorSet object{ nullptr };
+		vk::raii::DescriptorSet tex2D{ nullptr };
+		vk::raii::DescriptorSet texEnv{ nullptr };
 		vk::raii::DescriptorSet lighting{ nullptr };
+		vk::raii::DescriptorSet skybox{ nullptr };
 	} sets_;
 
 	struct PipelineLayout {
 		vk::raii::PipelineLayout model{ nullptr };
 		vk::raii::PipelineLayout lighting{ nullptr };
+		vk::raii::PipelineLayout skybox{ nullptr };
 	} pipeline_layouts_;
 
 	struct Pipeline {
@@ -169,6 +187,7 @@ public:
 		vk::raii::Pipeline model_wireframe{ nullptr };
 		vk::raii::Pipeline model_point{ nullptr };
 		vk::raii::Pipeline lighting{ nullptr };
+		vk::raii::Pipeline skybox{ nullptr };
 	} pipelines_;
 
 	vku::PolygonMode polygon_mode_ = vku::PolygonMode::SOLID;

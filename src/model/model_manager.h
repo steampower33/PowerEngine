@@ -5,6 +5,7 @@ class Context;
 class GraphicsContext;
 class GeometryGenerator;
 class TextureManager;
+class Skybox;
 
 class ModelManager
 {
@@ -19,4 +20,5 @@ public:
 	static constexpr uint32_t kMaxObjects = 2;
 	uint32_t model_count_ = 0;
 	std::vector<std::unique_ptr<Model>> models;
+	std::unique_ptr<Skybox> skybox_;
 };
