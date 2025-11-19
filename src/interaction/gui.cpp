@@ -133,10 +133,6 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 			drawControl();
 		};
 
-	auto& labels = graphicsContext.labels_;
-	auto& labelToTime = graphicsContext.label_time_;
-	auto& labelToAvgTime = graphicsContext.label_avg_time_;
-
 	ImGui::SetNextWindowSize(ImVec2(500, 0));
 	ImGui::SetNextWindowPos(ImVec2(5, 5), ImGuiCond_Once);
 	if (ImGui::Begin("Option", nullptr, wf))
@@ -152,104 +148,11 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 
 		}
 
-		SetObjectGui(row, graphicsContext.gpu_sim_->ubo_data_);
-
-		if (ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-
-			if (ImGui::BeginTable("LightTable", 2,
-				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
-			{
-				row("Pos", [&] { ImGui::DragFloat3("##Pos", &graphicsContext.ubo_data_.light.spotPos_range[0], 0.1f); });
-				row("Range", [&] { ImGui::DragFloat("##Range", &graphicsContext.ubo_data_.light.spotPos_range[3], 0.1f); });
-				row("Dir", [&] { ImGui::DragFloat3("##Dir", &graphicsContext.ubo_data_.light.spotDir_inner[0], 0.1f); });
-				row("Color", [&] { ImGui::DragFloat3("##Color", &graphicsContext.ubo_data_.light.spotColor_outer[0], 0.1f); });
-				row("Inner", [&] { ImGui::DragFloat("##Inner", &graphicsContext.ubo_data_.light.spotDir_inner[3], 0.1f); });
-				row("Outer", [&] { ImGui::DragFloat("##Outer", &graphicsContext.ubo_data_.light.spotColor_outer[3], 0.1f); });
-
-
-				ImGui::EndTable();
-			}
-		}
-
-		is_print_timestamps = ImGui::CollapsingHeader("Solver timing", ImGuiTreeNodeFlags_DefaultOpen);
-		if (is_print_timestamps)
-		{
-			if (ImGui::BeginTable("timing", 4))//,  ImGuiTableFlags_BordersOuter))
-			{
-				ImGui::TableSetupColumn("Kernel", ImGuiTableColumnFlags_WidthStretch, 0.5f);
-				ImGui::TableSetupColumn("Time (ms)", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-				ImGui::TableSetupColumn("Avg (ms)", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-				ImGui::TableSetupColumn("%", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-				ImGui::TableHeadersRow();
-
-				for (uint32_t i = 0; i < labels.size() - 1; i++)
-				{
-					DisplayKernelTiming(labels[i], labelToTime, labelToAvgTime);
-				}
-
-				DisplayKernelTiming(labels[labels.size() - 1], labelToTime, labelToAvgTime, false);
-
-				ImGui::EndTable();
-			}
-			count_ = graphicsContext.time_count_;
-		}
-
-		if (ImGui::CollapsingHeader("Simulation", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			ImGuiIO& io = ImGui::GetIO(); (void)io;
-			ImGui::Text("Avr %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-
-			const char* items[] = { "Solid", "Wireframe", "Point" };
-			int item_current = graphicsContext.polygon_mode_;
-			ImGui::ListBox("PolygonMode", &item_current, items, IM_ARRAYSIZE(items), 3);
-			graphicsContext.polygon_mode_ = vku::PolygonMode(item_current);
-
-			if (ImGui::BeginTable("SimulationTable", 2,
-				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
-			{
-				row("DevidingDt", [&] { ImGui::DragFloat("##DevidingDt", &graphicsContext.gpu_sim_->deviding_dt_, 1.0f, 1.0f, 240.0f); });
-				row("Iterations", [&] { ImGui::DragInt("##Iterations", &graphicsContext.gpu_sim_->iterations_, 1, 1, 40); });
-				row("BendCompliance", [&] { ImGui::DragFloat("##BendCompliance", &graphicsContext.gpu_sim_->bendCompliance, 0.1f, 0.0f, 1.0f); });
-				row("Damping", [&] { ImGui::SliderFloat("##Damping", &graphicsContext.gpu_sim_->ubo_data_.sim_params.damping, 0.f, 2.f, "%.3f"); });
-				row("Relaxation Factor", [&] { ImGui::SliderFloat("##RelaxationFactor", &graphicsContext.gpu_sim_->ubo_data_.sim_params.relaxationFactor, 0.f, 2.f, "%.3f"); });
-				row("Max Speed", [&] { ImGui::SliderFloat("##MaxSpeed", &graphicsContext.gpu_sim_->ubo_data_.sim_params.maxSpeed, 0.f, 500.f, "%.3f"); });
-				row("CollisionMargin", [&] { ImGui::SliderFloat("##CollisionMargin", &graphicsContext.gpu_sim_->ubo_data_.sim_params.collisionMargin, 0.0f, 1.0f, "%.3f"); });
-				row("Thickness", [&] { ImGui::DragFloat("##Thickness", &graphicsContext.gpu_sim_->ubo_data_.sim_params.thickness, 0.001f, 0.0f, 1.0f, "%.3f"); });
-				row("Friction", [&] { ImGui::DragFloat("##Friction", &graphicsContext.gpu_sim_->ubo_data_.sim_params.friction, 0.001f, 0.0f, 1.0f, "%.3f"); });
-
-				bool windEnabled = (graphicsContext.gpu_sim_->ubo_data_.sim_params.windTest != 0);
-				row("Wind", [&] {
-					if (ImGui::Checkbox("##Wind", &windEnabled)) {
-						graphicsContext.gpu_sim_->ubo_data_.sim_params.windTest = windEnabled ? 1 : 0;
-					} });
-
-					row("Wind Dir", [&] {
-						ImGui::DragFloat3("##WindDir", &graphicsContext.gpu_sim_->ubo_data_.sim_params.windDir[0], 0.1f, -1.0f, 1.0f); });
-
-					row("Wind Strength", [&] {
-						ImGui::DragFloat("##WindStrength", &graphicsContext.gpu_sim_->ubo_data_.sim_params.windStrength, 0.1f, 0.0f, 5.0f); });
-
-					ImGui::EndTable();
-			}
-		}
-
-		if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			if (ImGui::BeginTable("SceneTable", 2,
-				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
-			{
-
-				row("SphereCollision", [&] {
-					ImGui::Checkbox("##SphereCollision", &graphicsContext.test_scene_.sphereCollision); });
-				row("PinnedCorner", [&] {
-					ImGui::Checkbox("##PinnedCorner", &graphicsContext.test_scene_.pinnedCorner); });
-				row("TopPinnedCorner", [&] {
-					ImGui::Checkbox("##TopPinnedCorner", &graphicsContext.test_scene_.topPinnedCorner); });
-
-				ImGui::EndTable();
-			}
-		}
+		//SetObjectGUI(row, graphicsContext.gpu_sim_->ubo_data_);
+		//SetLightGUI(row, graphicsContext.ubo_data_);
+		SetSolverTimeingGUI(row, graphicsContext);
+		SetSimulationGUI(row, graphicsContext);
+		SetTestSceneGUI(row, graphicsContext.test_scene_);
 
 		ImGui::End();
 	}
@@ -306,7 +209,28 @@ void GUI::DisplayKernelTiming(const std::string name, std::unordered_map<std::st
 }
 
 template<typename RowFn, typename UBOData>
-void GUI::SetObjectGui(RowFn&& row, UBOData& data) {
+void GUI::SetLightGUI(RowFn&& row, UBOData& data) {
+	if (ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+
+		if (ImGui::BeginTable("LightTable", 2,
+			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+		{
+			row("Pos", [&] { ImGui::DragFloat3("##Pos", &data.light.spotPos_range[0], 0.1f); });
+			row("Range", [&] { ImGui::DragFloat("##Range", &data.light.spotPos_range[3], 0.1f); });
+			row("Dir", [&] { ImGui::DragFloat3("##Dir", &data.light.spotDir_inner[0], 0.1f); });
+			row("Color", [&] { ImGui::DragFloat3("##Color", &data.light.spotColor_outer[0], 0.1f); });
+			row("Inner", [&] { ImGui::DragFloat("##Inner", &data.light.spotDir_inner[3], 0.1f); });
+			row("Outer", [&] { ImGui::DragFloat("##Outer", &data.light.spotColor_outer[3], 0.1f); });
+
+
+			ImGui::EndTable();
+		}
+	}
+}
+
+template<typename RowFn, typename UBOData>
+void GUI::SetObjectGUI(RowFn&& row, UBOData& data) {
 
 	if (ImGui::CollapsingHeader("Object", ImGuiTreeNodeFlags_DefaultOpen))
 	{
@@ -351,6 +275,101 @@ void GUI::SetObjectGui(RowFn&& row, UBOData& data) {
 				ImGui::Checkbox("##ClothHeightEnable", &enable);
 				data.render.heightEnable = (enable) ? true : false;
 				});
+
+			ImGui::EndTable();
+		}
+	}
+}
+
+template<typename RowFn>
+void GUI::SetSolverTimeingGUI(RowFn&& row, GraphicsContext& graphicsContext)
+{
+	auto& labels = graphicsContext.labels_;
+	auto& labelToTime = graphicsContext.label_time_;
+	auto& labelToAvgTime = graphicsContext.label_avg_time_;
+
+	is_print_timestamps = ImGui::CollapsingHeader("Solver timing"); //, ImGuiTreeNodeFlags_DefaultOpen
+	if (is_print_timestamps)
+	{
+		if (ImGui::BeginTable("timing", 4))//,  ImGuiTableFlags_BordersOuter))
+		{
+			ImGui::TableSetupColumn("Kernel", ImGuiTableColumnFlags_WidthStretch, 0.5f);
+			ImGui::TableSetupColumn("Time (ms)", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+			ImGui::TableSetupColumn("Avg (ms)", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+			ImGui::TableSetupColumn("%", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+			ImGui::TableHeadersRow();
+
+			for (uint32_t i = 0; i < labels.size() - 1; i++)
+			{
+				DisplayKernelTiming(labels[i], labelToTime, labelToAvgTime);
+			}
+
+			DisplayKernelTiming(labels[labels.size() - 1], labelToTime, labelToAvgTime, false);
+
+			ImGui::EndTable();
+		}
+		count_ = graphicsContext.time_count_;
+	}
+}
+
+template<typename RowFn>
+void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext)
+{
+	if (ImGui::CollapsingHeader("Simulation", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		ImGuiIO& io = ImGui::GetIO(); (void)io;
+		ImGui::Text("Avr %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+
+		const char* items[] = { "Solid", "Wireframe", "Point" };
+		int item_current = graphicsContext.polygon_mode_;
+		ImGui::ListBox("PolygonMode", &item_current, items, IM_ARRAYSIZE(items), 3);
+		graphicsContext.polygon_mode_ = vku::PolygonMode(item_current);
+
+		if (ImGui::BeginTable("SimulationTable", 2,
+			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+		{
+			row("DevidingDt", [&] { ImGui::DragFloat("##DevidingDt", &graphicsContext.gpu_sim_->deviding_dt_, 1.0f, 1.0f, 240.0f); });
+			row("Iterations", [&] { ImGui::DragInt("##Iterations", &graphicsContext.gpu_sim_->iterations_, 1, 1, 40); });
+			row("BendCompliance", [&] { ImGui::DragFloat("##BendCompliance", &graphicsContext.gpu_sim_->bendCompliance, 0.1f, 0.0f, 1.0f); });
+			row("Damping", [&] { ImGui::SliderFloat("##Damping", &graphicsContext.gpu_sim_->ubo_data_.sim_params.damping, 0.f, 2.f, "%.3f"); });
+			row("Relaxation Factor", [&] { ImGui::SliderFloat("##RelaxationFactor", &graphicsContext.gpu_sim_->ubo_data_.sim_params.relaxationFactor, 0.f, 2.f, "%.3f"); });
+			row("Max Speed", [&] { ImGui::SliderFloat("##MaxSpeed", &graphicsContext.gpu_sim_->ubo_data_.sim_params.maxSpeed, 0.f, 500.f, "%.3f"); });
+			row("CollisionMargin", [&] { ImGui::SliderFloat("##CollisionMargin", &graphicsContext.gpu_sim_->ubo_data_.sim_params.collisionMargin, 0.0f, 1.0f, "%.3f"); });
+			row("Thickness", [&] { ImGui::DragFloat("##Thickness", &graphicsContext.gpu_sim_->ubo_data_.sim_params.thickness, 0.001f, 0.0f, 1.0f, "%.3f"); });
+			row("Friction", [&] { ImGui::DragFloat("##Friction", &graphicsContext.gpu_sim_->ubo_data_.sim_params.friction, 0.001f, 0.0f, 1.0f, "%.3f"); });
+
+			bool windEnabled = (graphicsContext.gpu_sim_->ubo_data_.sim_params.windTest != 0);
+			row("Wind", [&] {
+				if (ImGui::Checkbox("##Wind", &windEnabled)) {
+					graphicsContext.gpu_sim_->ubo_data_.sim_params.windTest = windEnabled ? 1 : 0;
+				} });
+
+				row("Wind Dir", [&] {
+					ImGui::DragFloat3("##WindDir", &graphicsContext.gpu_sim_->ubo_data_.sim_params.windDir[0], 0.1f, -1.0f, 1.0f); });
+
+				row("Wind Strength", [&] {
+					ImGui::DragFloat("##WindStrength", &graphicsContext.gpu_sim_->ubo_data_.sim_params.windStrength, 0.1f, 0.0f, 5.0f); });
+
+				ImGui::EndTable();
+		}
+	}
+}
+
+
+template<typename RowFn, typename Scene>
+void GUI::SetTestSceneGUI(RowFn&& row, Scene& scene)
+{
+	if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		if (ImGui::BeginTable("SceneTable", 2,
+			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+		{
+			row("SphereCollision", [&] {
+				ImGui::Checkbox("##SphereCollision", &scene.sphereCollision); });
+			row("PinnedCorner", [&] {
+				ImGui::Checkbox("##PinnedCorner", &scene.pinnedCorner); });
+			row("TopPinnedCorner", [&] {
+				ImGui::Checkbox("##TopPinnedCorner", &scene.topPinnedCorner); });
 
 			ImGui::EndTable();
 		}

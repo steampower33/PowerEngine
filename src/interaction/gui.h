@@ -18,8 +18,6 @@ public:
 	vk::raii::DescriptorPool imgui_pool_{ nullptr };
 	void Update(Context& context, GraphicsContext& graphicsContext, Swapchain& swapchain);
 	void DisplayKernelTiming(const std::string name, std::unordered_map<std::string, double>& labelToTime, std::unordered_map<std::string, double>& labelToAvgTime, bool autoColor = true);
-	template<typename RowFn, typename UBOData>
-	void SetObjectGui(RowFn&& row, UBOData& data);
 
 	uint32_t count_ = 0;
 
@@ -29,4 +27,15 @@ public:
 	ImVec4 color_disabled = ImVec4(0.5f, 0.5f, 0.5f, 1.000f);
 
 	bool is_print_timestamps = false;
+
+	template<typename RowFn, typename UBOData>
+	void SetLightGUI(RowFn&& row, UBOData& data);
+	template<typename RowFn, typename UBOData>
+	void SetObjectGUI(RowFn&& row, UBOData& data);
+	template<typename RowFn>
+	void SetSolverTimeingGUI(RowFn&& row, GraphicsContext& graphicsContext);
+	template<typename RowFn>
+	void SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext);
+	template<typename RowFn, typename Scene>
+	void SetTestSceneGUI(RowFn&& row, Scene& scene);
 };
