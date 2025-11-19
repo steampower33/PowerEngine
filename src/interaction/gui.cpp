@@ -93,30 +93,26 @@ GUI::~GUI()
 	ImGui::DestroyContext();
 }
 
-void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& swapchain)
+void GUI::SetStyle()
 {
-	ImGui_ImplVulkan_NewFrame();
-	ImGui_ImplGlfw_NewFrame();
-	ImGui::NewFrame();
-
 	ImGuiStyle& st = ImGui::GetStyle();
 	st.WindowRounding = 12.f;          // 창 라운드
 	st.FrameRounding = 10.f;          // 슬라이더/체크 등 라운드
 	st.GrabRounding = 10.f;
 	st.ScrollbarRounding = 10.f;
 
-	st.FramePadding = ImVec2(10, 6); // 컨트롤 패딩
-	st.ItemSpacing = ImVec2(10, 8); // 항목 간 간격
-	st.WindowTitleAlign = ImVec2(0.5f, 0.5f);
-
-	// 다크 테마 + 반투명 창
 	ImVec4* col = st.Colors;
 	col[ImGuiCol_WindowBg].w = 0.1f;          // 창 배경 알파
 
-	ImGui::SetNextWindowBgAlpha(1.0f); // 창 자체 투명도
-	ImGuiWindowFlags wf =
-		ImGuiWindowFlags_NoResize |
-		ImGuiWindowFlags_NoCollapse;
+}
+
+void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& swapchain)
+{
+	ImGui_ImplVulkan_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+
+	SetStyle();
 
 	auto row = [&](const char* label, auto drawControl)
 		{
@@ -132,6 +128,11 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 			ImGui::SetNextItemWidth(-FLT_MIN);   // 해당 아이템 하나가 열 폭을 다 씀
 			drawControl();
 		};
+
+	ImGui::SetNextWindowBgAlpha(1.0f); // 창 자체 투명도
+	ImGuiWindowFlags wf =
+		ImGuiWindowFlags_NoResize |
+		ImGuiWindowFlags_NoCollapse;
 
 	ImGui::SetNextWindowSize(ImVec2(500, 0));
 	ImGui::SetNextWindowPos(ImVec2(5, 5), ImGuiCond_Once);
