@@ -117,7 +117,7 @@ public:
 
 			uint32_t aoIdx = 0;
 			uint32_t heightIdx = 0;
-			float metallicFactor = 0.0f;
+			float metallicFactor = 0.5f;
 			float roughnessFactor = 0.5f;
 
 			float aoFactor = 0.0f;
@@ -125,13 +125,13 @@ public:
 			uint32_t p0 = 0;
 			uint32_t p1 = 0;
 
-			uint32_t albedoEnable = 1;
-			uint32_t metallicEnable = 1;
-			uint32_t normalEnable = 1;
-			uint32_t roughtnessEnable = 1;
+			uint32_t albedoEnable = 0;
+			uint32_t metallicEnable = 0;
+			uint32_t normalEnable = 0;
+			uint32_t roughnessEnable = 0;
 
-			uint32_t aoEnable = 1;
-			uint32_t heightEnable = 1;
+			uint32_t aoEnable = 0;
+			uint32_t heightEnable = 0;
 			uint32_t p3;
 			uint32_t p4;
 		} object;
@@ -143,13 +143,15 @@ public:
 			glm::vec4 spotDir_inner{ 0.0f, -1.0f, 0.0f, 0.0f }; // xyz: 방향(월드, normalized), w: innerConeCos
 			glm::vec4 spotColor_outer{ 1.0f, 1.0f, 1.0f, 0.0f }; // rgb: color, w: outerConeCos
 			glm::mat4 invViewProj{};
+			float exposure = 0.5f;
+			float p0;
+			float p1;
+			float p2;
 		} light;
 		static_assert(sizeof(UBOData::Light) % 16 == 0, "std140 must be 16-byte aligned.");
 
 		struct SkyBox {
 			glm::mat4 model;
-			glm::mat4 inverseView;
-			glm::mat4 inverseProj;
 
 			uint32_t envIdx = 0;
 			uint32_t radianceIdx = 0;

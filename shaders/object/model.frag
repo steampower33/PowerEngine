@@ -25,7 +25,7 @@ void main() {
     vec4 albedo    = (object.albedoEnable == 0u) ? vec4(object.albedo_use.xyz, 0.0): texture(tex[nonuniformEXT(albedoIndex)], vUV);
     vec3 normalTS  = vNormalWorld;
     float metallic = (object.metallicEnable == 0u) ? object.metallicFactor : texture(tex[nonuniformEXT(metallicIndex)], vUV).r;
-    float rough    = (object.roughtnessEnable == 0u) ? object.roughnessFactor : texture(tex[nonuniformEXT(roughnessIndex)], vUV).r;
+    float rough    = (object.roughnessEnable == 0u) ? object.roughnessFactor : texture(tex[nonuniformEXT(roughnessIndex)], vUV).r;
     float ao       = (object.aoEnable == 0u) ? object.aoFactor : texture(tex[nonuniformEXT(aoIndex)], vUV).r;
     float height   = (object.heightEnable == 0u) ? object.heightFactor : texture(tex[nonuniformEXT(heightIndex)], vUV).r;
 

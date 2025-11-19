@@ -48,6 +48,7 @@ void GraphicsContext::Update(Camera& camera)
 	else if (cpu_or_gpu_ == CpuOrGpu::GPU)
 	{
 		gpu_sim_->UpdateComputeUBO(current_frame_, model_manager_.models[0]);
+		gpu_sim_->UpdateGraphicsUBO(current_frame_);
 	}
 
 	UpdateGraphicsUBO(camera);
@@ -83,9 +84,6 @@ void GraphicsContext::UpdateGraphicsUBO(Camera& camera)
 			ubo_data_.object.roughnessIdx = model_manager_.models[i]->texture_idx_.roughness;
 			ubo_data_.object.aoIdx = model_manager_.models[i]->texture_idx_.ao;
 			ubo_data_.object.heightIdx = model_manager_.models[i]->texture_idx_.height;
-			ubo_data_.object.metallicFactor = model_manager_.models[i]->factors_.metallic;
-			ubo_data_.object.roughnessFactor = model_manager_.models[i]->factors_.roughness;
-			ubo_data_.object.aoFactor = model_manager_.models[i]->factors_.ao;
 
 			std::memcpy(dst, &ubo_data_.object, sizeof(UBOData::Object));
 		}
@@ -943,8 +941,6 @@ void GraphicsContext::CreateUniformBuffers()
 		ubo_mapped_.skybox = ubo_memories_.skybox.mapMemory(0, totalSize);
 
 		ubo_data_.skybox.model = model_manager_.skybox_->world_;
-		ubo_data_.skybox.inverseView = glm::inverse(ubo_data_.global.view);
-		ubo_data_.skybox.inverseProj = glm::inverse(ubo_data_.global.proj);
 		ubo_data_.skybox.envIdx = model_manager_.skybox_->texture_idx_.env;
 		ubo_data_.skybox.radianceIdx = model_manager_.skybox_->texture_idx_.radiance;
 		ubo_data_.skybox.irradianceIdx = model_manager_.skybox_->texture_idx_.irradiance;

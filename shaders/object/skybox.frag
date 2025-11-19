@@ -4,8 +4,6 @@
 
 layout(set = 1, binding = 0) uniform SkyboxUBO {
     mat4x4 model;
-    mat4x4 inverseView;
-    mat4x4 inverseProj;
 
     uint envIdx;
     uint radianceIdx;

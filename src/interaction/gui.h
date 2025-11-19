@@ -2,7 +2,6 @@
 
 class Context;
 class Swapchain;
-class GpuSim;
 class GraphicsContext;
 class GpuSim;
 
@@ -19,6 +18,8 @@ public:
 	vk::raii::DescriptorPool imgui_pool_{ nullptr };
 	void Update(Context& context, GraphicsContext& graphicsContext, Swapchain& swapchain);
 	void DisplayKernelTiming(const std::string name, std::unordered_map<std::string, double>& labelToTime, std::unordered_map<std::string, double>& labelToAvgTime, bool autoColor = true);
+	template<typename RowFn, typename UBOData>
+	void SetObjectGui(RowFn&& row, UBOData& data);
 
 	uint32_t count_ = 0;
 

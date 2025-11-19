@@ -3,9 +3,9 @@
 #include "context.h"
 #include "swapchain.h"
 #include "vulkan_utils.h"
-#include "gpu_sim.h"
 #include "graphics_context.h"
 #include "texture_manager.h"
+#include "gpu_sim.h"
 
 #include "gui.h"
 
@@ -139,52 +139,20 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 
 	ImGui::SetNextWindowSize(ImVec2(500, 0));
 	ImGui::SetNextWindowPos(ImVec2(5, 5), ImGuiCond_Once);
-	if (ImGui::Begin("Stat", nullptr, wf))
+	if (ImGui::Begin("Option", nullptr, wf))
 	{
 		if (ImGui::CollapsingHeader("Rendering", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			if (ImGui::BeginTable("RenderingTable", 2,
+			if (ImGui::BeginTable("Rendering", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
-				row("Meltallic", [&] { ImGui::SliderFloat("##Meltallic", &graphicsContext.ubo_data_.object.metallicFactor, 0.0f, 1.0f); });
-				row("Roughness", [&] { ImGui::SliderFloat("##Roughness", &graphicsContext.ubo_data_.object.roughnessFactor, 0.0f, 1.0f); });
-				row("AO", [&] { ImGui::SliderFloat("##AO", &graphicsContext.ubo_data_.object.aoFactor, 0.0f, 1.0f); });
-				row("Height", [&] { ImGui::SliderFloat("##Height", &graphicsContext.ubo_data_.object.heightFactor, 0.0f, 1.0f); });
-
-				row("AlbedoEnable", [&] { 
-					bool enable = (graphicsContext.ubo_data_.object.albedoEnable == 1) ? true : false;
-					ImGui::Checkbox("##AlbedoEnable", &enable);
-					graphicsContext.ubo_data_.object.albedoEnable = (enable) ? true : false;
-					});
-				row("MetalnessEnable", [&] {
-					bool enable = (graphicsContext.ubo_data_.object.metallicEnable == 1) ? true : false;
-					ImGui::Checkbox("##MetalnessEnable", &enable);
-					graphicsContext.ubo_data_.object.metallicEnable = (enable) ? true : false;
-					});
-				row("NormalEnable", [&] {
-					bool enable = (graphicsContext.ubo_data_.object.normalEnable == 1) ? true : false;
-					ImGui::Checkbox("##NormalEnable", &enable);
-					graphicsContext.ubo_data_.object.normalEnable = (enable) ? true : false;
-					});
-				row("RoughtnessEnable", [&] {
-					bool enable = (graphicsContext.ubo_data_.object.roughtnessEnable == 1) ? true : false;
-					ImGui::Checkbox("##RoughtnessEnable", &enable);
-					graphicsContext.ubo_data_.object.roughtnessEnable = (enable) ? true : false;
-					});
-				row("AOEnable", [&] {
-					bool enable = (graphicsContext.ubo_data_.object.aoEnable == 1) ? true : false;
-					ImGui::Checkbox("##AOEnable", &enable);
-					graphicsContext.ubo_data_.object.aoEnable = (enable) ? true : false;
-					});
-				row("HeightEnable", [&] {
-					bool enable = (graphicsContext.ubo_data_.object.heightEnable == 1) ? true : false;
-					ImGui::Checkbox("##HeightEnable", &enable);
-					graphicsContext.ubo_data_.object.heightEnable = (enable) ? true : false;
-					});
-
+				row("Exposure", [&] { ImGui::SliderFloat("##Exposure", &graphicsContext.ubo_data_.light.exposure, 0.0f, 2.0f); });
 				ImGui::EndTable();
 			}
+
 		}
+
+		SetObjectGui(row, graphicsContext.gpu_sim_->ubo_data_);
 
 		if (ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen))
 		{
@@ -226,7 +194,7 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 			}
 			count_ = graphicsContext.time_count_;
 		}
-	
+
 		if (ImGui::CollapsingHeader("Simulation", ImGuiTreeNodeFlags_DefaultOpen))
 		{
 			ImGuiIO& io = ImGui::GetIO(); (void)io;
@@ -334,5 +302,57 @@ void GUI::DisplayKernelTiming(const std::string name, std::unordered_map<std::st
 	if (shouldPop)
 	{
 		ImGui::PopStyleColor();
+	}
+}
+
+template<typename RowFn, typename UBOData>
+void GUI::SetObjectGui(RowFn&& row, UBOData& data) {
+
+	if (ImGui::CollapsingHeader("Object", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		if (ImGui::BeginTable("ObjectTable", 2,
+			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+		{
+			float metallic = data.render.metallicFactor;
+			row("Meltallic", [&] { ImGui::SliderFloat("##ClothMeltallic", &metallic, 0.0f, 1.0f); });
+			data.render.roughnessFactor = 1.0 - metallic;
+			row("Roughness", [&] { ImGui::SliderFloat("##ClothRoughness", &data.render.roughnessFactor, 0.0f, 1.0f); });
+			data.render.metallicFactor = 1.0 - data.render.roughnessFactor;
+			row("AO", [&] { ImGui::SliderFloat("##ClothAO", &data.render.aoFactor, 0.0f, 1.0f); });
+			row("Height", [&] { ImGui::SliderFloat("##ClothHeight", &data.render.heightFactor, 0.0f, 1.0f); });
+
+			row("AlbedoEnable", [&] {
+				bool enable = (data.render.albedoEnable == 1) ? true : false;
+				ImGui::Checkbox("##ClothAlbedoEnable", &enable);
+				data.render.albedoEnable = (enable) ? true : false;
+				});
+			row("MetalnessEnable", [&] {
+				bool enable = (data.render.metallicEnable == 1) ? true : false;
+				ImGui::Checkbox("##ClothMetalnessEnable", &enable);
+				data.render.metallicEnable = (enable) ? true : false;
+				});
+			row("NormalEnable", [&] {
+				bool enable = (data.render.normalEnable == 1) ? true : false;
+				ImGui::Checkbox("##ClothNormalEnable", &enable);
+				data.render.normalEnable = (enable) ? true : false;
+				});
+			row("RoughtnessEnable", [&] {
+				bool enable = (data.render.roughtnessEnable == 1) ? true : false;
+				ImGui::Checkbox("##ClothRoughtnessEnable", &enable);
+				data.render.roughtnessEnable = (enable) ? true : false;
+				});
+			row("AOEnable", [&] {
+				bool enable = (data.render.aoEnable == 1) ? true : false;
+				ImGui::Checkbox("##ClothAOEnable", &enable);
+				data.render.aoEnable = (enable) ? true : false;
+				});
+			row("HeightEnable", [&] {
+				bool enable = (data.render.heightEnable == 1) ? true : false;
+				ImGui::Checkbox("##ClothHeightEnable", &enable);
+				data.render.heightEnable = (enable) ? true : false;
+				});
+
+			ImGui::EndTable();
+		}
 	}
 }

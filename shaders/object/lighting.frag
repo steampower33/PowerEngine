@@ -8,6 +8,10 @@ layout(set = 0, binding = 0) uniform LightUBO {
     vec4 spotDir_inner;
     vec4 spotColor_outer;
     mat4 invViewProj;
+    float exposure;
+    float p0;
+    float p1;
+    float p2;
 } light;
 
 layout(set = 0, binding = 1) uniform sampler2D gAlbedoMetal;
@@ -17,8 +21,6 @@ layout(set = 0, binding = 4) uniform sampler2D gDepth;
 
 layout(set = 1, binding = 0) uniform SkyboxUBO {
     mat4x4 model;
-    mat4x4 inverseView;
-    mat4x4 inverseProj;
 
     uint envIdx;
     uint radianceIdx;
@@ -58,6 +60,18 @@ vec3 FresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
                 pow(1.0 - cosTheta, 5.0);
 }
 
+// Narkowicz ACES Filmic
+vec3 TonemapACES(vec3 x)
+{
+    const float a = 2.51;
+    const float b = 0.03;
+    const float c = 2.43;
+    const float d = 0.59;
+    const float e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e),
+                 0.0, 1.0);
+}
+
 void main()
 {
     float depth = texture(gDepth, vUV).r;
@@ -91,9 +105,6 @@ void main()
     float NdotV = max(dot(N, V), 0.0);
 
     vec3 F0 = mix(vec3(0.04), albedo, metallic);  // 금속이면 albedo가 F0
-    vec3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
-    vec3 kS = F;
-    vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
 
     vec3 diffuseIrr = texture(envTex[nonuniformEXT(skybox.irradianceIdx)], N).rgb;
     vec3 diffuseIBL = diffuseIrr * albedo;
@@ -108,16 +119,25 @@ void main()
     // (N·V, roughness) 로 LUT 샘플링
     vec2 brdf = texture(tex[nonuniformEXT(skybox.brdfLUTIndex)], vec2(NdotV, roughness)).rg;
 
-    // F는 위에서 구한 FresnelSchlickRoughness 사용
+    vec3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
+    vec3 kS = F;
+    vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
+
     vec3 specularIBL = prefilteredColor * (F * brdf.x + brdf.y);
 
-    vec3 ambient = kD * diffuseIBL + specularIBL;
-    ambient *= ao;
+    vec3 ambientDiffuse = kD * diffuseIBL * ao;
+    vec3 ambientSpec    = specularIBL; // 필요하면 여기도 약하게 ao 곱해도 됨
+
+    vec3 color = ambientDiffuse + ambientSpec;
+
+    color = max(color, vec3(0.0));
     
-    vec3 color = ambient;
+    // HDR → LDR (Tone Mapping)
+    float exposure = light.exposure; // UBO에서 조절
+    color *= exposure;
+    color  = TonemapACES(color);
 
-    // 톤매핑 & 감마
-    color = pow(color, vec3(1.0/2.2));   // sRGB
-
+    color = pow(color, vec3(1.0 / 2.2));
+     
     outColor = vec4(color, 1.0);
 }

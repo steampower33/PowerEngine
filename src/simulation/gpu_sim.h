@@ -25,8 +25,11 @@ public:
 	~GpuSim() = default;
 
 	void UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& model);
+	void UpdateGraphicsUBO(uint32_t currentFrame);
+
 	void ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& timestampSteps, vku::TestScene& testScene);
 	void GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset, vku::PolygonMode mode);
+
 	void UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene);
 
 	uint32_t timestamp_count_ = 10;
@@ -115,8 +118,39 @@ public:
 			alignas(4) float pad1;
 			alignas(4) float pad2;
 		} sim_params;
+		static_assert(sizeof(UBOData::SimParams) % 16 == 0, "std140 must be 16-byte aligned.");
+
+		struct Render {
+			glm::vec4 albedo_use;
+
+			uint32_t albedoIdx = 0;
+			uint32_t metallicIdx = 0;
+			uint32_t normalIdx = 0;
+			uint32_t roughnessIdx = 0;
+
+			uint32_t aoIdx = 0;
+			uint32_t heightIdx = 0;
+			float metallicFactor = 0.2f;
+			float roughnessFactor = 0.8f;
+
+			float aoFactor = 1.0f;
+			float heightFactor = 0.0f;
+			uint32_t p0 = 0;
+			uint32_t p1 = 0;
+
+			uint32_t albedoEnable = 1;
+			uint32_t metallicEnable = 1;
+			uint32_t normalEnable = 1;
+			uint32_t roughtnessEnable = 1;
+
+			uint32_t aoEnable = 1;
+			uint32_t heightEnable = 1;
+			uint32_t p3;
+			uint32_t p4;
+		} render;
+		static_assert(sizeof(UBOData::Render) % 16 == 0, "std140 must be 16-byte aligned.");
+
 	} ubo_data_;
-	static_assert(sizeof(UBOData::SimParams) % 16 == 0, "std140 must be 16-byte aligned.");
 
 	struct PushConstant {
 		uint32_t base;
@@ -126,28 +160,34 @@ public:
 
 	struct UBO {
 		vk::raii::Buffer sim_params{ nullptr };
+		vk::raii::Buffer render{ nullptr };
 	} ubos_;
 
 	struct UBOMemory {
 		vk::raii::DeviceMemory sim_params{ nullptr };
+		vk::raii::DeviceMemory render{ nullptr };
 	} ubo_memories_;
 
 	struct UBOMapped {
 		void* sim_params{ nullptr };
+		void* render{ nullptr };
 	} ubo_mapped_;
 
 	struct UBOSize {
 		vk::DeviceSize sim_params;
+		vk::DeviceSize render;
 	} ubo_size_;
 
 	struct SetLayout {
 		vk::raii::DescriptorSetLayout sim_params{ nullptr };
+		vk::raii::DescriptorSetLayout render{ nullptr };
 		vk::raii::DescriptorSetLayout cloth_compute{ nullptr };
 		vk::raii::DescriptorSetLayout cloth_graphics{ nullptr };
 	} set_layouts_;
 
 	struct Set {
 		vk::raii::DescriptorSet sim_params{ nullptr };
+		vk::raii::DescriptorSet render{ nullptr };
 		vk::raii::DescriptorSet cloth_compute{ nullptr };
 		vk::raii::DescriptorSet cloth_graphics{ nullptr };
 	} sets_;

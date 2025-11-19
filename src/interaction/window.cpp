@@ -9,6 +9,17 @@ Window::Window()
 {
 	glfwInit();
 
+	GLFWmonitor* primary = glfwGetPrimaryMonitor();
+	const GLFWvidmode* mode = glfwGetVideoMode(primary);
+
+	int screenWidth = mode->width;
+	int screenHeight = mode->height;
+
+	float ratio = 0.9f;
+
+	init_width_ = static_cast<int>(screenWidth * ratio);
+	init_height_ = static_cast<int>(init_width_ * 9.0f / 16.0f);
+
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
 	glfw_window_ = glfwCreateWindow(init_width_, init_height_, "Vulkan", nullptr, nullptr);

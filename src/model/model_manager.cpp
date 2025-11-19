@@ -17,25 +17,31 @@ ModelManager::ModelManager(Context& context, GraphicsContext& graphicsContext, T
 		MeshData sphere = GeometryGenerator::MakeSphere(1.0f, 20, 20);
 		glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
 		glm::vec3 initPos = glm::vec3(0.0f, 1.0f, 0.0f);
-		glm::vec4 initColor = glm::vec4(244.0f / 255.0f, 114 / 255.0f, 43 / 255.0f, 0.0);
+		glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
 		std::unique_ptr<Model> model = std::make_unique<Model>(sphere, vku::VertexIncludeInfo{ true, true }, context, graphicsContext, model_count_, initPos, angleQuat, initColor, true);
-		model->texture_idx_.albedo = textureManager.CreateTexture("assets/Metal", "albedo");
-		model->texture_idx_.metallic = textureManager.CreateTexture("assets/Metal", "metallic");
-		model->texture_idx_.normal = textureManager.CreateTexture("assets/Metal", "normal");
-		model->texture_idx_.roughness = textureManager.CreateTexture("assets/Metal", "roughness");
-		model->texture_idx_.ao = textureManager.CreateTexture("assets/Metal", "ao");
-		model->texture_idx_.height = textureManager.CreateTexture("assets/Metal", "height");
+		//model->texture_idx_.albedo = textureManager.CreateTexture("assets/Metal", "albedo");
+		//model->texture_idx_.metallic = textureManager.CreateTexture("assets/Metal", "metallic");
+		//model->texture_idx_.normal = textureManager.CreateTexture("assets/Metal", "normal");
+		//model->texture_idx_.roughness = textureManager.CreateTexture("assets/Metal", "roughness");
+		//model->texture_idx_.ao = textureManager.CreateTexture("assets/Metal", "ao");
+		//model->texture_idx_.height = textureManager.CreateTexture("assets/Metal", "height");
 		models.emplace_back(std::move(model));
 	}
 
 	{
-		MeshData plane = GeometryGenerator::MakeSquare(10.0f);
-		glm::quat angleQuat = glm::angleAxis(glm::radians(90.0f), glm::vec3(1, 0, 0));
-		glm::vec3 initPos = glm::vec3(0.0f, 0.0f, 0.0f);
-		float color = 62.0f / 255.0f;
-		glm::vec4 initColor = glm::vec4(color, color, color, 1.0);
-		std::unique_ptr<Model> model = std::make_unique<Model>(plane, vku::VertexIncludeInfo{ true, true }, context, graphicsContext, model_count_, initPos, angleQuat, initColor, false);
-		models.emplace_back(std::move(model));
+		//MeshData plane = GeometryGenerator::MakeSquare(10.0f);
+		//glm::quat angleQuat = glm::angleAxis(glm::radians(90.0f), glm::vec3(1, 0, 0));
+		//glm::vec3 initPos = glm::vec3(0.0f, 0.0f, 0.0f);
+		//float color = 62.0f / 255.0f;
+		//glm::vec4 initColor = glm::vec4(color, color, color, 1.0);
+		//std::unique_ptr<Model> model = std::make_unique<Model>(plane, vku::VertexIncludeInfo{ true, true }, context, graphicsContext, model_count_, initPos, angleQuat, initColor, false);
+		//model->texture_idx_.albedo = textureManager.CreateTexture("assets/Fabric", "color");
+		//model->texture_idx_.metallic = 0;
+		//model->texture_idx_.normal = textureManager.CreateTexture("assets/Fabric", "normalgl");
+		//model->texture_idx_.roughness = textureManager.CreateTexture("assets/Fabric", "roughness");
+		//model->texture_idx_.ao = 0;
+		//model->texture_idx_.height = textureManager.CreateTexture("assets/Fabric", "displacement");
+		//models.emplace_back(std::move(model));
 	}
 
 	{

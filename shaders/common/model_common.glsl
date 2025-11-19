@@ -34,7 +34,7 @@ layout(set = 1, binding = 0) uniform ObjectUBO {
     uint albedoEnable;
     uint metallicEnable;
     uint normalEnable;
-    uint roughtnessEnable;
+    uint roughnessEnable;
 
     uint aoEnable;
     uint heightEnable;

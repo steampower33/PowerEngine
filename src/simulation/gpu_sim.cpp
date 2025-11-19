@@ -29,6 +29,18 @@ GpuSim::GpuSim(
 			set_layouts_.sim_params = vk::raii::DescriptorSetLayout(context.device_, layoutInfo);
 		}
 
+		// Render
+		{
+			std::array layoutBindings{
+				vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eFragment, nullptr)
+			};
+			counts_.ubo_dynamic += 1;
+			counts_.layout += 1;
+
+			vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
+			set_layouts_.render = vk::raii::DescriptorSetLayout(context.device_, layoutInfo);
+		}
+
 		// Cloth Compute - Compute
 		{
 			std::array layoutBindings{
@@ -109,6 +121,25 @@ GpuSim::GpuSim(
 		ubos_.sim_params = std::move(buffer);
 		ubo_memories_.sim_params = std::move(bufferMem);
 		ubo_mapped_.sim_params = ubo_memories_.sim_params.mapMemory(0, totalSize);
+	}
+
+	// Render UBO
+	{
+		ubos_.render.clear();
+		ubo_memories_.render.clear();
+		ubo_mapped_.render = nullptr;
+
+		auto limits = context.physical_device_.getProperties().limits;
+		ubo_size_.render = (sizeof(UBOData::Render) + limits.minUniformBufferOffsetAlignment - 1)
+			& ~(limits.minUniformBufferOffsetAlignment - 1);
+		vk::DeviceSize totalSize = ubo_size_.render * MAX_FRAMES_IN_FLIGHT;
+
+		vk::raii::Buffer buffer({});
+		vk::raii::DeviceMemory bufferMem({});
+		vku::CreateBuffer(context.physical_device_, context.device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
+		ubos_.render = std::move(buffer);
+		ubo_memories_.render = std::move(bufferMem);
+		ubo_mapped_.render = ubo_memories_.render.mapMemory(0, totalSize);
 	}
 
 	// SSBOs
@@ -381,6 +412,31 @@ GpuSim::GpuSim(
 					.descriptorCount = 1,
 					.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
 					.pBufferInfo = &simParamsUboInfo
+				}
+			};
+			context.device_.updateDescriptorSets(descriptorWrites, {});
+		}
+
+		// Render
+		{
+			vk::DescriptorSetAllocateInfo allocInfo{
+				.descriptorPool = *descriptor_pool_,
+				.descriptorSetCount = 1,
+				.pSetLayouts = &*set_layouts_.render
+			};
+
+			auto sets = vk::raii::DescriptorSets{ context.device_, allocInfo };
+			sets_.render = std::move(sets.front());
+
+			vk::DescriptorBufferInfo renderUboInfo{ *ubos_.render, 0, sizeof(UBOData::Render) };
+			std::array descriptorWrites{
+				vk::WriteDescriptorSet{
+					.dstSet = *sets_.render,
+					.dstBinding = 0,
+					.dstArrayElement = 0,
+					.descriptorCount = 1,
+					.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
+					.pBufferInfo = &renderUboInfo
 				}
 			};
 			context.device_.updateDescriptorSets(descriptorWrites, {});
@@ -733,9 +789,13 @@ GpuSim::GpuSim(
 			cloth_pc_.ny1 = Ny_ + 1;
 
 			// Pipeline Layout
-			std::array<vk::DescriptorSetLayout, 2> setLayouts(*globalSetLayout, *set_layouts_.cloth_graphics);
+			std::array<vk::DescriptorSetLayout, 3> setLayouts(
+				*globalSetLayout, 
+				*set_layouts_.cloth_graphics,
+				*set_layouts_.render);
+
 			vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
-				.setLayoutCount = 2,
+				.setLayoutCount = setLayouts.size(),
 				.pSetLayouts = setLayouts.data(),
 				.pushConstantRangeCount = 1,
 				.pPushConstantRanges = &pcRange
@@ -787,6 +847,14 @@ void GpuSim::UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& mod
 	std::memcpy(dst, &ubo_data_.sim_params, sizeof(UBOData::SimParams));
 }
 
+void GpuSim::UpdateGraphicsUBO(uint32_t currentFrame)
+{
+	const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_size_.render);
+	auto* dst = static_cast<std::byte*>(ubo_mapped_.render) + baseOffset;
+
+	std::memcpy(dst, &ubo_data_.render, sizeof(UBOData::Render));
+}
+
 void GpuSim::GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset, vku::PolygonMode mode)
 {
 	// Cloth
@@ -806,12 +874,24 @@ void GpuSim::GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer
 			{ *globalSet },
 			{ globalOffset }
 		);
+
+		// Graphics
 		cmd.bindDescriptorSets(
 			vk::PipelineBindPoint::eGraphics,
 			pipeline_layouts_.cloth_graphics,
 			1,
 			{ *sets_.cloth_graphics },
 			{ }
+		);
+
+		// Render
+		const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_size_.render);
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			pipeline_layouts_.cloth_graphics,
+			2,
+			{ *sets_.render },
+			{ baseOffset }
 		);
 
 		cmd.pushConstants<ClothPC>(
