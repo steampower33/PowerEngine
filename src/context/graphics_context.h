@@ -110,13 +110,13 @@ public:
 
 			glm::vec4 albedo_use;
 
-			uint32_t albedoIdx = 0;
-			uint32_t metallicIdx = 0;
-			uint32_t normalIdx = 0;
-			uint32_t roughnessIdx = 0;
+			int albedoIdx = -1;
+			int metallicIdx = -1;
+			int normalIdx = -1;
+			int roughnessIdx = -1;
 
-			uint32_t aoIdx = 0;
-			uint32_t heightIdx = 0;
+			int aoIdx = -1;
+			int heightIdx = -1;
 			float metallicFactor = 0.5f;
 			float roughnessFactor = 0.5f;
 
@@ -153,12 +153,12 @@ public:
 		struct SkyBox {
 			glm::mat4 model;
 
-			uint32_t envIdx = 0;
-			uint32_t radianceIdx = 0;
-			uint32_t irradianceIdx = 0;
+			int envIdx = 0;
+			int radianceIdx = 0;
+			int irradianceIdx = 0;
 			uint32_t specularMipLevels = 0;
 
-			uint32_t brdfLUTIndex = 0;
+			int brdfLUTIndex = 0;
 			uint32_t p0 = 0;
 			uint32_t p1 = 0;
 			uint32_t p2 = 0;

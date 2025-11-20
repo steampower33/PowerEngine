@@ -19,32 +19,28 @@ ModelManager::ModelManager(Context& context, GraphicsContext& graphicsContext, T
 		glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
 		glm::vec3 initPos = glm::vec3(0.0f, 1.0f, 0.0f);
 		glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
-		std::unique_ptr<Model> model = std::make_unique<Model>(sphere, vku::VertexIncludeInfo{ true, true }, context, graphicsContext, model_count_, initPos, angleQuat, initColor, true);
+		std::unique_ptr<Model> model = std::make_unique<Model>(sphere, vku::VertexIncludeInfo{ true, true }, context, graphicsContext, initPos, angleQuat, initColor, true);
 		model->radius_ = radius;
-		//model->texture_idx_.albedo = textureManager.CreateTexture("assets/Metal", "albedo");
-		//model->texture_idx_.metallic = textureManager.CreateTexture("assets/Metal", "metallic");
-		//model->texture_idx_.normal = textureManager.CreateTexture("assets/Metal", "normal");
-		//model->texture_idx_.roughness = textureManager.CreateTexture("assets/Metal", "roughness");
-		//model->texture_idx_.ao = textureManager.CreateTexture("assets/Metal", "ao");
-		//model->texture_idx_.height = textureManager.CreateTexture("assets/Metal", "height");
 		models.emplace_back(std::move(model));
 	}
 
 	{
-		//glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
-		//glm::vec3 initPos = glm::vec3(0.0f, 1.0f, 0.0f);
-		//glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
-		//std::unique_ptr<Model> model = std::make_unique<Model>("assets/cloth/cloth.gltf", vku::VertexIncludeInfo{true, true}, context, graphicsContext, textureManager, model_count_, initPos, angleQuat, initColor, true);
-		//model->texture_idx_.albedo = textureManager.CreateTexture("assets/curtain", "basecolor");
-		//model->texture_use_.albedo = 1;
-		//model->texture_idx_.normal = textureManager.CreateTexture("assets/curtain", "normal");
-		//model->texture_use_.normal = 1;
-		//model->texture_idx_.metallic = textureManager.CreateTexture("assets/curtain", "metallic");
-		//model->texture_use_.metallic = 1;
-		//model->texture_idx_.roughness = textureManager.CreateTexture("assets/curtain", "roughness");
-		//model->texture_use_.roughtness = 1;
+		MeshData sphere = GeometryGenerator::MakeSquare(1.0f);
+		glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
+		glm::vec3 initPos = glm::vec3(0.0f, 1.0f, 0.0f);
+		glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
+		std::unique_ptr<Model> model = std::make_unique<Model>(sphere, vku::VertexIncludeInfo{ true, true }, context, graphicsContext, initPos, angleQuat, initColor, true);
 
-		//models.emplace_back(std::move(model));
+		model->texture_idx_.albedo = textureManager.CreateTexture("assets/Fabric", "color");
+		model->texture_use_.albedo = (model->texture_idx_.albedo != -1) ? 1 : 0;
+		model->texture_idx_.normal = textureManager.CreateTexture("assets/Fabric", "normalgl");
+		model->texture_use_.normal = (model->texture_idx_.normal != -1) ? 1 : 0;
+		model->texture_idx_.height = textureManager.CreateTexture("assets/Fabric", "displacement");
+		model->texture_use_.height = (model->texture_idx_.height != -1) ? 1 : 0;
+		model->texture_idx_.roughness = textureManager.CreateTexture("assets/Fabric", "roughness");
+		model->texture_use_.roughtness = (model->texture_idx_.roughness != -1) ? 1 : 0;
+
+		cloth_ = std::move(model);
 	}
 
 	{

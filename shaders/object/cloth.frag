@@ -1,19 +1,18 @@
 #version 450
 
 #extension GL_KHR_vulkan_glsl : enable
-
-layout(set = 1, binding = 1) uniform sampler2D tex;
+#extension GL_EXT_nonuniform_qualifier : require
 
 layout(set = 2, binding = 0) uniform Render {
     vec4 albedo_use;
 
-    uint albedoIdx;
-    uint metallicIdx;
-    uint normalIdx;
-    uint roughnessIdx;
+    int albedoIdx;
+    int metallicIdx;
+    int normalIdx;
+    int roughnessIdx;
 
-    uint aoIdx;
-    uint heightIdx;
+    int aoIdx;
+    int heightIdx;
     float metallicFactor;
     float roughnessFactor;
 
@@ -33,6 +32,8 @@ layout(set = 2, binding = 0) uniform Render {
     uint p4;
 } render;
 
+layout(set = 3, binding = 0) uniform sampler2D tex[];
+
 layout(location = 0) in vec2 vUV;
 layout(location = 1) in vec3 vWorldNormal; // world normal
 
@@ -41,18 +42,14 @@ layout(location = 1) out vec4 outNormalRough;
 layout(location = 2) out vec4 outHeightAO;
 
 void main() {
-//    vec3 albedo = (render.albedoEnable == 0u) ? pow(render.albedo_use.rgb,  vec3(2.2)) : texture(tex, vUV).rgb;
-//
-//    float metallic = (render.metallicEnable == 0u) ? 0.0 : render.metallicFactor;
-//    float roughness = (render.roughnessEnable == 0u) ? 0.0 : render.roughnessFactor;
-//    float ao = (render.aoEnable == 0u) ? 0.0 : render.aoFactor;
+    vec4 albedo    = (render.albedoEnable == 0u) ? vec4(render.albedo_use.xyz, 0.0): texture(tex[nonuniformEXT(render.albedoIdx)], vUV);
+    vec3 normalTS  = vWorldNormal;
+    float metallic = (render.metallicEnable == 0u) ? render.metallicFactor : texture(tex[nonuniformEXT(render.metallicIdx)], vUV).r;
+    float roughness    = (render.roughnessEnable == 0u) ? render.roughnessFactor : texture(tex[nonuniformEXT(render.roughnessIdx)], vUV).r;
+    float ao       = (render.aoEnable == 0u) ? render.aoFactor : texture(tex[nonuniformEXT(render.aoIdx)], vUV).r;
+    float height   = (render.heightEnable == 0u) ? render.heightFactor : texture(tex[nonuniformEXT(render.heightIdx)], vUV).r;
 
-    vec3 albedo = texture(tex, vUV).rgb;
-    float metallic = render.metallicFactor;
-    float roughness = render.roughnessFactor;
-    float ao = render.aoFactor;
-
-    outAlbedoMetal = vec4(albedo, metallic);
-    outNormalRough = vec4(vWorldNormal * 0.5 + 0.5, roughness); // [-1,1] -> [0,1]
+    outAlbedoMetal = vec4(albedo.xyz, metallic);
+    outNormalRough = vec4(normalTS * 0.5 + 0.5, roughness); // [-1,1] -> [0,1]
     outHeightAO = vec4(0.0, ao, 0.0, 0.0);
 }

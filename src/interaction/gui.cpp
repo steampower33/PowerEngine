@@ -143,13 +143,13 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 			if (ImGui::BeginTable("Rendering", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
-				row("Exposure", [&] { ImGui::SliderFloat("##Exposure", &graphicsContext.ubo_data_.light.exposure, 0.0f, 2.0f); });
+				row("Exposure", [&] { ImGui::DragFloat("##Exposure", &graphicsContext.ubo_data_.light.exposure, 0.1f, 0.0f, 2.0f); });
 				ImGui::EndTable();
 			}
 
 		}
 
-		//SetObjectGUI(row, graphicsContext.gpu_sim_->ubo_data_);
+		SetObjectGUI(row, graphicsContext.gpu_sim_->ubo_data_.render);
 		//SetLightGUI(row, graphicsContext.ubo_data_);
 		SetSolverTimeingGUI(row, graphicsContext);
 		SetSimulationGUI(row, graphicsContext);
@@ -238,43 +238,40 @@ void GUI::SetObjectGUI(RowFn&& row, UBOData& data) {
 		if (ImGui::BeginTable("ObjectTable", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
-			float metallic = data.render.metallicFactor;
-			row("Meltallic", [&] { ImGui::SliderFloat("##ClothMeltallic", &metallic, 0.0f, 1.0f); });
-			data.render.roughnessFactor = 1.0 - metallic;
-			row("Roughness", [&] { ImGui::SliderFloat("##ClothRoughness", &data.render.roughnessFactor, 0.0f, 1.0f); });
-			data.render.metallicFactor = 1.0 - data.render.roughnessFactor;
-			row("AO", [&] { ImGui::SliderFloat("##ClothAO", &data.render.aoFactor, 0.0f, 1.0f); });
-			row("Height", [&] { ImGui::SliderFloat("##ClothHeight", &data.render.heightFactor, 0.0f, 1.0f); });
+			row("Meltallic", [&] { ImGui::DragFloat("##ClothMeltallic", &data.metallicFactor, 0.1f, 0.0f, 1.0f); });
+			row("Roughness", [&] { ImGui::DragFloat("##ClothRoughness", &data.roughnessFactor, 0.1f, 0.0f, 1.0f); });
+			row("AO", [&] { ImGui::DragFloat("##ClothAO", &data.aoFactor, 0.1f, 0.0f, 1.0f); });
+			row("Height", [&] { ImGui::DragFloat("##ClothHeight", &data.heightFactor, 0.001f, 0.0f, 1.0f); });
 
 			row("AlbedoEnable", [&] {
-				bool enable = (data.render.albedoEnable == 1) ? true : false;
+				bool enable = (data.albedoEnable == 1) ? true : false;
 				ImGui::Checkbox("##ClothAlbedoEnable", &enable);
-				data.render.albedoEnable = (enable) ? true : false;
+				data.albedoEnable = (enable) ? true : false;
 				});
 			row("MetalnessEnable", [&] {
-				bool enable = (data.render.metallicEnable == 1) ? true : false;
+				bool enable = (data.metallicEnable == 1) ? true : false;
 				ImGui::Checkbox("##ClothMetalnessEnable", &enable);
-				data.render.metallicEnable = (enable) ? true : false;
+				data.metallicEnable = (enable) ? true : false;
 				});
 			row("NormalEnable", [&] {
-				bool enable = (data.render.normalEnable == 1) ? true : false;
+				bool enable = (data.normalEnable == 1) ? true : false;
 				ImGui::Checkbox("##ClothNormalEnable", &enable);
-				data.render.normalEnable = (enable) ? true : false;
+				data.normalEnable = (enable) ? true : false;
 				});
 			row("RoughtnessEnable", [&] {
-				bool enable = (data.render.roughtnessEnable == 1) ? true : false;
+				bool enable = (data.roughtnessEnable == 1) ? true : false;
 				ImGui::Checkbox("##ClothRoughtnessEnable", &enable);
-				data.render.roughtnessEnable = (enable) ? true : false;
+				data.roughtnessEnable = (enable) ? true : false;
 				});
 			row("AOEnable", [&] {
-				bool enable = (data.render.aoEnable == 1) ? true : false;
+				bool enable = (data.aoEnable == 1) ? true : false;
 				ImGui::Checkbox("##ClothAOEnable", &enable);
-				data.render.aoEnable = (enable) ? true : false;
+				data.aoEnable = (enable) ? true : false;
 				});
 			row("HeightEnable", [&] {
-				bool enable = (data.render.heightEnable == 1) ? true : false;
+				bool enable = (data.heightEnable == 1) ? true : false;
 				ImGui::Checkbox("##ClothHeightEnable", &enable);
-				data.render.heightEnable = (enable) ? true : false;
+				data.heightEnable = (enable) ? true : false;
 				});
 
 			ImGui::EndTable();
@@ -332,12 +329,18 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext)
 			row("DevidingDt", [&] { ImGui::DragFloat("##DevidingDt", &graphicsContext.gpu_sim_->deviding_dt_, 1.0f, 1.0f, 240.0f); });
 			row("Iterations", [&] { ImGui::DragInt("##Iterations", &graphicsContext.gpu_sim_->iterations_, 1, 1, 40); });
 			row("Mass", [&] { ImGui::DragFloat("##Mass", &graphicsContext.gpu_sim_->mass_, 0.001f, 0.0f, 10.0f); });
-			row("Damping", [&] { ImGui::SliderFloat("##Damping", &graphicsContext.gpu_sim_->ubo_data_.sim_params.damping, 0.f, 2.f, "%.6f"); });
-			row("Relaxation Factor", [&] { ImGui::SliderFloat("##RelaxationFactor", &graphicsContext.gpu_sim_->ubo_data_.sim_params.relaxationFactor, 0.f, 2.f, "%.6f"); });
+			row("Damping", [&] { ImGui::DragFloat("##Damping", &graphicsContext.gpu_sim_->ubo_data_.sim_params.damping, 0.1f, 0.0f, 3.0f, "%.2f"); });
+			row("RelaxationFactor", [&] { ImGui::DragFloat("##RelaxationFactor", &graphicsContext.gpu_sim_->ubo_data_.sim_params.relaxationFactor, 0.001f, 0.0f, 1.0f, "%.4f"); });
+			row("StretchCompliance", [&] { ImGui::DragFloat("##StretchCompliance", &graphicsContext.gpu_sim_->compliance_.stretch, 1e-8f, 0.0f, 1.0f, "%.8f"); });
+			row("DiagonalCompliance", [&] { ImGui::DragFloat("##DiagonalCompliance", &graphicsContext.gpu_sim_->compliance_.diagonal, 1e-8f, 0.0f, 1.0f, "%.8f"); });
+			row("BendCompliance", [&] { ImGui::DragFloat("##BendCompliance", &graphicsContext.gpu_sim_->compliance_.bend
+				, 1e-6f, 0.0f, 1.0f, "%.6f"); });
+
+
 			row("ClothSize", [&] { ImGui::DragFloat2("##ClothSize", &graphicsContext.gpu_sim_->cloth_size_[0], 0.1f, 0.0f, 10.0f); });
 			row("ClothHeight", [&] { ImGui::DragFloat("##ClothHeight", &graphicsContext.gpu_sim_->cloth_height_, 0.1f, 0.0f, 100.0f); });
 
-			row("CollisionMargin", [&] { ImGui::SliderFloat("##CollisionMargin", &graphicsContext.gpu_sim_->ubo_data_.sim_params.collisionMargin, 0.0f, 1.0f, "%.3f"); });
+			row("CollisionMargin", [&] { ImGui::DragFloat("##CollisionMargin", &graphicsContext.gpu_sim_->ubo_data_.sim_params.collisionMargin, 0.01f, 0.0f, 1.0f, "%.3f"); });
 			row("Thickness", [&] { ImGui::DragFloat("##Thickness", &graphicsContext.gpu_sim_->ubo_data_.sim_params.thickness, 0.001f, 0.0f, 1.0f, "%.3f"); });
 			row("Friction", [&] { ImGui::DragFloat("##Friction", &graphicsContext.gpu_sim_->ubo_data_.sim_params.friction, 0.001f, 0.0f, 1.0f, "%.3f"); });
 

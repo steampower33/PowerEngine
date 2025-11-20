@@ -16,13 +16,13 @@ layout(set = 1, binding = 0) uniform ObjectUBO {
 
     vec4 albedo_use;
 
-    uint albedoIdx;
-    uint metallicIdx;
-    uint normalIdx;
-    uint roughnessIdx;
+    int albedoIdx;
+    int metallicIdx;
+    int normalIdx;
+    int roughnessIdx;
 
-    uint aoIdx;
-    uint heightIdx;
+    int aoIdx;
+    int heightIdx;
     float metallicFactor;
     float roughnessFactor;
 

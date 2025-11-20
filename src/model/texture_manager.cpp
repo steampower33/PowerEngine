@@ -132,7 +132,7 @@ void TextureManager::CreateKtxFromFile(const fs::path& pngPath, const fs::path& 
 }
 
 
-uint32_t TextureManager::CreateTexture(std::string path, std::string keyword, bool isCubemap)
+int TextureManager::CreateTexture(std::string path, std::string keyword, bool isCubemap)
 {
     auto CreateTexture = [&](std::string path, std::string filename)
         {
@@ -177,5 +177,5 @@ uint32_t TextureManager::CreateTexture(std::string path, std::string keyword, bo
 
     }
 
-    return 0;
+    return -1;
 }

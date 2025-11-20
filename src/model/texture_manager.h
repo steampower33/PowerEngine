@@ -20,8 +20,8 @@ public:
 	const uint32_t env_texture_size = 3;
 	std::vector<std::unique_ptr<Texture>> env_textures_;
 	
-	uint32_t vulkan_thumbnail_index_ = 0;
-	uint32_t brdf_lut_index_ = 0;
+	int vulkan_thumbnail_index_ = 0;
+	int brdf_lut_index_ = 0;
 
 	const char* keywords_[10] = {
 		"color",
@@ -39,5 +39,5 @@ public:
 	void ConvertFileToKtx(const std::string& folderPath);
 	bool IsRightTextureName(const std::string& name);
 	void CreateKtxFromFile(const std::filesystem::path& pngPath, const std::filesystem::path& ktxPath);
-	uint32_t CreateTexture(std::string path, std::string keyword, bool isCubemap = false);
+	int CreateTexture(std::string path, std::string keyword, bool isCubemap = false);
 };

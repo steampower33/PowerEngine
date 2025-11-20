@@ -5,12 +5,12 @@
 layout(set = 1, binding = 0) uniform SkyboxUBO {
     mat4x4 model;
 
-    uint envIdx;
-    uint radianceIdx;
-    uint irradianceIdx;
+    int envIdx;
+    int radianceIdx;
+    int irradianceIdx;
     uint specularMipLevels;
 
-    uint brdfLUTIndex;
+    int brdfLUTIndex;
     uint p0;
     uint p1;
     uint p2;

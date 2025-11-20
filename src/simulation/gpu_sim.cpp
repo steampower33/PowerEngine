@@ -12,16 +12,18 @@ GpuSim::GpuSim(
 	Context& context,
 	Swapchain& swapchain,
 	TextureManager& textureManager,
+	ModelManager& modelManager,
 	vk::raii::DescriptorSetLayout& globalSetLayout,
-	std::vector<vk::Format>& formats)
+	std::vector<vk::Format>& formats,
+	vk::raii::DescriptorSetLayout& tex2DSetLayout)
 {
 	CreateDescriptorSetLayout(context);
 	CreateDescriptorPools(context);
-	CreateUniformBuffers(context);
+	CreateUniformBuffers(context, modelManager);
 	CreateSSBOBuffers(context);
 	CreateDescriptorSets(context, textureManager);
 	CreateComputePipelines(context);
-	CreateGraphicsPipelines(context, globalSetLayout, formats);
+	CreateGraphicsPipelines(context, globalSetLayout, formats, tex2DSetLayout);
 }
 
 void GpuSim::UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& model)
@@ -34,9 +36,6 @@ void GpuSim::UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& mod
 	ubo_data_.sim_params.sphereCenter = glm::vec4(model->position_, 0.0f);
 	ubo_data_.sim_params.sphereRadius = model->radius_;
 
-	mass_scale_ = mass_ / 1.0f;
-	ubo_data_.sim_params.relaxationFactor = relaxation_ * mass_scale_;
-	ubo_data_.sim_params.damping = damping_ * mass_scale_;
 	const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_size_.sim_params);
 	auto* dst = static_cast<std::byte*>(ubo_mapped_.sim_params) + baseOffset;
 
@@ -101,7 +100,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 			pc_.base = base;
 			pc_.count = count;
-			pc_.compliance = compliance_.stretch * (1.0f / mass_scale_);
+			pc_.compliance = compliance_.stretch;
 
 			cmd.pushConstants<PushConstant>(*pipeline_layouts_.common, vk::ShaderStageFlagBits::eCompute, 0u, pc_);
 
@@ -123,7 +122,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 			uint32_t count = datas_.pass_offset[5] - datas_.pass_offset[4];
 			pc_.base = base;
 			pc_.count = count;
-			pc_.compliance = compliance_.diagonal * (1.0f / mass_scale_);
+			pc_.compliance = compliance_.diagonal;
 			cmd.pushConstants<PushConstant>(*pipeline_layouts_.common,
 				vk::ShaderStageFlagBits::eCompute, 0u, pc_);
 
@@ -145,7 +144,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 			uint32_t count = bend_size;
 			pc_.base = base;
 			pc_.count = count;
-			pc_.compliance = compliance_.bend * (1.0f / mass_scale_);
+			pc_.compliance = compliance_.bend;
 			cmd.pushConstants<PushConstant>(*pipeline_layouts_.common,
 				vk::ShaderStageFlagBits::eCompute, 0u, pc_);
 
@@ -205,7 +204,8 @@ void GpuSim::UpdateGraphicsUBO(uint32_t currentFrame)
 	std::memcpy(dst, &ubo_data_.render, sizeof(UBOData::Render));
 }
 
-void GpuSim::GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset, vku::PolygonMode mode)
+void GpuSim::GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset, vku::PolygonMode mode,
+	vk::raii::DescriptorSet& tex2DSet)
 {
 	// Cloth
 	{
@@ -242,6 +242,15 @@ void GpuSim::GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer
 			2,
 			{ *sets_.render },
 			{ baseOffset }
+		);
+
+		// Tex
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			pipeline_layouts_.cloth_graphics,
+			3,
+			{ *tex2DSet },
+			{ }
 		);
 
 		cmd.pushConstants<ClothPC>(
@@ -433,8 +442,11 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 			}
 		}
 
-		datas_.inverse_mass[0] = 0.0f;
-		datas_.inverse_mass[nx1 - 1] = 0.0f;
+		uint32_t tap = (ny1 - 1) / 10;
+		for (uint32_t i = 0; i < ny1; i += tap)
+		{
+			datas_.inverse_mass[i] = 0.0f;
+		}
 		//datas_.inverse_mass[(ny1 - 1) * nx1] = 0.0f;
 		//datas_.inverse_mass[(ny1 - 1) * nx1 + nx1 - 1] = 0.0f;
 
@@ -478,7 +490,7 @@ void GpuSim::CreateDescriptorSetLayout(Context& context)
 	// Render
 	{
 		std::array layoutBindings{
-			vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eFragment, nullptr)
+			vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, nullptr)
 		};
 		counts_.ubo_dynamic += 1;
 		counts_.layout += 1;
@@ -510,11 +522,9 @@ void GpuSim::CreateDescriptorSetLayout(Context& context)
 
 	// Cloth Rendering - Graphics
 	{
-		std::array<vk::DescriptorSetLayoutBinding, 2> layoutBindings{
-			vk::DescriptorSetLayoutBinding{ 0, vk::DescriptorType::eStorageBuffer,        1, vk::ShaderStageFlagBits::eVertex },
-			vk::DescriptorSetLayoutBinding{ 1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment },
+		std::array<vk::DescriptorSetLayoutBinding, 1> layoutBindings{
+			vk::DescriptorSetLayoutBinding{ 0, vk::DescriptorType::eStorageBuffer,        1, vk::ShaderStageFlagBits::eVertex }
 		};
-		counts_.sampler += 1;
 		counts_.sb += 1;
 		counts_.layout += 1;
 
@@ -550,7 +560,8 @@ void GpuSim::CreateDescriptorPools(Context& context)
 	descriptor_pool_ = vk::raii::DescriptorPool(context.device_, poolInfo);
 }
 
-void GpuSim::CreateUniformBuffers(Context& context)
+void GpuSim::CreateUniformBuffers(Context& context,
+	ModelManager& modelManager)
 {
 	// Sim Params UBO
 	{
@@ -588,6 +599,17 @@ void GpuSim::CreateUniformBuffers(Context& context)
 		ubos_.render = std::move(buffer);
 		ubo_memories_.render = std::move(bufferMem);
 		ubo_mapped_.render = ubo_memories_.render.mapMemory(0, totalSize);
+
+		ubo_data_.render.albedoEnable = 1;
+		ubo_data_.render.albedoIdx = 0;
+		//ubo_data_.render.albedoIdx = modelManager.cloth_->texture_idx_.albedo;
+		//ubo_data_.render.albedoEnable = modelManager.cloth_->texture_use_.albedo;
+		//ubo_data_.render.normalIdx = modelManager.cloth_->texture_idx_.normal;
+		//ubo_data_.render.normalEnable = modelManager.cloth_->texture_use_.normal;
+		//ubo_data_.render.heightIdx = modelManager.cloth_->texture_idx_.height;
+		//ubo_data_.render.heightEnable = modelManager.cloth_->texture_use_.height;
+		//ubo_data_.render.roughnessIdx = modelManager.cloth_->texture_idx_.roughness;
+		//ubo_data_.render.roughtnessEnable = modelManager.cloth_->texture_use_.roughtness;
 	}
 
 }
@@ -661,8 +683,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	}
 
 	// 총 질량을 기존 설정과 맞추기
-	// - 총 질량 = N * mass_
-	float totalMassTarget = mass_ * static_cast<float>(N);
+	float totalMassTarget = mass_;
 
 	// 면적이 0인 경우 방어
 	float density = 0.0f;
@@ -1075,11 +1096,7 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 		sets_.cloth_graphics = std::move(sets.front());
 
 		vk::DescriptorBufferInfo positions(ssbos_.positions, 0, VK_WHOLE_SIZE);
-		vk::DescriptorImageInfo imageInfo{
-				.sampler = *textureManager.textures_[textureManager.vulkan_thumbnail_index_]->texture_sampler_,
-				.imageView = *textureManager.textures_[textureManager.vulkan_thumbnail_index_]->texture_image_view_,
-				.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
-		};
+
 		std::array descriptorWrites{
 			vk::WriteDescriptorSet{
 				.dstSet = *sets_.cloth_graphics,
@@ -1088,14 +1105,6 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 				.descriptorCount = 1,
 				.descriptorType = vk::DescriptorType::eStorageBuffer,
 				.pBufferInfo = &positions
-			},
-			vk::WriteDescriptorSet{
-				.dstSet = *sets_.cloth_graphics,
-				.dstBinding = 1,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = vk::DescriptorType::eCombinedImageSampler,
-				.pImageInfo = &imageInfo,
 			},
 
 		};
@@ -1210,8 +1219,7 @@ void GpuSim::CreateComputePipelines(Context& context)
 
 }
 
-void GpuSim::CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLayout& globalSetLayout,
-	std::vector<vk::Format>& formats)
+void GpuSim::CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLayout& globalSetLayout, std::vector<vk::Format>& formats, vk::raii::DescriptorSetLayout& tex2DSetLayout)
 {
 	vk::PipelineInputAssemblyStateCreateInfo inputAssembly{
 		.topology = vk::PrimitiveTopology::eTriangleList,
@@ -1306,10 +1314,11 @@ void GpuSim::CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLa
 		cloth_pc_.ny1 = ny_ + 1;
 
 		// Pipeline Layout
-		std::array<vk::DescriptorSetLayout, 3> setLayouts(
+		std::array<vk::DescriptorSetLayout, 4> setLayouts(
 			*globalSetLayout,
 			*set_layouts_.cloth_graphics,
-			*set_layouts_.render);
+			*set_layouts_.render,
+			*tex2DSetLayout);
 
 		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
 			.setLayoutCount = setLayouts.size(),

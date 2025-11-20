@@ -33,7 +33,7 @@ GraphicsContext::GraphicsContext(GLFWwindow* glfwWindow, Context& context, Swapc
 	CreateGraphicsPipelines();
 	CreateSyncObjects();
 
-	gpu_sim_ = std::make_unique<GpuSim>(context_, swapchain_, texture_manager_, set_layouts_.global, geometry_buffers_.formats);
+	gpu_sim_ = std::make_unique<GpuSim>(context_, swapchain_, texture_manager_, model_manager_, set_layouts_.global, geometry_buffers_.formats, set_layouts_.tex2D);
 }
 
 void GraphicsContext::Update(Camera& camera)
@@ -71,7 +71,7 @@ void GraphicsContext::UpdateGraphicsUBO(Camera& camera)
 	// Object UBO ¾²±â
 	{
 		const uint32_t baseObjectOffset = static_cast<uint32_t>(current_frame_ * ubo_size_.object * model_manager_.kMaxObjects);
-		for (uint32_t i = 0; i < model_manager_.model_count_; i++)
+		for (uint32_t i = 0; i < model_manager_.models.size(); i++)
 		{
 			const uint32_t objOff = baseObjectOffset + i * static_cast<uint32_t>(ubo_size_.object);
 			auto* dst = static_cast<std::byte*>(ubo_mapped_.object) + objOff;
@@ -212,7 +212,7 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 	}
 	else if (cpu_or_gpu_ == CpuOrGpu::GPU)
 	{
-		gpu_sim_->GraphicsRecord(current_frame_, cmd, sets_.global, globalOffset, polygon_mode_);
+		gpu_sim_->GraphicsRecord(current_frame_, cmd, sets_.global, globalOffset, polygon_mode_, sets_.tex2D);
 	}
 
 	// Model
@@ -242,7 +242,7 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 			{ }
 		);
 
-		for (uint32_t i = 0; i < model_manager_.model_count_; ++i) {
+		for (uint32_t i = 0; i < model_manager_.models.size(); ++i) {
 			uint32_t objectOffset = baseObjectOffset + i * static_cast<uint32_t>(ubo_size_.object);
 
 			// Object set

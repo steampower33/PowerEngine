@@ -16,8 +16,10 @@ public:
 		Context& context,
 		Swapchain& swapchain,
 		TextureManager& textureManager,
+		ModelManager& modelManager,
 		vk::raii::DescriptorSetLayout& globalSetLayout,
-		std::vector<vk::Format>& formats);
+		std::vector<vk::Format>& formats,
+		vk::raii::DescriptorSetLayout& tex2DSetLayout);
 	GpuSim(const GpuSim& rhs) = delete;
 	GpuSim(GpuSim&& rhs) = delete;
 	GpuSim& operator=(const GpuSim& rhs) = delete;
@@ -28,29 +30,27 @@ public:
 	void UpdateGraphicsUBO(uint32_t currentFrame);
 
 	void ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& timestampSteps, vku::TestScene& testScene);
-	void GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset, vku::PolygonMode mode);
+	void GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset, vku::PolygonMode mode,
+		vk::raii::DescriptorSet& tex2DSet);
 
 	void CopyDatas(const vk::raii::CommandBuffer& cmd);
 	void UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene);
 
 	uint32_t timestamp_count_ = 10;
 
-	const uint32_t nx_ = 50;
-	const uint32_t ny_ = 50;
+	const uint32_t nx_ = 100;
+	const uint32_t ny_ = 100;
 
-	glm::vec2 cloth_size_{ 2.0f, 2.0f };
+	glm::vec2 cloth_size_{ 4.0f, 4.0f };
 	float spacing_x_ = cloth_size_.x / nx_;
 	float spacing_y_ = cloth_size_.y / ny_;
-	float cloth_height_ = 4.0f;
-	float mass_ = cloth_size_.x * cloth_size_.y * 0.5f;
-	float mass_scale_ = 0.0f;
-	float relaxation_ = 0.1f;
-	float damping_ = 1.0f;
+	float cloth_height_ = 6.0f;
+	float mass_ = cloth_size_.x * cloth_size_.y * 0.2f;
 
 	struct Compliance {
-		float stretch = 1e-10f;
-		float diagonal = 1e-9f;
-		float bend = 1.0f;
+		float stretch = 1e-6f;
+		float diagonal = 1e-6f;
+		float bend = 1e-3f;
 	} compliance_;
 
 	uint32_t particles_size_ = nx_ * ny_;
@@ -122,46 +122,46 @@ public:
 			alignas(4)  float windStrength = 1.0f;
 			alignas(4)  float sphereRadius;
 			alignas(4)  float maxSpeed;
-			alignas(4)  float damping;
-			alignas(4)  float relaxationFactor;
+			alignas(4)  float damping = 1.0f;
+			alignas(4)  float relaxationFactor = 0.001f;
 			alignas(4)  int   numBends;
 			alignas(4)  uint32_t numColliders = 1;
 			alignas(4)  float collisionMargin = 0.1f;
 			alignas(16) glm::vec4 sphereCenter;
 			alignas(16) glm::vec4 windDir = glm::vec4(0.0f, 0.0f, -1.0f, 0.0f);
 			alignas(16) glm::vec4 gravity = glm::vec4(0.0f, -9.8f, 0.0f, 0.0f);
-			alignas(4) float thickness = 0.004f;
-			alignas(4) float friction = 0.01f;
+			alignas(4) float thickness = 0.008f;
+			alignas(4) float friction = 0.1f;
 			alignas(4) float pad1;
 			alignas(4) float pad2;
 		} sim_params;
 		static_assert(sizeof(UBOData::SimParams) % 16 == 0, "std140 must be 16-byte aligned.");
 
 		struct Render {
-			glm::vec4 albedo_use;
+			glm::vec4 albedo_use{ 1.0f, 1.0f, 1.0f, 0.0f };
 
-			uint32_t albedoIdx = 0;
-			uint32_t metallicIdx = 0;
-			uint32_t normalIdx = 0;
-			uint32_t roughnessIdx = 0;
+			int albedoIdx = -1;
+			int metallicIdx = -1;
+			int normalIdx = -1;
+			int roughnessIdx = -1;
 
-			uint32_t aoIdx = 0;
-			uint32_t heightIdx = 0;
-			float metallicFactor = 0.2f;
-			float roughnessFactor = 0.8f;
+			int aoIdx = -1;
+			int heightIdx = -1;
+			float metallicFactor = 0.0f;
+			float roughnessFactor = 1.0f;
 
 			float aoFactor = 1.0f;
 			float heightFactor = 0.0f;
 			uint32_t p0 = 0;
 			uint32_t p1 = 0;
 
-			uint32_t albedoEnable = 1;
-			uint32_t metallicEnable = 1;
-			uint32_t normalEnable = 1;
-			uint32_t roughtnessEnable = 1;
+			uint32_t albedoEnable = 0;
+			uint32_t metallicEnable = 0;
+			uint32_t normalEnable = 0;
+			uint32_t roughtnessEnable = 0;
 
-			uint32_t aoEnable = 1;
-			uint32_t heightEnable = 1;
+			uint32_t aoEnable = 0;
+			uint32_t heightEnable = 0;
 			uint32_t p3;
 			uint32_t p4;
 		} render;
@@ -301,11 +301,13 @@ public:
 private:
 	void CreateDescriptorSetLayout(Context& context);
 	void CreateDescriptorPools(Context& context);
-	void CreateUniformBuffers(Context& context);
+	void CreateUniformBuffers(Context& context,
+		ModelManager& modelManager);
 	void CreateSSBOBuffers(Context& context);
 	void CreateDescriptorSets(Context& context, TextureManager& textureManager);
 	void CreateComputePipelines(Context& context);
 	void CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLayout& globalSetLayout,
-		std::vector<vk::Format>& formats);
+		std::vector<vk::Format>& formats,
+		vk::raii::DescriptorSetLayout& tex2DSetLayout);
 
 };
