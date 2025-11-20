@@ -30,22 +30,35 @@ public:
 	void ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& timestampSteps, vku::TestScene& testScene);
 	void GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset, vku::PolygonMode mode);
 
+	void CopyDatas(const vk::raii::CommandBuffer& cmd);
 	void UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene);
 
 	uint32_t timestamp_count_ = 10;
 
-	const uint32_t Nx_ = 64;
-	const uint32_t Ny_ = 64;
-	const float spacing_ = 0.05;
+	const float cloth_width_ = 1.0f;
+	const float cloth_height_ = 1.0f;
 
-	uint32_t particles_size_ = Nx_ * Ny_;
+	const uint32_t nx_ = 50;
+	const uint32_t ny_ = 50;
+	const float spacing_x_ = cloth_width_ / nx_;
+	const float spacing_y_ = cloth_height_ / ny_;
+	const float simulation_height_ = 2.0f;
+	float mass_ = 0.1f;
+	float mass_scale_ = 0.0f;
+
+	struct Compliance {
+		float stretch = 1e-10f;
+		float diagonal = 1e-9f;
+		float bend = 1.0f;
+	} compliance_;
+
+	uint32_t particles_size_ = nx_ * ny_;
 	uint32_t indices_size_ = 0;
 	uint32_t edge_size = 0;
 	uint32_t bend_size = 0;
 
 	float deviding_dt_ = 120.0f;
 	int iterations_ = 10;
-	float bendCompliance = 1.0f;
 
 	vku::Counts counts_;
 	vk::raii::DescriptorPool descriptor_pool_{ nullptr };
@@ -55,6 +68,7 @@ public:
 
 	struct Data {
 		std::vector<glm::vec4> positions;
+		std::vector<glm::vec4> pred_positions;
 		std::vector<glm::vec4> velocities;
 		std::vector<float> inverse_mass;
 
@@ -76,6 +90,7 @@ public:
 			glm::vec2 pad;
 		};
 		static_assert(sizeof(Bend) == 32, "Bend must be 32 bytes");
+		std::vector<Data::Bend> bends;
 
 		struct SDFCollider {
 			int   type;       // 0: sphere, 1: plane, 2: capsule ...
@@ -258,6 +273,8 @@ public:
 		vk::raii::Buffer velocities{ nullptr };
 		vk::raii::Buffer inverse_mass{ nullptr };
 		vk::raii::Buffer edges{ nullptr };
+		vk::raii::Buffer pred_positions{ nullptr };
+		vk::raii::Buffer bends{ nullptr };
 	} staging_;
 
 	struct StagingMemory {
@@ -265,6 +282,8 @@ public:
 		vk::raii::DeviceMemory velocities{ nullptr };
 		vk::raii::DeviceMemory inverse_mass{ nullptr };
 		vk::raii::DeviceMemory edges{ nullptr };
+		vk::raii::DeviceMemory pred_positions{ nullptr };
+		vk::raii::DeviceMemory bends{ nullptr };
 
 	} staging_memories_;
 
@@ -273,6 +292,18 @@ public:
 		void* velocities{ nullptr };
 		void* inverse_mass{ nullptr };
 		void* edges{ nullptr };
+		void* pred_positions{ nullptr };
+		void* bends{ nullptr };
 	} staging_mapped_;
+
+private:
+	void CreateDescriptorSetLayout(Context& context);
+	void CreateDescriptorPools(Context& context);
+	void CreateUniformBuffers(Context& context);
+	void CreateSSBOBuffers(Context& context);
+	void CreateDescriptorSets(Context& context, TextureManager& textureManager);
+	void CreateComputePipelines(Context& context);
+	void CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLayout& globalSetLayout,
+		std::vector<vk::Format>& formats);
 
 };

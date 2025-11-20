@@ -331,10 +331,9 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext)
 		{
 			row("DevidingDt", [&] { ImGui::DragFloat("##DevidingDt", &graphicsContext.gpu_sim_->deviding_dt_, 1.0f, 1.0f, 240.0f); });
 			row("Iterations", [&] { ImGui::DragInt("##Iterations", &graphicsContext.gpu_sim_->iterations_, 1, 1, 40); });
-			row("BendCompliance", [&] { ImGui::DragFloat("##BendCompliance", &graphicsContext.gpu_sim_->bendCompliance, 0.1f, 0.0f, 1.0f); });
+			row("Mass", [&] { ImGui::DragFloat("##Mass", &graphicsContext.gpu_sim_->mass_, 0.001f, 0.0f, 10.0f); });
 			row("Damping", [&] { ImGui::SliderFloat("##Damping", &graphicsContext.gpu_sim_->ubo_data_.sim_params.damping, 0.f, 2.f, "%.3f"); });
 			row("Relaxation Factor", [&] { ImGui::SliderFloat("##RelaxationFactor", &graphicsContext.gpu_sim_->ubo_data_.sim_params.relaxationFactor, 0.f, 2.f, "%.3f"); });
-			row("Max Speed", [&] { ImGui::SliderFloat("##MaxSpeed", &graphicsContext.gpu_sim_->ubo_data_.sim_params.maxSpeed, 0.f, 500.f, "%.3f"); });
 			row("CollisionMargin", [&] { ImGui::SliderFloat("##CollisionMargin", &graphicsContext.gpu_sim_->ubo_data_.sim_params.collisionMargin, 0.0f, 1.0f, "%.3f"); });
 			row("Thickness", [&] { ImGui::DragFloat("##Thickness", &graphicsContext.gpu_sim_->ubo_data_.sim_params.thickness, 0.001f, 0.0f, 1.0f, "%.3f"); });
 			row("Friction", [&] { ImGui::DragFloat("##Friction", &graphicsContext.gpu_sim_->ubo_data_.sim_params.friction, 0.001f, 0.0f, 1.0f, "%.3f"); });
