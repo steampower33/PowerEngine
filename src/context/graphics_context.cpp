@@ -85,6 +85,13 @@ void GraphicsContext::UpdateGraphicsUBO(Camera& camera)
 			ubo_data_.object.aoIdx = model_manager_.models[i]->texture_idx_.ao;
 			ubo_data_.object.heightIdx = model_manager_.models[i]->texture_idx_.height;
 
+			ubo_data_.object.albedoEnable = model_manager_.models[i]->texture_use_.albedo;
+			ubo_data_.object.metallicEnable = model_manager_.models[i]->texture_use_.metallic;
+			ubo_data_.object.normalEnable = model_manager_.models[i]->texture_use_.normal;
+			ubo_data_.object.roughnessEnable = model_manager_.models[i]->texture_use_.roughtness;
+			ubo_data_.object.aoEnable = model_manager_.models[i]->texture_use_.ao;
+			ubo_data_.object.heightEnable = model_manager_.models[i]->texture_use_.height;
+
 			std::memcpy(dst, &ubo_data_.object, sizeof(UBOData::Object));
 		}
 	}

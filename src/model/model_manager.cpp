@@ -31,18 +31,19 @@ ModelManager::ModelManager(Context& context, GraphicsContext& graphicsContext, T
 	}
 
 	{
-		//MeshData plane = GeometryGenerator::MakeSquare(10.0f);
-		//glm::quat angleQuat = glm::angleAxis(glm::radians(90.0f), glm::vec3(1, 0, 0));
-		//glm::vec3 initPos = glm::vec3(0.0f, 0.0f, 0.0f);
-		//float color = 62.0f / 255.0f;
-		//glm::vec4 initColor = glm::vec4(color, color, color, 1.0);
-		//std::unique_ptr<Model> model = std::make_unique<Model>(plane, vku::VertexIncludeInfo{ true, true }, context, graphicsContext, model_count_, initPos, angleQuat, initColor, false);
-		//model->texture_idx_.albedo = textureManager.CreateTexture("assets/Fabric", "color");
-		//model->texture_idx_.metallic = 0;
-		//model->texture_idx_.normal = textureManager.CreateTexture("assets/Fabric", "normalgl");
-		//model->texture_idx_.roughness = textureManager.CreateTexture("assets/Fabric", "roughness");
-		//model->texture_idx_.ao = 0;
-		//model->texture_idx_.height = textureManager.CreateTexture("assets/Fabric", "displacement");
+		//glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
+		//glm::vec3 initPos = glm::vec3(0.0f, 1.0f, 0.0f);
+		//glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
+		//std::unique_ptr<Model> model = std::make_unique<Model>("assets/cloth/cloth.gltf", vku::VertexIncludeInfo{true, true}, context, graphicsContext, textureManager, model_count_, initPos, angleQuat, initColor, true);
+		//model->texture_idx_.albedo = textureManager.CreateTexture("assets/curtain", "basecolor");
+		//model->texture_use_.albedo = 1;
+		//model->texture_idx_.normal = textureManager.CreateTexture("assets/curtain", "normal");
+		//model->texture_use_.normal = 1;
+		//model->texture_idx_.metallic = textureManager.CreateTexture("assets/curtain", "metallic");
+		//model->texture_use_.metallic = 1;
+		//model->texture_idx_.roughness = textureManager.CreateTexture("assets/curtain", "roughness");
+		//model->texture_use_.roughtness = 1;
+
 		//models.emplace_back(std::move(model));
 	}
 

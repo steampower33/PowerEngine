@@ -35,16 +35,17 @@ public:
 
 	uint32_t timestamp_count_ = 10;
 
-	const float cloth_width_ = 1.0f;
-	const float cloth_height_ = 1.0f;
-
 	const uint32_t nx_ = 50;
 	const uint32_t ny_ = 50;
-	const float spacing_x_ = cloth_width_ / nx_;
-	const float spacing_y_ = cloth_height_ / ny_;
-	const float simulation_height_ = 2.0f;
-	float mass_ = 0.1f;
+
+	glm::vec2 cloth_size_{ 2.0f, 2.0f };
+	float spacing_x_ = cloth_size_.x / nx_;
+	float spacing_y_ = cloth_size_.y / ny_;
+	float cloth_height_ = 4.0f;
+	float mass_ = cloth_size_.x * cloth_size_.y * 0.5f;
 	float mass_scale_ = 0.0f;
+	float relaxation_ = 0.1f;
+	float damping_ = 1.0f;
 
 	struct Compliance {
 		float stretch = 1e-10f;
@@ -82,6 +83,7 @@ public:
 
 		std::vector<Edge> edges;
 		std::array<uint32_t, 6> pass_offset;
+		std::vector<std::pair<uint32_t, uint32_t>> pass[6];
 
 		struct Bend {
 			uint32_t p1, p2, p3, p4;
@@ -120,8 +122,8 @@ public:
 			alignas(4)  float windStrength = 1.0f;
 			alignas(4)  float sphereRadius;
 			alignas(4)  float maxSpeed;
-			alignas(4)  float damping = 1.0f;
-			alignas(4)  float relaxationFactor = 0.1f;
+			alignas(4)  float damping;
+			alignas(4)  float relaxationFactor;
 			alignas(4)  int   numBends;
 			alignas(4)  uint32_t numColliders = 1;
 			alignas(4)  float collisionMargin = 0.1f;

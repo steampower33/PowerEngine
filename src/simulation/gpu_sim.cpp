@@ -26,6 +26,7 @@ GpuSim::GpuSim(
 
 void GpuSim::UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& model)
 {
+
 	ubo_data_.sim_params.dt = 1 / deviding_dt_;
 	ubo_data_.sim_params.numParticles = particles_size_;
 	ubo_data_.sim_params.numEdges = edge_size;
@@ -33,12 +34,14 @@ void GpuSim::UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& mod
 	ubo_data_.sim_params.sphereCenter = glm::vec4(model->position_, 0.0f);
 	ubo_data_.sim_params.sphereRadius = model->radius_;
 
+	mass_scale_ = mass_ / 1.0f;
+	ubo_data_.sim_params.relaxationFactor = relaxation_ * mass_scale_;
+	ubo_data_.sim_params.damping = damping_ * mass_scale_;
 	const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_size_.sim_params);
 	auto* dst = static_cast<std::byte*>(ubo_mapped_.sim_params) + baseOffset;
 
 	std::memcpy(dst, &ubo_data_.sim_params, sizeof(UBOData::SimParams));
 
-	mass_scale_ = mass_ / 1.0f;
 }
 
 void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& timestampSteps, vku::TestScene& testScene)
@@ -283,6 +286,9 @@ void GpuSim::CopyDatas(const vk::raii::CommandBuffer& cmd)
 
 void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene)
 {
+	spacing_x_ = cloth_size_.x / nx_;
+	spacing_y_ = cloth_size_.y / ny_;
+
 	if (testScene.sphereCollision)
 	{
 		testScene.sphereCollision = false;
@@ -300,13 +306,23 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 			for (int x = 0; x < nx1; ++x) {
 				uint32_t id = vid(x, y);
 				float px = (x - 0.5f * nx_) * spacing_x_;   // (-Nx/2 .. +Nx/2) * spacing
-				float py = simulation_height_;
+				float py = cloth_height_;
 				float pz = (y - 0.5f * ny_) * spacing_y_;   // (-Ny/2 .. +Ny/2) * spacing
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0.0f);
 				float invMass = 1.0f / mass_;
 				datas_.inverse_mass[id] = invMass;
 				datas_.pred_positions[id] = datas_.positions[id];
+			}
+		}
+
+		uint32_t idx = 0;
+		for (int p = 0; p < 5; ++p) {
+			for (auto [i, j] : datas_.pass[p]) {
+				glm::vec3 pi = glm::vec3(datas_.positions[i]);
+				glm::vec3 pj = glm::vec3(datas_.positions[j]);
+				float rest = glm::length(pj - pi);
+				datas_.edges[idx++].rest = rest;
 			}
 		}
 
@@ -339,7 +355,7 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 			for (int x = 0; x < nx1; ++x) {
 				uint32_t id = vid(x, y);
 				float px = (x - 0.5f * nx_) * spacing_x_;   // (-Nx/2 .. +Nx/2) * spacing
-				float py = simulation_height_;
+				float py = cloth_height_;
 				float pz = (y - 0.5f * ny_) * spacing_y_;   // (-Ny/2 .. +Ny/2) * spacing
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0);
@@ -354,9 +370,24 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 		datas_.inverse_mass[(ny1 - 1) * nx1] = 0.0f;
 		datas_.inverse_mass[(ny1 - 1) * nx1 + nx1 - 1] = 0.0f;
 
+		uint32_t idx = 0;
+		for (int p = 0; p < 5; ++p) {
+			for (auto [i, j] : datas_.pass[p]) {
+				glm::vec3 pi = glm::vec3(datas_.positions[i]);
+				glm::vec3 pj = glm::vec3(datas_.positions[j]);
+				float rest = glm::length(pj - pi);
+				datas_.edges[idx++].rest = rest;
+			}
+		}
+
 		for (int i = 0; i < edge_size; i++)
 		{
 			datas_.edges[i].lambda = 0.0f;
+		}
+
+		for (int i = 0; i < bend_size; i++)
+		{
+			datas_.bends[i].lambda = 0.0f;
 		}
 
 		CopyDatas(cmd);
@@ -378,7 +409,7 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 			for (int x = 0; x < nx1; ++x) {
 				uint32_t id = vid(x, y);
 				float px = (x - 0.5f * nx_) * spacing_x_;   // (-Nx/2 .. +Nx/2) * spacing
-				float py = simulation_height_;
+				float py = cloth_height_;
 				float pz = (y - 0.5f * ny_) * spacing_y_;   // (-Ny/2 .. +Ny/2) * spacing
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0);
@@ -402,14 +433,28 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 			}
 		}
 
-		//datas_.inverse_mass[0] = 0.0f;
-		//datas_.inverse_mass[nx1 - 1] = 0.0f;
-		datas_.inverse_mass[(ny1 - 1) * nx1] = 0.0f;
-		datas_.inverse_mass[(ny1 - 1) * nx1 + nx1 - 1] = 0.0f;
+		datas_.inverse_mass[0] = 0.0f;
+		datas_.inverse_mass[nx1 - 1] = 0.0f;
+		//datas_.inverse_mass[(ny1 - 1) * nx1] = 0.0f;
+		//datas_.inverse_mass[(ny1 - 1) * nx1 + nx1 - 1] = 0.0f;
 
+		uint32_t idx = 0;
+		for (int p = 0; p < 5; ++p) {
+			for (auto [i, j] : datas_.pass[p]) {
+				glm::vec3 pi = glm::vec3(datas_.positions[i]);
+				glm::vec3 pj = glm::vec3(datas_.positions[j]);
+				float rest = glm::length(pj - pi);
+				datas_.edges[idx++].rest = rest;
+			}
+		}
 		for (int i = 0; i < edge_size; i++)
 		{
 			datas_.edges[i].lambda = 0.0f;
+		}
+
+		for (int i = 0; i < bend_size; i++)
+		{
+			datas_.bends[i].lambda = 0.0f;
 		}
 
 		CopyDatas(cmd);
@@ -559,6 +604,9 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	const uint32_t N = nx1 * ny1;            // 파티클 총수
 	particles_size_ = N;
 
+	spacing_x_ = cloth_size_.x / nx_;
+	spacing_y_ = cloth_size_.y / ny_;
+
 	// 입력
 	datas_.positions.resize(N);
 	datas_.velocities.resize(N);
@@ -568,18 +616,16 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	for (int y = 0; y < ny1; ++y) {
 		for (int x = 0; x < nx1; ++x) {
 			uint32_t id = vid(x, y);
-			float px = (x - 0.5f * nx_) * spacing_x_;   // (-Nx/2 .. +Nx/2) * spacing
-			float py = simulation_height_;
-			float pz = (y - 0.5f * ny_) * spacing_y_;   // (-Ny/2 .. +Ny/2) * spacing
+			float px = (x - 0.5f * nx_) * spacing_x_;
+			float py = cloth_height_;
+			float pz = (y - 0.5f * ny_) * spacing_y_;
+
 			datas_.positions[id] = { px, py, pz, 0.0f };
 			datas_.velocities[id] = glm::vec4(0);
-			float invMass = 1.0f / mass_;
-			datas_.inverse_mass[id] = invMass;
 			datas_.pred_positions[id] = datas_.positions[id];
 		}
 	}
 
-	// 인덱스 버퍼도 그대로
 	std::vector<uint32_t> indices;
 	indices.reserve(nx_ * ny_ * 6);
 	for (int y = 0; y < ny_; ++y) {
@@ -594,39 +640,99 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	}
 	indices_size_ = static_cast<uint32_t>(indices.size());
 
+	std::vector<float> masses(N, 0.0f);
+
+	// 전체 면적 계산
+	float totalArea = 0.0f;
+	for (size_t t = 0; t < indices.size(); t += 3) {
+		uint32_t i0 = indices[t + 0];
+		uint32_t i1 = indices[t + 1];
+		uint32_t i2 = indices[t + 2];
+
+		glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
+		glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
+		glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
+
+		glm::vec3 e1 = p1 - p0;
+		glm::vec3 e2 = p2 - p0;
+
+		float area = 0.5f * glm::length(glm::cross(e1, e2)); // 삼각형 면적
+		totalArea += area;
+	}
+
+	// 총 질량을 기존 설정과 맞추기
+	// - 총 질량 = N * mass_
+	float totalMassTarget = mass_ * static_cast<float>(N);
+
+	// 면적이 0인 경우 방어
+	float density = 0.0f;
+	if (totalArea > 0.0f) {
+		density = totalMassTarget / totalArea; // kg/m²
+	}
+
+	// 삼각형마다 mass를 area 비율로 분배
+	for (size_t t = 0; t < indices.size(); t += 3) {
+		uint32_t i0 = indices[t + 0];
+		uint32_t i1 = indices[t + 1];
+		uint32_t i2 = indices[t + 2];
+
+		glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
+		glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
+		glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
+
+		glm::vec3 e1 = p1 - p0;
+		glm::vec3 e2 = p2 - p0;
+
+		float area = 0.5f * glm::length(glm::cross(e1, e2));
+
+		float triMass = density * area; // 이 삼각형이 가져야 할 질량
+
+		float share = triMass / 3.0f;
+		masses[i0] += share;
+		masses[i1] += share;
+		masses[i2] += share;
+	}
+
+	// inverse_mass 세팅 (핀 고정할 파티클 있으면 여기서 처리)
+	for (uint32_t i = 0; i < N; ++i) {
+		float m = masses[i];
+		if (m > 0.0f)
+			datas_.inverse_mass[i] = 1.0f / m;
+		else
+			datas_.inverse_mass[i] = 0.0f; // 안전장치
+	}
+
 	vku::CreateIndexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, indices, index_buffer_, index_buffer_memory_);
 
 	// 출력 SoA
 	std::vector<float > deltaX(N, 0.0f), deltaY(N, 0.0f), deltaZ(N, 0.0f);
 	std::vector<uint32_t>  dcount(N, 0);
 
-	std::vector<std::pair<uint32_t, uint32_t>> pass[6];
-
 	// (0) 세로 짝수
 	for (int x = 0; x < nx1; ++x)
 		for (int y = 0; y + 1 < ny1; y += 2)
-			pass[0].push_back({ vid(x,y), vid(x,y + 1) });
+			datas_.pass[0].push_back({ vid(x,y), vid(x,y + 1) });
 
 	// (1) 세로 홀수
 	for (int x = 0; x < nx1; ++x)
 		for (int y = 1; y + 1 < ny1; y += 2)
-			pass[1].push_back({ vid(x,y), vid(x,y + 1) });
+			datas_.pass[1].push_back({ vid(x,y), vid(x,y + 1) });
 
 	// (2) 가로 짝수
 	for (int y = 0; y < ny1; ++y)
 		for (int x = 0; x + 1 < nx1; x += 2)
-			pass[2].push_back({ vid(x,y), vid(x + 1,y) });
+			datas_.pass[2].push_back({ vid(x,y), vid(x + 1,y) });
 
 	// (3) 가로 홀수
 	for (int y = 0; y < ny1; ++y)
 		for (int x = 1; x + 1 < nx1; x += 2)
-			pass[3].push_back({ vid(x,y), vid(x + 1,y) });
+			datas_.pass[3].push_back({ vid(x,y), vid(x + 1,y) });
 
 	// (4) Diagonal
 	for (int y = 0; y + 1 < ny1; ++y)
 		for (int x = 0; x + 1 < nx1; ++x) {
-			pass[4].push_back({ vid(x,y),     vid(x + 1,y + 1) }); // "\"
-			pass[4].push_back({ vid(x + 1,y),   vid(x,  y + 1) }); // "/"
+			datas_.pass[4].push_back({ vid(x,y),     vid(x + 1,y + 1) }); // "\"
+			datas_.pass[4].push_back({ vid(x + 1,y),   vid(x,  y + 1) }); // "/"
 		}
 
 	//// (5) 2-step bend
@@ -640,7 +746,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	datas_.pass_offset[0] = 0;
 
 	for (int p = 0; p < 5; ++p) {
-		for (auto [i, j] : pass[p]) {
+		for (auto [i, j] : datas_.pass[p]) {
 			glm::vec3 pi = glm::vec3(datas_.positions[i]);
 			glm::vec3 pj = glm::vec3(datas_.positions[j]);
 			float rest = glm::length(pj - pi);

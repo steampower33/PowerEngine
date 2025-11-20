@@ -332,8 +332,11 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext)
 			row("DevidingDt", [&] { ImGui::DragFloat("##DevidingDt", &graphicsContext.gpu_sim_->deviding_dt_, 1.0f, 1.0f, 240.0f); });
 			row("Iterations", [&] { ImGui::DragInt("##Iterations", &graphicsContext.gpu_sim_->iterations_, 1, 1, 40); });
 			row("Mass", [&] { ImGui::DragFloat("##Mass", &graphicsContext.gpu_sim_->mass_, 0.001f, 0.0f, 10.0f); });
-			row("Damping", [&] { ImGui::SliderFloat("##Damping", &graphicsContext.gpu_sim_->ubo_data_.sim_params.damping, 0.f, 2.f, "%.3f"); });
-			row("Relaxation Factor", [&] { ImGui::SliderFloat("##RelaxationFactor", &graphicsContext.gpu_sim_->ubo_data_.sim_params.relaxationFactor, 0.f, 2.f, "%.3f"); });
+			row("Damping", [&] { ImGui::SliderFloat("##Damping", &graphicsContext.gpu_sim_->ubo_data_.sim_params.damping, 0.f, 2.f, "%.6f"); });
+			row("Relaxation Factor", [&] { ImGui::SliderFloat("##RelaxationFactor", &graphicsContext.gpu_sim_->ubo_data_.sim_params.relaxationFactor, 0.f, 2.f, "%.6f"); });
+			row("ClothSize", [&] { ImGui::DragFloat2("##ClothSize", &graphicsContext.gpu_sim_->cloth_size_[0], 0.1f, 0.0f, 10.0f); });
+			row("ClothHeight", [&] { ImGui::DragFloat("##ClothHeight", &graphicsContext.gpu_sim_->cloth_height_, 0.1f, 0.0f, 100.0f); });
+
 			row("CollisionMargin", [&] { ImGui::SliderFloat("##CollisionMargin", &graphicsContext.gpu_sim_->ubo_data_.sim_params.collisionMargin, 0.0f, 1.0f, "%.3f"); });
 			row("Thickness", [&] { ImGui::DragFloat("##Thickness", &graphicsContext.gpu_sim_->ubo_data_.sim_params.thickness, 0.001f, 0.0f, 1.0f, "%.3f"); });
 			row("Friction", [&] { ImGui::DragFloat("##Friction", &graphicsContext.gpu_sim_->ubo_data_.sim_params.friction, 0.001f, 0.0f, 1.0f, "%.3f"); });

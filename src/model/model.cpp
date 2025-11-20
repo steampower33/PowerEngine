@@ -4,12 +4,13 @@
 #include "vertex.h"
 #include "camera.h"
 #include "geometry_generator.h"
+#include "texture_manager.h"
 
 #include "model.h"
 
-Model::Model(const std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, GraphicsContext& graphicsContext, uint32_t& model_count, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble)
+Model::Model(const std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, GraphicsContext& graphicsContext, TextureManager& textureManager, uint32_t& model_count, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble)
 {
-    LoadModel(modelPath, vertexIncludeInfo);
+    LoadModel(modelPath, vertexIncludeInfo, textureManager);
 
     vku::CreateVertexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, mesh_data_.vertices, mesh_data_.vertex_buffer, mesh_data_.vertex_buffer_memory);
     vku::CreateIndexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, mesh_data_.indices, mesh_data_.index_buffer, mesh_data_.index_buffer_memory);
@@ -36,7 +37,7 @@ Model::Model(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Conte
     ApplyTransform(initRotation, initPos);
 }
 
-void Model::LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo& vertexIncludeInfo)
+void Model::LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo& vertexIncludeInfo, TextureManager& textureManager)
 {
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
@@ -153,6 +154,53 @@ void Model::LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo
                 mesh_data_.indices.push_back(baseVert + raw);
             }
             mesh_data_.indices_count = mesh_data_.indices.size();
+
+            //// ----- material / texture / image 경로 로딩 -----
+            //int materialIndex = primitive.material;
+            //if (materialIndex >= 0 && materialIndex < static_cast<int>(model.materials.size()))
+            //{
+            //    const tinygltf::Material& mat = model.materials[materialIndex];
+
+            //    auto getTexturePath = [&](int textureIndex) -> std::string
+            //        {
+            //            if (textureIndex < 0 || textureIndex >= static_cast<int>(model.textures.size()))
+            //                return {};
+
+            //            const tinygltf::Texture& tex = model.textures[textureIndex];
+            //            int imageIndex = tex.source;
+            //            if (imageIndex < 0 || imageIndex >= static_cast<int>(model.images.size()))
+            //                return {};
+
+            //            const tinygltf::Image& img = model.images[imageIndex];
+            //            if (img.uri.empty())
+            //            {
+            //                // bufferView에 임베디드 된 경우 (uri 없음) - 필요하면 따로 처리
+            //                return {};
+            //            }
+
+            //            // glTF가 있는 폴더 기준으로 실제 경로 만들기
+            //            std::filesystem::path baseDir = std::filesystem::path(modelPath).parent_path();
+            //            std::filesystem::path fullPath = baseDir / img.uri;
+            //            return baseDir.string();
+            //        };
+
+            //    // PBR 메인 텍스처들
+            //    int baseColorTexIndex = mat.pbrMetallicRoughness.baseColorTexture.index;
+            //    int metallicRoughnessTexIdx = mat.pbrMetallicRoughness.metallicRoughnessTexture.index;
+            //    int normalTexIndex = mat.normalTexture.index;
+            //    int occlusionTexIndex = mat.occlusionTexture.index;
+            //    int emissiveTexIndex = mat.emissiveTexture.index;
+
+            //    std::string baseColorPath = getTexturePath(baseColorTexIndex);
+            //    std::string metallicRoughPath = getTexturePath(metallicRoughnessTexIdx);
+            //    std::string normalPath = getTexturePath(normalTexIndex);
+            //    //std::string aoPath = getTexturePath(occlusionTexIndex);
+            //    //std::string emissivePath = getTexturePath(emissiveTexIndex);
+
+            //    texture_idx_.albedo = textureManager.CreateTexture(baseColorPath, "basecolor");
+            //    texture_idx_.metallic = textureManager.CreateTexture(metallicRoughPath, "metallic");
+            //    texture_idx_.normal = textureManager.CreateTexture(normalPath, "normal");
+            //}
 
             // 로딩이 전부 끝난 뒤, 필요하면 탄젠트 계산
             if (vertexIncludeInfo.tangent) {
