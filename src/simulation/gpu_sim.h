@@ -38,14 +38,14 @@ public:
 
 	uint32_t iteration_timestamp_count_ = 12;
 
-	const uint32_t nx_ = 100;
-	const uint32_t ny_ = 100;
+	const uint32_t nx_ = 64;
+	const uint32_t ny_ = 64;
 
-	glm::vec2 cloth_size_{ 4.0f, 4.0f };
+	glm::vec2 cloth_size_{ 1.0f, 1.0f };
 	float spacing_x_ = cloth_size_.x / nx_;
 	float spacing_y_ = cloth_size_.y / ny_;
-	float cloth_height_ = 6.0f;
-	float mass_ = 0.2f;
+	float cloth_height_ = 2.0f;
+	float mass_ = 1.0f;
 
 	struct Compliance {
 		float stretch = 1e-7f;
@@ -145,7 +145,7 @@ public:
 			alignas(4)  float wind_strength = 1.0f;
 			alignas(4)  float sphere_radius;
 			alignas(4)  float max_speed;
-			alignas(4)  float damping = 3.0f;
+			alignas(4)  float damping = 10.0f;
 			alignas(4)  float relaxation_factor = 0.5f;
 			alignas(4)  uint32_t num_bends;
 			alignas(4)  uint32_t num_shears;

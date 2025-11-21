@@ -14,7 +14,7 @@ ModelManager::ModelManager(Context& context, GraphicsContext& graphicsContext, T
 	{
 		//MeshData sphere = GeometryGenerator::MakeBox(1.0f);
 		//MeshData sphere = GeometryGenerator::MakeCylinder(1.0f, 1.0f, 5.0f, 4);
-		float radius = 0.5f;
+		float radius = 0.125;
 		MeshData sphere = GeometryGenerator::MakeSphere(radius, 20, 20);
 		glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
 		glm::vec3 initPos = glm::vec3(0.0f, 1.0f, 0.0f);
