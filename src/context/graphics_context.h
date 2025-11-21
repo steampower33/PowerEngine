@@ -139,9 +139,9 @@ public:
 
 		struct Light {
 			glm::vec4 cameraPos{};
-			glm::vec4 spotPos_range{ 0.0f, 10.0f, 0.0f, 30.0f }; // xyz: 위치(월드), w: range(최대 거리)
-			glm::vec4 spotDir_inner{ 0.0f, -1.0f, 0.0f, 0.0f }; // xyz: 방향(월드, normalized), w: innerConeCos
-			glm::vec4 spotColor_outer{ 1.0f, 1.0f, 1.0f, 0.0f }; // rgb: color, w: outerConeCos
+			glm::vec4 spotPos_range{ 0.0f, 10.0f, 0.0f, 30.0f };
+			glm::vec4 spotDir_inner{ 0.0f, -1.0f, 0.0f, 0.0f };
+			glm::vec4 spotColor_outer{ 1.0f, 1.0f, 1.0f, 0.0f };
 			glm::mat4 invViewProj{};
 			float exposure = 0.5f;
 			float p0;
@@ -227,7 +227,6 @@ public:
 
 	glm::vec3 background_color_ = glm::vec3(glm::pow(214.0f / 255.0f, 2.2f), glm::pow(225.0f / 255.0f, 2.2f), glm::pow(252.0f / 255.0f, 2.2f));
 
-	// |===== Depth Image =====|
 	vk::raii::Image depth_image_ = nullptr;
 	vk::raii::DeviceMemory depth_image_memory_ = nullptr;
 	vk::raii::ImageView depth_image_view_ = nullptr;

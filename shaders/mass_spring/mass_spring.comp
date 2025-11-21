@@ -8,7 +8,6 @@ struct Particle {
     vec4 normal;
 };
 
-// SSBOs
 layout(set = 0, binding = 0, std430) readonly buffer ParticleIn {
     Particle vin[];
 };
@@ -17,7 +16,6 @@ layout(set = 0, binding = 1, std430) writeonly buffer ParticleOut {
     Particle vout[];
 };
 
-// UBO (std140 권장)
 layout(set = 0, binding = 2, std140) uniform UBOCompute {
     float deltaT;
     float particleMass;
@@ -32,7 +30,6 @@ layout(set = 0, binding = 2, std140) uniform UBOCompute {
     ivec2 particleCount;
 } params;
 
-// Push constant
 layout(push_constant) uniform PC {
     uint calculateNormals;
 } pc;
@@ -58,7 +55,6 @@ void main()
     vec3 pos = vin[idx].pos.xyz;
     vec3 vel = vin[idx].vel.xyz;
 
-    // 이웃 스프링
     if (id.x > 0)
         force += springForce(vin[idx-1].pos.xyz, pos, params.restDistH);
     if (id.x + 1 < uint(params.particleCount.x))
@@ -79,12 +75,10 @@ void main()
 
     force += (-params.damping * vel);
 
-    // 적분
     vec3 a = force / params.particleMass;
     vec3 newPos = pos + vel * params.deltaT + 0.5 * a * params.deltaT * params.deltaT;
     vec3 newVel = vel + a * params.deltaT;
 
-    // 구 충돌 (간단)
     vec3 sDist = newPos - params.spherePos.xyz;
     if (length(sDist) < params.sphereRadius + 0.01) {
         newPos = params.spherePos.xyz + normalize(sDist) * (params.sphereRadius + 0.01);

@@ -35,7 +35,7 @@ CpuSim::CpuSim(
 
 
 		std::array<vk::DescriptorBindingFlags, 2> bindingFlags{
-			vk::DescriptorBindingFlags{}, // binding 0: 없음
+			vk::DescriptorBindingFlags{},
 			vk::DescriptorBindingFlagBits::ePartiallyBound |
 			vk::DescriptorBindingFlagBits::eVariableDescriptorCount
 		};
@@ -206,7 +206,6 @@ CpuSim::CpuSim(
 				.pVertexAttributeDescriptions = nullptr
 			};
 
-			// push constant 범위: VS에서만 사용(필요하면 FS도 추가)
 			vk::PushConstantRange pcRange{
 				.stageFlags = vk::ShaderStageFlagBits::eVertex,
 				.offset = 0,
@@ -332,9 +331,7 @@ void CpuSim::CreateClothData_CPU(
 		pos_staging_map_[k] = pos_staging_mem_[k].mapMemory(0, posSize);
 	}
 
-	// 2) 초기 값 업로드(한 번)
 	std::memcpy(pos_staging_map_[0], positions_.data(), (size_t)posSize);
-	// 초기 카피는 임의 프레임 k로 실행해도 됨
 	vku::CopyBuffer(device, queue, commandPool, pos_staging_[0], pos_ssbo_[0], posSize);
 
 	// --- top row pin ---
@@ -375,7 +372,6 @@ void CpuSim::SimulateClothXPBD_CPU(
 	const size_t N = particles_size_;
 	std::vector<glm::vec4> xp(N);
 
-	// 1. integrate
 	for (size_t i = 0; i < N; ++i) {
 		if (inv_mass_[i] == 0.0f) { xp[i] = positions_[i]; continue; }
 		glm::vec3 xi = glm::vec3(positions_[i]);
@@ -390,9 +386,7 @@ void CpuSim::SimulateClothXPBD_CPU(
 		e.lambda = 0.0f;
 	}
 
-	// 2. XPBD 반복
 	for (int iter = 0; iter < iterations_; ++iter) {
-		// 거리 제약
 		for (auto& e : edges_) {
 			uint32_t i = e.i, j = e.j;
 			float wi = inv_mass_[i], wj = inv_mass_[j];
@@ -416,7 +410,6 @@ void CpuSim::SimulateClothXPBD_CPU(
 			if (wj > 0.0f) xp[j] -= glm::vec4(wj * corr, 0.0f);
 		}
 
-		// 구 충돌 (투영)
 		for (size_t i = 0; i < N; ++i) {
 			if (inv_mass_[i] == 0.0f) continue;
 			glm::vec3 p = glm::vec3(xp[i]);
@@ -424,14 +417,13 @@ void CpuSim::SimulateClothXPBD_CPU(
 			float dist = glm::length(d);
 			if (dist < sphereRadius) {
 				glm::vec3 n = (dist > 1e-8f) ? (d / dist) : glm::vec3(0, 1, 0);
-				float beta = 0.3f; // 부분 보정
+				float beta = 0.3f;
 				p += (sphereRadius - dist) * beta * n;
 				xp[i] = glm::vec4(p, 1.0f);
 			}
 		}
 	}
 
-	// 3. 속도 업데이트
 	for (size_t i = 0; i < N; ++i) {
 		if (inv_mass_[i] == 0.0f) continue;
 		glm::vec3 newV = (glm::vec3(xp[i]) - glm::vec3(positions_[i])) / dt_;

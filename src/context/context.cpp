@@ -159,7 +159,6 @@ void Context::PickPhysicalDevice() {
 				dynState.extendedDynamicState &&
 				timeline.timelineSemaphore &&
 
-				// 여기부터 descriptor indexing 관련
 				indexing.runtimeDescriptorArray &&
 				indexing.shaderSampledImageArrayNonUniformIndexing &&
 				indexing.descriptorBindingPartiallyBound &&

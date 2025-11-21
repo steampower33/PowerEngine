@@ -2,7 +2,6 @@
 
 #include "vulkan_utils.h"
 
-// 파이프라인 만들 때 쓰기 편하게 묶어둔 구조체
 struct VertexInputDescription {
     std::vector<vk::VertexInputBindingDescription>   bindings;
     std::vector<vk::VertexInputAttributeDescription> attributes;
@@ -14,12 +13,10 @@ struct Vertex {
     glm::vec3 normal = {};
     glm::vec3 tangent = {};
 
-    // 1) 바인딩 + 어트리뷰트 자동 생성기
     static VertexInputDescription GetInputDescription(const vku::VertexIncludeInfo& include)
     {
         VertexInputDescription desc;
 
-        // 하나의 바인딩(0번)만 사용
         vk::VertexInputBindingDescription binding{};
         binding.binding = 0;
         binding.stride = sizeof(Vertex);
@@ -46,8 +43,6 @@ struct Vertex {
             desc.attributes.push_back(uvAttr);
         }
 
-        // 나머지 location은 include에 따라 선택적으로 추가
-        // (원하면 항상 추가해서 고정 레이아웃으로 써도 됨)
         if (include.normal) {
             vk::VertexInputAttributeDescription nAttr{};
             nAttr.location = 2;

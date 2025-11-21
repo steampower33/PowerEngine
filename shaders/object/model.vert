@@ -11,15 +11,14 @@ layout(location = 2) in vec3 inNormal;
 layout(location = 3) in vec3 inTangent;
 
 layout(location = 0) out vec2 vUV;
-layout(location = 1) out vec3 vNormalWorld;   // 월드 공간 노멀
-layout(location = 2) out vec3 vPosWorld;      // 월드 위치
+layout(location = 1) out vec3 vNormalWorld;
+layout(location = 2) out vec3 vPosWorld;
 layout(location = 3) out vec3 vTangentWorld;
 
-void main() {
-    // 월드 위치
+void main() 
+{
     vec4 worldPos = object.model * vec4(inPos, 1.0);
 
-    // 일반적인 노말 매트릭스
     mat3 normalMat = transpose(inverse(mat3(object.model)));
     vNormalWorld = normalize(normalMat * inNormal);    
 

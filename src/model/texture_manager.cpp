@@ -22,7 +22,6 @@ TextureManager::~TextureManager()
 
 }
 
-// PBR 관련 키워드가 파일명에 들어있는지 체크
 bool TextureManager::IsRightTextureName(const std::string& name)
 {
     std::string lower = name;
@@ -159,12 +158,6 @@ int TextureManager::CreateTexture(std::string path, std::string keyword, bool is
         if (!entry.is_regular_file()) continue;
 
         std::filesystem::path p(entry.path());
-
-        //std::cout << "전체 경로: " << p << "\n";
-        //std::cout << "파일 이름: " << p.filename() << "\n";
-        //std::cout << "확장자: " << p.extension() << "\n";
-        //std::cout << "부모 폴더: " << p.parent_path() << "\n";
-        //std::cout << "이름(확장자 제외): " << p.stem() << "\n";
 
         std::string parentPath = p.parent_path().string();
         std::string filename = p.filename().string();

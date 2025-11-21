@@ -72,16 +72,13 @@ void main() {
     vec3 pD = pos[idD].xyz;
     vec3 pU = pos[idU].xyz;
     
-    // 격자 방향 벡터
     vec3 dx = pR - pL;
     vec3 dy = pU - pD;
 
-    // 노말 계산 (방향은 필요에 따라 cross 순서 바꿔서 뒤집을 수 있음)
     vec3 N = normalize(cross(dy, dx));
     
     vWorldNormal = N;
 
-    // 간단히 UV도 격자 좌표로 계산 (0~1)
     vUV = vec2(float(x) / float(nx1 - 1), float(y) / float(ny1 - 1));
 
     if (render.heightEnable == 1u)

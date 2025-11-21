@@ -96,13 +96,13 @@ GUI::~GUI()
 void GUI::SetStyle()
 {
 	ImGuiStyle& st = ImGui::GetStyle();
-	st.WindowRounding = 12.f;          // 창 라운드
-	st.FrameRounding = 10.f;          // 슬라이더/체크 등 라운드
+	st.WindowRounding = 12.f;
+	st.FrameRounding = 10.f;
 	st.GrabRounding = 10.f;
 	st.ScrollbarRounding = 10.f;
 
 	ImVec4* col = st.Colors;
-	col[ImGuiCol_WindowBg].w = 0.1f;          // 창 배경 알파
+	col[ImGuiCol_WindowBg].w = 0.1f;
 
 }
 
@@ -118,18 +118,16 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 		{
 			ImGui::TableNextRow();
 
-			// 1) 라벨 열
 			ImGui::TableSetColumnIndex(0);
 			ImGui::AlignTextToFramePadding();
 			ImGui::TextUnformatted(label);
 
-			// 2) 컨트롤 열: 위젯 폭을 컬럼의 남은 폭 전체로
 			ImGui::TableSetColumnIndex(1);
-			ImGui::SetNextItemWidth(-FLT_MIN);   // 해당 아이템 하나가 열 폭을 다 씀
+			ImGui::SetNextItemWidth(-FLT_MIN);
 			drawControl();
 		};
 
-	ImGui::SetNextWindowBgAlpha(1.0f); // 창 자체 투명도
+	ImGui::SetNextWindowBgAlpha(1.0f);
 	ImGuiWindowFlags wf =
 		ImGuiWindowFlags_NoResize |
 		ImGuiWindowFlags_NoCollapse;

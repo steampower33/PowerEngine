@@ -325,7 +325,6 @@ namespace vku
 		vk::raii::DeviceMemory stagingBufferMemory({});
 
 		if (optStagingBuf && optStagingMem) {
-			// 이미 만들어 둔 staging 사용
 			stagingBuffer = std::move(*optStagingBuf);
 			stagingBufferMemory = std::move(*optStagingMem);
 		}
@@ -369,11 +368,10 @@ namespace vku
 		mem.dstStageMask = dstStage;
 		mem.dstAccessMask = dstAccess;
 
-		// ArrayProxyNoTemporaries 회피: 로컬 배열에 담아서 전달
 		std::array<vk::MemoryBarrier2, 1> mems{ mem };
 
 		vk::DependencyInfo dep{};
-		dep.setMemoryBarriers(mems); // ArrayProxy로 안전하게 복사됨
+		dep.setMemoryBarriers(mems);
 
 		cmd.pipelineBarrier2(dep);
 	}
@@ -392,7 +390,6 @@ namespace vku
 		vk::BufferMemoryBarrier2 b{
 			.srcStageMask = srcStageMask,
 			.srcAccessMask = srcAccessMask,
-			// SSBO를 VS에서 읽는다면:
 			.dstStageMask = dstStageMask,
 			.dstAccessMask = dstAccessMask,
 			.buffer = *ssbo,

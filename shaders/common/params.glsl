@@ -1,8 +1,6 @@
 #ifndef PARAMS_GLSL
 #define PARAMS_GLSL
 
-// 변경될때마다 리컴파일 안되고있음
-
 layout(std140, set = 0, binding = 0) uniform SimParams {
     float dt;
     int   numParticles;
@@ -51,11 +49,11 @@ struct Bend {
 layout(std430, set = 1, binding = 9) buffer Bends { Bend  bends[]; };
 
 struct SDFCollider {
-    int   type;       // 0: sphere, 1: plane, 2: capsule ...
+    int   type;
     vec3  center;
     float radius;
-    vec3  normal;     // plane normal 등
-    vec3  velocity;   // 간단히 전체 rigid body 속도 넣어도 됨
+    vec3  normal;
+    vec3  velocity;
     float pad;
 };
 

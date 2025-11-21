@@ -8,7 +8,7 @@
 
 #include "model.h"
 
-Model::Model(const std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, GraphicsContext& graphicsContext, TextureManager& textureManager, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble)
+Model::Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, GraphicsContext& graphicsContext, TextureManager& textureManager, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble)
 {
     LoadModel(modelPath, vertexIncludeInfo, textureManager);
 
@@ -50,14 +50,11 @@ void Model::LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo
     {
         for (const auto& primitive : mesh.primitives)
         {
-            // 1) geometry attribute 존재 여부 확인
             bool hasUV = primitive.attributes.find("TEXCOORD_0") != primitive.attributes.end();
             bool hasNormals = primitive.attributes.find("NORMAL") != primitive.attributes.end();
 
-            // 2) VertexIncludeInfo 까지 결합
             bool loadNormal = vertexIncludeInfo.normal && hasNormals;
 
-            // 3) Accessors
             const auto& posAccessor = model.accessors[primitive.attributes.at("POSITION")];
             const auto& posBufferView = model.bufferViews[posAccessor.bufferView];
             const auto& posBuffer = model.buffers[posBufferView.buffer];
@@ -90,9 +87,6 @@ void Model::LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo
 
             uint32_t baseVert = mesh_data_.vertices.size();
 
-            // ------------------------
-            // BUILD VERTEX LIST
-            // ------------------------
             for (size_t i = 0; i < posAccessor.count; i++)
             {
                 Vertex v{};
@@ -121,15 +115,11 @@ void Model::LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo
                     v.normal = glm::vec3(np[0], np[1], np[2]);
                 }
 
-                // tangent은 나중에 CalculateTangents에서 채우므로 일단 0
                 v.tangent = glm::vec3(0.0f);
 
                 mesh_data_.vertices.push_back(v);
             }
 
-            // ------------------------
-            // BUILD INDICES
-            // ------------------------
             const auto& idxAccessor = model.accessors[primitive.indices];
             const auto& idxView = model.bufferViews[idxAccessor.bufferView];
             const auto& idxBuffer = model.buffers[idxView.buffer];
@@ -152,7 +142,6 @@ void Model::LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo
             }
             mesh_data_.indices_count = mesh_data_.indices.size();
 
-            //// ----- material / texture / image 경로 로딩 -----
             //int materialIndex = primitive.material;
             //if (materialIndex >= 0 && materialIndex < static_cast<int>(model.materials.size()))
             //{
@@ -171,17 +160,14 @@ void Model::LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo
             //            const tinygltf::Image& img = model.images[imageIndex];
             //            if (img.uri.empty())
             //            {
-            //                // bufferView에 임베디드 된 경우 (uri 없음) - 필요하면 따로 처리
             //                return {};
             //            }
 
-            //            // glTF가 있는 폴더 기준으로 실제 경로 만들기
             //            std::filesystem::path baseDir = std::filesystem::path(modelPath).parent_path();
             //            std::filesystem::path fullPath = baseDir / img.uri;
             //            return baseDir.string();
             //        };
 
-            //    // PBR 메인 텍스처들
             //    int baseColorTexIndex = mat.pbrMetallicRoughness.baseColorTexture.index;
             //    int metallicRoughnessTexIdx = mat.pbrMetallicRoughness.metallicRoughnessTexture.index;
             //    int normalTexIndex = mat.normalTexture.index;
@@ -199,7 +185,6 @@ void Model::LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo
             //    texture_idx_.normal = textureManager.CreateTexture(normalPath, "normal");
             //}
 
-            // 로딩이 전부 끝난 뒤, 필요하면 탄젠트 계산
             if (vertexIncludeInfo.tangent) {
                 GeometryGenerator::CalculateTangents(mesh_data_);
             }
@@ -209,22 +194,13 @@ void Model::LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo
 
 void Model::ApplyTransform(const glm::quat& rotationDelta, const glm::vec3& translationDelta)
 {
-
-    // 기존 위치에 이동량을 더한다.
     position_ += translationDelta;
-
-    // 기존 회전에 새로운 회전을 '앞에' 곱해준다.
-    // (q_new * q_old 는 old 회전 후 new 회전을 적용하는 것과 같음)
     rotation_ = rotationDelta * rotation_;
-
-    // 쿼터니언은 부동소수점 오차로 길이가 1이 아니게 될 수 있으므로,
-    // 주기적으로 정규화해주는 것이 좋다.
     rotation_ = glm::normalize(rotation_);
 
     glm::mat4 scaleMatrix = glm::scale(glm::mat4(1.0f), scale_);
-    glm::mat4 rotationMatrix = glm::mat4_cast(rotation_); // 쿼터니언 -> 회전 행렬
+    glm::mat4 rotationMatrix = glm::mat4_cast(rotation_);
     glm::mat4 translationMatrix = glm::translate(glm::mat4(1.0f), position_);
 
-    // 2. SRT (Scale -> Rotate -> Translate) 순서로 조합하여 최종 월드 행렬을 계산한다.
     world_ = translationMatrix * rotationMatrix * scaleMatrix;
 }

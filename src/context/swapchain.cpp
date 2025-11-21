@@ -57,12 +57,10 @@ vk::SurfaceFormatKHR Swapchain::ChooseSwapSurfaceFormat(const std::vector<vk::Su
 vk::PresentModeKHR Swapchain::ChooseSwapPresentMode(const std::vector<vk::PresentModeKHR>& availablePresentModes) {
 	for (const auto& availablePresentMode : availablePresentModes) {
 		if (availablePresentMode == vk::PresentModeKHR::eImmediate) {
-			// 이 함수는 디버그/프로파일링 빌드에서만 활성화되도록 #ifdef로 감싸면 더 좋습니다.
 			return vk::PresentModeKHR::eImmediate;
 		}
 	}
 
-	// Immediate가 없다면, 원래 로직대로 Mailbox 또는 Fifo를 선택
 	for (const auto& availablePresentMode : availablePresentModes) {
 		if (availablePresentMode == vk::PresentModeKHR::eMailbox) {
 			return vk::PresentModeKHR::eMailbox;

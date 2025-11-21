@@ -38,14 +38,14 @@ public:
 
 	uint32_t timestamp_count_ = 10;
 
-	const uint32_t nx_ = 100;
-	const uint32_t ny_ = 100;
+	const uint32_t nx_ = 64;
+	const uint32_t ny_ = 64;
 
-	glm::vec2 cloth_size_{ 4.0f, 4.0f };
+	glm::vec2 cloth_size_{ 2.0f, 2.0f };
 	float spacing_x_ = cloth_size_.x / nx_;
 	float spacing_y_ = cloth_size_.y / ny_;
-	float cloth_height_ = 6.0f;
-	float mass_ = cloth_size_.x * cloth_size_.y * 0.2f;
+	float cloth_height_ = 4.0f;
+	float mass_ = cloth_size_.x * cloth_size_.y * 0.1f;
 
 	struct Compliance {
 		float stretch = 1e-6f;
@@ -95,11 +95,11 @@ public:
 		std::vector<Data::Bend> bends;
 
 		struct SDFCollider {
-			int   type;       // 0: sphere, 1: plane, 2: capsule ...
+			int   type;
 			glm::vec3  center;
 			float radius;
-			glm::vec3  normal;     // plane normal 등
-			glm::vec3  velocity;   // 간단히 전체 rigid body 속도 넣어도 됨
+			glm::vec3  normal;
+			glm::vec3  velocity;
 			float pad;
 		};
 		static_assert(sizeof(SDFCollider) == 48, "SDFCollider must be 48 bytes");

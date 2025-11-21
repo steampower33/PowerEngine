@@ -67,7 +67,6 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 	uint32_t groupsEdges = ceil_div(edge_size, 256u);
 
 	// 1. Integrate
-	// x : write -> read
 	TS(timestampSteps);
 	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.integrate);
 	cmd.dispatch(groupsP, 1, 1);
@@ -412,14 +411,14 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 
 		auto vid = [&](int x, int y) { return uint32_t(y * nx1 + x); };
 
-		const uint32_t N = nx1 * ny1;            // 파티클 총수
+		const uint32_t N = nx1 * ny1;
 
 		for (int y = 0; y < ny1; ++y) {
 			for (int x = 0; x < nx1; ++x) {
 				uint32_t id = vid(x, y);
-				float px = (x - 0.5f * nx_) * spacing_x_;   // (-Nx/2 .. +Nx/2) * spacing
+				float px = (x - 0.5f * nx_) * spacing_x_;
 				float py = cloth_height_;
-				float pz = (y - 0.5f * ny_) * spacing_y_;   // (-Ny/2 .. +Ny/2) * spacing
+				float pz = (y - 0.5f * ny_) * spacing_y_;
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0);
 				float invMass = 1.0f / mass_;
@@ -428,7 +427,6 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 			}
 		}
 
-		// 인덱스 버퍼도 그대로
 		std::vector<uint32_t> indices;
 		indices.reserve(nx_ * ny_ * 6);
 		for (int y = 0; y < ny_; ++y) {
@@ -623,13 +621,12 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	auto vid = [&](int x, int y) { return uint32_t(y * nx1 + x); };
 
-	const uint32_t N = nx1 * ny1;            // 파티클 총수
+	const uint32_t N = nx1 * ny1;
 	particles_size_ = N;
 
 	spacing_x_ = cloth_size_.x / nx_;
 	spacing_y_ = cloth_size_.y / ny_;
 
-	// 입력
 	datas_.positions.resize(N);
 	datas_.velocities.resize(N);
 	datas_.inverse_mass.resize(N);
@@ -664,7 +661,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	std::vector<float> masses(N, 0.0f);
 
-	// 전체 면적 계산
+	// Total Area
 	float totalArea = 0.0f;
 	for (size_t t = 0; t < indices.size(); t += 3) {
 		uint32_t i0 = indices[t + 0];
@@ -678,20 +675,19 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		glm::vec3 e1 = p1 - p0;
 		glm::vec3 e2 = p2 - p0;
 
-		float area = 0.5f * glm::length(glm::cross(e1, e2)); // 삼각형 면적
+		float area = 0.5f * glm::length(glm::cross(e1, e2)); // Triangle Area
 		totalArea += area;
 	}
 
-	// 총 질량을 기존 설정과 맞추기
 	float totalMassTarget = mass_;
 
-	// 면적이 0인 경우 방어
+	// area zero defence
 	float density = 0.0f;
 	if (totalArea > 0.0f) {
 		density = totalMassTarget / totalArea; // kg/m²
 	}
 
-	// 삼각형마다 mass를 area 비율로 분배
+	// Distribute mass to each triangle in proportion to area
 	for (size_t t = 0; t < indices.size(); t += 3) {
 		uint32_t i0 = indices[t + 0];
 		uint32_t i1 = indices[t + 1];
@@ -706,7 +702,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 		float area = 0.5f * glm::length(glm::cross(e1, e2));
 
-		float triMass = density * area; // 이 삼각형이 가져야 할 질량
+		float triMass = density * area;
 
 		float share = triMass / 3.0f;
 		masses[i0] += share;
@@ -714,55 +710,40 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		masses[i2] += share;
 	}
 
-	// inverse_mass 세팅 (핀 고정할 파티클 있으면 여기서 처리)
 	for (uint32_t i = 0; i < N; ++i) {
 		float m = masses[i];
 		if (m > 0.0f)
 			datas_.inverse_mass[i] = 1.0f / m;
 		else
-			datas_.inverse_mass[i] = 0.0f; // 안전장치
+			datas_.inverse_mass[i] = 0.0f;
 	}
 
 	vku::CreateIndexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, indices, index_buffer_, index_buffer_memory_);
 
-	// 출력 SoA
 	std::vector<float > deltaX(N, 0.0f), deltaY(N, 0.0f), deltaZ(N, 0.0f);
 	std::vector<uint32_t>  dcount(N, 0);
 
-	// (0) 세로 짝수
 	for (int x = 0; x < nx1; ++x)
 		for (int y = 0; y + 1 < ny1; y += 2)
 			datas_.pass[0].push_back({ vid(x,y), vid(x,y + 1) });
 
-	// (1) 세로 홀수
 	for (int x = 0; x < nx1; ++x)
 		for (int y = 1; y + 1 < ny1; y += 2)
 			datas_.pass[1].push_back({ vid(x,y), vid(x,y + 1) });
 
-	// (2) 가로 짝수
 	for (int y = 0; y < ny1; ++y)
 		for (int x = 0; x + 1 < nx1; x += 2)
 			datas_.pass[2].push_back({ vid(x,y), vid(x + 1,y) });
 
-	// (3) 가로 홀수
 	for (int y = 0; y < ny1; ++y)
 		for (int x = 1; x + 1 < nx1; x += 2)
 			datas_.pass[3].push_back({ vid(x,y), vid(x + 1,y) });
 
-	// (4) Diagonal
 	for (int y = 0; y + 1 < ny1; ++y)
 		for (int x = 0; x + 1 < nx1; ++x) {
 			datas_.pass[4].push_back({ vid(x,y),     vid(x + 1,y + 1) }); // "\"
 			datas_.pass[4].push_back({ vid(x + 1,y),   vid(x,  y + 1) }); // "/"
 		}
-
-	//// (5) 2-step bend
-	//for (int x = 0; x < nx1; ++x)
-	//	for (int y = 0; y + 2 < ny1; ++y)
-	//		pass[5].push_back({ vid(x,y), vid(x,  y + 2) });
-	//for (int y = 0; y < ny1; ++y)
-	//	for (int x = 0; x + 2 < nx1; ++x)
-	//		pass[5].push_back({ vid(x,y), vid(x + 2,y) });
 
 	datas_.pass_offset[0] = 0;
 
@@ -783,13 +764,11 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 			uint32_t i2 = vid(x, y + 1);
 			uint32_t i3 = vid(x + 1, y + 1);
 
-			// 두 삼각형: (i0,i1,i2), (i1,i3,i2)
 			uint32_t p1 = i1;   // hinge start
 			uint32_t p2 = i2;   // hinge end
 			uint32_t p3 = i0;   // opp of first tri
 			uint32_t p4 = i3;   // opp of second tri
 
-			// 평면 시작이면 0으로 충분. 필요하면 아래 함수로 실제 θ0 계산.
 			float theta0 = 0.0f;
 			//theta0 = ComputeRestAngle(p1,p2,p3,p4, data_.positions);
 
@@ -1257,7 +1236,7 @@ void GpuSim::CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLa
 			vk::ColorComponentFlagBits::eG |
 			vk::ColorComponentFlagBits::eB |
 			vk::ColorComponentFlagBits::eA;
-		a.blendEnable = vk::False;  // G-buffer라 blending 불필요
+		a.blendEnable = vk::False;
 	}
 
 	vk::PipelineColorBlendStateCreateInfo colorBlending{
@@ -1304,7 +1283,6 @@ void GpuSim::CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLa
 			.pVertexAttributeDescriptions = nullptr
 		};
 
-		// push constant 범위: VS에서만 사용(필요하면 FS도 추가)
 		vk::PushConstantRange pcRange{
 			.stageFlags = vk::ShaderStageFlagBits::eVertex,
 			.offset = 0,

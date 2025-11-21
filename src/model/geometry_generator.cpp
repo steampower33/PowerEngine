@@ -5,7 +5,6 @@ MeshData GeometryGenerator::MakeSquare(float scale)
     MeshData meshData;
 
     meshData.vertices = {
-        // front (Z+를 정면, normal = -Z로 가정한 기존 코드 유지)
         Vertex{ glm::vec3(-scale, -scale, 0.0f), glm::vec2(1.0f, 1.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec4(0.0f) },
         Vertex{ glm::vec3(-scale,  scale, 0.0f), glm::vec2(1.0f, 0.0f),   glm::vec3(0.0f, 0.0f, -1.0f), glm::vec4(0.0f) },
         Vertex{ glm::vec3(scale,  scale, 0.0f), glm::vec2(0.0f, 0.0f),  glm::vec3(0.0f, 0.0f, -1.0f), glm::vec4(0.0f) },
@@ -24,7 +23,7 @@ MeshData GeometryGenerator::MakeBox(float scale)
     MeshData meshData;
 
     meshData.vertices = {
-        // front (-Z) : Square와 동일한 패턴
+        // front (-Z)
         { glm::vec3(-scale, -scale, -scale), glm::vec2(1.0f, 1.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec4(0.0f) },
         { glm::vec3(-scale,  scale, -scale), glm::vec2(1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec4(0.0f) },
         { glm::vec3(scale,  scale, -scale), glm::vec2(0.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec4(0.0f) },
@@ -95,7 +94,7 @@ MeshData GeometryGenerator::MakeCylinder(
 
         Vertex v{};
         v.pos = glm::vec3(bottomRadius * c, -halfH, bottomRadius * s);
-        v.uv = glm::vec2(1.0f - static_cast<float>(i) / sliceCount, 1.0f); // 아래쪽 v=1
+        v.uv = glm::vec2(1.0f - static_cast<float>(i) / sliceCount, 1.0f);
         v.normal = glm::normalize(glm::vec3(c, 0.0f, s)); // radial
         v.tangent = glm::vec4(0.0f);
 
@@ -112,7 +111,7 @@ MeshData GeometryGenerator::MakeCylinder(
 
         Vertex v{};
         v.pos = glm::vec3(topRadius * c, +halfH, topRadius * s);
-        v.uv = glm::vec2(1.0f - static_cast<float>(i) / sliceCount, 0.0f); // 위쪽 v=0
+        v.uv = glm::vec2(1.0f - static_cast<float>(i) / sliceCount, 0.0f);
         v.normal = glm::normalize(glm::vec3(c, 0.0f, s));
         v.tangent = glm::vec4(0.0f);
 
@@ -121,7 +120,6 @@ MeshData GeometryGenerator::MakeCylinder(
 
     int ringCount = sliceCount + 1;
 
-    // 인덱스: 각 슬라이스마다 Quad 두 개 (Square와 동일 패턴)
     for (int i = 0; i < sliceCount; ++i)
     {
         int i0 = i;
@@ -129,12 +127,12 @@ MeshData GeometryGenerator::MakeCylinder(
         int i2 = i + 1 + ringCount;
         int i3 = i + 1;
 
-        // 삼각형 1: i0, i1, i2
+        // triangle 1: i0, i1, i2
         indices.push_back(i0);
         indices.push_back(i1);
         indices.push_back(i2);
 
-        // 삼각형 2: i0, i2, i3
+        // triangle 2: i0, i2, i3
         indices.push_back(i0);
         indices.push_back(i2);
         indices.push_back(i3);
@@ -184,12 +182,11 @@ MeshData GeometryGenerator::MakeSphere(
                 (static_cast<float>(j) / numStacks) * texScale.y
             );
 
-            v.tangent = glm::vec4(0.0f); // 나중에 CalculateTangents에서 채움
+            v.tangent = glm::vec4(0.0f);
             vertices.push_back(v);
         }
     }
 
-    // 인덱스: 각 사각형을 두 삼각형으로 (CCW 기준으로 수정)
     int rowStride = numSlices + 1;
     for (int j = 0; j < numStacks; ++j)
     {
@@ -198,17 +195,15 @@ MeshData GeometryGenerator::MakeSphere(
 
         for (int i = 0; i < numSlices; ++i)
         {
-            int i0 = rowStart + i;        // 위, 왼
-            int i1 = nextRowStart + i;        // 아래, 왼
-            int i2 = nextRowStart + i + 1;    // 아래, 오른
-            int i3 = rowStart + i + 1;    // 위, 오른
+            int i0 = rowStart + i;
+            int i1 = nextRowStart + i;
+            int i2 = nextRowStart + i + 1;
+            int i3 = rowStart + i + 1;
 
-            // 삼각형 1: i0, i2, i1  (기존 i0,i1,i2 에서 i1,i2 swap)
             indices.push_back(i0);
             indices.push_back(i2);
             indices.push_back(i1);
 
-            // 삼각형 2: i0, i3, i2  (기존 i0,i2,i3 에서 i2,i3 swap)
             indices.push_back(i0);
             indices.push_back(i3);
             indices.push_back(i2);
@@ -217,7 +212,6 @@ MeshData GeometryGenerator::MakeSphere(
 
     meshData.indices_count = meshData.indices.size();
 
-    // Square와 동일하게 UV 기반으로 tangent 재계산
     CalculateTangents(meshData);
     return meshData;
 }
@@ -226,7 +220,6 @@ void GeometryGenerator::CalculateTangents(MeshData& meshData)
 {
     std::vector<glm::vec3> accumulatedTangents(meshData.vertices.size(), glm::vec3(0.0f));
 
-    // 삼각형마다 tangent 누적
     for (size_t i = 0; i + 2 < meshData.indices.size(); i += 3)
     {
         uint32_t i0 = meshData.indices[i];
@@ -264,7 +257,6 @@ void GeometryGenerator::CalculateTangents(MeshData& meshData)
         accumulatedTangents[i2] += tangent;
     }
 
-    // 정규화 후 Vertex.tangent에 기록
     for (size_t i = 0; i < meshData.vertices.size(); ++i)
     {
         glm::vec3 t = accumulatedTangents[i];

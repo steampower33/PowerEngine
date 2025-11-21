@@ -30,13 +30,12 @@ vec3 ComputeSDF(in SDFCollider c, vec3 p, float margin)
         float dist = length(diff);
         float target = c.radius + margin;
         if (dist < target) {
-            // target까지 밖으로 밀어내는 보정 벡터
             vec3 n = (dist > 1e-6) ? diff / dist : vec3(0.0, 1.0, 0.0);
             return n * (target - dist);
         }
         return vec3(0.0);
     }
-    else if (c.type == 1) { // plane: dot(p-center, normal) < margin 이면 위로 밀어냄
+    else if (c.type == 1) {
         float d = dot(p - c.center, c.normal);
         float target = margin;
         if (d < target) {
@@ -45,14 +44,11 @@ vec3 ComputeSDF(in SDFCollider c, vec3 p, float margin)
         return vec3(0.0);
     }
 
-    // TODO: capsule, box 등 추가
     return vec3(0.0);
 }
 
 vec3 ColliderVelocityAt(in SDFCollider c, vec3 p)
 {
-    // 단순히 rigid body 전체 속도로만 처리
-    // (회전까지 하려면 angular velocity + cross(omega, r) 등 구현)
     return c.velocity;
 }
 

@@ -24,6 +24,15 @@ ModelManager::ModelManager(Context& context, GraphicsContext& graphicsContext, T
 		models.emplace_back(std::move(model));
 	}
 
+	//{
+	//	glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
+	//	glm::vec3 initPos = glm::vec3(3.0f, 1.0f, 0.0f);
+	//	glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
+	//	std::string modelPath = "assets/ybot/ybot.gltf";
+	//	std::unique_ptr<Model> model = std::make_unique<Model>(modelPath, vku::VertexIncludeInfo{true, true}, context, graphicsContext, textureManager, initPos, angleQuat, initColor, true);
+	//	models.emplace_back(std::move(model));
+	//}
+
 	{
 		MeshData sphere = GeometryGenerator::MakeSquare(1.0f);
 		glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));

@@ -33,11 +33,9 @@ void MouseInteractor::Update(const Camera& camera,
 {
     const float EPS = 1e-6f;
 
-    // (옵션) 선택 인덱스 안전화: 모델이 삭제되었을 수도 있음
     if (selected_ >= static_cast<int>(models.size()))
         selected_ = -1;
 
-    // ===== 좌클릭: 회전 시작 =====
     if (is_left_button_down_event && !is_dragging_ && !is_translating_) {
         Ray ray = CalculateMouseRay(camera, viewportSize);
         auto [idx, dist] = PickClosestModel(ray, models);
@@ -61,12 +59,10 @@ void MouseInteractor::Update(const Camera& camera,
             }
         }
         else {
-            // 아무 것도 안 맞았으면 선택 해제
             selected_ = -1;
         }
     }
 
-    // ===== 우클릭: 이동 시작 (깊이 비율 고정) =====
     if (is_right_button_down_event && !is_translating_ && !is_dragging_) {
         Ray ray = CalculateMouseRay(camera, viewportSize);
         auto [idx, dist] = PickClosestModel(ray, models);
@@ -82,8 +78,8 @@ void MouseInteractor::Update(const Camera& camera,
                 is_translating_ = true;
                 has_grab_point_ = true;
 
-                prevRatio_ = dist / nfLen;          // near→far 비율
-                prevPos_ = wNear + nf * prevRatio_; // 시작 교점
+                prevRatio_ = dist / nfLen;
+                prevPos_ = wNear + nf * prevRatio_;
             }
         }
         else {
@@ -91,7 +87,6 @@ void MouseInteractor::Update(const Camera& camera,
         }
     }
 
-    // ===== 좌 드래그: 회전 진행 =====
     if (is_dragging_ && has_prev_ && selected_ >= 0) {
         Ray ray = CalculateMouseRay(camera, viewportSize);
         float dist = 0.0f;
@@ -131,7 +126,6 @@ void MouseInteractor::Update(const Camera& camera,
         }
     }
 
-    // ===== 우 드래그: 이동 진행 (깊이 비율 유지) =====
     if (is_translating_ && has_grab_point_ && selected_ >= 0) {
         glm::vec3 wNear, wFar;
         CalculateMouseNearFar(camera, viewportSize, wNear, wFar);
@@ -142,13 +136,12 @@ void MouseInteractor::Update(const Camera& camera,
             glm::vec3 delta = newPos - prevPos_;
 
             if (glm::length(delta) > 1e-8f) {
-                models[selected_]->ApplyTransform(glm::quat(1, 0, 0, 0), delta); // 이동
+                models[selected_]->ApplyTransform(glm::quat(1, 0, 0, 0), delta);
                 prevPos_ = newPos;
             }
         }
     }
 
-    // ===== 버튼 업 =====
     if (is_left_button_up_event) {
         is_dragging_ = false;
         has_prev_ = false;
@@ -159,7 +152,6 @@ void MouseInteractor::Update(const Camera& camera,
         prevRatio_ = 0.0f;
     }
 
-    // 이벤트 플래그 리셋
     is_left_button_down_event = false;
     is_left_button_up_event = false;
     is_right_button_down_event = false;

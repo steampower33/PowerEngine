@@ -14,7 +14,6 @@ void main() {
     uint eidx = pc.base + t;
     if (eidx >= sim.numEdges) return;
 
-    // --- edge fields 개별 읽기 (aliasing·캐시 이슈 최소화)
     uint  i      = edges[eidx].i;
     uint  j      = edges[eidx].j;
     float rest   = edges[eidx].rest;
@@ -23,7 +22,7 @@ void main() {
     float wi = w[i];
     float wj = w[j];
     float wsum = wi + wj;
-    if (wsum == 0.0) { edges[eidx].lambda = 0.0; return; }  // 둘 다 고정점이면 λ 유지 필요X
+    if (wsum == 0.0) { edges[eidx].lambda = 0.0; return; }
 
     vec3 pi = xp[i].xyz;
     vec3 pj = xp[j].xyz;
@@ -33,26 +32,20 @@ void main() {
     if (len < 1e-7) return;
     vec3 n = d / len;
 
-    // XPBD 파라미터
-    float dt    = sim.dt;             // 한 substep의 dt
-    float alpha = pc.compliance / (dt * dt);   // α = compliance / dt^2
+    float dt    = sim.dt;
+    float alpha = pc.compliance / (dt * dt);
 
-    // 제약값 C = |d| - rest
     float C = len - rest;
 
-    // Δλ = ( -C - α λ ) / (Σ w + α)
     float denom = wsum + alpha;
-    // 안전장치(희박하지만 0 분모 방지)
     if (denom < 1e-8) denom = 1e-8;
 
     float dLambda = (-C - alpha * lambda) / denom;
 
-    // λ 누적 및 NaN 가드
     float newLambda = lambda + dLambda;
     if (!isFinite_f(newLambda)) newLambda = 0.0;
     edges[eidx].lambda = newLambda;
 
-    // 위치 보정: Δx_i =  wi * dLambda * n,  Δx_j = -wj * dLambda * n
     vec3 corr = dLambda * n;
 
     if (wi > 0.0) xp[i].xyz += wi * corr;

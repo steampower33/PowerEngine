@@ -56,7 +56,7 @@ void GraphicsContext::Update(Camera& camera)
 
 void GraphicsContext::UpdateGraphicsUBO(Camera& camera)
 {
-	// Global UBO 쓰기
+	// Global UBO
 	{
 		const uint32_t globalOffset = static_cast<uint32_t>(current_frame_ * ubo_size_.global);
 		auto* dst = static_cast<std::byte*>(ubo_mapped_.global) + globalOffset;
@@ -65,10 +65,9 @@ void GraphicsContext::UpdateGraphicsUBO(Camera& camera)
 		ubo_data_.global.proj = camera.Proj(swapchain_.swapchain_extent_.width, swapchain_.swapchain_extent_.height);
 
 		std::memcpy(dst, &ubo_data_.global, sizeof(UBOData::Global));
-		// HostCoherent라 flush 생략, 비-coherent면 flush 필요
 	}
 
-	// Object UBO 쓰기
+	// Object UBO
 	{
 		const uint32_t baseObjectOffset = static_cast<uint32_t>(current_frame_ * ubo_size_.object * model_manager_.kMaxObjects);
 		for (uint32_t i = 0; i < model_manager_.models.size(); i++)
@@ -294,7 +293,7 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 	vku::TransitionImageLayout(
 		swapchain_.swapchain_images_[imageIndex],
 		cmd,
-		vk::ImageLayout::eUndefined,               // 또는 이전 프레임 PresentSrcKHR
+		vk::ImageLayout::eUndefined,
 		vk::ImageLayout::eColorAttachmentOptimal,
 		{},
 		vk::AccessFlagBits2::eColorAttachmentWrite,
@@ -302,7 +301,7 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 		vk::PipelineStageFlagBits2::eColorAttachmentOutput
 	);
 
-	// Lighting pass: swapchain에 렌더
+	// Lighting pass
 	vk::ClearValue clearColor = vk::ClearColorValue(
 		0.0f, 0.0f, 0.0f, 1.0f);
 
@@ -327,7 +326,6 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 
 	cmd.beginRendering(lightingRenderingInfo);
 
-	// 뷰포트/시저 재설정 (같은 vp 재사용)
 	cmd.setViewport(0, vp);
 	cmd.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchain_.swapchain_extent_));
 
@@ -409,7 +407,6 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 	//	cmd.drawIndexed(model_manager_.skybox_->mesh_data_.indices_count, 1, 0, 0, 0);
 	//}
 
-	// --- ImGui는 여기서 ---
 	ImDrawData* draw_data = ImGui::GetDrawData();
 	ImGui_ImplVulkan_RenderDrawData(draw_data, *cmd);
 
@@ -484,7 +481,7 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 			vk::SemaphoreWaitInfo waitInfo{
 				.semaphoreCount = 1,
 				.pSemaphores = &*semaphore_,
-				.pValues = &computeSignalValue // 또는 computeSignalValue
+				.pValues = &computeSignalValue
 			};
 			while (vk::Result::eTimeout == context_.device_.waitSemaphores(waitInfo, UINT64_MAX));
 
@@ -506,11 +503,9 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 				return (ts[i1] - ts[i0]) * toMs;
 				};
 
-			// 1) Integrate / Clear Lambdas
 			float tIntegrate = delta_ms(0, 1);
 			float tClearLambdas = delta_ms(2, 3);
 
-			// 2) Iteration 안의 것들은 전부 합산
 			float tSolveStretch = 0.0f;
 			float tSolveDiag = 0.0f;
 			float tSolveBend = 0.0f;
@@ -527,11 +522,9 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 				tCollideSdf += delta_ms(base + 8, base + 9);
 			}
 
-			// 3) Update Velocity
 			uint32_t lastBase = 4 + gpu_sim_->timestamp_count_ * gpu_sim_->iterations_;
 			double tUpdate = delta_ms(lastBase + 0, lastBase + 1);
 
-			// 4) 출력
 			double total = tIntegrate + tClearLambdas + tSolveStretch +
 				tSolveDiag + tSolveBend + tApplyDeltas + tCollideSdf + tUpdate;
 			uint32_t c = 0;
@@ -1256,7 +1249,7 @@ void GraphicsContext::CreateGraphicsPipelines()
 			vk::ColorComponentFlagBits::eG |
 			vk::ColorComponentFlagBits::eB |
 			vk::ColorComponentFlagBits::eA;
-		a.blendEnable = vk::False;  // G-buffer라 blending 불필요
+		a.blendEnable = vk::False;
 	}
 
 	vk::PipelineColorBlendStateCreateInfo colorBlending{
@@ -1409,10 +1402,10 @@ void GraphicsContext::CreateGraphicsPipelines()
 		};
 		std::array<vk::PipelineShaderStageCreateInfo, 2> stages{ vertStage, fragStage };
 
-		// fullscreen triangle: vertex input 비움
+		// fullscreen triangle: no vertex input
 		vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
 
-		// color blend: attachment 1개
+		// color blend: attachment 1
 		vk::PipelineColorBlendAttachmentState lightingBlendAttachment{};
 		lightingBlendAttachment.blendEnable = vk::False;
 		lightingBlendAttachment.colorWriteMask =
@@ -1453,7 +1446,7 @@ void GraphicsContext::CreateGraphicsPipelines()
 			  .pViewportState = &viewportState,
 			  .pRasterizationState = &rasterizerSolid,
 			  .pMultisampleState = &multisampling,
-			  .pDepthStencilState = nullptr,          // 라이트 패스에서 depth 안 쓰면 nullptr
+			  .pDepthStencilState = nullptr,
 			  .pColorBlendState = &lightingColorBlending,
 			  .pDynamicState = &dynamicState,
 			  .layout = pipeline_layouts_.lighting,
@@ -1522,7 +1515,7 @@ void GraphicsContext::CreateGraphicsPipelines()
 			.stencilTestEnable = vk::False
 		};
 
-		// color blend: attachment 1개
+		// color blend: attachment 1
 		vk::PipelineColorBlendAttachmentState skyboxBlendAttachment{};
 		skyboxBlendAttachment.blendEnable = vk::False;
 		skyboxBlendAttachment.colorWriteMask =
@@ -1638,7 +1631,6 @@ void GraphicsContext::CreateGeometryBuffers()
 		imageView = vku::CreateImageView(context_.device_, image, format, vk::ImageAspectFlagBits::eColor, 1);
 	}
 
-	// G-buffer용 샘플러 생성
 	vk::SamplerCreateInfo samplerInfo{
 		.magFilter = vk::Filter::eLinear,
 		.minFilter = vk::Filter::eLinear,
