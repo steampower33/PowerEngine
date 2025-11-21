@@ -93,8 +93,8 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_coloring);
 
 		for (uint32_t c = 0; c < 4; ++c) {
-			uint32_t base = datas_.pass_offset[c];
-			uint32_t count = datas_.pass_offset[c + 1] - datas_.pass_offset[c];
+			uint32_t base = datas_.pass_offsets[c];
+			uint32_t count = datas_.pass_offsets[c + 1] - datas_.pass_offsets[c];
 			if (!count) continue;
 
 			pc_.base = base;
@@ -117,8 +117,8 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 			// 4. Solve AtomicAdd - Diagonal
 			TS(timestampSteps);
 			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_atomic);
-			uint32_t base = datas_.pass_offset[4];
-			uint32_t count = datas_.pass_offset[5] - datas_.pass_offset[4];
+			uint32_t base = datas_.pass_offsets[4];
+			uint32_t count = datas_.pass_offsets[5] - datas_.pass_offsets[4];
 			pc_.base = base;
 			pc_.count = count;
 			pc_.compliance = compliance_.diagonal;
@@ -267,27 +267,27 @@ void GpuSim::GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer
 void GpuSim::CopyDatas(const vk::raii::CommandBuffer& cmd)
 {
 
-	vku::CopyStagingToSSBO(cmd, ssbo_size_.positions, staging_mapped_.positions, datas_.positions, staging_.positions, ssbos_.positions,
+	vku::CopyStagingToSSBO(cmd, ssbo_size_.position, staging_mapped_.position, datas_.positions, staging_.position, ssbos_.position,
 		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
 		vk::PipelineStageFlagBits2::eVertexShader, vk::AccessFlagBits2::eShaderStorageRead);
 
-	vku::CopyStagingToSSBO(cmd, ssbo_size_.velocities, staging_mapped_.velocities, datas_.velocities, staging_.velocities, ssbos_.velocities,
+	vku::CopyStagingToSSBO(cmd, ssbo_size_.velocity, staging_mapped_.velocity, datas_.velocities, staging_.velocity, ssbos_.velocity,
 		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
 		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
 
-	vku::CopyStagingToSSBO(cmd, ssbo_size_.inverse_mass, staging_mapped_.inverse_mass, datas_.inverse_mass, staging_.inverse_mass, ssbos_.inverse_mass,
+	vku::CopyStagingToSSBO(cmd, ssbo_size_.inverse_mass, staging_mapped_.inverse_mass, datas_.inverse_masses, staging_.inverse_mass, ssbos_.inverse_mass,
 		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
 		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
 
-	vku::CopyStagingToSSBO(cmd, ssbo_size_.edges, staging_mapped_.edges, datas_.edges, staging_.edges, ssbos_.edges,
+	vku::CopyStagingToSSBO(cmd, ssbo_size_.edge, staging_mapped_.edge, datas_.edges, staging_.edge, ssbos_.edge,
 		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
 		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
 
-	vku::CopyStagingToSSBO(cmd, ssbo_size_.pred_positions, staging_mapped_.pred_positions, datas_.pred_positions, staging_.pred_positions, ssbos_.pred_positions,
+	vku::CopyStagingToSSBO(cmd, ssbo_size_.pred_position, staging_mapped_.pred_position, datas_.pred_positions, staging_.pred_position, ssbos_.pred_position,
 		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
 		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
 
-	vku::CopyStagingToSSBO(cmd, ssbo_size_.bends, staging_mapped_.bends, datas_.bends, staging_.bends, ssbos_.bends,
+	vku::CopyStagingToSSBO(cmd, ssbo_size_.bend, staging_mapped_.bend, datas_.bends, staging_.bend, ssbos_.bend,
 		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
 		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
 }
@@ -319,14 +319,14 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0.0f);
 				float invMass = 1.0f / mass_;
-				datas_.inverse_mass[id] = invMass;
+				datas_.inverse_masses[id] = invMass;
 				datas_.pred_positions[id] = datas_.positions[id];
 			}
 		}
 
 		uint32_t idx = 0;
 		for (int p = 0; p < 5; ++p) {
-			for (auto [i, j] : datas_.pass[p]) {
+			for (auto [i, j] : datas_.passes[p]) {
 				glm::vec3 pi = glm::vec3(datas_.positions[i]);
 				glm::vec3 pj = glm::vec3(datas_.positions[j]);
 				float rest = glm::length(pj - pi);
@@ -368,19 +368,19 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0);
 				float invMass = 1.0f / mass_;
-				datas_.inverse_mass[id] = invMass;
+				datas_.inverse_masses[id] = invMass;
 				datas_.pred_positions[id] = datas_.positions[id];
 			}
 		}
 
-		datas_.inverse_mass[0] = 0.0f;
-		datas_.inverse_mass[nx1 - 1] = 0.0f;
-		datas_.inverse_mass[(ny1 - 1) * nx1] = 0.0f;
-		datas_.inverse_mass[(ny1 - 1) * nx1 + nx1 - 1] = 0.0f;
+		datas_.inverse_masses[0] = 0.0f;
+		datas_.inverse_masses[nx1 - 1] = 0.0f;
+		datas_.inverse_masses[(ny1 - 1) * nx1] = 0.0f;
+		datas_.inverse_masses[(ny1 - 1) * nx1 + nx1 - 1] = 0.0f;
 
 		uint32_t idx = 0;
 		for (int p = 0; p < 5; ++p) {
-			for (auto [i, j] : datas_.pass[p]) {
+			for (auto [i, j] : datas_.passes[p]) {
 				glm::vec3 pi = glm::vec3(datas_.positions[i]);
 				glm::vec3 pj = glm::vec3(datas_.positions[j]);
 				float rest = glm::length(pj - pi);
@@ -422,7 +422,7 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0);
 				float invMass = 1.0f / mass_;
-				datas_.inverse_mass[id] = invMass;
+				datas_.inverse_masses[id] = invMass;
 				datas_.pred_positions[id] = datas_.positions[id];
 			}
 		}
@@ -443,14 +443,14 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 		uint32_t tap = (ny1 - 1) / 10;
 		for (uint32_t i = 0; i < ny1; i += tap)
 		{
-			datas_.inverse_mass[i] = 0.0f;
+			datas_.inverse_masses[i] = 0.0f;
 		}
 		//datas_.inverse_mass[(ny1 - 1) * nx1] = 0.0f;
 		//datas_.inverse_mass[(ny1 - 1) * nx1 + nx1 - 1] = 0.0f;
 
 		uint32_t idx = 0;
 		for (int p = 0; p < 5; ++p) {
-			for (auto [i, j] : datas_.pass[p]) {
+			for (auto [i, j] : datas_.passes[p]) {
 				glm::vec3 pi = glm::vec3(datas_.positions[i]);
 				glm::vec3 pj = glm::vec3(datas_.positions[j]);
 				float rest = glm::length(pj - pi);
@@ -629,7 +629,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	datas_.positions.resize(N);
 	datas_.velocities.resize(N);
-	datas_.inverse_mass.resize(N);
+	datas_.inverse_masses.resize(N);
 	datas_.pred_positions.resize(N);
 
 	for (int y = 0; y < ny1; ++y) {
@@ -713,9 +713,9 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	for (uint32_t i = 0; i < N; ++i) {
 		float m = masses[i];
 		if (m > 0.0f)
-			datas_.inverse_mass[i] = 1.0f / m;
+			datas_.inverse_masses[i] = 1.0f / m;
 		else
-			datas_.inverse_mass[i] = 0.0f;
+			datas_.inverse_masses[i] = 0.0f;
 	}
 
 	vku::CreateIndexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, indices, index_buffer_, index_buffer_memory_);
@@ -725,36 +725,36 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	for (int x = 0; x < nx1; ++x)
 		for (int y = 0; y + 1 < ny1; y += 2)
-			datas_.pass[0].push_back({ vid(x,y), vid(x,y + 1) });
+			datas_.passes[0].push_back({ vid(x,y), vid(x,y + 1) });
 
 	for (int x = 0; x < nx1; ++x)
 		for (int y = 1; y + 1 < ny1; y += 2)
-			datas_.pass[1].push_back({ vid(x,y), vid(x,y + 1) });
+			datas_.passes[1].push_back({ vid(x,y), vid(x,y + 1) });
 
 	for (int y = 0; y < ny1; ++y)
 		for (int x = 0; x + 1 < nx1; x += 2)
-			datas_.pass[2].push_back({ vid(x,y), vid(x + 1,y) });
+			datas_.passes[2].push_back({ vid(x,y), vid(x + 1,y) });
 
 	for (int y = 0; y < ny1; ++y)
 		for (int x = 1; x + 1 < nx1; x += 2)
-			datas_.pass[3].push_back({ vid(x,y), vid(x + 1,y) });
+			datas_.passes[3].push_back({ vid(x,y), vid(x + 1,y) });
 
 	for (int y = 0; y + 1 < ny1; ++y)
 		for (int x = 0; x + 1 < nx1; ++x) {
-			datas_.pass[4].push_back({ vid(x,y),     vid(x + 1,y + 1) }); // "\"
-			datas_.pass[4].push_back({ vid(x + 1,y),   vid(x,  y + 1) }); // "/"
+			datas_.passes[4].push_back({ vid(x,y),     vid(x + 1,y + 1) }); // "\"
+			datas_.passes[4].push_back({ vid(x + 1,y),   vid(x,  y + 1) }); // "/"
 		}
 
-	datas_.pass_offset[0] = 0;
+	datas_.pass_offsets[0] = 0;
 
 	for (int p = 0; p < 5; ++p) {
-		for (auto [i, j] : datas_.pass[p]) {
+		for (auto [i, j] : datas_.passes[p]) {
 			glm::vec3 pi = glm::vec3(datas_.positions[i]);
 			glm::vec3 pj = glm::vec3(datas_.positions[j]);
 			float rest = glm::length(pj - pi);
 			datas_.edges.push_back({ i, j, rest, 0.0f });
 		}
-		datas_.pass_offset[p + 1] = static_cast<uint32_t>(datas_.edges.size());
+		datas_.pass_offsets[p + 1] = static_cast<uint32_t>(datas_.edges.size());
 	}
 
 	for (int y = 0; y < ny_; ++y) {
@@ -782,30 +782,30 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	datas_.sdfColliders.push_back(Data::SDFCollider{ 0, glm::vec3(0.0f, 0.0f, 0.0f), 1.0f, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 0.0f), 0.0f });
 
 	// position
-	ssbo_size_.positions = sizeof(glm::vec4) * N;
+	ssbo_size_.position = sizeof(glm::vec4) * N;
 	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
-		ssbo_size_.positions,
+		ssbo_size_.position,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
 		datas_.positions,
 		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
 		vk::MemoryPropertyFlagBits::eDeviceLocal,
-		ssbos_.positions, ssbo_memories_.positions,
-		&staging_.positions, &staging_memories_.positions);
-	staging_mapped_.positions = staging_memories_.positions.mapMemory(0, ssbo_size_.positions);
+		ssbos_.position, ssbo_memories_.position,
+		&staging_.position, &staging_memories_.position);
+	staging_mapped_.position = staging_memories_.position.mapMemory(0, ssbo_size_.position);
 
 	// velocity
-	ssbo_size_.velocities = sizeof(glm::vec4) * N;
+	ssbo_size_.velocity = sizeof(glm::vec4) * N;
 	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
-		ssbo_size_.velocities,
+		ssbo_size_.velocity,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
 		datas_.velocities,
 		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
 		vk::MemoryPropertyFlagBits::eDeviceLocal,
-		ssbos_.velocities, ssbo_memories_.velocities,
-		&staging_.velocities, &staging_memories_.velocities);
-	staging_mapped_.velocities = staging_memories_.velocities.mapMemory(0, ssbo_size_.velocities);
+		ssbos_.velocity, ssbo_memories_.velocity,
+		&staging_.velocity, &staging_memories_.velocity);
+	staging_mapped_.velocity = staging_memories_.velocity.mapMemory(0, ssbo_size_.velocity);
 
 	// inverse mass
 	ssbo_size_.inverse_mass = sizeof(float) * N;
@@ -813,7 +813,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		ssbo_size_.inverse_mass,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-		datas_.inverse_mass,
+		datas_.inverse_masses,
 		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
 		vk::MemoryPropertyFlagBits::eDeviceLocal,
 		ssbos_.inverse_mass, ssbo_memories_.inverse_mass,
@@ -865,43 +865,43 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		ssbos_.dcount, ssbo_memories_.dcount);
 
 	// edges
-	ssbo_size_.edges = sizeof(Data::Edge) * edge_size;
+	ssbo_size_.edge = sizeof(Data::Edge) * edge_size;
 	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
-		ssbo_size_.edges,
+		ssbo_size_.edge,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
 		datas_.edges,
 		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
 		vk::MemoryPropertyFlagBits::eDeviceLocal,
-		ssbos_.edges, ssbo_memories_.edges,
-		&staging_.edges, &staging_memories_.edges);
-	staging_mapped_.edges = staging_memories_.edges.mapMemory(0, ssbo_size_.edges);
+		ssbos_.edge, ssbo_memories_.edge,
+		&staging_.edge, &staging_memories_.edge);
+	staging_mapped_.edge = staging_memories_.edge.mapMemory(0, ssbo_size_.edge);
 
 	// Pred Position
-	ssbo_size_.pred_positions = sizeof(glm::vec4) * N;
+	ssbo_size_.pred_position = sizeof(glm::vec4) * N;
 	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
-		ssbo_size_.pred_positions,
+		ssbo_size_.pred_position,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
 		datas_.pred_positions,
 		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
 		vk::MemoryPropertyFlagBits::eDeviceLocal,
-		ssbos_.pred_positions, ssbo_memories_.pred_positions,
-		&staging_.pred_positions, &staging_memories_.pred_positions);
-	staging_mapped_.pred_positions = staging_memories_.pred_positions.mapMemory(0, ssbo_size_.pred_positions);
+		ssbos_.pred_position, ssbo_memories_.pred_position,
+		&staging_.pred_position, &staging_memories_.pred_position);
+	staging_mapped_.pred_position = staging_memories_.pred_position.mapMemory(0, ssbo_size_.pred_position);
 
 	// Data::Bend
-	ssbo_size_.bends = sizeof(Data::Bend) * bend_size;
+	ssbo_size_.bend = sizeof(Data::Bend) * bend_size;
 	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
-		ssbo_size_.bends,
+		ssbo_size_.bend,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
 		datas_.bends,
 		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
 		vk::MemoryPropertyFlagBits::eDeviceLocal,
-		ssbos_.bends, ssbo_memories_.bends,
-		&staging_.bends, &staging_memories_.bends);
-	staging_mapped_.bends = staging_memories_.bends.mapMemory(0, ssbo_size_.bends);
+		ssbos_.bend, ssbo_memories_.bend,
+		&staging_.bend, &staging_memories_.bend);
+	staging_mapped_.bend = staging_memories_.bend.mapMemory(0, ssbo_size_.bend);
 
 }
 
@@ -968,16 +968,16 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 		auto sets = vk::raii::DescriptorSets{ context.device_, allocInfo };
 		sets_.cloth_compute = std::move(sets.front());
 
-		vk::DescriptorBufferInfo positions(*ssbos_.positions, 0, VK_WHOLE_SIZE);
-		vk::DescriptorBufferInfo velocities(*ssbos_.velocities, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo positions(*ssbos_.position, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo velocities(*ssbos_.velocity, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo inverseMass(*ssbos_.inverse_mass, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo deltaX(*ssbos_.delta_x, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo deltaY(*ssbos_.delta_y, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo deltaZ(*ssbos_.delta_z, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo dcount(*ssbos_.dcount, 0, VK_WHOLE_SIZE);
-		vk::DescriptorBufferInfo edge(*ssbos_.edges, 0, VK_WHOLE_SIZE);
-		vk::DescriptorBufferInfo predPositions(*ssbos_.pred_positions, 0, VK_WHOLE_SIZE);
-		vk::DescriptorBufferInfo bend(*ssbos_.bends, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo edge(*ssbos_.edge, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo predPositions(*ssbos_.pred_position, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo bend(*ssbos_.bend, 0, VK_WHOLE_SIZE);
 		std::array descriptorWrites{
 			vk::WriteDescriptorSet{
 				.dstSet = *sets_.cloth_compute,
@@ -1074,7 +1074,7 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 		auto sets = vk::raii::DescriptorSets{ context.device_, allocInfo };
 		sets_.cloth_graphics = std::move(sets.front());
 
-		vk::DescriptorBufferInfo positions(ssbos_.positions, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo positions(ssbos_.position, 0, VK_WHOLE_SIZE);
 
 		std::array descriptorWrites{
 			vk::WriteDescriptorSet{
