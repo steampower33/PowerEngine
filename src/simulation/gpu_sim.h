@@ -36,7 +36,7 @@ public:
 	void CopyDatas(const vk::raii::CommandBuffer& cmd);
 	void UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene);
 
-	uint32_t timestamp_count_ = 12;
+	uint32_t iteration_timestamp_count_ = 12;
 
 	const uint32_t nx_ = 100;
 	const uint32_t ny_ = 100;
@@ -45,7 +45,7 @@ public:
 	float spacing_x_ = cloth_size_.x / nx_;
 	float spacing_y_ = cloth_size_.y / ny_;
 	float cloth_height_ = 6.0f;
-	float mass_ = 0.1f;
+	float mass_ = 0.2f;
 
 	struct Compliance {
 		float stretch = 1e-7f;
@@ -60,8 +60,9 @@ public:
 	uint32_t shear_size_ = 0;
 	uint32_t bend_size_ = 0;
 
-	float deviding_dt_ = 240.0f;
-	int iterations_ = 20;
+	float frame_dt_ = 60.0f;
+	int substeps_ = 10;
+	int iterations_ = 4;
 
 	vku::Counts counts_;
 	vk::raii::DescriptorPool descriptor_pool_{ nullptr };
@@ -144,16 +145,16 @@ public:
 			alignas(4)  float wind_strength = 1.0f;
 			alignas(4)  float sphere_radius;
 			alignas(4)  float max_speed;
-			alignas(4)  float damping = 0.5f;
-			alignas(4)  float relaxation_factor = 0.2f;
+			alignas(4)  float damping = 3.0f;
+			alignas(4)  float relaxation_factor = 0.5f;
 			alignas(4)  uint32_t num_bends;
 			alignas(4)  uint32_t num_shears;
 			alignas(4)  float collision_margin = 0.1f;
 			alignas(16) glm::vec4 sphere_center;
 			alignas(16) glm::vec4 wind_dir = glm::vec4(0.0f, 0.0f, -1.0f, 0.0f);
 			alignas(16) glm::vec4 gravity = glm::vec4(0.0f, -9.8f, 0.0f, 0.0f);
-			alignas(4) float thickness = 0.008f;
-			alignas(4) float friction = 0.001f;
+			alignas(4) float thickness = 0.05f;
+			alignas(4) float friction = 0.1f;
 			alignas(4) float pad1;
 			alignas(4) float pad2;
 		} sim_params;

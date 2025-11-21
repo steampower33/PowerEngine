@@ -28,8 +28,7 @@ GpuSim::GpuSim(
 
 void GpuSim::UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& model)
 {
-
-	ubo_data_.sim_params.dt = 1 / deviding_dt_;
+	ubo_data_.sim_params.dt = 1.0f / frame_dt_ / substeps_;
 	ubo_data_.sim_params.num_particles = particles_size_;
 	ubo_data_.sim_params.num_edges = edge_size_;
 	ubo_data_.sim_params.num_bends = bend_size_;
@@ -52,7 +51,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 	UpdateTestScene(cmd, testScene);
 
 	timestampSteps = 0;
-	uint32_t kSlotsPerIterPair = 4 + timestamp_count_ * iterations_ + 2;
+	uint32_t kSlotsPerIterPair = substeps_ * (4 + iteration_timestamp_count_ * iterations_ + 2);
 	const auto stage = vk::PipelineStageFlagBits2::eComputeShader;
 	auto TS = [&](uint32_t& idx) {
 		cmd.writeTimestamp2(stage, *timestampPool, idx++);
@@ -67,118 +66,11 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 	uint32_t groupsP = ceil_div(particles_size_, 256u);
 	uint32_t groupsEdges = ceil_div(edge_size_, 256u);
 
-	// Integrate
-	TS(timestampSteps);
-	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.integrate);
-	cmd.dispatch(groupsP, 1, 1);
-	TS(timestampSteps);
-	vku::barrier2(cmd,
-		vk::PipelineStageFlagBits2::eComputeShader,
-		vk::AccessFlagBits2::eShaderStorageWrite,
-		vk::PipelineStageFlagBits2::eComputeShader,
-		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
-
-	// Clear Lambdas
-	TS(timestampSteps);
-	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.clear_lambdas);
-	cmd.dispatch(groupsEdges, 1, 1);
-	TS(timestampSteps);
-	vku::barrier2(cmd,
-		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageWrite,
-		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
-
-	for (uint32_t iter = 0; iter < iterations_; iter++)
+	for (uint32_t step = 0; step < substeps_; step++)
 	{
-		// Solve Coloring - Stretch
+		// Integrate
 		TS(timestampSteps);
-		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_coloring);
-
-		for (uint32_t c = 0; c < 4; ++c) {
-			uint32_t base = datas_.pass_offsets[c];
-			uint32_t count = datas_.pass_offsets[c + 1] - datas_.pass_offsets[c];
-			if (!count) continue;
-
-			pc_.base = base;
-			pc_.count = count;
-			pc_.compliance = compliance_.stretch;
-
-			cmd.pushConstants<PushConstant>(*pipeline_layouts_.common, vk::ShaderStageFlagBits::eCompute, 0u, pc_);
-
-			uint32_t groups = (count + 256 - 1) / 256;
-			cmd.dispatch(groups, 1, 1);
-			vku::barrier2(cmd,
-				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageWrite,
-				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
-		}
-		TS(timestampSteps);
-
-		{
-			// Solve Diagonal
-			TS(timestampSteps);
-			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_diagonal);
-			uint32_t base = datas_.pass_offsets[4];
-			uint32_t count = datas_.pass_offsets[5] - datas_.pass_offsets[4];
-			pc_.base = base;
-			pc_.count = count;
-			pc_.compliance = compliance_.diagonal;
-			cmd.pushConstants<PushConstant>(*pipeline_layouts_.common,
-				vk::ShaderStageFlagBits::eCompute, 0u, pc_);
-
-			uint32_t group = (count + 256 - 1) / 256;
-			cmd.dispatch(group, 1, 1);
-			TS(timestampSteps);
-			vku::barrier2(cmd,
-				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageWrite,
-				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
-		}
-
-		{
-			// Solve Shear
-			TS(timestampSteps);
-			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_shear);
-			pc_.compliance = compliance_.shear;
-			cmd.pushConstants<PushConstant>(*pipeline_layouts_.common,
-				vk::ShaderStageFlagBits::eCompute, 0u, pc_);
-
-			uint32_t group = (shear_size_ + 256 - 1) / 256;
-			cmd.dispatch(group, 1, 1);
-			TS(timestampSteps);
-			vku::barrier2(cmd,
-				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageWrite,
-				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
-		}
-
-		{
-			// Solve Bend
-			TS(timestampSteps);
-			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_bend);
-			uint32_t base = 0;
-			uint32_t count = bend_size_;
-			pc_.base = base;
-			pc_.count = count;
-			pc_.compliance = compliance_.bend;
-			cmd.pushConstants<PushConstant>(*pipeline_layouts_.common,
-				vk::ShaderStageFlagBits::eCompute, 0u, pc_);
-
-			uint32_t group = (count + 256 - 1) / 256;
-			cmd.dispatch(group, 1, 1);
-			TS(timestampSteps);
-			vku::barrier2(cmd,
-				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageWrite,
-				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
-		}
-
-		// Apply Deltas 
-		TS(timestampSteps);
-		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.apply_deltas);
+		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.integrate);
 		cmd.dispatch(groupsP, 1, 1);
 		TS(timestampSteps);
 		vku::barrier2(cmd,
@@ -187,29 +79,139 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 			vk::PipelineStageFlagBits2::eComputeShader,
 			vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
-		// Collide SDF
+		// Clear Lambdas
 		TS(timestampSteps);
-		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.collide_sdf);
+		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.clear_lambdas);
+		cmd.dispatch(groupsEdges, 1, 1);
+		TS(timestampSteps);
+		vku::barrier2(cmd,
+			vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageWrite,
+			vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+
+		for (uint32_t iter = 0; iter < iterations_; iter++)
+		{
+			// Solve Coloring - Stretch
+			TS(timestampSteps);
+			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_coloring);
+
+			for (uint32_t c = 0; c < 4; ++c) {
+				uint32_t base = datas_.pass_offsets[c];
+				uint32_t count = datas_.pass_offsets[c + 1] - datas_.pass_offsets[c];
+				if (!count) continue;
+
+				pc_.base = base;
+				pc_.count = count;
+				pc_.compliance = compliance_.stretch;
+
+				cmd.pushConstants<PushConstant>(*pipeline_layouts_.common, vk::ShaderStageFlagBits::eCompute, 0u, pc_);
+
+				uint32_t groups = (count + 256 - 1) / 256;
+				cmd.dispatch(groups, 1, 1);
+				vku::barrier2(cmd,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageWrite,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+			}
+			TS(timestampSteps);
+
+			{
+				// Solve Diagonal
+				TS(timestampSteps);
+				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_diagonal);
+				uint32_t base = datas_.pass_offsets[4];
+				uint32_t count = datas_.pass_offsets[5] - datas_.pass_offsets[4];
+				pc_.base = base;
+				pc_.count = count;
+				pc_.compliance = compliance_.diagonal;
+				cmd.pushConstants<PushConstant>(*pipeline_layouts_.common,
+					vk::ShaderStageFlagBits::eCompute, 0u, pc_);
+
+				uint32_t group = (count + 256 - 1) / 256;
+				cmd.dispatch(group, 1, 1);
+				TS(timestampSteps);
+				vku::barrier2(cmd,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageWrite,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+			}
+
+			{
+				// Solve Shear
+				TS(timestampSteps);
+				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_shear);
+				pc_.compliance = compliance_.shear;
+				cmd.pushConstants<PushConstant>(*pipeline_layouts_.common,
+					vk::ShaderStageFlagBits::eCompute, 0u, pc_);
+
+				uint32_t group = (shear_size_ + 256 - 1) / 256;
+				cmd.dispatch(group, 1, 1);
+				TS(timestampSteps);
+				vku::barrier2(cmd,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageWrite,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+			}
+
+			{
+				// Solve Bend
+				TS(timestampSteps);
+				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_bend);
+				uint32_t base = 0;
+				uint32_t count = bend_size_;
+				pc_.base = base;
+				pc_.count = count;
+				pc_.compliance = compliance_.bend;
+				cmd.pushConstants<PushConstant>(*pipeline_layouts_.common,
+					vk::ShaderStageFlagBits::eCompute, 0u, pc_);
+
+				uint32_t group = (count + 256 - 1) / 256;
+				cmd.dispatch(group, 1, 1);
+				TS(timestampSteps);
+				vku::barrier2(cmd,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageWrite,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+			}
+
+			// Collide SDF
+			TS(timestampSteps);
+			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.collide_sdf);
+			cmd.dispatch(groupsP, 1, 1);
+			TS(timestampSteps);
+			vku::barrier2(cmd,
+				vk::PipelineStageFlagBits2::eComputeShader,
+				vk::AccessFlagBits2::eShaderStorageWrite,
+				vk::PipelineStageFlagBits2::eComputeShader,
+				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+
+			// Apply Deltas 
+			TS(timestampSteps);
+			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.apply_deltas);
+			cmd.dispatch(groupsP, 1, 1);
+			TS(timestampSteps);
+			vku::barrier2(cmd,
+				vk::PipelineStageFlagBits2::eComputeShader,
+				vk::AccessFlagBits2::eShaderStorageWrite,
+				vk::PipelineStageFlagBits2::eComputeShader,
+				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+		}
+
+		// Update Velocity
+		TS(timestampSteps);
+		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.update_velocity);
 		cmd.dispatch(groupsP, 1, 1);
 		TS(timestampSteps);
 		vku::barrier2(cmd,
 			vk::PipelineStageFlagBits2::eComputeShader,
 			vk::AccessFlagBits2::eShaderStorageWrite,
-			vk::PipelineStageFlagBits2::eComputeShader,
+			vk::PipelineStageFlagBits2::eVertexShader,
 			vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+
 	}
-
-	// Update Velocity
-	TS(timestampSteps);
-	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.update_velocity);
-	cmd.dispatch(groupsP, 1, 1);
-	TS(timestampSteps);
-	vku::barrier2(cmd,
-		vk::PipelineStageFlagBits2::eComputeShader,
-		vk::AccessFlagBits2::eShaderStorageWrite,
-		vk::PipelineStageFlagBits2::eVertexShader,
-		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
-
 	cmd.end();
 }
 
@@ -337,7 +339,7 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0.0f);
 				datas_.pred_positions[id] = datas_.positions[id];
-				datas_.inverse_masses[id] = 1.0f;
+				datas_.inverse_masses[id] = 1.0f / mass_;
 			}
 		}
 
@@ -440,7 +442,7 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0.0f);
 				datas_.pred_positions[id] = datas_.positions[id];
-				datas_.inverse_masses[id] = 1.0f;
+				datas_.inverse_masses[id] = 1.0f / mass_;
 			}
 		}
 
@@ -548,7 +550,7 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0.0f);
 				datas_.pred_positions[id] = datas_.positions[id];
-				datas_.inverse_masses[id] = 1.0f;
+				datas_.inverse_masses[id] = 1.0f / mass_;
 			}
 		}
 
@@ -814,7 +816,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 			datas_.positions[id] = { px, py, pz, 0.0f };
 			datas_.velocities[id] = glm::vec4(0);
 			datas_.pred_positions[id] = datas_.positions[id];
-			datas_.inverse_masses[id] = 1.0f;
+			datas_.inverse_masses[id] = 1.0f / mass_;
 		}
 	}
 

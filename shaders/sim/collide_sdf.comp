@@ -1,29 +1,110 @@
 #version 460
+#extension GL_EXT_shader_atomic_float : require
 
 #include "../common/params.glsl"
 
 layout(local_size_x = 256) in;
 
+//-----------------------------------------
+// SDF: sphere
+//-----------------------------------------
+float sdf_sphere(vec3 p, vec3 center, float radius)
+{
+    return length(p - center) - radius;
+}
+
+// Normal for sphere
+vec3 normal_sphere(vec3 p, vec3 center)
+{
+    return normalize(p - center);
+}
+
+
+//-----------------------------------------
+// SDF: plane (y = ground_y)
+//-----------------------------------------
+float sdf_ground(vec3 p, float gy)
+{
+    return p.y - gy;
+}
+
+vec3 normal_ground(vec3 p)
+{
+    return vec3(0, 1, 0);
+}
+
+
+//-----------------------------------------
+// XPBD collision solve for ONE constraint
+//-----------------------------------------
+void solveXPBD_Collision(
+    uint id,
+    vec3 p,
+    float invMass,
+    float C,
+    vec3 grad)
+{
+    if (C >= 0.0) return; // not penetrating
+
+    float wsum = invMass * dot(grad, grad);
+    if (wsum < 1e-8) return;
+
+    float deltaLambda = -(C) / wsum;
+
+    // Correction
+    vec3 corr = invMass * deltaLambda * grad;
+
+    // Tangential friction (PBD style, stable)
+    if (sim.friction > 0.0)
+    {
+        vec3 t = corr - dot(corr, grad) * grad;
+        corr -= sim.friction * t;
+    }
+    
+    atomicAdd(delta_x[id], corr.x);
+    atomicAdd(delta_y[id], corr.y);
+    atomicAdd(delta_z[id], corr.z);
+    atomicAdd(delta_count[id], 1u);
+}
+
+
+//-----------------------------------------
+// MAIN
+//-----------------------------------------
 void main()
 {
     uint id = gl_GlobalInvocationID.x;
-    if (id >= sim.num_particles)
-        return;
+    if (id >= sim.num_particles) return;
 
-    vec3 xi  = x[id].xyz;
-    vec3 xpi = xp[id].xyz;
-    
-    float d = length(xpi - sim.sphere_center.xyz);
-    if (d < sim.sphere_radius + sim.thickness){
-        vec3 p = mix(xpi, xi, sim.friction);
-        vec3 r = p - sim.sphere_center.xyz;
-        float d = length(r);
-        xpi = sim.sphere_center.xyz + r * ((sim.sphere_radius + sim.thickness) / d);
-    }
-    if (xpi.y < sim.thickness){
-        vec3 p = mix(xpi, xi, sim.friction);
-        xpi = vec3(p.x, sim.thickness, p.z);
+    vec3 xi = x[id].xyz;     // corrected position
+    vec3 xpi = xp[id].xyz;   // predicted position
+    float w = w[id];       // invMass
+
+    if (w == 0.0) return; // fixed particle
+
+    //------------------------------------------------------------
+    // Sphere collision
+    //------------------------------------------------------------
+    {
+        float C = sdf_sphere(xpi, sim.sphere_center.xyz, sim.sphere_radius + sim.thickness);
+
+        if (C < 0.0)
+        {
+            vec3 grad = normal_sphere(xpi, sim.sphere_center.xyz);
+            solveXPBD_Collision(id, xpi, w, C, grad);
+        }
     }
 
-    xp[id].xyz = xpi;
+    //------------------------------------------------------------
+    // Ground plane collision
+    //------------------------------------------------------------
+    {
+        float Cg = sdf_ground(xpi, 0.0f + sim.thickness);
+
+        if (Cg < 0.0)
+        {
+            vec3 grad = normal_ground(xpi);
+            solveXPBD_Collision(id, xpi, w, Cg, grad);
+        }
+    }
 }

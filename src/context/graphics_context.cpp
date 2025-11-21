@@ -503,31 +503,38 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 				return (ts[i1] - ts[i0]) * toMs;
 				};
 
-			float tIntegrate = delta_ms(0, 1);
-			float tClearLambdas = delta_ms(2, 3);
-
+			float tIntegrate = 0.0f;
+			float tClearLambdas = 0.0f;
 			float tSolveStretch = 0.0f;
 			float tSolveDiag = 0.0f;
 			float tSolveShear = 0.0f;
 			float tSolveBend = 0.0f;
-			float tApplyDeltas = 0.0f;
 			float tCollideSdf = 0.0f;
+			float tApplyDeltas = 0.0f;
+			float tUpdate = 0.0f;
 
-			for (uint32_t it = 0; it < gpu_sim_->iterations_; ++it)
+			uint32_t tsCnt = gpu_sim_->iteration_timestamp_count_;
+			uint32_t base = 0;
+			for (uint32_t sub = 0; sub < gpu_sim_->substeps_; sub++)
 			{
-				uint32_t base = 4 + it * gpu_sim_->timestamp_count_;
-				tSolveStretch += delta_ms(base + 0, base + 1);
-				tSolveDiag += delta_ms(base + 2, base + 3);
-				tSolveShear += delta_ms(base + 4, base + 5);
-				tSolveBend += delta_ms(base + 6, base + 7);
-				tApplyDeltas += delta_ms(base + 8, base + 9);
-				tCollideSdf += delta_ms(base + 10, base + 11);
+				tIntegrate += delta_ms(base + 0, base + 1);
+				tClearLambdas += delta_ms(base + 2, base + 3);
+
+				uint32_t iterBase = base + 4;
+				for (uint32_t it = 0; it < gpu_sim_->iterations_; it++)
+				{
+					tSolveStretch += delta_ms(iterBase + it * tsCnt + 0, iterBase + it * tsCnt + 1);
+					tSolveDiag += delta_ms(iterBase + it * tsCnt + 2, iterBase + it * tsCnt + 3);
+					tSolveShear += delta_ms(iterBase + it * tsCnt + 4, iterBase + it * tsCnt + 5);
+					tSolveBend += delta_ms(iterBase + it * tsCnt + 6, iterBase + it * tsCnt + 7);
+					tCollideSdf += delta_ms(iterBase + it * tsCnt + 8, iterBase + it * tsCnt + 9);
+					tApplyDeltas += delta_ms(iterBase + it * tsCnt + 10, iterBase + it * tsCnt + 11);
+				}
+				uint32_t updateStart = base + 4 + gpu_sim_->iterations_ * tsCnt;
+				tUpdate += delta_ms(updateStart, updateStart + 1);
 			}
 
-			uint32_t lastBase = 4 + gpu_sim_->timestamp_count_ * gpu_sim_->iterations_;
-			double tUpdate = delta_ms(lastBase + 0, lastBase + 1);
-
-			double total = tIntegrate + tClearLambdas + tSolveStretch +
+			float total = tIntegrate + tClearLambdas + tSolveStretch +
 				tSolveDiag + tSolveBend + tApplyDeltas + tCollideSdf + tUpdate;
 			uint32_t c = 0;
 			{
@@ -654,7 +661,7 @@ void GraphicsContext::CreateCommandBuffers()
 void GraphicsContext::CreateQueryPool() {
 	vk::QueryPoolCreateInfo queryInfo = {};
 	queryInfo.queryType = vk::QueryType::eTimestamp;
-	queryInfo.queryCount = 4 + 20 * 40 + 2;
+	queryInfo.queryCount = 1024;
 
 	timestamp_pool_ = context_.device_.createQueryPool(queryInfo);
 }

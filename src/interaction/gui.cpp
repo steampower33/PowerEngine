@@ -329,7 +329,8 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext)
 			row("NumEdges", [&] { ImGui::Text("%u", graphicsContext.gpu_sim_->edge_size_); });
 			row("NumShears", [&] { ImGui::Text("%u", graphicsContext.gpu_sim_->shear_size_); });
 			row("NumBends", [&] { ImGui::Text("%u", graphicsContext.gpu_sim_->bend_size_); });
-			row("DevidingDt", [&] { ImGui::DragFloat("##DevidingDt", &graphicsContext.gpu_sim_->deviding_dt_, 1.0f, 1.0f, 240.0f); });
+			row("FrameDt", [&] { ImGui::DragFloat("##FrameDt", &graphicsContext.gpu_sim_->frame_dt_, 1.0f, 1.0f, 240.0f); });
+			row("Substeps", [&] { ImGui::DragInt("##Substeps", &graphicsContext.gpu_sim_->substeps_, 1, 1, 40); });
 			row("Iterations", [&] { ImGui::DragInt("##Iterations", &graphicsContext.gpu_sim_->iterations_, 1, 1, 40); });
 			row("Mass", [&] { ImGui::DragFloat("##Mass", &graphicsContext.gpu_sim_->mass_, 0.001f, 0.0f, 10.0f); });
 			row("Damping", [&] { ImGui::DragFloat("##Damping", &graphicsContext.gpu_sim_->ubo_data_.sim_params.damping, 0.1f, 0.0f, 3.0f, "%.2f"); });
