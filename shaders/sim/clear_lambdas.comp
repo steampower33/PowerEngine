@@ -6,5 +6,5 @@ void main(){
     uint id = gl_GlobalInvocationID.x;
     if (id < sim.num_edges) edges[id].lambda = 0.0;
     if (id < sim.num_bends) bends[id].lambda = 0.0;
-//    if (id < sim.numShears) shears[id].lambda = 0.0;
+    if (id < sim.num_shears) shears[id].lambda = 0.0;
 }

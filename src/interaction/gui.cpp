@@ -147,7 +147,7 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 
 		}
 
-		SetObjectGUI(row, graphicsContext.gpu_sim_->ubo_data_.render);
+		//SetObjectGUI(row, graphicsContext.gpu_sim_->ubo_data_.render);
 		//SetLightGUI(row, graphicsContext.ubo_data_);
 		SetSolverTimeingGUI(row, graphicsContext);
 		SetSimulationGUI(row, graphicsContext);
@@ -324,6 +324,11 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext)
 		if (ImGui::BeginTable("SimulationTable", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
+			row("Nx x Ny", [&] { ImGui::Text("%u x %u", graphicsContext.gpu_sim_->nx_, graphicsContext.gpu_sim_->ny_); });
+			row("NumParticles", [&] { ImGui::Text("%u", graphicsContext.gpu_sim_->particles_size_); });
+			row("NumEdges", [&] { ImGui::Text("%u", graphicsContext.gpu_sim_->edge_size_); });
+			row("NumShears", [&] { ImGui::Text("%u", graphicsContext.gpu_sim_->shear_size_); });
+			row("NumBends", [&] { ImGui::Text("%u", graphicsContext.gpu_sim_->bend_size_); });
 			row("DevidingDt", [&] { ImGui::DragFloat("##DevidingDt", &graphicsContext.gpu_sim_->deviding_dt_, 1.0f, 1.0f, 240.0f); });
 			row("Iterations", [&] { ImGui::DragInt("##Iterations", &graphicsContext.gpu_sim_->iterations_, 1, 1, 40); });
 			row("Mass", [&] { ImGui::DragFloat("##Mass", &graphicsContext.gpu_sim_->mass_, 0.001f, 0.0f, 10.0f); });
@@ -331,8 +336,10 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext)
 			row("RelaxationFactor", [&] { ImGui::DragFloat("##RelaxationFactor", &graphicsContext.gpu_sim_->ubo_data_.sim_params.relaxation_factor, 0.001f, 0.0f, 1.0f, "%.4f"); });
 			row("StretchCompliance", [&] { ImGui::DragFloat("##StretchCompliance", &graphicsContext.gpu_sim_->compliance_.stretch, 1e-8f, 0.0f, 1.0f, "%.8f"); });
 			row("DiagonalCompliance", [&] { ImGui::DragFloat("##DiagonalCompliance", &graphicsContext.gpu_sim_->compliance_.diagonal, 1e-8f, 0.0f, 1.0f, "%.8f"); });
+			row("ShearCompliance", [&] { ImGui::DragFloat("##ShearCompliance", &graphicsContext.gpu_sim_->compliance_.shear
+				, 1e-6f, 0.0f, 1.0f, "%.8f"); });
 			row("BendCompliance", [&] { ImGui::DragFloat("##BendCompliance", &graphicsContext.gpu_sim_->compliance_.bend
-				, 1e-6f, 0.0f, 1.0f, "%.6f"); });
+				, 1e-6f, 0.0f, 1.0f, "%.8f"); });
 
 
 			row("ClothSize", [&] { ImGui::DragFloat2("##ClothSize", &graphicsContext.gpu_sim_->cloth_size_[0], 0.1f, 0.0f, 10.0f); });

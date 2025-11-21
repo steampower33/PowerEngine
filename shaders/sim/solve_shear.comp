@@ -7,59 +7,69 @@ layout(push_constant) uniform PC { uint base; uint count; float compliance; } pc
 
 layout(local_size_x = 256) in;
 
-bool isFinite_f(float x) { return !isnan(x) && !isinf(x); }
+void accumulate_delta(uint i, vec3 corr)
+{
+    atomicAdd(delta_x[i], corr.x);
+    atomicAdd(delta_y[i], corr.y);
+    atomicAdd(delta_z[i], corr.z);
+    atomicAdd(delta_count[i], 1u);
+}
 
 void main() {
-    uint t = gl_GlobalInvocationID.x;
-    if (t >= pc.count) return;
+    uint gid  = gl_GlobalInvocationID.x;
+    if (gid >= sim.num_shears) return;
 
-    uint eidx = pc.base + t;
-    if (eidx >= sim.num_edges) return;
+    Shear s = shears[gid];
     
-    uint  i      = edges[eidx].i;
-    uint  j      = edges[eidx].j;
-    float rest   = edges[eidx].rest;
-    float lambda = edges[eidx].lambda;
+    uint i0 = s.i0;
+    uint i1 = s.i1;
+    uint i2 = s.i2;
 
-    float wi = w[i];
-    float wj = w[j];
-    float wsum = wi + wj;
-    if (wsum == 0.0) { edges[eidx].lambda = 0.0; return; }
+    vec3 x0  = x[i0].xyz;
+    vec3 x1  = x[i1].xyz;
+    vec3 x2  = x[i2].xyz;
 
-    vec3 pi = xp[i].xyz;
-    vec3 pj = xp[j].xyz;
+    float w0 = w[i0];
+    float w1 = w[i1];
+    float w2 = w[i2];
     
-    vec3 d = pi - pj;
-    float len = length(d);
-    if (len < 1e-7) return;
-    vec3 n = d / len;
-
-    float dt    = sim.dt;
-    float alpha = pc.compliance / (dt * dt);
-
-    float C = len - rest;
-
-    float denom = wsum + alpha;
-    if (denom < 1e-8) denom = 1e-8;
-
-    float dlambda = (-C - alpha * lambda) / denom;
-
-    float newLambda = lambda + dlambda;
-    if (!isFinite_f(newLambda)) newLambda = 0.0;
-    edges[eidx].lambda = newLambda;
-
-    vec3 corr = dlambda * n;
+    if (w0 + w1 + w2 == 0.0)
+        return;
     
-    if (wi > 0.0) {
-        atomicAdd(delta_x[i], +wi * corr.x);
-        atomicAdd(delta_y[i], +wi * corr.y);
-        atomicAdd(delta_z[i], +wi * corr.z);
-        atomicAdd(delta_count[i], 1u);
-    }
-    if (wj > 0.0) {
-        atomicAdd(delta_x[j], -wj * corr.x);
-        atomicAdd(delta_y[j], -wj * corr.y);
-        atomicAdd(delta_z[j], -wj * corr.z);
-        atomicAdd(delta_count[j], 1u);
-    }
+    vec3 e1 = x1 - x0;
+    vec3 e2 = x2 - x0;
+
+    float dot_now = dot(e1, e2);
+    float C = dot_now - s.rest_dot;
+
+    if (abs(C) < 1e-8) return;
+    
+    vec3 grad0 = -(e1 + e2);
+    vec3 grad1 = e2;
+    vec3 grad2 = e1;
+
+    float alpha = pc.compliance / (sim.dt * sim.dt);
+
+    float wsum = 
+        w0 * dot(grad0, grad0) + 
+        w1 * dot(grad1, grad1) + 
+        w2 * dot(grad2, grad2) +
+        alpha;
+
+    if (wsum < 1e-8)
+        return;
+
+    float lambda_old = s.lambda;
+    float delta_lambda = -(C + alpha * lambda_old) / wsum;
+    float lambda_new = lambda_old + delta_lambda;
+
+    shears[gid].lambda = lambda_new;
+
+    vec3 corr0 = w0 * delta_lambda * grad0;
+    vec3 corr1 = w1 * delta_lambda * grad1;
+    vec3 corr2 = w2 * delta_lambda * grad2;
+    
+    accumulate_delta(i0, corr0);
+    accumulate_delta(i1, corr1);
+    accumulate_delta(i2, corr2);
 }

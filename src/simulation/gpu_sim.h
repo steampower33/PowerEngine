@@ -36,7 +36,7 @@ public:
 	void CopyDatas(const vk::raii::CommandBuffer& cmd);
 	void UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene);
 
-	uint32_t timestamp_count_ = 10;
+	uint32_t timestamp_count_ = 12;
 
 	const uint32_t nx_ = 64;
 	const uint32_t ny_ = 64;
@@ -45,19 +45,20 @@ public:
 	float spacing_x_ = cloth_size_.x / nx_;
 	float spacing_y_ = cloth_size_.y / ny_;
 	float cloth_height_ = 4.0f;
-	float mass_ = cloth_size_.x * cloth_size_.y * 0.1f;
+	float mass_ = 1.0f;
 
 	struct Compliance {
-		float stretch = 1e-6f;
-		float diagonal = 1e-6f;
+		float stretch = 1e-5f;
+		float diagonal = 1e-5f;
+		float shear = 1.0e-8f;
 		float bend = 1e-3f;
 	} compliance_;
 
 	uint32_t particles_size_ = nx_ * ny_;
 	uint32_t indices_size_ = 0;
 	uint32_t edge_size_ = 0;
-	uint32_t bend_size_ = 0;
 	uint32_t shear_size_ = 0;
+	uint32_t bend_size_ = 0;
 
 	float deviding_dt_ = 120.0f;
 	int iterations_ = 10;
@@ -73,6 +74,8 @@ public:
 		std::vector<glm::vec4> pred_positions;
 		std::vector<glm::vec4> velocities;
 		std::vector<float> inverse_masses;
+		std::vector<float> masses;
+		std::vector<uint32_t> indices;
 
 		struct Edge {
 			uint32_t i;
@@ -86,6 +89,14 @@ public:
 		std::array<uint32_t, 6> pass_offsets;
 		std::vector<std::pair<uint32_t, uint32_t>> passes[6];
 
+		struct Shear {
+			uint32_t i0, i1, i2;
+			float rest_dot;
+			float lambda;
+			float p0, p1, p2;
+		};
+		static_assert(sizeof(Shear) == 32, "Shear must be 32 bytes");
+
 		struct Bend {
 			uint32_t p1, p2, p3, p4;
 			float rest_angle;
@@ -94,14 +105,6 @@ public:
 		};
 		static_assert(sizeof(Bend) == 32, "Bend must be 32 bytes");
 		std::vector<Data::Bend> bends;
-
-		struct Shear {
-			uint32_t i0, i1, i2;
-			float rest_dot;
-			float lambda;
-			float p0, p1, p2;
-		} shear_;
-		static_assert(sizeof(Shear) == 32, "Shear must be 32 bytes");
 	} datas_;
 
 	// |===== Push Constant =====|
@@ -216,12 +219,12 @@ public:
 		vk::raii::Pipeline clear_lambdas{ nullptr };
 		vk::raii::Pipeline integrate{ nullptr };
 		vk::raii::Pipeline solve_coloring{ nullptr };
-		vk::raii::Pipeline solve_atomic{ nullptr };
+		vk::raii::Pipeline solve_diagonal{ nullptr };
+		vk::raii::Pipeline solve_shear{ nullptr };
 		vk::raii::Pipeline solve_bend{ nullptr };
 		vk::raii::Pipeline apply_deltas{ nullptr };
 		vk::raii::Pipeline collide_sdf{ nullptr };
 		vk::raii::Pipeline update_velocity{ nullptr };
-		vk::raii::Pipeline solve_shear{ nullptr };
 
 		vk::raii::Pipeline cloth_solid{ nullptr };
 		vk::raii::Pipeline cloth_wireframe{ nullptr };
@@ -231,72 +234,70 @@ public:
 
 	struct SSBO {
 		vk::raii::Buffer position{ nullptr };
+		vk::raii::Buffer pred_position{ nullptr };
 		vk::raii::Buffer velocity{ nullptr };
 		vk::raii::Buffer inverse_mass{ nullptr };
 		vk::raii::Buffer delta_x{ nullptr };
 		vk::raii::Buffer delta_y{ nullptr };
 		vk::raii::Buffer delta_z{ nullptr };
-		vk::raii::Buffer dcount{ nullptr };
+		vk::raii::Buffer delta_count{ nullptr };
 		vk::raii::Buffer edge{ nullptr };
-		vk::raii::Buffer pred_position{ nullptr };
-		vk::raii::Buffer bend{ nullptr };
 		vk::raii::Buffer shear{ nullptr };
+		vk::raii::Buffer bend{ nullptr };
 	} ssbos_;
 
 	struct SSBOMemory {
 		vk::raii::DeviceMemory position{ nullptr };
+		vk::raii::DeviceMemory pred_position{ nullptr };
 		vk::raii::DeviceMemory velocity{ nullptr };
 		vk::raii::DeviceMemory inverse_mass{ nullptr };
 		vk::raii::DeviceMemory delta_x{ nullptr };
 		vk::raii::DeviceMemory delta_y{ nullptr };
 		vk::raii::DeviceMemory delta_z{ nullptr };
-		vk::raii::DeviceMemory dcount{ nullptr };
+		vk::raii::DeviceMemory delta_count{ nullptr };
 		vk::raii::DeviceMemory edge{ nullptr };
-		vk::raii::DeviceMemory pred_position{ nullptr };
-		vk::raii::DeviceMemory bend{ nullptr };
 		vk::raii::DeviceMemory shear{ nullptr };
-
+		vk::raii::DeviceMemory bend{ nullptr };
 	} ssbo_memories_;
 
 	struct SSBOSize {
 		uint32_t position = 0;
+		uint32_t pred_position = 0;
 		uint32_t velocity = 0;
 		uint32_t inverse_mass = 0;
 		uint32_t delta_x = 0;
 		uint32_t delta_y = 0;
 		uint32_t delta_z = 0;
-		uint32_t dcount = 0;
+		uint32_t delta_count = 0;
 		uint32_t edge = 0;
-		uint32_t pred_position = 0;
-		uint32_t bend = 0;
 		uint32_t shear = 0;
+		uint32_t bend = 0;
 	} ssbo_size_;
 
 	struct Staging {
 		vk::raii::Buffer position{ nullptr };
+		vk::raii::Buffer pred_position{ nullptr };
 		vk::raii::Buffer velocity{ nullptr };
 		vk::raii::Buffer inverse_mass{ nullptr };
 		vk::raii::Buffer edge{ nullptr };
-		vk::raii::Buffer pred_position{ nullptr };
 		vk::raii::Buffer bend{ nullptr };
 	} staging_;
 
 	struct StagingMemory {
 		vk::raii::DeviceMemory position{ nullptr };
+		vk::raii::DeviceMemory pred_position{ nullptr };
 		vk::raii::DeviceMemory velocity{ nullptr };
 		vk::raii::DeviceMemory inverse_mass{ nullptr };
 		vk::raii::DeviceMemory edge{ nullptr };
-		vk::raii::DeviceMemory pred_position{ nullptr };
 		vk::raii::DeviceMemory bend{ nullptr };
-
 	} staging_memories_;
 
 	struct StagingMapped {
 		void* position{ nullptr };
+		void* pred_position{ nullptr };
 		void* velocity{ nullptr };
 		void* inverse_mass{ nullptr };
 		void* edge{ nullptr };
-		void* pred_position{ nullptr };
 		void* bend{ nullptr };
 	} staging_mapped_;
 

@@ -67,7 +67,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 	uint32_t groupsP = ceil_div(particles_size_, 256u);
 	uint32_t groupsEdges = ceil_div(edge_size_, 256u);
 
-	// 1. Integrate
+	// Integrate
 	TS(timestampSteps);
 	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.integrate);
 	cmd.dispatch(groupsP, 1, 1);
@@ -78,7 +78,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 		vk::PipelineStageFlagBits2::eComputeShader,
 		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
-	// 2. Clear Lambdas
+	// Clear Lambdas
 	TS(timestampSteps);
 	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.clear_lambdas);
 	cmd.dispatch(groupsEdges, 1, 1);
@@ -89,7 +89,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 	for (uint32_t iter = 0; iter < iterations_; iter++)
 	{
-		// 3. Solve Coloring - Stretch
+		// Solve Coloring - Stretch
 		TS(timestampSteps);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_coloring);
 
@@ -115,9 +115,9 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 		TS(timestampSteps);
 
 		{
-			// 4. Solve AtomicAdd - Diagonal
+			// Solve Diagonal
 			TS(timestampSteps);
-			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_atomic);
+			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_diagonal);
 			uint32_t base = datas_.pass_offsets[4];
 			uint32_t count = datas_.pass_offsets[5] - datas_.pass_offsets[4];
 			pc_.base = base;
@@ -137,7 +137,25 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 		}
 
 		{
-			// 5. Solve Bend
+			// Solve Shear
+			TS(timestampSteps);
+			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_shear);
+			pc_.compliance = compliance_.shear;
+			cmd.pushConstants<PushConstant>(*pipeline_layouts_.common,
+				vk::ShaderStageFlagBits::eCompute, 0u, pc_);
+
+			uint32_t group = (shear_size_ + 256 - 1) / 256;
+			cmd.dispatch(group, 1, 1);
+			TS(timestampSteps);
+			vku::barrier2(cmd,
+				vk::PipelineStageFlagBits2::eComputeShader,
+				vk::AccessFlagBits2::eShaderStorageWrite,
+				vk::PipelineStageFlagBits2::eComputeShader,
+				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+		}
+
+		{
+			// Solve Bend
 			TS(timestampSteps);
 			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_bend);
 			uint32_t base = 0;
@@ -158,7 +176,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 		}
 
-		// 6. Apply Deltas 
+		// Apply Deltas 
 		TS(timestampSteps);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.apply_deltas);
 		cmd.dispatch(groupsP, 1, 1);
@@ -169,7 +187,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 			vk::PipelineStageFlagBits2::eComputeShader,
 			vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
-		// 7. Collide SDF
+		// Collide SDF
 		TS(timestampSteps);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.collide_sdf);
 		cmd.dispatch(groupsP, 1, 1);
@@ -181,7 +199,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 			vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 	}
 
-	// 8. Update Velocity
+	// Update Velocity
 	TS(timestampSteps);
 	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.update_velocity);
 	cmd.dispatch(groupsP, 1, 1);
@@ -267,7 +285,6 @@ void GpuSim::GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer
 
 void GpuSim::CopyDatas(const vk::raii::CommandBuffer& cmd)
 {
-
 	vku::CopyStagingToSSBO(cmd, ssbo_size_.position, staging_mapped_.position, datas_.positions, staging_.position, ssbos_.position,
 		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
 		vk::PipelineStageFlagBits2::eVertexShader, vk::AccessFlagBits2::eShaderStorageRead);
@@ -319,9 +336,8 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 				float pz = (y - 0.5f * ny_) * spacing_y_;
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0.0f);
-				float invMass = 1.0f / mass_;
-				datas_.inverse_masses[id] = invMass;
 				datas_.pred_positions[id] = datas_.positions[id];
+				datas_.inverse_masses[id] = 1.0f;
 			}
 		}
 
@@ -331,14 +347,69 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 				glm::vec3 pi = glm::vec3(datas_.positions[i]);
 				glm::vec3 pj = glm::vec3(datas_.positions[j]);
 				float rest = glm::length(pj - pi);
-				datas_.edges[idx++].rest = rest;
+				datas_.edges[idx].rest = rest;
+				datas_.edges[idx].lambda = 0.0f;
+				idx++;
 			}
 		}
 
-		for (int i = 0; i < edge_size_; i++)
-		{
-			datas_.edges[i].lambda = 0.0f;
-		}
+		//// Total area
+		//float totalArea = 0.0f;
+		//for (size_t t = 0; t < datas_.indices.size(); t += 3) {
+		//	uint32_t i0 = datas_.indices[t + 0];
+		//	uint32_t i1 = datas_.indices[t + 1];
+		//	uint32_t i2 = datas_.indices[t + 2];
+
+		//	glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
+		//	glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
+		//	glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
+
+		//	glm::vec3 e1 = p1 - p0;
+		//	glm::vec3 e2 = p2 - p0;
+
+		//	float area = 0.5f * glm::length(glm::cross(e1, e2)); // Triangle area
+		//	totalArea += area;
+		//}
+
+		//float totalMassTarget = mass_;
+
+		//// Area zero defence
+		//float density = 0.0f;
+		//if (totalArea > 0.0f) {
+		//	density = totalMassTarget / totalArea; // kg/m©÷
+		//}
+
+		//// Distribute mass to each triangle in proportion to area
+		//for (size_t t = 0; t < datas_.indices.size(); t += 3) {
+		//	uint32_t i0 = datas_.indices[t + 0];
+		//	uint32_t i1 = datas_.indices[t + 1];
+		//	uint32_t i2 = datas_.indices[t + 2];
+
+		//	glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
+		//	glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
+		//	glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
+
+		//	glm::vec3 e1 = p1 - p0;
+		//	glm::vec3 e2 = p2 - p0;
+
+		//	float area = 0.5f * glm::length(glm::cross(e1, e2));
+
+		//	float triMass = density * area;
+
+		//	float share = triMass / 3.0f;
+		//	datas_.masses[i0] += share;
+		//	datas_.masses[i1] += share;
+		//	datas_.masses[i2] += share;
+		//}
+
+		//// Set inverse masses using mass
+		//for (uint32_t i = 0; i < N; ++i) {
+		//	float m = datas_.masses[i];
+		//	if (m > 0.0f)
+		//		datas_.inverse_masses[i] = 1.0f / m;
+		//	else
+		//		datas_.inverse_masses[i] = 0.0f;
+		//}
 
 		for (int i = 0; i < bend_size_; i++)
 		{
@@ -367,17 +438,11 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 				float py = cloth_height_;
 				float pz = (y - 0.5f * ny_) * spacing_y_;
 				datas_.positions[id] = { px, py, pz, 0.0f };
-				datas_.velocities[id] = glm::vec4(0);
-				float invMass = 1.0f / mass_;
-				datas_.inverse_masses[id] = invMass;
+				datas_.velocities[id] = glm::vec4(0.0f);
 				datas_.pred_positions[id] = datas_.positions[id];
+				datas_.inverse_masses[id] = 1.0f;
 			}
 		}
-
-		datas_.inverse_masses[0] = 0.0f;
-		datas_.inverse_masses[nx1 - 1] = 0.0f;
-		datas_.inverse_masses[(ny1 - 1) * nx1] = 0.0f;
-		datas_.inverse_masses[(ny1 - 1) * nx1 + nx1 - 1] = 0.0f;
 
 		uint32_t idx = 0;
 		for (int p = 0; p < 5; ++p) {
@@ -385,14 +450,74 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 				glm::vec3 pi = glm::vec3(datas_.positions[i]);
 				glm::vec3 pj = glm::vec3(datas_.positions[j]);
 				float rest = glm::length(pj - pi);
-				datas_.edges[idx++].rest = rest;
+				datas_.edges[idx].rest = rest;
+				datas_.edges[idx].lambda = 0.0f;
+				idx++;
 			}
 		}
 
-		for (int i = 0; i < edge_size_; i++)
-		{
-			datas_.edges[i].lambda = 0.0f;
-		}
+		//// Total area
+		//float totalArea = 0.0f;
+		//for (size_t t = 0; t < datas_.indices.size(); t += 3) {
+		//	uint32_t i0 = datas_.indices[t + 0];
+		//	uint32_t i1 = datas_.indices[t + 1];
+		//	uint32_t i2 = datas_.indices[t + 2];
+
+		//	glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
+		//	glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
+		//	glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
+
+		//	glm::vec3 e1 = p1 - p0;
+		//	glm::vec3 e2 = p2 - p0;
+
+		//	float area = 0.5f * glm::length(glm::cross(e1, e2)); // Triangle area
+		//	totalArea += area;
+		//}
+
+		//float totalMassTarget = mass_;
+
+		//// Area zero defence
+		//float density = 0.0f;
+		//if (totalArea > 0.0f) {
+		//	density = totalMassTarget / totalArea; // kg/m©÷
+		//}
+
+		//// Distribute mass to each triangle in proportion to area
+		//for (size_t t = 0; t < datas_.indices.size(); t += 3) {
+		//	uint32_t i0 = datas_.indices[t + 0];
+		//	uint32_t i1 = datas_.indices[t + 1];
+		//	uint32_t i2 = datas_.indices[t + 2];
+
+		//	glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
+		//	glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
+		//	glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
+
+		//	glm::vec3 e1 = p1 - p0;
+		//	glm::vec3 e2 = p2 - p0;
+
+		//	float area = 0.5f * glm::length(glm::cross(e1, e2));
+
+		//	float triMass = density * area;
+
+		//	float share = triMass / 3.0f;
+		//	datas_.masses[i0] += share;
+		//	datas_.masses[i1] += share;
+		//	datas_.masses[i2] += share;
+		//}
+
+		//// Set inverse masses using mass
+		//for (uint32_t i = 0; i < N; ++i) {
+		//	float m = datas_.masses[i];
+		//	if (m > 0.0f)
+		//		datas_.inverse_masses[i] = 1.0f / m;
+		//	else
+		//		datas_.inverse_masses[i] = 0.0f;
+		//}
+
+		datas_.inverse_masses[0] = 0.0f;
+		datas_.inverse_masses[nx1 - 1] = 0.0f;
+		datas_.inverse_masses[(ny1 - 1) * nx1] = 0.0f;
+		datas_.inverse_masses[(ny1 - 1) * nx1 + nx1 - 1] = 0.0f;
 
 		for (int i = 0; i < bend_size_; i++)
 		{
@@ -421,33 +546,11 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 				float py = cloth_height_;
 				float pz = (y - 0.5f * ny_) * spacing_y_;
 				datas_.positions[id] = { px, py, pz, 0.0f };
-				datas_.velocities[id] = glm::vec4(0);
-				float invMass = 1.0f / mass_;
-				datas_.inverse_masses[id] = invMass;
+				datas_.velocities[id] = glm::vec4(0.0f);
 				datas_.pred_positions[id] = datas_.positions[id];
+				datas_.inverse_masses[id] = 1.0f;
 			}
 		}
-
-		std::vector<uint32_t> indices;
-		indices.reserve(nx_ * ny_ * 6);
-		for (int y = 0; y < ny_; ++y) {
-			for (int x = 0; x < nx_; ++x) {
-				uint32_t i0 = vid(x, y);
-				uint32_t i1 = vid(x + 1, y);
-				uint32_t i2 = vid(x, y + 1);
-				uint32_t i3 = vid(x + 1, y + 1);
-				indices.push_back(i0); indices.push_back(i1); indices.push_back(i2);
-				indices.push_back(i1); indices.push_back(i3); indices.push_back(i2);
-			}
-		}
-
-		uint32_t tap = (ny1 - 1) / 10;
-		for (uint32_t i = 0; i < ny1; i += tap)
-		{
-			datas_.inverse_masses[i] = 0.0f;
-		}
-		//datas_.inverse_mass[(ny1 - 1) * nx1] = 0.0f;
-		//datas_.inverse_mass[(ny1 - 1) * nx1 + nx1 - 1] = 0.0f;
 
 		uint32_t idx = 0;
 		for (int p = 0; p < 5; ++p) {
@@ -455,13 +558,77 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 				glm::vec3 pi = glm::vec3(datas_.positions[i]);
 				glm::vec3 pj = glm::vec3(datas_.positions[j]);
 				float rest = glm::length(pj - pi);
-				datas_.edges[idx++].rest = rest;
+				datas_.edges[idx].rest = rest;
+				datas_.edges[idx].lambda = 0.0f;
+				idx++;
 			}
 		}
-		for (int i = 0; i < edge_size_; i++)
-		{
-			datas_.edges[i].lambda = 0.0f;
-		}
+
+		//// Total area
+		//float totalArea = 0.0f;
+		//for (size_t t = 0; t < datas_.indices.size(); t += 3) {
+		//	uint32_t i0 = datas_.indices[t + 0];
+		//	uint32_t i1 = datas_.indices[t + 1];
+		//	uint32_t i2 = datas_.indices[t + 2];
+
+		//	glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
+		//	glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
+		//	glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
+
+		//	glm::vec3 e1 = p1 - p0;
+		//	glm::vec3 e2 = p2 - p0;
+
+		//	float area = 0.5f * glm::length(glm::cross(e1, e2)); // Triangle area
+		//	totalArea += area;
+		//}
+
+		//float totalMassTarget = mass_;
+
+		//// Area zero defence
+		//float density = 0.0f;
+		//if (totalArea > 0.0f) {
+		//	density = totalMassTarget / totalArea; // kg/m©÷
+		//}
+
+		//// Distribute mass to each triangle in proportion to area
+		//for (size_t t = 0; t < datas_.indices.size(); t += 3) {
+		//	uint32_t i0 = datas_.indices[t + 0];
+		//	uint32_t i1 = datas_.indices[t + 1];
+		//	uint32_t i2 = datas_.indices[t + 2];
+
+		//	glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
+		//	glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
+		//	glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
+
+		//	glm::vec3 e1 = p1 - p0;
+		//	glm::vec3 e2 = p2 - p0;
+
+		//	float area = 0.5f * glm::length(glm::cross(e1, e2));
+
+		//	float triMass = density * area;
+
+		//	float share = triMass / 3.0f;
+		//	datas_.masses[i0] += share;
+		//	datas_.masses[i1] += share;
+		//	datas_.masses[i2] += share;
+		//}
+
+		//// Set inverse masses using mass
+		//for (uint32_t i = 0; i < N; ++i) {
+		//	float m = datas_.masses[i];
+		//	if (m > 0.0f)
+		//		datas_.inverse_masses[i] = 1.0f / m;
+		//	else
+		//		datas_.inverse_masses[i] = 0.0f;
+		//}
+
+		//uint32_t tap = (ny1 - 1) / 10;
+		//for (uint32_t i = 0; i < ny1; i += tap)
+		//{
+		//	datas_.inverse_masses[i] = 0.0f;
+		//}
+		datas_.inverse_masses[0] = 0.0f;
+		datas_.inverse_masses[nx1 - 1] = 0.0f;
 
 		for (int i = 0; i < bend_size_; i++)
 		{
@@ -634,7 +801,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	datas_.inverse_masses.resize(N);
 	datas_.pred_positions.resize(N);
 	std::vector<float > deltaX(N, 0.0f), deltaY(N, 0.0f), deltaZ(N, 0.0f);
-	std::vector<uint32_t>  dcount(N, 0);
+	std::vector<uint32_t>  delta_count(N, 0);
 
 	// Set positions, velocities, pred_positions
 	for (int y = 0; y < ny1; ++y) {
@@ -647,85 +814,87 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 			datas_.positions[id] = { px, py, pz, 0.0f };
 			datas_.velocities[id] = glm::vec4(0);
 			datas_.pred_positions[id] = datas_.positions[id];
+			datas_.inverse_masses[id] = 1.0f;
 		}
 	}
 
 	// Set indices
-	std::vector<uint32_t> indices;
-	indices.reserve(nx_ * ny_ * 6);
+	datas_.indices.reserve(nx_ * ny_ * 6);
 	for (int y = 0; y < ny_; ++y) {
 		for (int x = 0; x < nx_; ++x) {
 			uint32_t i0 = vid(x, y);
 			uint32_t i1 = vid(x + 1, y);
 			uint32_t i2 = vid(x, y + 1);
 			uint32_t i3 = vid(x + 1, y + 1);
-			indices.push_back(i0); indices.push_back(i1); indices.push_back(i2);
-			indices.push_back(i1); indices.push_back(i3); indices.push_back(i2);
+			datas_.indices.push_back(i0); datas_.indices.push_back(i1); datas_.indices.push_back(i2);
+			datas_.indices.push_back(i1); datas_.indices.push_back(i3); datas_.indices.push_back(i2);
 		}
 	}
-	indices_size_ = static_cast<uint32_t>(indices.size());
-	vku::CreateIndexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, indices, index_buffer_, index_buffer_memory_);
+	indices_size_ = static_cast<uint32_t>(datas_.indices.size());
+	vku::CreateIndexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, datas_.indices, index_buffer_, index_buffer_memory_);
 
-	// Calculate mass per vertex
-	std::vector<float> masses(N, 0.0f);
+	//datas_.masses.resize(N, 0.0f);
 
-	// Total area
-	float totalArea = 0.0f;
-	for (size_t t = 0; t < indices.size(); t += 3) {
-		uint32_t i0 = indices[t + 0];
-		uint32_t i1 = indices[t + 1];
-		uint32_t i2 = indices[t + 2];
+	//// Total area
+	//float totalArea = 0.0f;
+	//for (size_t t = 0; t < indices_size_; t += 3) {
+	//	uint32_t i0 = datas_.indices[t + 0];
+	//	uint32_t i1 = datas_.indices[t + 1];
+	//	uint32_t i2 = datas_.indices[t + 2];
 
-		glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
-		glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
-		glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
+	//	glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
+	//	glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
+	//	glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
 
-		glm::vec3 e1 = p1 - p0;
-		glm::vec3 e2 = p2 - p0;
+	//	glm::vec3 e1 = p1 - p0;
+	//	glm::vec3 e2 = p2 - p0;
 
-		float area = 0.5f * glm::length(glm::cross(e1, e2)); // Triangle area
-		totalArea += area;
-	}
+	//	float area = 0.5f * glm::length(glm::cross(e1, e2)); // Triangle area
+	//	totalArea += area;
+	//}
 
-	float totalMassTarget = mass_;
+	//float totalMassTarget = mass_;
 
-	// Area zero defence
-	float density = 0.0f;
-	if (totalArea > 0.0f) {
-		density = totalMassTarget / totalArea; // kg/m©÷
-	}
+	//// Area zero defence
+	//float density = 0.0f;
+	//if (totalArea > 0.0f) {
+	//	density = totalMassTarget / totalArea; // kg/m©÷
+	//}
 
-	// Distribute mass to each triangle in proportion to area
-	for (size_t t = 0; t < indices.size(); t += 3) {
-		uint32_t i0 = indices[t + 0];
-		uint32_t i1 = indices[t + 1];
-		uint32_t i2 = indices[t + 2];
+	//// Distribute mass to each triangle in proportion to area
+	//for (size_t t = 0; t < indices_size_; t += 3) {
+	//	uint32_t i0 = datas_.indices[t + 0];
+	//	uint32_t i1 = datas_.indices[t + 1];
+	//	uint32_t i2 = datas_.indices[t + 2];
 
-		glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
-		glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
-		glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
+	//	glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
+	//	glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
+	//	glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
 
-		glm::vec3 e1 = p1 - p0;
-		glm::vec3 e2 = p2 - p0;
+	//	glm::vec3 e1 = p1 - p0;
+	//	glm::vec3 e2 = p2 - p0;
 
-		float area = 0.5f * glm::length(glm::cross(e1, e2));
+	//	float area = 0.5f * glm::length(glm::cross(e1, e2));
 
-		float triMass = density * area;
+	//	float triMass = density * area;
 
-		float share = triMass / 3.0f;
-		masses[i0] += share;
-		masses[i1] += share;
-		masses[i2] += share;
-	}
+	//	float share = triMass / 3.0f;
+	//	datas_.masses[i0] += share;
+	//	datas_.masses[i1] += share;
+	//	datas_.masses[i2] += share;
+	//}
 
-	// Set inverse masses using mass
-	for (uint32_t i = 0; i < N; ++i) {
-		float m = masses[i];
-		if (m > 0.0f)
-			datas_.inverse_masses[i] = 1.0f / m;
-		else
-			datas_.inverse_masses[i] = 0.0f;
-	}
+	//// Set inverse masses using mass
+	//for (uint32_t i = 0; i < N; ++i) {
+	//	float m = datas_.masses[i];
+	//	if (m > 0.0f)
+	//		datas_.inverse_masses[i] = 1.0f / m;
+	//	else
+	//		datas_.inverse_masses[i] = 0.0f;
+	//}
+
+	datas_.inverse_masses[0] = 0.0f;
+	datas_.inverse_masses[nx1 - 1] = 0.0f;
 
 	// Set stretch edges coloring
 	for (int x = 0; x < nx1; ++x)
@@ -763,7 +932,22 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		}
 		datas_.pass_offsets[p + 1] = static_cast<uint32_t>(datas_.edges.size());
 	}
+
+	uint32_t idx = 0;
+	for (int p = 0; p < 5; ++p) {
+		for (auto [i, j] : datas_.passes[p]) {
+			glm::vec3 pi = glm::vec3(datas_.positions[i]);
+			glm::vec3 pj = glm::vec3(datas_.positions[j]);
+			float rest = glm::length(pj - pi);
+			datas_.edges[idx++] = { i, j, rest, 0.0f };
+		}
+	}
 	edge_size_ = static_cast<uint32_t>(datas_.edges.size());
+	if (edge_size_ != ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)) + (nx_ * ny_) * 2)
+	{
+		std::cout << edge_size_ << " " << ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)) + (nx_ * ny_) * 2 << std::endl;
+		throw std::runtime_error("edge size is not right");
+	}
 
 	// Set bends
 	for (int y = 0; y < ny_; ++y) {
@@ -781,20 +965,21 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 			float theta0 = 0.0f;
 			//theta0 = ComputeRestAngle(p1,p2,p3,p4, data_.positions);
 
-			datas_.bends.push_back({ p1,p2,p3,p4,theta0, 0.0f, glm::vec2(0.0f, 0.0f) });
+			datas_.bends.push_back({ p1,p2,p3,p4, theta0, 0.0f, glm::vec2(0.0f, 0.0f) });
 		}
 	}
 	bend_size_ = static_cast<uint32_t>(datas_.bends.size());
 
 	// Set shears
-	const size_t numTris = indices.size() / 3;
-	std::vector<Data::Shear> shears(numTris);
+	const size_t numTris = datas_.indices.size() / 3;
+	std::vector<Data::Shear> shears;
+	shears.reserve(numTris);
 
 	for (size_t t = 0; t < numTris; ++t)
 	{
-		uint32_t i0 = indices[3 * t + 0];
-		uint32_t i1 = indices[3 * t + 1];
-		uint32_t i2 = indices[3 * t + 2];
+		uint32_t i0 = datas_.indices[3 * t + 0];
+		uint32_t i1 = datas_.indices[3 * t + 1];
+		uint32_t i2 = datas_.indices[3 * t + 2];
 
 		const glm::vec3& x0 = datas_.positions[i0];
 		const glm::vec3& x1 = datas_.positions[i1];
@@ -889,15 +1074,15 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		ssbos_.delta_z, ssbo_memories_.delta_z);
 
 	// delta count
-	ssbo_size_.dcount = sizeof(uint32_t) * N;
+	ssbo_size_.delta_count = sizeof(uint32_t) * N;
 	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
-		ssbo_size_.dcount,
+		ssbo_size_.delta_count,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-		dcount,
+		delta_count,
 		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
 		vk::MemoryPropertyFlagBits::eDeviceLocal,
-		ssbos_.dcount, ssbo_memories_.dcount);
+		ssbos_.delta_count, ssbo_memories_.delta_count);
 
 	// edges
 	ssbo_size_.edge = sizeof(Data::Edge) * edge_size_;
@@ -1014,16 +1199,16 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 		sets_.cloth_compute = std::move(sets.front());
 
 		vk::DescriptorBufferInfo positions(*ssbos_.position, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo predPositions(*ssbos_.pred_position, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo velocities(*ssbos_.velocity, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo inverseMass(*ssbos_.inverse_mass, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo deltaX(*ssbos_.delta_x, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo deltaY(*ssbos_.delta_y, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo deltaZ(*ssbos_.delta_z, 0, VK_WHOLE_SIZE);
-		vk::DescriptorBufferInfo dcount(*ssbos_.dcount, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo delta_count(*ssbos_.delta_count, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo edge(*ssbos_.edge, 0, VK_WHOLE_SIZE);
-		vk::DescriptorBufferInfo predPositions(*ssbos_.pred_position, 0, VK_WHOLE_SIZE);
-		vk::DescriptorBufferInfo bend(*ssbos_.bend, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo shear(*ssbos_.shear, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo bend(*ssbos_.bend, 0, VK_WHOLE_SIZE);
 		std::array descriptorWrites{
 			vk::WriteDescriptorSet{
 				.dstSet = *sets_.cloth_compute,
@@ -1039,79 +1224,79 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 				.dstArrayElement = 0,
 				.descriptorCount = 1,
 				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &predPositions
+			},
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.cloth_compute,
+				.dstBinding = 2,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
 				.pBufferInfo = &velocities
 			},
-				vk::WriteDescriptorSet{
-					.dstSet = *sets_.cloth_compute,
-					.dstBinding = 2,
-					.dstArrayElement = 0,
-					.descriptorCount = 1,
-					.descriptorType = vk::DescriptorType::eStorageBuffer,
-					.pBufferInfo = &inverseMass
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.cloth_compute,
+				.dstBinding = 3,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &inverseMass
 			},
-				vk::WriteDescriptorSet{
-					.dstSet = *sets_.cloth_compute,
-					.dstBinding = 3,
-					.dstArrayElement = 0,
-					.descriptorCount = 1,
-					.descriptorType = vk::DescriptorType::eStorageBuffer,
-					.pBufferInfo = &deltaX
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.cloth_compute,
+				.dstBinding = 4,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &deltaX
 			},
-				vk::WriteDescriptorSet{
-					.dstSet = *sets_.cloth_compute,
-					.dstBinding = 4,
-					.dstArrayElement = 0,
-					.descriptorCount = 1,
-					.descriptorType = vk::DescriptorType::eStorageBuffer,
-					.pBufferInfo = &deltaY
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.cloth_compute,
+				.dstBinding = 5,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &deltaY
 			},
-				vk::WriteDescriptorSet{
-					.dstSet = *sets_.cloth_compute,
-					.dstBinding = 5,
-					.dstArrayElement = 0,
-					.descriptorCount = 1,
-					.descriptorType = vk::DescriptorType::eStorageBuffer,
-					.pBufferInfo = &deltaZ
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.cloth_compute,
+				.dstBinding = 6,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &deltaZ
 			},
-				vk::WriteDescriptorSet{
-					.dstSet = *sets_.cloth_compute,
-					.dstBinding = 6,
-					.dstArrayElement = 0,
-					.descriptorCount = 1,
-					.descriptorType = vk::DescriptorType::eStorageBuffer,
-					.pBufferInfo = &dcount
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.cloth_compute,
+				.dstBinding = 7,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &delta_count
 			},
-				vk::WriteDescriptorSet{
-					.dstSet = *sets_.cloth_compute,
-					.dstBinding = 7,
-					.dstArrayElement = 0,
-					.descriptorCount = 1,
-					.descriptorType = vk::DescriptorType::eStorageBuffer,
-					.pBufferInfo = &edge
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.cloth_compute,
+				.dstBinding = 8,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &edge
 			},
-				vk::WriteDescriptorSet{
-					.dstSet = *sets_.cloth_compute,
-					.dstBinding = 8,
-					.dstArrayElement = 0,
-					.descriptorCount = 1,
-					.descriptorType = vk::DescriptorType::eStorageBuffer,
-					.pBufferInfo = &predPositions
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.cloth_compute,
+				.dstBinding = 9,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &shear
 			},
-				vk::WriteDescriptorSet{
-					.dstSet = *sets_.cloth_compute,
-					.dstBinding = 9,
-					.dstArrayElement = 0,
-					.descriptorCount = 1,
-					.descriptorType = vk::DescriptorType::eStorageBuffer,
-					.pBufferInfo = &bend
-			},
-				vk::WriteDescriptorSet{
-					.dstSet = *sets_.cloth_compute,
-					.dstBinding = 10,
-					.dstArrayElement = 0,
-					.descriptorCount = 1,
-					.descriptorType = vk::DescriptorType::eStorageBuffer,
-					.pBufferInfo = &shear
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.cloth_compute,
+				.dstBinding = 10,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &bend
 			},
 		};
 		context.device_.updateDescriptorSets(descriptorWrites, {});
@@ -1198,15 +1383,25 @@ void GpuSim::CreateComputePipelines(Context& context)
 		pipelines_.solve_coloring = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
 	}
 
-	// solve_atomic
+	// solve_diagonal
 	{
-		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/solve_atomic.comp.spv"));
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/solve_diagonal.comp.spv"));
 
 		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common,
 		};
-		pipelines_.solve_atomic = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
+		pipelines_.solve_diagonal = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
+	}
+
+	// solve_shear
+	{
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/solve_shear.comp.spv"));
+
+		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
+
+		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
+		pipelines_.solve_shear = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
 	}
 
 	// solve_bend
@@ -1250,15 +1445,6 @@ void GpuSim::CreateComputePipelines(Context& context)
 		pipelines_.update_velocity = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
 	}
 
-	// solve_shear
-	{
-		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/solve_shear.comp.spv"));
-
-		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
-
-		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
-		pipelines_.solve_shear = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
-	}
 
 }
 

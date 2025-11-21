@@ -508,6 +508,7 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 
 			float tSolveStretch = 0.0f;
 			float tSolveDiag = 0.0f;
+			float tSolveShear = 0.0f;
 			float tSolveBend = 0.0f;
 			float tApplyDeltas = 0.0f;
 			float tCollideSdf = 0.0f;
@@ -517,9 +518,10 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 				uint32_t base = 4 + it * gpu_sim_->timestamp_count_;
 				tSolveStretch += delta_ms(base + 0, base + 1);
 				tSolveDiag += delta_ms(base + 2, base + 3);
-				tSolveBend += delta_ms(base + 4, base + 5);
-				tApplyDeltas += delta_ms(base + 6, base + 7);
-				tCollideSdf += delta_ms(base + 8, base + 9);
+				tSolveShear += delta_ms(base + 4, base + 5);
+				tSolveBend += delta_ms(base + 6, base + 7);
+				tApplyDeltas += delta_ms(base + 8, base + 9);
+				tCollideSdf += delta_ms(base + 10, base + 11);
 			}
 
 			uint32_t lastBase = 4 + gpu_sim_->timestamp_count_ * gpu_sim_->iterations_;
@@ -534,6 +536,7 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 				label_time_[labels_[c++]] = tClearLambdas;
 				label_time_[labels_[c++]] = tSolveStretch;
 				label_time_[labels_[c++]] = tSolveDiag;
+				label_time_[labels_[c++]] = tSolveShear;
 				label_time_[labels_[c++]] = tSolveBend;
 				label_time_[labels_[c++]] = tApplyDeltas;
 				label_time_[labels_[c++]] = tCollideSdf;
@@ -547,6 +550,7 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 				label_avg_time_[labels_[c++]] += tClearLambdas;
 				label_avg_time_[labels_[c++]] += tSolveStretch;
 				label_avg_time_[labels_[c++]] += tSolveDiag;
+				label_avg_time_[labels_[c++]] += tSolveShear;
 				label_avg_time_[labels_[c++]] += tSolveBend;
 				label_avg_time_[labels_[c++]] += tApplyDeltas;
 				label_avg_time_[labels_[c++]] += tCollideSdf;
@@ -650,7 +654,7 @@ void GraphicsContext::CreateCommandBuffers()
 void GraphicsContext::CreateQueryPool() {
 	vk::QueryPoolCreateInfo queryInfo = {};
 	queryInfo.queryType = vk::QueryType::eTimestamp;
-	queryInfo.queryCount = 4 + 10 * 40 + 2;
+	queryInfo.queryCount = 4 + 20 * 40 + 2;
 
 	timestamp_pool_ = context_.device_.createQueryPool(queryInfo);
 }
