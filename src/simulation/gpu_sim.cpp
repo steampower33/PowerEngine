@@ -92,35 +92,35 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 		{
 			// Solve Coloring - Stretch
 			TS(timestampSteps);
-			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_coloring);
+			//cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_coloring);
 
-			for (uint32_t c = 0; c < 4; ++c) {
-				uint32_t base = datas_.pass_offsets[c];
-				uint32_t count = datas_.pass_offsets[c + 1] - datas_.pass_offsets[c];
-				if (!count) continue;
+			//for (uint32_t c = 0; c < 4; ++c) {
+			//	uint32_t base = datas_.pass_offsets[c];
+			//	uint32_t count = datas_.pass_offsets[c + 1] - datas_.pass_offsets[c];
+			//	if (!count) continue;
 
-				pc_.base = base;
-				pc_.count = count;
-				pc_.compliance = compliance_.stretch;
+			//	pc_.base = base;
+			//	pc_.count = count;
+			//	pc_.compliance = compliance_.stretch;
 
-				cmd.pushConstants<PushConstant>(*pipeline_layouts_.common, vk::ShaderStageFlagBits::eCompute, 0u, pc_);
+			//	cmd.pushConstants<PushConstant>(*pipeline_layouts_.common, vk::ShaderStageFlagBits::eCompute, 0u, pc_);
 
-				uint32_t groups = (count + 256 - 1) / 256;
-				cmd.dispatch(groups, 1, 1);
-				vku::barrier2(cmd,
-					vk::PipelineStageFlagBits2::eComputeShader,
-					vk::AccessFlagBits2::eShaderStorageWrite,
-					vk::PipelineStageFlagBits2::eComputeShader,
-					vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
-			}
+			//	uint32_t groups = (count + 256 - 1) / 256;
+			//	cmd.dispatch(groups, 1, 1);
+			//	vku::barrier2(cmd,
+			//		vk::PipelineStageFlagBits2::eComputeShader,
+			//		vk::AccessFlagBits2::eShaderStorageWrite,
+			//		vk::PipelineStageFlagBits2::eComputeShader,
+			//		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+			//}
 			TS(timestampSteps);
 
 			{
 				// Solve Diagonal
 				TS(timestampSteps);
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_diagonal);
-				uint32_t base = datas_.pass_offsets[4];
-				uint32_t count = datas_.pass_offsets[5] - datas_.pass_offsets[4];
+				uint32_t base = datas_.pass_offsets[0];
+				uint32_t count = datas_.pass_offsets[5] - datas_.pass_offsets[0];
 				pc_.base = base;
 				pc_.count = count;
 				pc_.compliance = compliance_.diagonal;
@@ -816,7 +816,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 			datas_.positions[id] = { px, py, pz, 0.0f };
 			datas_.velocities[id] = glm::vec4(0);
 			datas_.pred_positions[id] = datas_.positions[id];
-			datas_.inverse_masses[id] = 1.0f / mass_;
+			//datas_.inverse_masses[id] = 1.0f / mass_;
 		}
 	}
 
@@ -835,65 +835,65 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	indices_size_ = static_cast<uint32_t>(datas_.indices.size());
 	vku::CreateIndexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, datas_.indices, index_buffer_, index_buffer_memory_);
 
-	//datas_.masses.resize(N, 0.0f);
+	datas_.masses.resize(N, 0.0f);
 
-	//// Total area
-	//float totalArea = 0.0f;
-	//for (size_t t = 0; t < indices_size_; t += 3) {
-	//	uint32_t i0 = datas_.indices[t + 0];
-	//	uint32_t i1 = datas_.indices[t + 1];
-	//	uint32_t i2 = datas_.indices[t + 2];
+	// Total area
+	float totalArea = 0.0f;
+	for (size_t t = 0; t < indices_size_; t += 3) {
+		uint32_t i0 = datas_.indices[t + 0];
+		uint32_t i1 = datas_.indices[t + 1];
+		uint32_t i2 = datas_.indices[t + 2];
 
-	//	glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
-	//	glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
-	//	glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
+		glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
+		glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
+		glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
 
-	//	glm::vec3 e1 = p1 - p0;
-	//	glm::vec3 e2 = p2 - p0;
+		glm::vec3 e1 = p1 - p0;
+		glm::vec3 e2 = p2 - p0;
 
-	//	float area = 0.5f * glm::length(glm::cross(e1, e2)); // Triangle area
-	//	totalArea += area;
-	//}
+		float area = 0.5f * glm::length(glm::cross(e1, e2)); // Triangle area
+		totalArea += area;
+	}
 
-	//float totalMassTarget = mass_;
+	float totalMassTarget = mass_ * N;
 
-	//// Area zero defence
-	//float density = 0.0f;
-	//if (totalArea > 0.0f) {
-	//	density = totalMassTarget / totalArea; // kg/m²
-	//}
+	// Area zero defence
+	float density = 0.0f;
+	if (totalArea > 0.0f) {
+		density = totalMassTarget / totalArea; // kg/m²
+	}
 
-	//// Distribute mass to each triangle in proportion to area
-	//for (size_t t = 0; t < indices_size_; t += 3) {
-	//	uint32_t i0 = datas_.indices[t + 0];
-	//	uint32_t i1 = datas_.indices[t + 1];
-	//	uint32_t i2 = datas_.indices[t + 2];
+	// Distribute mass to each triangle in proportion to area
+	for (size_t t = 0; t < indices_size_; t += 3) {
+		uint32_t i0 = datas_.indices[t + 0];
+		uint32_t i1 = datas_.indices[t + 1];
+		uint32_t i2 = datas_.indices[t + 2];
 
-	//	glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
-	//	glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
-	//	glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
+		glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
+		glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
+		glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
 
-	//	glm::vec3 e1 = p1 - p0;
-	//	glm::vec3 e2 = p2 - p0;
+		glm::vec3 e1 = p1 - p0;
+		glm::vec3 e2 = p2 - p0;
 
-	//	float area = 0.5f * glm::length(glm::cross(e1, e2));
+		float area = 0.5f * glm::length(glm::cross(e1, e2));
 
-	//	float triMass = density * area;
+		float triMass = density * area;
 
-	//	float share = triMass / 3.0f;
-	//	datas_.masses[i0] += share;
-	//	datas_.masses[i1] += share;
-	//	datas_.masses[i2] += share;
-	//}
+		float share = triMass / 3.0f;
+		datas_.masses[i0] += share;
+		datas_.masses[i1] += share;
+		datas_.masses[i2] += share;
+	}
 
-	//// Set inverse masses using mass
-	//for (uint32_t i = 0; i < N; ++i) {
-	//	float m = datas_.masses[i];
-	//	if (m > 0.0f)
-	//		datas_.inverse_masses[i] = 1.0f / m;
-	//	else
-	//		datas_.inverse_masses[i] = 0.0f;
-	//}
+	// Set inverse masses using mass
+	for (uint32_t i = 0; i < N; ++i) {
+		float m = datas_.masses[i];
+		if (m > 0.0f)
+			datas_.inverse_masses[i] = 1.0f / m;
+		else
+			datas_.inverse_masses[i] = 0.0f;
+	}
 
 	datas_.inverse_masses[0] = 0.0f;
 	datas_.inverse_masses[nx1 - 1] = 0.0f;
@@ -1593,34 +1593,26 @@ float GpuSim::ComputeRestBendAngle(
 	uint32_t p3, uint32_t p4,
 	const std::vector<glm::vec4>& pos)
 {
-	const glm::vec3& x1 = pos[p1];
-	const glm::vec3& x2 = pos[p2];
-	const glm::vec3& x3 = pos[p3];
-	const glm::vec3& x4 = pos[p4];
+	glm::vec3 P1 = glm::vec3(pos[p1]);
+	glm::vec3 P2 = glm::vec3(pos[p2]);
+	glm::vec3 P3 = glm::vec3(pos[p3]);
+	glm::vec3 P4 = glm::vec3(pos[p4]);
 
-	glm::vec3 e = x2 - x1;          // hinge vector
-	glm::vec3 n1 = glm::cross(x3 - x1, x3 - x2); // tri1 normal (p1,p2,p3)
-	glm::vec3 n2 = glm::cross(x4 - x2, x4 - x1); // tri2 normal (p2,p1,p4)
+	glm::vec3 e = P2 - P1;
+	float el = glm::length(e);
+	if (el < 1e-8f) return 0.0f;
+	glm::vec3 ehat = e / el;
 
-	float lenE = glm::length(e);
-	float lenN1 = glm::length(n1);
-	float lenN2 = glm::length(n2);
+	glm::vec3 n1 = glm::normalize(glm::cross(P2 - P1, P3 - P1));
+	glm::vec3 n2 = glm::normalize(glm::cross(P2 - P1, P4 - P1));
 
-	if (lenE < 1e-8f || lenN1 < 1e-8f || lenN2 < 1e-8f)
-		return 0.0f;
+	float c = glm::clamp(glm::dot(n1, n2), -1.0f, 1.0f);
+	glm::vec3 cross_n1n2 = glm::cross(n1, n2);
+	float s = glm::dot(ehat, cross_n1n2);
 
-	n1 /= lenN1;
-	n2 /= lenN2;
+	float phi = std::atan2(s, c); // atan(s,c)와 동일
 
-	float cosTheta = glm::clamp(glm::dot(n1, n2), -1.0f, 1.0f);
-	float theta = std::acos(cosTheta);
-
-	// 부호 결정: hinge 방향 기준으로 양/음
-	glm::vec3 signRef = glm::cross(n1, n2);
-	if (glm::dot(signRef, e) < 0.0f)
-		theta = -theta;
-
-	return theta; // rest angle θ0
+	return phi;
 }
 
 void GpuSim::BuildBendConstraintsFromTriangles()

@@ -51,7 +51,7 @@ public:
 		float stretch = 1e-7f;
 		float diagonal = 1e-7f;
 		float shear = 1.0e-6f;
-		float bend = 1.0f;
+		float bend = 0.8f;
 	} compliance_;
 
 	uint32_t particles_size_ = nx_ * ny_;
@@ -145,8 +145,8 @@ public:
 			alignas(4)  float wind_strength = 1.0f;
 			alignas(4)  float sphere_radius;
 			alignas(4)  float max_speed;
-			alignas(4)  float damping = 10.0f;
-			alignas(4)  float relaxation_factor = 0.5f;
+			alignas(4)  float damping = 5.0f;
+			alignas(4)  float relaxation_factor = 5.0f;
 			alignas(4)  uint32_t num_bends;
 			alignas(4)  uint32_t num_shears;
 			alignas(4)  float collision_margin = 0.1f;
