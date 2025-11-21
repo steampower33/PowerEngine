@@ -77,19 +77,19 @@ void GraphicsContext::UpdateGraphicsUBO(Camera& camera)
 
 			ubo_data_.object.model = model_manager_.models[i]->world_;
 			ubo_data_.object.albedo_use = model_manager_.models[i]->albedo_use_;
-			ubo_data_.object.albedoIdx = model_manager_.models[i]->texture_idx_.albedo;
-			ubo_data_.object.metallicIdx = model_manager_.models[i]->texture_idx_.metallic;
-			ubo_data_.object.normalIdx = model_manager_.models[i]->texture_idx_.normal;
-			ubo_data_.object.roughnessIdx = model_manager_.models[i]->texture_idx_.roughness;
-			ubo_data_.object.aoIdx = model_manager_.models[i]->texture_idx_.ao;
-			ubo_data_.object.heightIdx = model_manager_.models[i]->texture_idx_.height;
+			ubo_data_.object.albedo_idx = model_manager_.models[i]->texture_idx_.albedo;
+			ubo_data_.object.metallic_idx = model_manager_.models[i]->texture_idx_.metallic;
+			ubo_data_.object.normal_idx = model_manager_.models[i]->texture_idx_.normal;
+			ubo_data_.object.roughness_idx = model_manager_.models[i]->texture_idx_.roughness;
+			ubo_data_.object.ao_idx = model_manager_.models[i]->texture_idx_.ao;
+			ubo_data_.object.height_idx = model_manager_.models[i]->texture_idx_.height;
 
-			ubo_data_.object.albedoEnable = model_manager_.models[i]->texture_use_.albedo;
-			ubo_data_.object.metallicEnable = model_manager_.models[i]->texture_use_.metallic;
-			ubo_data_.object.normalEnable = model_manager_.models[i]->texture_use_.normal;
-			ubo_data_.object.roughnessEnable = model_manager_.models[i]->texture_use_.roughtness;
-			ubo_data_.object.aoEnable = model_manager_.models[i]->texture_use_.ao;
-			ubo_data_.object.heightEnable = model_manager_.models[i]->texture_use_.height;
+			ubo_data_.object.albedo_enable = model_manager_.models[i]->texture_use_.albedo;
+			ubo_data_.object.metallic_enable = model_manager_.models[i]->texture_use_.metallic;
+			ubo_data_.object.normal_enable = model_manager_.models[i]->texture_use_.normal;
+			ubo_data_.object.roughness_enable = model_manager_.models[i]->texture_use_.roughtness;
+			ubo_data_.object.ao_enable = model_manager_.models[i]->texture_use_.ao;
+			ubo_data_.object.height_enable = model_manager_.models[i]->texture_use_.height;
 
 			std::memcpy(dst, &ubo_data_.object, sizeof(UBOData::Object));
 		}
@@ -881,7 +881,7 @@ void GraphicsContext::CreateUniformBuffers()
 		ubo_memories_.global = std::move(bufferMem);
 		ubo_mapped_.global = ubo_memories_.global.mapMemory(0, totalSize);
 
-		ubo_data_.global.vulkanThumbnailIndex = texture_manager_.vulkan_thumbnail_index_;
+		ubo_data_.global.vulkan_thumbnail_index = texture_manager_.vulkan_thumbnail_index_;
 	}
 
 	// Object

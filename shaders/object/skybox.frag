@@ -5,25 +5,25 @@
 layout(set = 1, binding = 0) uniform SkyboxUBO {
     mat4x4 model;
 
-    int envIdx;
-    int radianceIdx;
-    int irradianceIdx;
-    uint specularMipLevels;
+    uint env_idx;
+    uint radiance_idx;
+    uint irradiance_idx;
+    uint specular_mip_levels;
 
-    int brdfLUTIndex;
+    uint brdf_lut_index;
     uint p0;
     uint p1;
     uint p2;
 } skybox;
 
-layout(set = 2, binding = 0) uniform samplerCube envTex[];
+layout(set = 2, binding = 0) uniform samplerCube env_tex[];
 
-layout(location = 0) in vec3 vDir;
+layout(location = 0) in vec3 in_dir;
 
-layout(location = 0) out vec4 outColor;
+layout(location = 0) out vec4 out_color;
 
 void main() {
-    vec3 color = texture(envTex[nonuniformEXT(skybox.envIdx)], vDir).rgb;
+    vec3 color = texture(env_tex[nonuniformEXT(skybox.env_idx)], in_dir).rgb;
 
-    outColor = vec4(color, 0.0);
+    out_color = vec4(color, 0.0);
 }

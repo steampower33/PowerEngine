@@ -173,6 +173,7 @@ set(GLSL_SHADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/apply_deltas.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/collide_sdf.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/update_velocity.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_shear.comp
 )
 
 compile_glsl_shaders(glsl_shaders_target SOURCES ${GLSL_SHADERS})

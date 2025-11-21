@@ -3,19 +3,19 @@
 
 layout(std140, set = 0, binding = 0) uniform SimParams {
     float dt;
-    int   numParticles;
-    int   numEdges;
-    int   windTest;
-    float windStrength;
-    float sphereRadius;
-    float maxSpeed;
+    uint   num_particles;
+    uint   num_edges;
+    int   wind_test;
+    float wind_strength;
+    float sphere_radius;
+    float max_speed;
     float damping;
-    float relaxationFactor;
-    int   numBends;
-    uint  numColliders;
-    float collisionMargin;
-    vec4  sphereCenter;
-    vec4  windDir;
+    float relaxation_factor;
+    uint   num_bends;
+    uint   num_shears;
+    float collision_margin;
+    vec4  sphere_center;
+    vec4  wind_dir;
     vec4  gravity;
     float thickness;
     float friction;
@@ -26,10 +26,10 @@ layout(std140, set = 0, binding = 0) uniform SimParams {
 layout(std430, set = 1, binding = 0) buffer X { vec4 x[]; };
 layout(std430, set = 1, binding = 1) buffer V { vec4 v[]; };
 layout(std430, set = 1, binding = 2) buffer W { float w[]; };
-layout(std430, set = 1, binding = 3) buffer DeltaX { float  deltaX[]; };
-layout(std430, set = 1, binding = 4) buffer DeltaY { float  deltaY[]; };
-layout(std430, set = 1, binding = 5) buffer DeltaZ { float  deltaZ[]; };
-layout(std430, set = 1, binding = 6) buffer DCount { uint dcount[]; };
+layout(std430, set = 1, binding = 3) buffer DeltaX { float  delta_x[]; };
+layout(std430, set = 1, binding = 4) buffer DeltaY { float  delta_y[]; };
+layout(std430, set = 1, binding = 5) buffer DeltaZ { float  delta_z[]; };
+layout(std430, set = 1, binding = 6) buffer DCount { uint delta_count[]; };
 
 struct Edge { 
     uint i; 
@@ -42,19 +42,19 @@ layout(std430, set = 1, binding = 8) buffer XP { vec4  xp[]; };
 
 struct Bend {
     uint p1, p2, p3, p4;
-    float restAngle;
+    float rest_angle;
     float lambda;
     vec2 pad;
 };
 layout(std430, set = 1, binding = 9) buffer Bends { Bend  bends[]; };
 
-struct SDFCollider {
-    int   type;
-    vec3  center;
-    float radius;
-    vec3  normal;
-    vec3  velocity;
-    float pad;
+struct Shear {
+    uint i0, i1, i2;
+    float rest_dot;
+    float lambda;
+    float p0, p1, p2;
 };
+layout(std430, set = 1, binding = 9) buffer Shears { Bend  shears[]; };
+
 
 #endif

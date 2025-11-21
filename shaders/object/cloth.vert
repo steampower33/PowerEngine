@@ -13,28 +13,28 @@ layout(set=1, binding=0, std430) readonly buffer Positions { vec4 pos[]; };
 layout(set = 2, binding = 0) uniform Render {
     vec4 albedo_use;
 
-    int albedoIdx;
-    int metallicIdx;
-    int normalIdx;
-    int roughnessIdx;
+    int albedo_idx;
+    int metallic_idx;
+    int normal_idx;
+    int roughness_idx;
 
-    int aoIdx;
-    int heightIdx;
-    float metallicFactor;
-    float roughnessFactor;
+    int ao_idx;
+    int height_idx;
+    float metallic_factor;
+    float roughness_factor;
 
-    float aoFactor;
-    float heightFactor;
+    float ao_factor;
+    float height_factor;
     uint p0;
     uint p1;
 
-    uint albedoEnable;
-    uint metallicEnable;
-    uint normalEnable;
-    uint roughnessEnable;
+    uint albedo_enable;
+    uint metallic_enable;
+    uint normal_enable;
+    uint roughness_enable;
 
-    uint aoEnable;
-    uint heightEnable;
+    uint ao_enable;
+    uint height_enable;
     uint p3;
     uint p4;
 } render;
@@ -43,8 +43,8 @@ layout(set = 3, binding = 0) uniform sampler2D tex[];
 
 layout(push_constant) uniform ClothPC { uint nx1; uint ny1; } pc;
 
-layout(location = 0) out vec2 vUV;
-layout(location = 1) out vec3 vWorldNormal; // world normal
+layout(location = 0) out vec2 out_uv;
+layout(location = 1) out vec3 out_world_normal;
 
 void main() {
 
@@ -77,16 +77,15 @@ void main() {
 
     vec3 N = normalize(cross(dy, dx));
     
-    vWorldNormal = N;
+    out_world_normal = N;
 
-    vUV = vec2(float(x) / float(nx1 - 1), float(y) / float(ny1 - 1));
+    out_uv = vec2(float(x) / float(nx1 - 1), float(y) / float(ny1 - 1));
 
-    if (render.heightEnable == 1u)
+    if (render.height_enable == 1u)
     {
-        float height   = (render.heightEnable == 0u) ? render.heightFactor : texture(tex[nonuniformEXT(render.heightIdx)], vUV).r;
-        p += vWorldNormal * height * render.heightFactor;
+        float height = (render.height_enable == 0u) ? render.height_factor : texture(tex[nonuniformEXT(render.height_idx)], out_uv).r;
+        p += N * height * render.height_factor;
     }
-
 
     gl_Position = ubo.proj * ubo.view * vec4(p, 1.0);
 }

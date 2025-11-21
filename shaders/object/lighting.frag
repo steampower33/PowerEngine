@@ -3,61 +3,61 @@
 #extension GL_EXT_nonuniform_qualifier : require
 
 layout(set = 0, binding = 0) uniform LightUBO {
-    vec4 cameraPos;
+    vec4 camera_pos;
     vec4 spotPos_range;
     vec4 spotDir_inner;
     vec4 spotColor_outer;
-    mat4 invViewProj;
+    mat4 inv_view_proj;
     float exposure;
     float p0;
     float p1;
     float p2;
 } light;
 
-layout(set = 0, binding = 1) uniform sampler2D gAlbedoMetal;
-layout(set = 0, binding = 2) uniform sampler2D gNormalRough;
-layout(set = 0, binding = 3) uniform sampler2D gHeightAo;
-layout(set = 0, binding = 4) uniform sampler2D gDepth;
+layout(set = 0, binding = 1) uniform sampler2D out_albedo_metal;
+layout(set = 0, binding = 2) uniform sampler2D out_normal_rough;
+layout(set = 0, binding = 3) uniform sampler2D out_height_ao;
+layout(set = 0, binding = 4) uniform sampler2D out_depth;
 
 layout(set = 1, binding = 0) uniform SkyboxUBO {
     mat4x4 model;
 
-    uint envIdx;
-    uint radianceIdx;
-    uint irradianceIdx;
-    uint specularMipLevels;
+    uint env_idx;
+    uint radiance_idx;
+    uint irradiance_idx;
+    uint specular_mip_levels;
 
-    uint brdfLUTIndex;
+    uint brdf_lut_index;
     uint p0;
     uint p1;
     uint p2;
 } skybox;
 
 layout(set = 2, binding = 0) uniform sampler2D tex[];
-layout(set = 3, binding = 0) uniform samplerCube envTex[];
+layout(set = 3, binding = 0) uniform samplerCube env_tex[];
 
-layout(location = 0) in vec2 vUV;
+layout(location = 0) in vec2 in_uv;
 
-layout(location = 0) out vec4 outColor;
+layout(location = 0) out vec4 out_color;
 
-vec3 reconstructWorldPos(vec2 uv, float depth01)
+vec3 reconstruct_world_pos(vec2 uv, float depth01)
 {
-    vec2 ndcXY = uv * 2.0 - 1.0;
-    float ndcZ = depth01;
+    vec2 ndc_xy = uv * 2.0 - 1.0;
+    float ndc_z = depth01;
 
-    vec4 clipPos = vec4(ndcXY, ndcZ, 1.0);
+    vec4 clip_pos = vec4(ndc_xy, ndc_z, 1.0);
 
-    vec4 world = light.invViewProj * clipPos;
+    vec4 world = light.inv_view_proj * clip_pos;
     return world.xyz / world.w;
 }
 
-vec3 FresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
+vec3 fresnel_schlick_roughness(float cosTheta, vec3 F0, float roughness)
 {
     return F0 + (max(vec3(1.0 - roughness), F0) - F0) *
                 pow(1.0 - cosTheta, 5.0);
 }
 
-vec3 TonemapACES(vec3 x)
+vec3 tonemap_aces(vec3 x)
 {
     const float a = 2.51;
     const float b = 0.03;
@@ -70,19 +70,19 @@ vec3 TonemapACES(vec3 x)
 
 void main()
 {
-    float depth = texture(gDepth, vUV).r;
+    float depth = texture(out_depth, in_uv).r;
     
-    vec3 worldPos = reconstructWorldPos(vUV, depth);
+    vec3 world_pos = reconstruct_world_pos(in_uv, depth);
     
     if (depth >= 1.0 - 1e-5) {
-        vec3 sky = texture(envTex[nonuniformEXT(skybox.radianceIdx)], worldPos).rgb; // or 별도 skyboxCube
-        outColor = vec4(sky, 1.0);
+        vec3 sky = texture(env_tex[nonuniformEXT(skybox.radiance_idx)], world_pos).rgb; // or 별도 skyboxCube
+        out_color = vec4(sky, 1.0);
         return;
     }
     
-    vec4 am = texture(gAlbedoMetal, vUV);
-    vec4 nr = texture(gNormalRough, vUV);
-    vec4 ha = texture(gHeightAo, vUV);
+    vec4 am = texture(out_albedo_metal, in_uv);
+    vec4 nr = texture(out_normal_rough, in_uv);
+    vec4 ha = texture(out_height_ao, in_uv);
 
     vec3 albedo    = am.rgb;
     float metallic = am.a;
@@ -92,44 +92,44 @@ void main()
     float height = ha.r;
     float ao = ha.g;
 
-    vec3 cameraPos   = light.cameraPos.xyz;
+    vec3 camera_pos = light.camera_pos.xyz;
 
     vec3 N = normalize(normal);
-    vec3 V = normalize(cameraPos - worldPos);
-    float NdotV = max(dot(N, V), 0.0);
+    vec3 V = normalize(camera_pos - world_pos);
+    float n_dot_v = max(dot(N, V), 0.0);
 
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
-    vec3 diffuseIrr = texture(envTex[nonuniformEXT(skybox.irradianceIdx)], N).rgb;
-    vec3 diffuseIBL = diffuseIrr * albedo;
+    vec3 diffuse_irr = texture(env_tex[nonuniformEXT(skybox.irradiance_idx)], N).rgb;
+    vec3 diffuse_ibl = diffuse_irr * albedo;
 
     vec3 R = reflect(-V, N);
 
-    float maxMip = float(skybox.specularMipLevels);
-    float lod = roughness * maxMip;
+    float max_mip = float(skybox.specular_mip_levels);
+    float lod = roughness * max_mip;
 
-    vec3 prefilteredColor = textureLod(envTex[nonuniformEXT(skybox.radianceIdx)], R, lod).rgb;
+    vec3 prefiltered_color = textureLod(env_tex[nonuniformEXT(skybox.radiance_idx)], R, lod).rgb;
 
-    vec2 brdf = texture(tex[nonuniformEXT(skybox.brdfLUTIndex)], vec2(NdotV, roughness)).rg;
+    vec2 brdf = texture(tex[nonuniformEXT(skybox.brdf_lut_index)], vec2(n_dot_v, roughness)).rg;
 
-    vec3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
+    vec3 F = fresnel_schlick_roughness(n_dot_v, F0, roughness);
     vec3 kS = F;
     vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
 
-    vec3 specularIBL = prefilteredColor * (F * brdf.x + brdf.y);
+    vec3 specular_ibl = prefiltered_color * (F * brdf.x + brdf.y);
 
-    vec3 ambientDiffuse = kD * diffuseIBL * ao;
-    vec3 ambientSpec    = specularIBL;
+    vec3 ambient_diffuse = kD * diffuse_ibl * ao;
+    vec3 ambient_spec    = specular_ibl;
 
-    vec3 color = ambientDiffuse + ambientSpec;
+    vec3 color = ambient_diffuse + ambient_spec;
 
     color = max(color, vec3(0.0));
     
     float exposure = light.exposure;
     color *= exposure;
-    color  = TonemapACES(color);
+    color  = tonemap_aces(color);
 
     color = pow(color, vec3(1.0 / 2.2));
      
-    outColor = vec4(color, 1.0);
+    out_color = vec4(color, 1.0);
 }

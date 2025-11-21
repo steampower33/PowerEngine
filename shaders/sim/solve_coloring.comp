@@ -12,7 +12,7 @@ void main() {
     if (t >= pc.count) return;
 
     uint eidx = pc.base + t;
-    if (eidx >= sim.numEdges) return;
+    if (eidx >= sim.num_edges) return;
 
     uint  i      = edges[eidx].i;
     uint  j      = edges[eidx].j;
@@ -40,13 +40,13 @@ void main() {
     float denom = wsum + alpha;
     if (denom < 1e-8) denom = 1e-8;
 
-    float dLambda = (-C - alpha * lambda) / denom;
+    float dlambda = (-C - alpha * lambda) / denom;
 
-    float newLambda = lambda + dLambda;
+    float newLambda = lambda + dlambda;
     if (!isFinite_f(newLambda)) newLambda = 0.0;
     edges[eidx].lambda = newLambda;
 
-    vec3 corr = dLambda * n;
+    vec3 corr = dlambda * n;
 
     if (wi > 0.0) xp[i].xyz += wi * corr;
     if (wj > 0.0) xp[j].xyz -= wj * corr;

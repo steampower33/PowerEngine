@@ -236,25 +236,25 @@ void GUI::SetObjectGUI(RowFn&& row, UBOData& data) {
 		if (ImGui::BeginTable("ObjectTable", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
-			row("Meltallic", [&] { ImGui::DragFloat("##ClothMeltallic", &data.metallicFactor, 0.1f, 0.0f, 1.0f); });
-			row("Roughness", [&] { ImGui::DragFloat("##ClothRoughness", &data.roughnessFactor, 0.1f, 0.0f, 1.0f); });
-			row("AO", [&] { ImGui::DragFloat("##ClothAO", &data.aoFactor, 0.1f, 0.0f, 1.0f); });
-			row("Height", [&] { ImGui::DragFloat("##ClothHeight", &data.heightFactor, 0.001f, 0.0f, 1.0f); });
+			row("Meltallic", [&] { ImGui::DragFloat("##ClothMeltallic", &data.metallic_factor, 0.1f, 0.0f, 1.0f); });
+			row("Roughness", [&] { ImGui::DragFloat("##ClothRoughness", &data.roughness_factor, 0.1f, 0.0f, 1.0f); });
+			row("AO", [&] { ImGui::DragFloat("##ClothAO", &data.ao_factor, 0.1f, 0.0f, 1.0f); });
+			row("Height", [&] { ImGui::DragFloat("##ClothHeight", &data.height_factor, 0.001f, 0.0f, 1.0f); });
 
 			row("AlbedoEnable", [&] {
-				bool enable = (data.albedoEnable == 1) ? true : false;
+				bool enable = (data.albedo_enable == 1) ? true : false;
 				ImGui::Checkbox("##ClothAlbedoEnable", &enable);
-				data.albedoEnable = (enable) ? true : false;
+				data.albedo_enable = (enable) ? true : false;
 				});
 			row("MetalnessEnable", [&] {
-				bool enable = (data.metallicEnable == 1) ? true : false;
+				bool enable = (data.metallic_enable == 1) ? true : false;
 				ImGui::Checkbox("##ClothMetalnessEnable", &enable);
-				data.metallicEnable = (enable) ? true : false;
+				data.metallic_enable = (enable) ? true : false;
 				});
 			row("NormalEnable", [&] {
-				bool enable = (data.normalEnable == 1) ? true : false;
+				bool enable = (data.normal_enable == 1) ? true : false;
 				ImGui::Checkbox("##ClothNormalEnable", &enable);
-				data.normalEnable = (enable) ? true : false;
+				data.normal_enable = (enable) ? true : false;
 				});
 			row("RoughtnessEnable", [&] {
 				bool enable = (data.roughtnessEnable == 1) ? true : false;
@@ -262,14 +262,14 @@ void GUI::SetObjectGUI(RowFn&& row, UBOData& data) {
 				data.roughtnessEnable = (enable) ? true : false;
 				});
 			row("AOEnable", [&] {
-				bool enable = (data.aoEnable == 1) ? true : false;
+				bool enable = (data.ao_enable == 1) ? true : false;
 				ImGui::Checkbox("##ClothAOEnable", &enable);
-				data.aoEnable = (enable) ? true : false;
+				data.ao_enable = (enable) ? true : false;
 				});
 			row("HeightEnable", [&] {
-				bool enable = (data.heightEnable == 1) ? true : false;
+				bool enable = (data.height_enable == 1) ? true : false;
 				ImGui::Checkbox("##ClothHeightEnable", &enable);
-				data.heightEnable = (enable) ? true : false;
+				data.height_enable = (enable) ? true : false;
 				});
 
 			ImGui::EndTable();
@@ -328,7 +328,7 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext)
 			row("Iterations", [&] { ImGui::DragInt("##Iterations", &graphicsContext.gpu_sim_->iterations_, 1, 1, 40); });
 			row("Mass", [&] { ImGui::DragFloat("##Mass", &graphicsContext.gpu_sim_->mass_, 0.001f, 0.0f, 10.0f); });
 			row("Damping", [&] { ImGui::DragFloat("##Damping", &graphicsContext.gpu_sim_->ubo_data_.sim_params.damping, 0.1f, 0.0f, 3.0f, "%.2f"); });
-			row("RelaxationFactor", [&] { ImGui::DragFloat("##RelaxationFactor", &graphicsContext.gpu_sim_->ubo_data_.sim_params.relaxationFactor, 0.001f, 0.0f, 1.0f, "%.4f"); });
+			row("RelaxationFactor", [&] { ImGui::DragFloat("##RelaxationFactor", &graphicsContext.gpu_sim_->ubo_data_.sim_params.relaxation_factor, 0.001f, 0.0f, 1.0f, "%.4f"); });
 			row("StretchCompliance", [&] { ImGui::DragFloat("##StretchCompliance", &graphicsContext.gpu_sim_->compliance_.stretch, 1e-8f, 0.0f, 1.0f, "%.8f"); });
 			row("DiagonalCompliance", [&] { ImGui::DragFloat("##DiagonalCompliance", &graphicsContext.gpu_sim_->compliance_.diagonal, 1e-8f, 0.0f, 1.0f, "%.8f"); });
 			row("BendCompliance", [&] { ImGui::DragFloat("##BendCompliance", &graphicsContext.gpu_sim_->compliance_.bend
@@ -338,7 +338,7 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext)
 			row("ClothSize", [&] { ImGui::DragFloat2("##ClothSize", &graphicsContext.gpu_sim_->cloth_size_[0], 0.1f, 0.0f, 10.0f); });
 			row("ClothHeight", [&] { ImGui::DragFloat("##ClothHeight", &graphicsContext.gpu_sim_->cloth_height_, 0.1f, 0.0f, 100.0f); });
 
-			row("CollisionMargin", [&] { ImGui::DragFloat("##CollisionMargin", &graphicsContext.gpu_sim_->ubo_data_.sim_params.collisionMargin, 0.01f, 0.0f, 1.0f, "%.3f"); });
+			row("CollisionMargin", [&] { ImGui::DragFloat("##CollisionMargin", &graphicsContext.gpu_sim_->ubo_data_.sim_params.collision_margin, 0.01f, 0.0f, 1.0f, "%.3f"); });
 			row("Thickness", [&] { ImGui::DragFloat("##Thickness", &graphicsContext.gpu_sim_->ubo_data_.sim_params.thickness, 0.001f, 0.0f, 1.0f, "%.3f"); });
 			row("Friction", [&] { ImGui::DragFloat("##Friction", &graphicsContext.gpu_sim_->ubo_data_.sim_params.friction, 0.001f, 0.0f, 1.0f, "%.3f"); });
 
@@ -349,10 +349,10 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext)
 				} });
 
 				row("Wind Dir", [&] {
-					ImGui::DragFloat3("##WindDir", &graphicsContext.gpu_sim_->ubo_data_.sim_params.windDir[0], 0.1f, -1.0f, 1.0f); });
+					ImGui::DragFloat3("##WindDir", &graphicsContext.gpu_sim_->ubo_data_.sim_params.wind_dir[0], 0.1f, -1.0f, 1.0f); });
 
 				row("Wind Strength", [&] {
-					ImGui::DragFloat("##WindStrength", &graphicsContext.gpu_sim_->ubo_data_.sim_params.windStrength, 0.1f, 0.0f, 5.0f); });
+					ImGui::DragFloat("##WindStrength", &graphicsContext.gpu_sim_->ubo_data_.sim_params.wind_strength, 0.1f, 0.0f, 5.0f); });
 
 				ImGui::EndTable();
 		}

@@ -55,8 +55,9 @@ public:
 
 	uint32_t particles_size_ = nx_ * ny_;
 	uint32_t indices_size_ = 0;
-	uint32_t edge_size = 0;
-	uint32_t bend_size = 0;
+	uint32_t edge_size_ = 0;
+	uint32_t bend_size_ = 0;
+	uint32_t shear_size_ = 0;
 
 	float deviding_dt_ = 120.0f;
 	int iterations_ = 10;
@@ -87,23 +88,20 @@ public:
 
 		struct Bend {
 			uint32_t p1, p2, p3, p4;
-			float restAngle;
+			float rest_angle;
 			float lambda;
 			glm::vec2 pad;
 		};
 		static_assert(sizeof(Bend) == 32, "Bend must be 32 bytes");
 		std::vector<Data::Bend> bends;
 
-		struct SDFCollider {
-			int   type;
-			glm::vec3  center;
-			float radius;
-			glm::vec3  normal;
-			glm::vec3  velocity;
-			float pad;
-		};
-		static_assert(sizeof(SDFCollider) == 48, "SDFCollider must be 48 bytes");
-		std::vector<SDFCollider> sdfColliders;
+		struct Shear {
+			uint32_t i0, i1, i2;
+			float rest_dot;
+			float lambda;
+			float p0, p1, p2;
+		} shear_;
+		static_assert(sizeof(Shear) == 32, "Shear must be 32 bytes");
 	} datas_;
 
 	// |===== Push Constant =====|
@@ -116,19 +114,19 @@ public:
 	struct UBOData {
 		struct SimParams {
 			alignas(4)  float dt = 0.0f;
-			alignas(4)  int   numParticles;
-			alignas(4)  int   numEdges;
-			alignas(4)  int   windTest = 0;
-			alignas(4)  float windStrength = 1.0f;
-			alignas(4)  float sphereRadius;
-			alignas(4)  float maxSpeed;
+			alignas(4)  uint32_t num_particles;
+			alignas(4)  uint32_t num_edges;
+			alignas(4)  int windTest = 0;
+			alignas(4)  float wind_strength = 1.0f;
+			alignas(4)  float sphere_radius;
+			alignas(4)  float max_speed;
 			alignas(4)  float damping = 1.0f;
-			alignas(4)  float relaxationFactor = 0.001f;
-			alignas(4)  int   numBends;
-			alignas(4)  uint32_t numColliders = 1;
-			alignas(4)  float collisionMargin = 0.1f;
-			alignas(16) glm::vec4 sphereCenter;
-			alignas(16) glm::vec4 windDir = glm::vec4(0.0f, 0.0f, -1.0f, 0.0f);
+			alignas(4)  float relaxation_factor = 0.001f;
+			alignas(4)  uint32_t num_bends;
+			alignas(4)  uint32_t num_shears;
+			alignas(4)  float collision_margin = 0.1f;
+			alignas(16) glm::vec4 sphere_center;
+			alignas(16) glm::vec4 wind_dir = glm::vec4(0.0f, 0.0f, -1.0f, 0.0f);
 			alignas(16) glm::vec4 gravity = glm::vec4(0.0f, -9.8f, 0.0f, 0.0f);
 			alignas(4) float thickness = 0.008f;
 			alignas(4) float friction = 0.1f;
@@ -140,28 +138,28 @@ public:
 		struct Render {
 			glm::vec4 albedo_use{ 1.0f, 1.0f, 1.0f, 0.0f };
 
-			int albedoIdx = -1;
-			int metallicIdx = -1;
-			int normalIdx = -1;
-			int roughnessIdx = -1;
+			int albedo_idx = -1;
+			int metallic_idx = -1;
+			int normal_idx = -1;
+			int roughness_idx = -1;
 
-			int aoIdx = -1;
-			int heightIdx = -1;
-			float metallicFactor = 0.0f;
-			float roughnessFactor = 1.0f;
+			int ao_idx = -1;
+			int height_idx = -1;
+			float metallic_factor = 0.0f;
+			float roughness_factor = 1.0f;
 
-			float aoFactor = 1.0f;
-			float heightFactor = 0.0f;
+			float ao_factor = 1.0f;
+			float height_factor = 0.0f;
 			uint32_t p0 = 0;
 			uint32_t p1 = 0;
 
-			uint32_t albedoEnable = 0;
-			uint32_t metallicEnable = 0;
-			uint32_t normalEnable = 0;
+			uint32_t albedo_enable = 0;
+			uint32_t metallic_enable = 0;
+			uint32_t normal_enable = 0;
 			uint32_t roughtnessEnable = 0;
 
-			uint32_t aoEnable = 0;
-			uint32_t heightEnable = 0;
+			uint32_t ao_enable = 0;
+			uint32_t height_enable = 0;
 			uint32_t p3;
 			uint32_t p4;
 		} render;

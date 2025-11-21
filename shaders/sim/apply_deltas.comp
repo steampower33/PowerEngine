@@ -4,15 +4,15 @@
 layout(local_size_x = 256) in;
 void main() {
     uint i = gl_GlobalInvocationID.x;
-    if (i >= sim.numParticles) return;
+    if (i >= sim.num_particles) return;
 
     if (w[i] == 0.0) {
-        deltaX[i] = 0.0; deltaY[i] = 0.0; deltaZ[i] = 0.0; dcount[i] = 0u;
+        delta_x[i] = 0.0; delta_y[i] = 0.0; delta_z[i] = 0.0; delta_count[i] = 0u;
         return;
     }
-    uint c = max(dcount[i], 1u);
-    vec3 corr = vec3(deltaX[i], deltaY[i], deltaZ[i]) / c;
-    xp[i].xyz += corr * sim.relaxationFactor;
+    uint c = max(delta_count[i], 1u);
+    vec3 corr = vec3(delta_x[i], delta_y[i], delta_z[i]) / c;
+    xp[i].xyz += corr * sim.relaxation_factor;
     
-    deltaX[i]=0.0; deltaY[i]=0.0; deltaZ[i]=0.0; dcount[i]=0u;
+    delta_x[i]=0.0; delta_y[i]=0.0; delta_z[i]=0.0; delta_count[i]=0u;
 }

@@ -3,7 +3,7 @@
 layout(local_size_x = 256) in;
 void main(){
     uint i = gl_GlobalInvocationID.x;
-    if (i >= sim.numParticles) return;
+    if (i >= sim.num_particles) return;
     
     vec3 xi = x[i].xyz;
 
@@ -15,9 +15,10 @@ void main(){
     vec3 vi = v[i].xyz;
 
     vec3 wind = vec3(0);
-    if (sim.windTest==1){
-        float L = length(sim.windDir.xyz);
-        if (L>1e-8) wind = (sim.windDir.xyz/L)*sim.windStrength;
+    if (sim.wind_test==1){
+        float L = length(sim.wind_dir.xyz);
+        if (L>1e-8) 
+            wind = (sim.wind_dir.xyz/L)*sim.wind_strength;
     }
     vi += (sim.gravity.xyz + wind) * sim.dt;
     vec3 xpi = xi + vi * sim.dt;

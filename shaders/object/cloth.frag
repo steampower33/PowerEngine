@@ -6,50 +6,50 @@
 layout(set = 2, binding = 0) uniform Render {
     vec4 albedo_use;
 
-    int albedoIdx;
-    int metallicIdx;
-    int normalIdx;
-    int roughnessIdx;
+    int albedo_idx;
+    int metallic_idx;
+    int normal_idx;
+    int roughness_idx;
 
-    int aoIdx;
-    int heightIdx;
-    float metallicFactor;
-    float roughnessFactor;
+    int ao_idx;
+    int height_idx;
+    float metallic_factor;
+    float roughness_factor;
 
-    float aoFactor;
-    float heightFactor;
+    float ao_factor;
+    float height_factor;
     uint p0;
     uint p1;
 
-    uint albedoEnable;
-    uint metallicEnable;
-    uint normalEnable;
-    uint roughnessEnable;
+    uint albedo_enable;
+    uint metallic_enable;
+    uint normal_enable;
+    uint roughness_enable;
 
-    uint aoEnable;
-    uint heightEnable;
+    uint ao_enable;
+    uint height_enable;
     uint p3;
     uint p4;
 } render;
 
 layout(set = 3, binding = 0) uniform sampler2D tex[];
 
-layout(location = 0) in vec2 vUV;
-layout(location = 1) in vec3 vWorldNormal; // world normal
+layout(location = 0) in vec2 in_uv;
+layout(location = 1) in vec3 in_world_normal;
 
-layout(location = 0) out vec4 outAlbedoMetal;
-layout(location = 1) out vec4 outNormalRough;
-layout(location = 2) out vec4 outHeightAO;
+layout(location = 0) out vec4 out_albedo_metal;
+layout(location = 1) out vec4 out_normal_rough;
+layout(location = 2) out vec4 out_height_ao;
 
 void main() {
-    vec4 albedo    = (render.albedoEnable == 0u) ? vec4(render.albedo_use.xyz, 0.0): texture(tex[nonuniformEXT(render.albedoIdx)], vUV);
-    vec3 normalTS  = vWorldNormal;
-    float metallic = (render.metallicEnable == 0u) ? render.metallicFactor : texture(tex[nonuniformEXT(render.metallicIdx)], vUV).r;
-    float roughness    = (render.roughnessEnable == 0u) ? render.roughnessFactor : texture(tex[nonuniformEXT(render.roughnessIdx)], vUV).r;
-    float ao       = (render.aoEnable == 0u) ? render.aoFactor : texture(tex[nonuniformEXT(render.aoIdx)], vUV).r;
-    float height   = (render.heightEnable == 0u) ? render.heightFactor : texture(tex[nonuniformEXT(render.heightIdx)], vUV).r;
+    vec4 albedo    = (render.albedo_enable == 0u) ? vec4(render.albedo_use.xyz, 0.0): texture(tex[nonuniformEXT(render.albedo_idx)], in_uv);
+    vec3 normal  = in_world_normal;
+    float metallic = (render.metallic_enable == 0u) ? render.metallic_factor : texture(tex[nonuniformEXT(render.metallic_idx)], in_uv).r;
+    float roughness = (render.roughness_enable == 0u) ? render.roughness_factor : texture(tex[nonuniformEXT(render.roughness_idx)], in_uv).r;
+    float ao       = (render.ao_enable == 0u) ? render.ao_factor : texture(tex[nonuniformEXT(render.ao_idx)], in_uv).r;
+    float height   = (render.height_enable == 0u) ? render.height_factor : texture(tex[nonuniformEXT(render.height_idx)], in_uv).r;
 
-    outAlbedoMetal = vec4(albedo.xyz, metallic);
-    outNormalRough = vec4(normalTS * 0.5 + 0.5, roughness); // [-1,1] -> [0,1]
-    outHeightAO = vec4(0.0, ao, 0.0, 0.0);
+    out_albedo_metal = vec4(albedo.xyz, metallic);
+    out_normal_rough = vec4(normal * 0.5 + 0.5, roughness); // [-1,1] -> [0,1]
+    out_height_ao = vec4(0.0, ao, 0.0, 0.0);
 }

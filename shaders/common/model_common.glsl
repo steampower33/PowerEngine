@@ -5,7 +5,7 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     mat4x4 view;
     mat4x4 proj;
 
-    uint vulkanThumbnailIndex;
+    uint vulkan_thumbnail_index;
     uint p0;
     uint p1;
     uint p2;
@@ -16,28 +16,28 @@ layout(set = 1, binding = 0) uniform ObjectUBO {
 
     vec4 albedo_use;
 
-    int albedoIdx;
-    int metallicIdx;
-    int normalIdx;
-    int roughnessIdx;
+    int albedo_idx;
+    int metallic_idx;
+    int normal_idx;
+    int roughness_idx;
 
-    int aoIdx;
-    int heightIdx;
-    float metallicFactor;
-    float roughnessFactor;
+    int ao_idx;
+    int height_idx;
+    float metallic_factor;
+    float roughness_factor;
 
-    float aoFactor;
-    float heightFactor;
+    float ao_factor;
+    float height_factor;
     uint p0;
     uint p1;
 
-    uint albedoEnable;
-    uint metallicEnable;
-    uint normalEnable;
-    uint roughnessEnable;
+    uint albedo_enable;
+    uint metallic_enable;
+    uint normal_enable;
+    uint roughness_enable;
 
-    uint aoEnable;
-    uint heightEnable;
+    uint ao_enable;
+    uint height_enable;
     uint p3;
     uint p4;
 } object;

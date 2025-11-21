@@ -15,11 +15,11 @@ void main(){
     if (t >= pc.count) return;
 
     uint cidx = pc.base + t;
-    if (cidx >= sim.numBends) return;
+    if (cidx >= sim.num_bends) return;
 
     Bend bc = bends[cidx];
     uint i1 = bc.p1, i2 = bc.p2, i3 = bc.p3, i4 = bc.p4;
-    float rest = bc.restAngle;
+    float rest = bc.rest_angle;
     float lam  = bc.lambda;
 
     float w1 = w[i1], w2 = w[i2], w3 = w[i3], w4 = w[i4];
@@ -56,19 +56,19 @@ void main(){
         + w1*dot(q1,q1) + w2*dot(q2,q2) + w3*dot(q3,q3) + w4*dot(q4,q4);
     if (denom < 1e-8) denom = 1e-8;
 
-    float dLambda = (-(phi - rest) - alpha * lam) / denom;
+    float dlambda = (-(phi - rest) - alpha * lam) / denom;
 
-    float newLam = lam + dLambda;
+    float newLam = lam + dlambda;
     if (!isFinite_f(newLam)) newLam = 0.0;
     bends[cidx].lambda = newLam;
 
-    vec3 corr1 =  w1 * dLambda * q1;
-    vec3 corr2 =  w2 * dLambda * q2;
-    vec3 corr3 =  w3 * dLambda * q3;
-    vec3 corr4 =  w4 * dLambda * q4;
+    vec3 corr1 =  w1 * dlambda * q1;
+    vec3 corr2 =  w2 * dlambda * q2;
+    vec3 corr3 =  w3 * dlambda * q3;
+    vec3 corr4 =  w4 * dlambda * q4;
 
-    if (w1 > 0.0){ atomicAdd(deltaX[i1], corr1.x); atomicAdd(deltaY[i1], corr1.y); atomicAdd(deltaZ[i1], corr1.z); atomicAdd(dcount[i1], 1u); }
-    if (w2 > 0.0){ atomicAdd(deltaX[i2], corr2.x); atomicAdd(deltaY[i2], corr2.y); atomicAdd(deltaZ[i2], corr2.z); atomicAdd(dcount[i2], 1u); }
-    if (w3 > 0.0){ atomicAdd(deltaX[i3], corr3.x); atomicAdd(deltaY[i3], corr3.y); atomicAdd(deltaZ[i3], corr3.z); atomicAdd(dcount[i3], 1u); }
-    if (w4 > 0.0){ atomicAdd(deltaX[i4], corr4.x); atomicAdd(deltaY[i4], corr4.y); atomicAdd(deltaZ[i4], corr4.z); atomicAdd(dcount[i4], 1u); }
+    if (w1 > 0.0){ atomicAdd(delta_x[i1], corr1.x); atomicAdd(delta_y[i1], corr1.y); atomicAdd(delta_z[i1], corr1.z); atomicAdd(delta_count[i1], 1u); }
+    if (w2 > 0.0){ atomicAdd(delta_x[i2], corr2.x); atomicAdd(delta_y[i2], corr2.y); atomicAdd(delta_z[i2], corr2.z); atomicAdd(delta_count[i2], 1u); }
+    if (w3 > 0.0){ atomicAdd(delta_x[i3], corr3.x); atomicAdd(delta_y[i3], corr3.y); atomicAdd(delta_z[i3], corr3.z); atomicAdd(delta_count[i3], 1u); }
+    if (w4 > 0.0){ atomicAdd(delta_x[i4], corr4.x); atomicAdd(delta_y[i4], corr4.y); atomicAdd(delta_z[i4], corr4.z); atomicAdd(delta_count[i4], 1u); }
 }

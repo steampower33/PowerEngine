@@ -98,7 +98,7 @@ public:
 			glm::mat4 view;
 			glm::mat4 proj;
 
-			uint32_t vulkanThumbnailIndex;
+			uint32_t vulkan_thumbnail_index;
 			uint32_t p1;
 			uint32_t p2;
 			uint32_t p3;
@@ -110,28 +110,28 @@ public:
 
 			glm::vec4 albedo_use;
 
-			int albedoIdx = -1;
-			int metallicIdx = -1;
-			int normalIdx = -1;
-			int roughnessIdx = -1;
+			int albedo_idx = -1;
+			int metallic_idx = -1;
+			int normal_idx = -1;
+			int roughness_idx = -1;
 
-			int aoIdx = -1;
-			int heightIdx = -1;
-			float metallicFactor = 0.5f;
-			float roughnessFactor = 0.5f;
+			int ao_idx = -1;
+			int height_idx = -1;
+			float metallic_factor = 0.5f;
+			float roughness_factor = 0.5f;
 
-			float aoFactor = 0.0f;
-			float heightFactor = 0.0f;
+			float ao_factor = 0.0f;
+			float height_factor = 0.0f;
 			uint32_t p0 = 0;
 			uint32_t p1 = 0;
 
-			uint32_t albedoEnable = 0;
-			uint32_t metallicEnable = 0;
-			uint32_t normalEnable = 0;
-			uint32_t roughnessEnable = 0;
+			uint32_t albedo_enable = 0;
+			uint32_t metallic_enable = 0;
+			uint32_t normal_enable = 0;
+			uint32_t roughness_enable = 0;
 
-			uint32_t aoEnable = 0;
-			uint32_t heightEnable = 0;
+			uint32_t ao_enable = 0;
+			uint32_t height_enable = 0;
 			uint32_t p3;
 			uint32_t p4;
 		} object;
