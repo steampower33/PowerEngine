@@ -949,25 +949,26 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		throw std::runtime_error("edge size is not right");
 	}
 
-	// Set bends
-	for (int y = 0; y < ny_; ++y) {
-		for (int x = 0; x < nx_; ++x) {
-			uint32_t i0 = vid(x, y);
-			uint32_t i1 = vid(x + 1, y);
-			uint32_t i2 = vid(x, y + 1);
-			uint32_t i3 = vid(x + 1, y + 1);
+	//// Set bends
+	//for (int y = 0; y < ny_; ++y) {
+	//	for (int x = 0; x < nx_; ++x) {
+	//		uint32_t i0 = vid(x, y);
+	//		uint32_t i1 = vid(x + 1, y);
+	//		uint32_t i2 = vid(x, y + 1);
+	//		uint32_t i3 = vid(x + 1, y + 1);
 
-			uint32_t p1 = i1;   // hinge start
-			uint32_t p2 = i2;   // hinge end
-			uint32_t p3 = i0;   // opp of first tri
-			uint32_t p4 = i3;   // opp of second tri
+	//		uint32_t p1 = i1;   // hinge start
+	//		uint32_t p2 = i2;   // hinge end
+	//		uint32_t p3 = i0;   // opp of first tri
+	//		uint32_t p4 = i3;   // opp of second tri
 
-			float theta0 = 0.0f;
-			//theta0 = ComputeRestAngle(p1,p2,p3,p4, data_.positions);
+	//		float theta0 = 0.0f;
+	//		//theta0 = ComputeRestAngle(p1,p2,p3,p4, data_.positions);
 
-			datas_.bends.push_back({ p1,p2,p3,p4, theta0, 0.0f, glm::vec2(0.0f, 0.0f) });
-		}
-	}
+	//		datas_.bends.push_back({ p1,p2,p3,p4, theta0, 0.0f, glm::vec2(0.0f, 0.0f) });
+	//	}
+	//}
+	BuildBendConstraintsFromTriangles();
 	bend_size_ = static_cast<uint32_t>(datas_.bends.size());
 
 	// Set shears
@@ -1583,4 +1584,127 @@ void GpuSim::CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLa
 		pipelines_.cloth_point = vk::raii::Pipeline(context.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 	}
 
+}
+
+float GpuSim::ComputeRestBendAngle(
+	uint32_t p1, uint32_t p2,
+	uint32_t p3, uint32_t p4,
+	const std::vector<glm::vec4>& pos)
+{
+	const glm::vec3& x1 = pos[p1];
+	const glm::vec3& x2 = pos[p2];
+	const glm::vec3& x3 = pos[p3];
+	const glm::vec3& x4 = pos[p4];
+
+	glm::vec3 e = x2 - x1;          // hinge vector
+	glm::vec3 n1 = glm::cross(x3 - x1, x3 - x2); // tri1 normal (p1,p2,p3)
+	glm::vec3 n2 = glm::cross(x4 - x2, x4 - x1); // tri2 normal (p2,p1,p4)
+
+	float lenE = glm::length(e);
+	float lenN1 = glm::length(n1);
+	float lenN2 = glm::length(n2);
+
+	if (lenE < 1e-8f || lenN1 < 1e-8f || lenN2 < 1e-8f)
+		return 0.0f;
+
+	n1 /= lenN1;
+	n2 /= lenN2;
+
+	float cosTheta = glm::clamp(glm::dot(n1, n2), -1.0f, 1.0f);
+	float theta = std::acos(cosTheta);
+
+	// 부호 결정: hinge 방향 기준으로 양/음
+	glm::vec3 signRef = glm::cross(n1, n2);
+	if (glm::dot(signRef, e) < 0.0f)
+		theta = -theta;
+
+	return theta; // rest angle θ0
+}
+
+void GpuSim::BuildBendConstraintsFromTriangles()
+{
+	datas_.bends.clear();
+
+	const auto& indices = datas_.indices;
+	const auto& positions = datas_.positions;
+
+	const size_t numTris = indices.size() / 3;
+
+	std::unordered_map<EdgeKey, std::pair<TriRef, TriRef>, EdgeKeyHash> edgeMap;
+	edgeMap.reserve(numTris * 3);
+
+	auto make_edge = [](uint32_t i, uint32_t j) {
+		EdgeKey k;
+		if (i < j) { k.a = i; k.b = j; }
+		else { k.a = j; k.b = i; }
+		return k;
+		};
+
+	// 1) 삼각형 순회하면서 edgeMap 채우기
+	for (uint32_t t = 0; t < numTris; ++t)
+	{
+		uint32_t i0 = indices[3 * t + 0];
+		uint32_t i1 = indices[3 * t + 1];
+		uint32_t i2 = indices[3 * t + 2];
+
+		// tri edges: (i0,i1), (i1,i2), (i2,i0)
+		EdgeKey e01 = make_edge(i0, i1);
+		EdgeKey e12 = make_edge(i1, i2);
+		EdgeKey e20 = make_edge(i2, i0);
+
+		TriRef r0{ t, i2 }; // edge(i0,i1)의 반대점은 i2
+		TriRef r1{ t, i0 }; // edge(i1,i2)의 반대점은 i0
+		TriRef r2{ t, i1 }; // edge(i2,i0)의 반대점은 i1
+
+		auto insert_ref = [&](const EdgeKey& e, const TriRef& r)
+			{
+				auto it = edgeMap.find(e);
+				if (it == edgeMap.end())
+				{
+					edgeMap.emplace(e, std::make_pair(r, TriRef{ UINT32_MAX, UINT32_MAX }));
+				}
+				else
+				{
+					// second가 비어있으면 채우고, 이미 둘 다 차 있으면 무시(비매니폴드)
+					if (it->second.second.triIndex == UINT32_MAX)
+						it->second.second = r;
+				}
+			};
+
+		insert_ref(e01, r0);
+		insert_ref(e12, r1);
+		insert_ref(e20, r2);
+	}
+
+	// 2) edgeMap에서 tri 두 개 공유하는 edge만 bending으로 생성
+	datas_.bends.reserve(edgeMap.size());
+
+	for (const auto& kv : edgeMap)
+	{
+		const EdgeKey& e = kv.first;
+		const TriRef& t0 = kv.second.first;
+		const TriRef& t1 = kv.second.second;
+
+		if (t1.triIndex == UINT32_MAX)
+			continue; // 경계 edge: 삼각형 하나만 붙어있음 → bending 없음
+
+		uint32_t p1 = e.a;         // hinge start
+		uint32_t p2 = e.b;         // hinge end
+		uint32_t p3 = t0.oppVertex;// tri0 opposite
+		uint32_t p4 = t1.oppVertex;// tri1 opposite
+
+		float restAngle = ComputeRestBendAngle(p1, p2, p3, p4, positions);
+
+		Data::Bend bc;
+		bc.i0 = p1;
+		bc.i1 = p2;
+		bc.i2 = p3;
+		bc.i3 = p4;
+		bc.rest_angle = restAngle;
+		bc.lambda = 0.0f;
+
+		datas_.bends.push_back(bc);
+	}
+
+	bend_size_ = static_cast<uint32_t>(datas_.bends.size());
 }

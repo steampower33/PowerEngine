@@ -38,20 +38,20 @@ public:
 
 	uint32_t timestamp_count_ = 12;
 
-	const uint32_t nx_ = 64;
-	const uint32_t ny_ = 64;
+	const uint32_t nx_ = 100;
+	const uint32_t ny_ = 100;
 
-	glm::vec2 cloth_size_{ 2.0f, 2.0f };
+	glm::vec2 cloth_size_{ 4.0f, 4.0f };
 	float spacing_x_ = cloth_size_.x / nx_;
 	float spacing_y_ = cloth_size_.y / ny_;
-	float cloth_height_ = 4.0f;
-	float mass_ = 1.0f;
+	float cloth_height_ = 6.0f;
+	float mass_ = 0.1f;
 
 	struct Compliance {
-		float stretch = 1e-5f;
-		float diagonal = 1e-5f;
-		float shear = 1.0e-8f;
-		float bend = 1e-3f;
+		float stretch = 1e-7f;
+		float diagonal = 1e-7f;
+		float shear = 1.0e-6f;
+		float bend = 1.0f;
 	} compliance_;
 
 	uint32_t particles_size_ = nx_ * ny_;
@@ -60,8 +60,8 @@ public:
 	uint32_t shear_size_ = 0;
 	uint32_t bend_size_ = 0;
 
-	float deviding_dt_ = 120.0f;
-	int iterations_ = 10;
+	float deviding_dt_ = 240.0f;
+	int iterations_ = 20;
 
 	vku::Counts counts_;
 	vk::raii::DescriptorPool descriptor_pool_{ nullptr };
@@ -98,7 +98,7 @@ public:
 		static_assert(sizeof(Shear) == 32, "Shear must be 32 bytes");
 
 		struct Bend {
-			uint32_t p1, p2, p3, p4;
+			uint32_t i0, i1, i2, i3;
 			float rest_angle;
 			float lambda;
 			glm::vec2 pad;
@@ -107,7 +107,28 @@ public:
 		std::vector<Data::Bend> bends;
 	} datas_;
 
-	// |===== Push Constant =====|
+	struct EdgeKey
+	{
+		uint32_t a, b; // always a < b
+
+		bool operator==(const EdgeKey& o) const noexcept {
+			return a == o.a && b == o.b;
+		}
+	};
+
+	struct EdgeKeyHash
+	{
+		size_t operator()(const EdgeKey& k) const noexcept {
+			return (size_t(k.a) << 32) ^ size_t(k.b);
+		}
+	};
+
+	struct TriRef
+	{
+		uint32_t triIndex;
+		uint32_t oppVertex;
+	};
+
 	struct ClothPC {
 		uint32_t nx1;
 		uint32_t ny1;
@@ -123,8 +144,8 @@ public:
 			alignas(4)  float wind_strength = 1.0f;
 			alignas(4)  float sphere_radius;
 			alignas(4)  float max_speed;
-			alignas(4)  float damping = 1.0f;
-			alignas(4)  float relaxation_factor = 0.001f;
+			alignas(4)  float damping = 0.5f;
+			alignas(4)  float relaxation_factor = 0.2f;
 			alignas(4)  uint32_t num_bends;
 			alignas(4)  uint32_t num_shears;
 			alignas(4)  float collision_margin = 0.1f;
@@ -132,7 +153,7 @@ public:
 			alignas(16) glm::vec4 wind_dir = glm::vec4(0.0f, 0.0f, -1.0f, 0.0f);
 			alignas(16) glm::vec4 gravity = glm::vec4(0.0f, -9.8f, 0.0f, 0.0f);
 			alignas(4) float thickness = 0.008f;
-			alignas(4) float friction = 0.1f;
+			alignas(4) float friction = 0.001f;
 			alignas(4) float pad1;
 			alignas(4) float pad2;
 		} sim_params;
@@ -312,5 +333,10 @@ private:
 	void CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLayout& globalSetLayout,
 		std::vector<vk::Format>& formats,
 		vk::raii::DescriptorSetLayout& tex2DSetLayout);
+	float ComputeRestBendAngle(
+		uint32_t p1, uint32_t p2,
+		uint32_t p3, uint32_t p4,
+		const std::vector<glm::vec4>& pos);
+	void BuildBendConstraintsFromTriangles();
 
 };
