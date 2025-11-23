@@ -12,7 +12,7 @@ void main() {
     }
     uint c = max(delta_count[i], 1u);
     vec3 corr = vec3(delta_x[i], delta_y[i], delta_z[i]) / c;
-    xp[i].xyz += corr * sim.relaxation_factor;
+    xp[i].xyz += corr;
     
     delta_x[i]=0.0; delta_y[i]=0.0; delta_z[i]=0.0; delta_count[i]=0u;
 }

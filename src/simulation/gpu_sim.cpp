@@ -138,6 +138,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				push_constants_.solve.base = base;
 				push_constants_.solve.count = count;
 				push_constants_.solve.compliance = compliance_.stretch;
+				push_constants_.solve.beta = beta_.stretch;
 
 				cmd.pushConstants<PushConstant::Solve>(
 					*pipeline_layouts_.common,
@@ -162,6 +163,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				push_constants_.solve.base = base;
 				push_constants_.solve.count = count;
 				push_constants_.solve.compliance = compliance_.diagonal;
+				push_constants_.solve.beta = beta_.diagonal;
 				cmd.pushConstants<PushConstant::Solve>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
@@ -181,6 +183,8 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				TS(timestampSteps);
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_shear);
 				push_constants_.solve.compliance = compliance_.shear;
+				push_constants_.solve.beta = beta_.shear;
+
 				cmd.pushConstants<PushConstant::Solve>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
@@ -204,6 +208,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				push_constants_.solve.base = base;
 				push_constants_.solve.count = count;
 				push_constants_.solve.compliance = compliance_.bend;
+				push_constants_.solve.beta = beta_.bend;
 				cmd.pushConstants<PushConstant::Solve>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
@@ -331,6 +336,10 @@ void GpuSim::CopyDatas(const vk::raii::CommandBuffer& cmd)
 		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
 		vk::PipelineStageFlagBits2::eVertexShader, vk::AccessFlagBits2::eShaderStorageRead);
 
+	vku::CopyStagingToSSBO(cmd, ssbo_size_.pred_position, staging_mapped_.pred_position, datas_.pred_positions, staging_.pred_position, ssbos_.pred_position,
+		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
+		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+
 	vku::CopyStagingToSSBO(cmd, ssbo_size_.velocity, staging_mapped_.velocity, datas_.velocities, staging_.velocity, ssbos_.velocity,
 		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
 		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
@@ -343,7 +352,7 @@ void GpuSim::CopyDatas(const vk::raii::CommandBuffer& cmd)
 		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
 		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
 
-	vku::CopyStagingToSSBO(cmd, ssbo_size_.pred_position, staging_mapped_.pred_position, datas_.pred_positions, staging_.pred_position, ssbos_.pred_position,
+	vku::CopyStagingToSSBO(cmd, ssbo_size_.shear, staging_mapped_.shear, datas_.shears, staging_.shear, ssbos_.shear,
 		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
 		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
 
@@ -379,85 +388,10 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0.0f);
 				datas_.pred_positions[id] = datas_.positions[id];
-				datas_.inverse_masses[id] = 1.0f / mass_;
 			}
 		}
 
-		uint32_t idx = 0;
-		for (int p = 0; p < 5; ++p) {
-			for (auto [i, j] : datas_.passes[p]) {
-				glm::vec3 pi = glm::vec3(datas_.positions[i]);
-				glm::vec3 pj = glm::vec3(datas_.positions[j]);
-				float rest = glm::length(pj - pi);
-				datas_.edges[idx].rest = rest;
-				datas_.edges[idx].lambda = 0.0f;
-				idx++;
-			}
-		}
-
-		//// Total area
-		//float totalArea = 0.0f;
-		//for (size_t t = 0; t < datas_.indices.size(); t += 3) {
-		//	uint32_t i0 = datas_.indices[t + 0];
-		//	uint32_t i1 = datas_.indices[t + 1];
-		//	uint32_t i2 = datas_.indices[t + 2];
-
-		//	glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
-		//	glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
-		//	glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
-
-		//	glm::vec3 e1 = p1 - p0;
-		//	glm::vec3 e2 = p2 - p0;
-
-		//	float area = 0.5f * glm::length(glm::cross(e1, e2)); // Triangle area
-		//	totalArea += area;
-		//}
-
-		//float totalMassTarget = mass_;
-
-		//// Area zero defence
-		//float density = 0.0f;
-		//if (totalArea > 0.0f) {
-		//	density = totalMassTarget / totalArea; // kg/m©÷
-		//}
-
-		//// Distribute mass to each triangle in proportion to area
-		//for (size_t t = 0; t < datas_.indices.size(); t += 3) {
-		//	uint32_t i0 = datas_.indices[t + 0];
-		//	uint32_t i1 = datas_.indices[t + 1];
-		//	uint32_t i2 = datas_.indices[t + 2];
-
-		//	glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
-		//	glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
-		//	glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
-
-		//	glm::vec3 e1 = p1 - p0;
-		//	glm::vec3 e2 = p2 - p0;
-
-		//	float area = 0.5f * glm::length(glm::cross(e1, e2));
-
-		//	float triMass = density * area;
-
-		//	float share = triMass / 3.0f;
-		//	datas_.masses[i0] += share;
-		//	datas_.masses[i1] += share;
-		//	datas_.masses[i2] += share;
-		//}
-
-		//// Set inverse masses using mass
-		//for (uint32_t i = 0; i < N; ++i) {
-		//	float m = datas_.masses[i];
-		//	if (m > 0.0f)
-		//		datas_.inverse_masses[i] = 1.0f / m;
-		//	else
-		//		datas_.inverse_masses[i] = 0.0f;
-		//}
-
-		for (int i = 0; i < bend_size_; i++)
-		{
-			datas_.bends[i].lambda = 0.0f;
-		}
-
+		ResetConstraints();
 		CopyDatas(cmd);
 	}
 	else if (testScene.pinnedCorner)
@@ -482,89 +416,15 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0.0f);
 				datas_.pred_positions[id] = datas_.positions[id];
-				datas_.inverse_masses[id] = 1.0f / mass_;
 			}
 		}
 
-		uint32_t idx = 0;
-		for (int p = 0; p < 5; ++p) {
-			for (auto [i, j] : datas_.passes[p]) {
-				glm::vec3 pi = glm::vec3(datas_.positions[i]);
-				glm::vec3 pj = glm::vec3(datas_.positions[j]);
-				float rest = glm::length(pj - pi);
-				datas_.edges[idx].rest = rest;
-				datas_.edges[idx].lambda = 0.0f;
-				idx++;
-			}
-		}
-
-		//// Total area
-		//float totalArea = 0.0f;
-		//for (size_t t = 0; t < datas_.indices.size(); t += 3) {
-		//	uint32_t i0 = datas_.indices[t + 0];
-		//	uint32_t i1 = datas_.indices[t + 1];
-		//	uint32_t i2 = datas_.indices[t + 2];
-
-		//	glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
-		//	glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
-		//	glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
-
-		//	glm::vec3 e1 = p1 - p0;
-		//	glm::vec3 e2 = p2 - p0;
-
-		//	float area = 0.5f * glm::length(glm::cross(e1, e2)); // Triangle area
-		//	totalArea += area;
-		//}
-
-		//float totalMassTarget = mass_;
-
-		//// Area zero defence
-		//float density = 0.0f;
-		//if (totalArea > 0.0f) {
-		//	density = totalMassTarget / totalArea; // kg/m©÷
-		//}
-
-		//// Distribute mass to each triangle in proportion to area
-		//for (size_t t = 0; t < datas_.indices.size(); t += 3) {
-		//	uint32_t i0 = datas_.indices[t + 0];
-		//	uint32_t i1 = datas_.indices[t + 1];
-		//	uint32_t i2 = datas_.indices[t + 2];
-
-		//	glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
-		//	glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
-		//	glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
-
-		//	glm::vec3 e1 = p1 - p0;
-		//	glm::vec3 e2 = p2 - p0;
-
-		//	float area = 0.5f * glm::length(glm::cross(e1, e2));
-
-		//	float triMass = density * area;
-
-		//	float share = triMass / 3.0f;
-		//	datas_.masses[i0] += share;
-		//	datas_.masses[i1] += share;
-		//	datas_.masses[i2] += share;
-		//}
-
-		//// Set inverse masses using mass
-		//for (uint32_t i = 0; i < N; ++i) {
-		//	float m = datas_.masses[i];
-		//	if (m > 0.0f)
-		//		datas_.inverse_masses[i] = 1.0f / m;
-		//	else
-		//		datas_.inverse_masses[i] = 0.0f;
-		//}
+		ResetConstraints();
 
 		datas_.inverse_masses[0] = 0.0f;
 		datas_.inverse_masses[nx1 - 1] = 0.0f;
-		datas_.inverse_masses[(ny1 - 1) * nx1] = 0.0f;
-		datas_.inverse_masses[(ny1 - 1) * nx1 + nx1 - 1] = 0.0f;
-
-		for (int i = 0; i < bend_size_; i++)
-		{
-			datas_.bends[i].lambda = 0.0f;
-		}
+		datas_.inverse_masses[nx1 * (ny1 - 1)] = 0.0f;
+		datas_.inverse_masses[nx1 * (ny1 - 1) + nx1 - 1] = 0.0f;
 
 		CopyDatas(cmd);
 	}
@@ -590,92 +450,13 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0.0f);
 				datas_.pred_positions[id] = datas_.positions[id];
-				datas_.inverse_masses[id] = 1.0f / mass_;
 			}
 		}
 
-		uint32_t idx = 0;
-		for (int p = 0; p < 5; ++p) {
-			for (auto [i, j] : datas_.passes[p]) {
-				glm::vec3 pi = glm::vec3(datas_.positions[i]);
-				glm::vec3 pj = glm::vec3(datas_.positions[j]);
-				float rest = glm::length(pj - pi);
-				datas_.edges[idx].rest = rest;
-				datas_.edges[idx].lambda = 0.0f;
-				idx++;
-			}
-		}
+		ResetConstraints();
 
-		//// Total area
-		//float totalArea = 0.0f;
-		//for (size_t t = 0; t < datas_.indices.size(); t += 3) {
-		//	uint32_t i0 = datas_.indices[t + 0];
-		//	uint32_t i1 = datas_.indices[t + 1];
-		//	uint32_t i2 = datas_.indices[t + 2];
-
-		//	glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
-		//	glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
-		//	glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
-
-		//	glm::vec3 e1 = p1 - p0;
-		//	glm::vec3 e2 = p2 - p0;
-
-		//	float area = 0.5f * glm::length(glm::cross(e1, e2)); // Triangle area
-		//	totalArea += area;
-		//}
-
-		//float totalMassTarget = mass_;
-
-		//// Area zero defence
-		//float density = 0.0f;
-		//if (totalArea > 0.0f) {
-		//	density = totalMassTarget / totalArea; // kg/m©÷
-		//}
-
-		//// Distribute mass to each triangle in proportion to area
-		//for (size_t t = 0; t < datas_.indices.size(); t += 3) {
-		//	uint32_t i0 = datas_.indices[t + 0];
-		//	uint32_t i1 = datas_.indices[t + 1];
-		//	uint32_t i2 = datas_.indices[t + 2];
-
-		//	glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
-		//	glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
-		//	glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
-
-		//	glm::vec3 e1 = p1 - p0;
-		//	glm::vec3 e2 = p2 - p0;
-
-		//	float area = 0.5f * glm::length(glm::cross(e1, e2));
-
-		//	float triMass = density * area;
-
-		//	float share = triMass / 3.0f;
-		//	datas_.masses[i0] += share;
-		//	datas_.masses[i1] += share;
-		//	datas_.masses[i2] += share;
-		//}
-
-		//// Set inverse masses using mass
-		//for (uint32_t i = 0; i < N; ++i) {
-		//	float m = datas_.masses[i];
-		//	if (m > 0.0f)
-		//		datas_.inverse_masses[i] = 1.0f / m;
-		//	else
-		//		datas_.inverse_masses[i] = 0.0f;
-		//}
-
-		//uint32_t tap = (ny1 - 1) / 10;
-		//for (uint32_t i = 0; i < ny1; i += tap)
-		//{
-		//	datas_.inverse_masses[i] = 0.0f;
-		//}
 		datas_.inverse_masses[0] = 0.0f;
 		datas_.inverse_masses[nx1 - 1] = 0.0f;
-
-		for (int i = 0; i < bend_size_; i++)
-		{
-			datas_.bends[i].lambda = 0.0f;
-		}
 
 		CopyDatas(cmd);
 	}
@@ -856,7 +637,6 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 			datas_.positions[id] = { px, py, pz, 0.0f };
 			datas_.velocities[id] = glm::vec4(0);
 			datas_.pred_positions[id] = datas_.positions[id];
-			//datas_.inverse_masses[id] = 1.0f / mass_;
 		}
 	}
 
@@ -970,20 +750,12 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 			glm::vec3 pi = glm::vec3(datas_.positions[i]);
 			glm::vec3 pj = glm::vec3(datas_.positions[j]);
 			float rest = glm::length(pj - pi);
+
 			datas_.edges.push_back({ i, j, rest, 0.0f });
 		}
 		datas_.pass_offsets[p + 1] = static_cast<uint32_t>(datas_.edges.size());
 	}
 
-	uint32_t idx = 0;
-	for (int p = 0; p < 5; ++p) {
-		for (auto [i, j] : datas_.passes[p]) {
-			glm::vec3 pi = glm::vec3(datas_.positions[i]);
-			glm::vec3 pj = glm::vec3(datas_.positions[j]);
-			float rest = glm::length(pj - pi);
-			datas_.edges[idx++] = { i, j, rest, 0.0f };
-		}
-	}
 	edge_size_ = static_cast<uint32_t>(datas_.edges.size());
 	if (edge_size_ != ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)) + (nx_ * ny_) * 2)
 	{
@@ -996,8 +768,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	// Set shears
 	const size_t numTris = datas_.indices.size() / 3;
-	std::vector<Data::Shear> shears;
-	shears.reserve(numTris);
+	datas_.shears.reserve(numTris);
 
 	for (size_t t = 0; t < numTris; ++t)
 	{
@@ -1021,9 +792,9 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		c.rest_dot = restDot;
 		c.lambda = 0.0f;
 
-		shears.push_back(c);
+		datas_.shears.push_back(c);
 	}
-	shear_size_ = static_cast<uint32_t>(shears.size());
+	shear_size_ = static_cast<uint32_t>(datas_.shears.size());
 
 	// position
 	ssbo_size_.position = sizeof(glm::vec4) * N;
@@ -1153,10 +924,12 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		ssbo_size_.shear,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-		shears,
+		datas_.shears,
 		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
 		vk::MemoryPropertyFlagBits::eDeviceLocal,
-		ssbos_.shear, ssbo_memories_.shear);
+		ssbos_.shear, ssbo_memories_.shear,
+		&staging_.shear, &staging_memories_.shear);
+	staging_mapped_.shear = staging_memories_.shear.mapMemory(0, ssbo_size_.shear);
 
 	// grab_counter
 	struct GrabState {
@@ -1636,22 +1409,22 @@ void GpuSim::CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLa
 }
 
 float GpuSim::ComputeRestBendAngle(
-	uint32_t p1, uint32_t p2,
-	uint32_t p3, uint32_t p4,
+	uint32_t i1, uint32_t i2,
+	uint32_t i3, uint32_t i4,
 	const std::vector<glm::vec4>& pos)
 {
-	glm::vec3 P1 = glm::vec3(pos[p1]);
-	glm::vec3 P2 = glm::vec3(pos[p2]);
-	glm::vec3 P3 = glm::vec3(pos[p3]);
-	glm::vec3 P4 = glm::vec3(pos[p4]);
+	glm::vec3 p1 = glm::vec3(pos[i1]);
+	glm::vec3 p2 = glm::vec3(pos[i2]);
+	glm::vec3 p3 = glm::vec3(pos[i3]);
+	glm::vec3 p4 = glm::vec3(pos[i4]);
 
-	glm::vec3 e = P2 - P1;
+	glm::vec3 e = p2 - p1;
 	float el = glm::length(e);
 	if (el < 1e-8f) return 0.0f;
 	glm::vec3 ehat = e / el;
 
-	glm::vec3 n1 = glm::normalize(glm::cross(P2 - P1, P3 - P1));
-	glm::vec3 n2 = glm::normalize(glm::cross(P2 - P1, P4 - P1));
+	glm::vec3 n1 = glm::normalize(glm::cross(p2 - p1, p3 - p1));
+	glm::vec3 n2 = glm::normalize(glm::cross(p2 - p1, p4 - p1));
 
 	float c = glm::clamp(glm::dot(n1, n2), -1.0f, 1.0f);
 	glm::vec3 cross_n1n2 = glm::cross(n1, n2);
@@ -1726,18 +1499,18 @@ void GpuSim::BuildBendConstraintsFromTriangles()
 		if (t1.triIndex == UINT32_MAX)
 			continue;
 
-		uint32_t p1 = e.a;         // hinge start
-		uint32_t p2 = e.b;         // hinge end
-		uint32_t p3 = t0.oppVertex;// tri0 opposite
-		uint32_t p4 = t1.oppVertex;// tri1 opposite
+		uint32_t i1 = e.a;         // hinge start
+		uint32_t i2 = e.b;         // hinge end
+		uint32_t i3 = t0.oppVertex;// tri0 opposite
+		uint32_t i4 = t1.oppVertex;// tri1 opposite
 
-		float restAngle = ComputeRestBendAngle(p1, p2, p3, p4, positions);
+		float restAngle = ComputeRestBendAngle(i1, i2, i3, i4, positions);
 
 		Data::Bend bc;
-		bc.i0 = p1;
-		bc.i1 = p2;
-		bc.i2 = p3;
-		bc.i3 = p4;
+		bc.i0 = i1;
+		bc.i1 = i2;
+		bc.i2 = i3;
+		bc.i3 = i4;
 		bc.rest_angle = restAngle;
 		bc.lambda = 0.0f;
 
@@ -1745,4 +1518,102 @@ void GpuSim::BuildBendConstraintsFromTriangles()
 	}
 
 	bend_size_ = static_cast<uint32_t>(datas_.bends.size());
+}
+
+void GpuSim::ResetConstraints()
+{
+	// Edge - Stretch, Diagonal
+	{
+		uint32_t idx = 0;
+		for (int p = 0; p < 5; ++p) {
+			for (auto [i, j] : datas_.passes[p]) {
+				glm::vec3 pi = glm::vec3(datas_.positions[i]);
+				glm::vec3 pj = glm::vec3(datas_.positions[j]);
+				float rest = glm::length(pj - pi);
+				datas_.edges[idx].rest = rest;
+				datas_.edges[idx].lambda = 0.0f;
+				idx++;
+			}
+		}
+	}
+
+	// Shear
+	{
+		for (int i = 0; i < shear_size_; i++)
+		{
+			datas_.shears[i].lambda = 0.0f;
+		}
+
+	}
+
+	// Bend
+	{
+		for (int i = 0; i < bend_size_; i++)
+		{
+			datas_.bends[i].lambda = 0.0f;
+		}
+	}
+
+	// mass
+	{
+
+		// Total area
+		float totalArea = 0.0f;
+		for (size_t t = 0; t < indices_size_; t += 3) {
+			uint32_t i0 = datas_.indices[t + 0];
+			uint32_t i1 = datas_.indices[t + 1];
+			uint32_t i2 = datas_.indices[t + 2];
+
+			glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
+			glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
+			glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
+
+			glm::vec3 e1 = p1 - p0;
+			glm::vec3 e2 = p2 - p0;
+
+			float area = 0.5f * glm::length(glm::cross(e1, e2)); // Triangle area
+			totalArea += area;
+		}
+
+		float totalMassTarget = mass_ * particles_size_;
+
+		// Area zero defence
+		float density = 0.0f;
+		if (totalArea > 0.0f) {
+			density = totalMassTarget / totalArea; // kg/m©÷
+		}
+
+		// Distribute mass to each triangle in proportion to area
+		for (size_t t = 0; t < indices_size_; t += 3) {
+			uint32_t i0 = datas_.indices[t + 0];
+			uint32_t i1 = datas_.indices[t + 1];
+			uint32_t i2 = datas_.indices[t + 2];
+
+			glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
+			glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
+			glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
+
+			glm::vec3 e1 = p1 - p0;
+			glm::vec3 e2 = p2 - p0;
+
+			float area = 0.5f * glm::length(glm::cross(e1, e2));
+
+			float triMass = density * area;
+
+			float share = triMass / 3.0f;
+			datas_.masses[i0] += share;
+			datas_.masses[i1] += share;
+			datas_.masses[i2] += share;
+		}
+
+		// Set inverse masses using mass
+		for (uint32_t i = 0; i < particles_size_; ++i) {
+			float m = datas_.masses[i];
+			if (m > 0.0f)
+				datas_.inverse_masses[i] = 1.0f / m;
+			else
+				datas_.inverse_masses[i] = 0.0f;
+		}
+	}
+
 }

@@ -5,7 +5,7 @@ struct Solve {
     uint base;
     uint count;
     float compliance;
-    float p0;
+    float beta;
 };
 
 struct MouseInteract {
@@ -22,25 +22,25 @@ layout(push_constant) uniform PushConstant {
 
 
 layout(std140, set = 0, binding = 0) uniform SimParams {
-    float dt;
     uint   num_particles;
     uint   num_edges;
-    int   wind_test;
-    float wind_strength;
+    uint   num_shears;
+    uint   num_bends;
+    vec4  gravity;
+    float dt;
+    float p0;
     float sphere_radius;
     float max_speed;
-    float damping;
-    float relaxation_factor;
-    uint   num_bends;
-    uint   num_shears;
-    float collision_margin;
-    vec4  sphere_center;
     vec4  wind_dir;
-    vec4  gravity;
+    int   wind_test;
+    float wind_strength;
+    float collision_margin;
     float thickness;
+    vec4  sphere_center;
     float friction;
-    float pad1;
-    float pad2;
+    float air_damping;
+    float p1;
+    float p2;
 } sim;
 
 layout(std430, set = 1, binding = 0) buffer X { vec4 x[]; };
@@ -64,15 +64,18 @@ struct Shear {
     uint i0, i1, i2;
     float rest_dot;
     float lambda;
-    float p0, p1, p2;
+    float p0;
+    float p1;
+    float p2;
 };
 layout(std430, set = 1, binding = 9) buffer Shears { Shear  shears[]; };
 
 struct Bend {
-    uint p1, p2, p3, p4;
+    uint i1, i2, i3, i4;
     float rest_angle;
     float lambda;
-    vec2 pad;
+    float p0;
+    float p1;
 };
 layout(std430, set = 1, binding = 10) buffer Bends { Bend  bends[]; };
 

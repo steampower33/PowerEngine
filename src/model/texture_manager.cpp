@@ -9,7 +9,7 @@ TextureManager::TextureManager(Context& context)
     : context_(context)
 {
     //ConvertFileToKtx("assets/Metal");
-    //ConvertFileToKtx("assets/lut");
+    ConvertFileToKtx("assets/lut");
     //ConvertFileToKtx("assets/Fabric");
     //ConvertFileToKtx("assets/curtain");
 

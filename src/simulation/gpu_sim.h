@@ -50,11 +50,18 @@ public:
 	float mass_ = 1.0f;
 
 	struct Compliance {
-		float stretch = 1e-7f;
-		float diagonal = 5.0e-6f;
-		float shear = 5.0e-6f;
-		float bend = 0.1f;
+		float stretch = 5e-7f;
+		float diagonal = 3e-6f;
+		float shear = 4e-7f;
+		float bend = 0.5f;
 	} compliance_;
+
+	struct Beta {
+		float stretch = 50.0f;
+		float diagonal= 350.0f;
+		float shear = 40.0f;
+		float bend = 500.0f;
+	} beta_;
 
 	uint32_t particles_size_ = nx_ * ny_;
 	uint32_t indices_size_ = 0;
@@ -86,8 +93,7 @@ public:
 			float    rest;
 			float    lambda;
 		};
-		static_assert(sizeof(Edge) == 16, "Edge must be 16 bytes");
-
+		static_assert(sizeof(Edge) == 16, "Edge must be 32 bytes");
 		std::vector<Edge> edges;
 		std::array<uint32_t, 6> pass_offsets;
 		std::vector<std::pair<uint32_t, uint32_t>> passes[6];
@@ -95,16 +101,21 @@ public:
 		struct Shear {
 			uint32_t i0, i1, i2;
 			float rest_dot;
+
 			float lambda;
-			float p0, p1, p2;
+			float p0;
+			float p1;
+			float p2;
 		};
 		static_assert(sizeof(Shear) == 32, "Shear must be 32 bytes");
+		std::vector<Data::Shear> shears;
 
 		struct Bend {
 			uint32_t i0, i1, i2, i3;
 			float rest_angle;
 			float lambda;
-			glm::vec2 pad;
+			float p0;
+			float p1;
 		};
 		static_assert(sizeof(Bend) == 32, "Bend must be 32 bytes");
 		std::vector<Data::Bend> bends;
@@ -134,25 +145,25 @@ public:
 
 	struct UBOData {
 		struct SimParams {
-			alignas(4)  float dt = 0.0f;
 			alignas(4)  uint32_t num_particles;
 			alignas(4)  uint32_t num_edges;
-			alignas(4)  int windTest = 0;
-			alignas(4)  float wind_strength = 1.0f;
+			alignas(4)  uint32_t num_shears;
+			alignas(4)  uint32_t num_bends;
+			alignas(16) glm::vec4 gravity = glm::vec4(0.0f, -9.8f, 0.0f, 0.0f);
+			alignas(4)  float dt = 0.0f;
+			alignas(4)  float p0;
 			alignas(4)  float sphere_radius;
 			alignas(4)  float max_speed;
-			alignas(4)  float damping = 5.0f;
-			alignas(4)  float relaxation_factor = 1.0f;
-			alignas(4)  uint32_t num_bends;
-			alignas(4)  uint32_t num_shears;
-			alignas(4)  float collision_margin = 0.1f;
-			alignas(16) glm::vec4 sphere_center;
 			alignas(16) glm::vec4 wind_dir = glm::vec4(0.0f, 0.0f, -1.0f, 0.0f);
-			alignas(16) glm::vec4 gravity = glm::vec4(0.0f, -9.8f, 0.0f, 0.0f);
+			alignas(4)  int windTest = 0;
+			alignas(4)  float wind_strength = 1.0f;
+			alignas(4)  float collision_margin = 0.1f;
 			alignas(4) float thickness = 0.05f;
+			alignas(16) glm::vec4 sphere_center;
 			alignas(4) float friction = 0.1f;
-			alignas(4) float pad1;
-			alignas(4) float pad2;
+			alignas(4) float air_damping = 1.0f;
+			alignas(4) float p1;
+			alignas(4) float p2;
 		} sim_params;
 		static_assert(sizeof(UBOData::SimParams) % 16 == 0, "std140 must be 16-byte aligned.");
 
@@ -193,7 +204,7 @@ public:
 			uint32_t base;
 			uint32_t count;
 			float compliance;
-			float p0;
+			float beta;
 		} solve;
 		static_assert(sizeof(Solve) % 4 == 0, "push constant must be multiple of 4 bytes");
 
@@ -320,6 +331,7 @@ public:
 		vk::raii::Buffer velocity{ nullptr };
 		vk::raii::Buffer inverse_mass{ nullptr };
 		vk::raii::Buffer edge{ nullptr };
+		vk::raii::Buffer shear{ nullptr };
 		vk::raii::Buffer bend{ nullptr };
 	} staging_;
 
@@ -329,6 +341,7 @@ public:
 		vk::raii::DeviceMemory velocity{ nullptr };
 		vk::raii::DeviceMemory inverse_mass{ nullptr };
 		vk::raii::DeviceMemory edge{ nullptr };
+		vk::raii::DeviceMemory shear{ nullptr };
 		vk::raii::DeviceMemory bend{ nullptr };
 	} staging_memories_;
 
@@ -338,6 +351,7 @@ public:
 		void* velocity{ nullptr };
 		void* inverse_mass{ nullptr };
 		void* edge{ nullptr };
+		void* shear{ nullptr };
 		void* bend{ nullptr };
 	} staging_mapped_;
 
@@ -357,5 +371,6 @@ private:
 		uint32_t p3, uint32_t p4,
 		const std::vector<glm::vec4>& pos);
 	void BuildBendConstraintsFromTriangles();
+	void ResetConstraints();
 
 };

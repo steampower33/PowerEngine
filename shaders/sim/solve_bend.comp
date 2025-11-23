@@ -16,45 +16,78 @@ void main(){
     if (cidx >= sim.num_bends) return;
 
     Bend bc = bends[cidx];
-    uint i1 = bc.p1, i2 = bc.p2, i3 = bc.p3, i4 = bc.p4;
+    uint i1 = bc.i1, i2 = bc.i2, i3 = bc.i3, i4 = bc.i4;
     float rest = bc.rest_angle;
     float lam  = bc.lambda;
 
     float w1 = w[i1], w2 = w[i2], w3 = w[i3], w4 = w[i4];
-    if (w1 + w2 + w3 + w4 == 0.0) { bends[cidx].lambda = 0.0; return; }
+    if (w1 + w2 + w3 + w4 == 0.0) {
+        bends[cidx].lambda = 0.0;
+        return;
+    }
 
-    vec3 P1 = xp[i1].xyz;
-    vec3 P2 = xp[i2].xyz;
-    vec3 P3 = xp[i3].xyz;
-    vec3 P4 = xp[i4].xyz;
+    vec3 p1 = xp[i1].xyz;
+    vec3 p2 = xp[i2].xyz;
+    vec3 p3 = xp[i3].xyz;
+    vec3 p4 = xp[i4].xyz;
 
-    vec3 e   = P2 - P1;
+    vec3 p1_prev = x[i1].xyz;
+    vec3 p2_prev = x[i2].xyz;
+    vec3 p3_prev = x[i3].xyz;
+    vec3 p4_prev = x[i4].xyz;
+
+    vec3 e   = p2 - p1;
     float el = safeLen(e);
     vec3 ehat = e / el;
 
-    vec3 n1 = normalize(cross(P2 - P1, P3 - P1));
-    vec3 n2 = normalize(cross(P2 - P1, P4 - P1));
+    vec3 n1 = normalize(cross(p2 - p1, p3 - p1));
+    vec3 n2 = normalize(cross(p2 - p1, p4 - p1));
 
     float c = clamp(dot(n1, n2), -1.0, 1.0);
     float s = dot(ehat, cross(n1, n2));
     float phi = atan(s, c);
 
-    float A1 = safeLen(cross(P2 - P1, P3 - P1));
-    float A2 = safeLen(cross(P2 - P1, P4 - P1));
+    float C = phi - rest;
 
-    vec3 q3 = (cross(P2 - P1, n2) + cross(n1, P2 - P1) * c) / A1;
-    vec3 q4 = (cross(P2 - P1, n1) + cross(n2, P2 - P1) * c) / A2;
-    vec3 q2 = -(cross(P3 - P1, n2) + cross(n1, P3 - P1) * c) / A1
-              -(cross(P4 - P1, n1) + cross(n2, P4 - P1) * c) / A2;
+    float A1 = safeLen(cross(p2 - p1, p3 - p1));
+    float A2 = safeLen(cross(p2 - p1, p4 - p1));
+
+    vec3 q3 = (cross(p2 - p1, n2) + cross(n1, p2 - p1) * c) / A1;
+    vec3 q4 = (cross(p2 - p1, n1) + cross(n2, p2 - p1) * c) / A2;
+    vec3 q2 = -(cross(p3 - p1, n2) + cross(n1, p3 - p1) * c) / A1
+              -(cross(p4 - p1, n1) + cross(n2, p4 - p1) * c) / A2;
     vec3 q1 = -q2 - q3 - q4;
 
-    float alpha = pc.solve.compliance / (sim.dt * sim.dt);
+    float dt = sim.dt;
 
-    float denom = alpha
-        + w1*dot(q1,q1) + w2*dot(q2,q2) + w3*dot(q3,q3) + w4*dot(q4,q4);
+    float alpha_tilde = pc.solve.compliance / (dt * dt);
+
+    float beta       = pc.solve.beta;
+    float beta_tilde = dt * dt * beta;
+    float gamma      = (alpha_tilde * beta_tilde) / dt;
+
+    float wsum_grad =
+        w1 * dot(q1, q1) +
+        w2 * dot(q2, q2) +
+        w3 * dot(q3, q3) +
+        w4 * dot(q4, q4);
+
+    float denom = (1.0 + gamma) * wsum_grad + alpha_tilde;
     if (denom < 1e-8) denom = 1e-8;
 
-    float dlambda = (-(phi - rest) - alpha * lam) / denom;
+    vec3 dp1 = p1 - p1_prev;
+    vec3 dp2 = p2 - p2_prev;
+    vec3 dp3 = p3 - p3_prev;
+    vec3 dp4 = p4 - p4_prev;
+
+    float rel =
+        dot(q1, dp1) +
+        dot(q2, dp2) +
+        dot(q3, dp3) +
+        dot(q4, dp4);
+
+    float rhs = C + alpha_tilde * lam + gamma * rel;
+    float dlambda = -rhs / denom;
 
     float newLam = lam + dlambda;
     if (!isFinite_f(newLam)) newLam = 0.0;

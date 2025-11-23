@@ -664,7 +664,7 @@ void GraphicsContext::CreateCommandBuffers()
 void GraphicsContext::CreateQueryPool() {
 	vk::QueryPoolCreateInfo queryInfo = {};
 	queryInfo.queryType = vk::QueryType::eTimestamp;
-	queryInfo.queryCount = 1024;
+	queryInfo.queryCount = 4096;
 
 	timestamp_pool_ = context_.device_.createQueryPool(queryInfo);
 }
