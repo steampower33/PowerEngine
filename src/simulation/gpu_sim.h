@@ -201,7 +201,7 @@ public:
 			glm::vec3 ray_origin;
 			uint32_t select_mode; // 0: none, 1: select, 2: drag
 			glm::vec3 ray_dir;
-			float radius;
+			float radius = 0.1f;
 		} mouse_interact;
 		static_assert(sizeof(MouseInteract) % 4 == 0, "push constant must be multiple of 4 bytes");
 

@@ -10,7 +10,7 @@ struct Solve {
 
 struct MouseInteract {
     vec3 ray_origin;
-    uint select_mode; // 1: none, 2: drag
+    uint select_mode; // 0: none, 1: select, 2: drag
     vec3 ray_dir;
     float radius;
 };
