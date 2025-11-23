@@ -1,17 +1,15 @@
 #version 460
 #include "../common/params.glsl"
 
-layout(push_constant) uniform PC { uint base; uint count; float compliance; } pc;
-
 layout(local_size_x = 256) in;
 
 bool isFinite_f(float x) { return !isnan(x) && !isinf(x); }
 
 void main() {
     uint t = gl_GlobalInvocationID.x;
-    if (t >= pc.count) return;
+    if (t >= pc.solve.count) return;
 
-    uint eidx = pc.base + t;
+    uint eidx = pc.solve.base + t;
     if (eidx >= sim.num_edges) return;
 
     uint  i      = edges[eidx].i;
@@ -33,7 +31,7 @@ void main() {
     vec3 n = d / len;
 
     float dt    = sim.dt;
-    float alpha = pc.compliance / (dt * dt);
+    float alpha = pc.solve.compliance / (dt * dt);
 
     float C = len - rest;
 

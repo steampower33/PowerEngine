@@ -6,6 +6,7 @@ class Texture;
 class TextureManager;
 class Model;
 class ModelManager;
+class MouseInteractor;
 
 #include "vulkan_utils.h"
 
@@ -28,6 +29,7 @@ public:
 
 	void UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& model);
 	void UpdateGraphicsUBO(uint32_t currentFrame);
+	void UpdateMousePushConstant(Camera& camera, MouseInteractor& mouseInteractor, glm::vec2 viewportSize);
 
 	void ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& timestampSteps, vku::TestScene& testScene);
 	void GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset, vku::PolygonMode mode,
@@ -49,9 +51,9 @@ public:
 
 	struct Compliance {
 		float stretch = 1e-7f;
-		float diagonal = 1e-7f;
-		float shear = 1.0e-6f;
-		float bend = 0.8f;
+		float diagonal = 5.0e-6f;
+		float shear = 5.0e-6f;
+		float bend = 0.1f;
 	} compliance_;
 
 	uint32_t particles_size_ = nx_ * ny_;
@@ -130,12 +132,6 @@ public:
 		uint32_t oppVertex;
 	};
 
-	struct ClothPC {
-		uint32_t nx1;
-		uint32_t ny1;
-	} cloth_pc_;
-	static_assert(sizeof(ClothPC) % 4 == 0, "push constant must be multiple of 4 bytes");
-
 	struct UBOData {
 		struct SimParams {
 			alignas(4)  float dt = 0.0f;
@@ -146,7 +142,7 @@ public:
 			alignas(4)  float sphere_radius;
 			alignas(4)  float max_speed;
 			alignas(4)  float damping = 5.0f;
-			alignas(4)  float relaxation_factor = 5.0f;
+			alignas(4)  float relaxation_factor = 1.0f;
 			alignas(4)  uint32_t num_bends;
 			alignas(4)  uint32_t num_shears;
 			alignas(4)  float collision_margin = 0.1f;
@@ -190,13 +186,32 @@ public:
 		} render;
 		static_assert(sizeof(UBOData::Render) % 16 == 0, "std140 must be 16-byte aligned.");
 
-	} ubo_data_;
+	} ubo_datas_;
 
 	struct PushConstant {
-		uint32_t base;
-		uint32_t count;
-		float compliance;
-	} pc_;
+		struct Solve {
+			uint32_t base;
+			uint32_t count;
+			float compliance;
+			float p0;
+		} solve;
+		static_assert(sizeof(Solve) % 4 == 0, "push constant must be multiple of 4 bytes");
+
+		struct MouseInteract {
+			glm::vec3 ray_origin;
+			uint32_t select_mode; // 0: none, 1: select, 2: drag
+			glm::vec3 ray_dir;
+			float radius;
+		} mouse_interact;
+		static_assert(sizeof(MouseInteract) % 4 == 0, "push constant must be multiple of 4 bytes");
+
+		struct ClothRender {
+			uint32_t nx1;
+			uint32_t ny1;
+		} cloth_render;
+		static_assert(sizeof(ClothRender) % 4 == 0, "push constant must be multiple of 4 bytes");
+
+	} push_constants_;
 
 	struct UBO {
 		vk::raii::Buffer sim_params{ nullptr };
@@ -266,6 +281,7 @@ public:
 		vk::raii::Buffer edge{ nullptr };
 		vk::raii::Buffer shear{ nullptr };
 		vk::raii::Buffer bend{ nullptr };
+		vk::raii::Buffer grab_state{ nullptr };
 	} ssbos_;
 
 	struct SSBOMemory {
@@ -280,6 +296,7 @@ public:
 		vk::raii::DeviceMemory edge{ nullptr };
 		vk::raii::DeviceMemory shear{ nullptr };
 		vk::raii::DeviceMemory bend{ nullptr };
+		vk::raii::DeviceMemory grab_state{ nullptr };
 	} ssbo_memories_;
 
 	struct SSBOSize {
@@ -294,6 +311,7 @@ public:
 		uint32_t edge = 0;
 		uint32_t shear = 0;
 		uint32_t bend = 0;
+		uint32_t grab_state = 0;
 	} ssbo_size_;
 
 	struct Staging {

@@ -5,6 +5,8 @@
 #include "model.h"
 #include "model_manager.h"
 #include "vulkan_utils.h"
+#include "ray.h"
+#include "mouse_interactor.h"
 
 #include "gpu_sim.h"
 
@@ -26,21 +28,45 @@ GpuSim::GpuSim(
 	CreateGraphicsPipelines(context, globalSetLayout, formats, tex2DSetLayout);
 }
 
+void GpuSim::UpdateMousePushConstant(Camera& camera, MouseInteractor& mouseInteractor, glm::vec2 viewportSize)
+{
+	if (mouseInteractor.is_left_button_down_event)
+	{
+		push_constants_.mouse_interact.select_mode = 1;
+
+		Ray ray = mouseInteractor.CalculateMouseRay(camera, viewportSize);
+
+		push_constants_.mouse_interact.ray_origin = ray.origin;
+		push_constants_.mouse_interact.ray_dir = ray.direction;
+
+	}
+	else if (!mouseInteractor.is_left_button_down_event && mouseInteractor.is_left_down)
+	{
+		push_constants_.mouse_interact.select_mode = 2;
+
+		Ray ray = mouseInteractor.CalculateMouseRay(camera, viewportSize);
+
+		push_constants_.mouse_interact.ray_origin = ray.origin;
+		push_constants_.mouse_interact.ray_dir = ray.direction;
+	}
+	else
+		push_constants_.mouse_interact.select_mode = 0;
+}
+
 void GpuSim::UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& model)
 {
-	ubo_data_.sim_params.dt = 1.0f / frame_dt_ / substeps_;
-	ubo_data_.sim_params.num_particles = particles_size_;
-	ubo_data_.sim_params.num_edges = edge_size_;
-	ubo_data_.sim_params.num_bends = bend_size_;
-	ubo_data_.sim_params.num_shears = shear_size_;
-	ubo_data_.sim_params.sphere_center = glm::vec4(model->position_, 0.0f);
-	ubo_data_.sim_params.sphere_radius = model->radius_;
+	ubo_datas_.sim_params.dt = 1.0f / frame_dt_ / substeps_;
+	ubo_datas_.sim_params.num_particles = particles_size_;
+	ubo_datas_.sim_params.num_edges = edge_size_;
+	ubo_datas_.sim_params.num_bends = bend_size_;
+	ubo_datas_.sim_params.num_shears = shear_size_;
+	ubo_datas_.sim_params.sphere_center = glm::vec4(model->position_, 0.0f);
+	ubo_datas_.sim_params.sphere_radius = model->radius_;
 
 	const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_size_.sim_params);
 	auto* dst = static_cast<std::byte*>(ubo_mapped_.sim_params) + baseOffset;
 
-	std::memcpy(dst, &ubo_data_.sim_params, sizeof(UBOData::SimParams));
-
+	std::memcpy(dst, &ubo_datas_.sim_params, sizeof(UBOData::SimParams));
 }
 
 void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& timestampSteps, vku::TestScene& testScene)
@@ -60,7 +86,12 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 	cmd.resetQueryPool(*timestampPool, 0, kSlotsPerIterPair);
 
 	uint32_t simparamOffset = currentFrame * static_cast<uint32_t>(ubo_size_.sim_params);
-	cmd.bindDescriptorSets(vk::PipelineBindPoint::eCompute, pipeline_layouts_.common, 0, { sets_.sim_params, sets_.cloth_compute }, { simparamOffset });
+	cmd.bindDescriptorSets(
+		vk::PipelineBindPoint::eCompute, pipeline_layouts_.common,
+		0,
+		{ sets_.sim_params, sets_.cloth_compute },
+		{ simparamOffset }
+	);
 
 	auto ceil_div = [](uint32_t n, uint32_t d) { return (n + d - 1) / d; };
 	uint32_t groupsP = ceil_div(particles_size_, 256u);
@@ -71,6 +102,11 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 		// Integrate
 		TS(timestampSteps);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.integrate);
+		cmd.pushConstants<PushConstant::MouseInteract>(
+			*pipeline_layouts_.common,
+			vk::ShaderStageFlagBits::eCompute,
+			static_cast<uint32_t>(sizeof(PushConstant::Solve)), // offset
+			push_constants_.mouse_interact);
 		cmd.dispatch(groupsP, 1, 1);
 		TS(timestampSteps);
 		vku::barrier2(cmd,
@@ -92,40 +128,43 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 		{
 			// Solve Coloring - Stretch
 			TS(timestampSteps);
-			//cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_coloring);
+			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_coloring);
 
-			//for (uint32_t c = 0; c < 4; ++c) {
-			//	uint32_t base = datas_.pass_offsets[c];
-			//	uint32_t count = datas_.pass_offsets[c + 1] - datas_.pass_offsets[c];
-			//	if (!count) continue;
+			for (uint32_t c = 0; c < 4; ++c) {
+				uint32_t base = datas_.pass_offsets[c];
+				uint32_t count = datas_.pass_offsets[c + 1] - datas_.pass_offsets[c];
+				if (!count) continue;
 
-			//	pc_.base = base;
-			//	pc_.count = count;
-			//	pc_.compliance = compliance_.stretch;
+				push_constants_.solve.base = base;
+				push_constants_.solve.count = count;
+				push_constants_.solve.compliance = compliance_.stretch;
 
-			//	cmd.pushConstants<PushConstant>(*pipeline_layouts_.common, vk::ShaderStageFlagBits::eCompute, 0u, pc_);
+				cmd.pushConstants<PushConstant::Solve>(
+					*pipeline_layouts_.common,
+					vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
 
-			//	uint32_t groups = (count + 256 - 1) / 256;
-			//	cmd.dispatch(groups, 1, 1);
-			//	vku::barrier2(cmd,
-			//		vk::PipelineStageFlagBits2::eComputeShader,
-			//		vk::AccessFlagBits2::eShaderStorageWrite,
-			//		vk::PipelineStageFlagBits2::eComputeShader,
-			//		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
-			//}
+				uint32_t groups = (count + 256 - 1) / 256;
+				cmd.dispatch(groups, 1, 1);
+				vku::barrier2(cmd,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageWrite,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+			}
 			TS(timestampSteps);
 
 			{
 				// Solve Diagonal
 				TS(timestampSteps);
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_diagonal);
-				uint32_t base = datas_.pass_offsets[0];
-				uint32_t count = datas_.pass_offsets[5] - datas_.pass_offsets[0];
-				pc_.base = base;
-				pc_.count = count;
-				pc_.compliance = compliance_.diagonal;
-				cmd.pushConstants<PushConstant>(*pipeline_layouts_.common,
-					vk::ShaderStageFlagBits::eCompute, 0u, pc_);
+				uint32_t base = datas_.pass_offsets[4];
+				uint32_t count = datas_.pass_offsets[5] - datas_.pass_offsets[4];
+				push_constants_.solve.base = base;
+				push_constants_.solve.count = count;
+				push_constants_.solve.compliance = compliance_.diagonal;
+				cmd.pushConstants<PushConstant::Solve>(
+					*pipeline_layouts_.common,
+					vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
 
 				uint32_t group = (count + 256 - 1) / 256;
 				cmd.dispatch(group, 1, 1);
@@ -141,9 +180,10 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				// Solve Shear
 				TS(timestampSteps);
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_shear);
-				pc_.compliance = compliance_.shear;
-				cmd.pushConstants<PushConstant>(*pipeline_layouts_.common,
-					vk::ShaderStageFlagBits::eCompute, 0u, pc_);
+				push_constants_.solve.compliance = compliance_.shear;
+				cmd.pushConstants<PushConstant::Solve>(
+					*pipeline_layouts_.common,
+					vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
 
 				uint32_t group = (shear_size_ + 256 - 1) / 256;
 				cmd.dispatch(group, 1, 1);
@@ -161,11 +201,12 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_bend);
 				uint32_t base = 0;
 				uint32_t count = bend_size_;
-				pc_.base = base;
-				pc_.count = count;
-				pc_.compliance = compliance_.bend;
-				cmd.pushConstants<PushConstant>(*pipeline_layouts_.common,
-					vk::ShaderStageFlagBits::eCompute, 0u, pc_);
+				push_constants_.solve.base = base;
+				push_constants_.solve.count = count;
+				push_constants_.solve.compliance = compliance_.bend;
+				cmd.pushConstants<PushConstant::Solve>(
+					*pipeline_layouts_.common,
+					vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
 
 				uint32_t group = (count + 256 - 1) / 256;
 				cmd.dispatch(group, 1, 1);
@@ -215,13 +256,12 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 	cmd.end();
 }
 
-
 void GpuSim::UpdateGraphicsUBO(uint32_t currentFrame)
 {
 	const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_size_.render);
 	auto* dst = static_cast<std::byte*>(ubo_mapped_.render) + baseOffset;
 
-	std::memcpy(dst, &ubo_data_.render, sizeof(UBOData::Render));
+	std::memcpy(dst, &ubo_datas_.render, sizeof(UBOData::Render));
 }
 
 void GpuSim::GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset, vku::PolygonMode mode,
@@ -273,11 +313,11 @@ void GpuSim::GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer
 			{ }
 		);
 
-		cmd.pushConstants<ClothPC>(
+		cmd.pushConstants<PushConstant::ClothRender>(
 			*pipeline_layouts_.cloth_graphics,
 			vk::ShaderStageFlagBits::eVertex,
 			/*offset=*/0,
-			cloth_pc_
+			push_constants_.cloth_render
 		);
 
 		cmd.bindIndexBuffer(*index_buffer_, 0, vk::IndexType::eUint32);
@@ -681,8 +721,9 @@ void GpuSim::CreateDescriptorSetLayout(Context& context)
 			vk::DescriptorSetLayoutBinding{ 8, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
 			vk::DescriptorSetLayoutBinding{ 9, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
 			vk::DescriptorSetLayoutBinding{ 10, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
+			vk::DescriptorSetLayoutBinding{ 11, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
 		};
-		counts_.sb += 11;
+		counts_.sb += 12;
 		counts_.layout += 1;
 
 		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
@@ -691,7 +732,7 @@ void GpuSim::CreateDescriptorSetLayout(Context& context)
 
 	// Cloth graphics
 	{
-		std::array<vk::DescriptorSetLayoutBinding, 1> layoutBindings{
+		std::array layoutBindings{
 			vk::DescriptorSetLayoutBinding{ 0, vk::DescriptorType::eStorageBuffer,        1, vk::ShaderStageFlagBits::eVertex }
 		};
 		counts_.sb += 1;
@@ -769,18 +810,17 @@ void GpuSim::CreateUniformBuffers(Context& context,
 		ubo_memories_.render = std::move(bufferMem);
 		ubo_mapped_.render = ubo_memories_.render.mapMemory(0, totalSize);
 
-		ubo_data_.render.albedo_enable = 1;
-		ubo_data_.render.albedo_idx = 0;
-		//ubo_data_.render.albedo_idx = modelManager.cloth_->texture_idx_.albedo;
-		//ubo_data_.render.albedo_enable = modelManager.cloth_->texture_use_.albedo;
-		//ubo_data_.render.normal_idx = modelManager.cloth_->texture_idx_.normal;
-		//ubo_data_.render.normal_enable = modelManager.cloth_->texture_use_.normal;
-		//ubo_data_.render.height_idx = modelManager.cloth_->texture_idx_.height;
-		//ubo_data_.render.height_enable = modelManager.cloth_->texture_use_.height;
-		//ubo_data_.render.roughness_idx = modelManager.cloth_->texture_idx_.roughness;
-		//ubo_data_.render.roughtnessEnable = modelManager.cloth_->texture_use_.roughtness;
+		ubo_datas_.render.albedo_enable = 1;
+		ubo_datas_.render.albedo_idx = 0;
+		//ubo_datas_.render.albedo_idx = modelManager.cloth_->texture_idx_.albedo;
+		//ubo_datas_.render.albedo_enable = modelManager.cloth_->texture_use_.albedo;
+		//ubo_datas_.render.normal_idx = modelManager.cloth_->texture_idx_.normal;
+		//ubo_datas_.render.normal_enable = modelManager.cloth_->texture_use_.normal;
+		//ubo_datas_.render.height_idx = modelManager.cloth_->texture_idx_.height;
+		//ubo_datas_.render.height_enable = modelManager.cloth_->texture_use_.height;
+		//ubo_datas_.render.roughness_idx = modelManager.cloth_->texture_idx_.roughness;
+		//ubo_datas_.render.roughtnessEnable = modelManager.cloth_->texture_use_.roughtness;
 	}
-
 }
 
 void GpuSim::CreateSSBOBuffers(Context& context)
@@ -951,25 +991,6 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		throw std::runtime_error("edge size is not right");
 	}
 
-	//// Set bends
-	//for (int y = 0; y < ny_; ++y) {
-	//	for (int x = 0; x < nx_; ++x) {
-	//		uint32_t i0 = vid(x, y);
-	//		uint32_t i1 = vid(x + 1, y);
-	//		uint32_t i2 = vid(x, y + 1);
-	//		uint32_t i3 = vid(x + 1, y + 1);
-
-	//		uint32_t p1 = i1;   // hinge start
-	//		uint32_t p2 = i2;   // hinge end
-	//		uint32_t p3 = i0;   // opp of first tri
-	//		uint32_t p4 = i3;   // opp of second tri
-
-	//		float theta0 = 0.0f;
-	//		//theta0 = ComputeRestAngle(p1,p2,p3,p4, data_.positions);
-
-	//		datas_.bends.push_back({ p1,p2,p3,p4, theta0, 0.0f, glm::vec2(0.0f, 0.0f) });
-	//	}
-	//}
 	BuildBendConstraintsFromTriangles();
 	bend_size_ = static_cast<uint32_t>(datas_.bends.size());
 
@@ -1136,6 +1157,23 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
 		vk::MemoryPropertyFlagBits::eDeviceLocal,
 		ssbos_.shear, ssbo_memories_.shear);
+
+	// grab_counter
+	struct GrabState {
+		uint32_t id = 0;
+		uint32_t dist_bits = 0;
+		float	 t = 0.0f;
+	};
+	std::vector<GrabState> grabState(1);
+	ssbo_size_.grab_state = sizeof(GrabState) * grabState.size();
+	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+		ssbo_size_.grab_state,
+		vk::BufferUsageFlagBits::eTransferSrc,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+		grabState,
+		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+		vk::MemoryPropertyFlagBits::eDeviceLocal,
+		ssbos_.grab_state, ssbo_memories_.grab_state);
 }
 
 void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManager)
@@ -1208,10 +1246,11 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 		vk::DescriptorBufferInfo deltaX(*ssbos_.delta_x, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo deltaY(*ssbos_.delta_y, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo deltaZ(*ssbos_.delta_z, 0, VK_WHOLE_SIZE);
-		vk::DescriptorBufferInfo delta_count(*ssbos_.delta_count, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo deltaCount(*ssbos_.delta_count, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo edge(*ssbos_.edge, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo shear(*ssbos_.shear, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo bend(*ssbos_.bend, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo grabState(*ssbos_.grab_state, 0, VK_WHOLE_SIZE);
 		std::array descriptorWrites{
 			vk::WriteDescriptorSet{
 				.dstSet = *sets_.cloth_compute,
@@ -1275,7 +1314,7 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 				.dstArrayElement = 0,
 				.descriptorCount = 1,
 				.descriptorType = vk::DescriptorType::eStorageBuffer,
-				.pBufferInfo = &delta_count
+				.pBufferInfo = &deltaCount
 			},
 			vk::WriteDescriptorSet{
 				.dstSet = *sets_.cloth_compute,
@@ -1300,6 +1339,14 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 				.descriptorCount = 1,
 				.descriptorType = vk::DescriptorType::eStorageBuffer,
 				.pBufferInfo = &bend
+			},
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.cloth_compute,
+				.dstBinding = 11,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &grabState
 			},
 		};
 		context.device_.updateDescriptorSets(descriptorWrites, {});
@@ -1331,26 +1378,28 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 		};
 		context.device_.updateDescriptorSets(descriptorWrites, {});
 	}
-
 }
 
 void GpuSim::CreateComputePipelines(Context& context)
 {
 	// common pipeline layout
 	{
-		std::array<vk::DescriptorSetLayout, 2> setLayouts(*set_layouts_.sim_params, *set_layouts_.cloth_compute);
+		std::array<vk::DescriptorSetLayout, 2> setLayouts(
+			*set_layouts_.sim_params,
+			*set_layouts_.cloth_compute
+		);
 
 		vk::PushConstantRange pcRange{
 			.stageFlags = vk::ShaderStageFlagBits::eCompute,
 			.offset = 0,
-			.size = static_cast<uint32_t>(sizeof(PushConstant))
+			.size = static_cast<uint32_t>(sizeof(PushConstant::Solve) + sizeof(PushConstant::MouseInteract))
 		};
 
 		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
 			.setLayoutCount = 2,
 			.pSetLayouts = setLayouts.data(),
 			.pushConstantRangeCount = 1,
-			.pPushConstantRanges = &pcRange
+			.pPushConstantRanges = &pcRange,
 		};
 		pipeline_layouts_.common = vk::raii::PipelineLayout(context.device_, pipelineLayoutInfo);
 	}
@@ -1447,8 +1496,6 @@ void GpuSim::CreateComputePipelines(Context& context)
 		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
 		pipelines_.update_velocity = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
 	}
-
-
 }
 
 void GpuSim::CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLayout& globalSetLayout, std::vector<vk::Format>& formats, vk::raii::DescriptorSetLayout& tex2DSetLayout)
@@ -1539,10 +1586,10 @@ void GpuSim::CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLa
 		vk::PushConstantRange pcRange{
 			.stageFlags = vk::ShaderStageFlagBits::eVertex,
 			.offset = 0,
-			.size = static_cast<uint32_t>(sizeof(ClothPC))
+			.size = static_cast<uint32_t>(sizeof(PushConstant::ClothRender))
 		};
-		cloth_pc_.nx1 = nx_ + 1;
-		cloth_pc_.ny1 = ny_ + 1;
+		push_constants_.cloth_render.nx1 = nx_ + 1;
+		push_constants_.cloth_render.ny1 = ny_ + 1;
 
 		// Pipeline Layout
 		std::array<vk::DescriptorSetLayout, 4> setLayouts(
@@ -1634,7 +1681,6 @@ void GpuSim::BuildBendConstraintsFromTriangles()
 		return k;
 		};
 
-	// 1) 삼각형 순회하면서 edgeMap 채우기
 	for (uint32_t t = 0; t < numTris; ++t)
 	{
 		uint32_t i0 = indices[3 * t + 0];
@@ -1646,9 +1692,9 @@ void GpuSim::BuildBendConstraintsFromTriangles()
 		EdgeKey e12 = make_edge(i1, i2);
 		EdgeKey e20 = make_edge(i2, i0);
 
-		TriRef r0{ t, i2 }; // edge(i0,i1)의 반대점은 i2
-		TriRef r1{ t, i0 }; // edge(i1,i2)의 반대점은 i0
-		TriRef r2{ t, i1 }; // edge(i2,i0)의 반대점은 i1
+		TriRef r0{ t, i2 };
+		TriRef r1{ t, i0 };
+		TriRef r2{ t, i1 };
 
 		auto insert_ref = [&](const EdgeKey& e, const TriRef& r)
 			{
@@ -1659,7 +1705,6 @@ void GpuSim::BuildBendConstraintsFromTriangles()
 				}
 				else
 				{
-					// second가 비어있으면 채우고, 이미 둘 다 차 있으면 무시(비매니폴드)
 					if (it->second.second.triIndex == UINT32_MAX)
 						it->second.second = r;
 				}
@@ -1670,7 +1715,6 @@ void GpuSim::BuildBendConstraintsFromTriangles()
 		insert_ref(e20, r2);
 	}
 
-	// 2) edgeMap에서 tri 두 개 공유하는 edge만 bending으로 생성
 	datas_.bends.reserve(edgeMap.size());
 
 	for (const auto& kv : edgeMap)
@@ -1680,7 +1724,7 @@ void GpuSim::BuildBendConstraintsFromTriangles()
 		const TriRef& t1 = kv.second.second;
 
 		if (t1.triIndex == UINT32_MAX)
-			continue; // 경계 edge: 삼각형 하나만 붙어있음 → bending 없음
+			continue;
 
 		uint32_t p1 = e.a;         // hinge start
 		uint32_t p2 = e.b;         // hinge end

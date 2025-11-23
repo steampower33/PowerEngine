@@ -10,10 +10,11 @@
 #include "model_manager.h"
 #include "gui.h"
 #include "skybox.h"
+#include "mouse_interactor.h"
 
 #include "graphics_context.h"
 
-GraphicsContext::GraphicsContext(GLFWwindow* glfwWindow, Context& context, Swapchain& swapchain, TextureManager& textureManager, ModelManager& modelManager) 
+GraphicsContext::GraphicsContext(GLFWwindow* glfwWindow, Context& context, Swapchain& swapchain, TextureManager& textureManager, ModelManager& modelManager)
 	: context_(context), swapchain_(swapchain), texture_manager_(textureManager), model_manager_(modelManager)
 {
 	//msaa_samples_ = vku::GetMaxUsableSampleCount(context_.physical_device_.getProperties());
@@ -36,7 +37,7 @@ GraphicsContext::GraphicsContext(GLFWwindow* glfwWindow, Context& context, Swapc
 	gpu_sim_ = std::make_unique<GpuSim>(context_, swapchain_, texture_manager_, model_manager_, set_layouts_.global, geometry_buffers_.formats, set_layouts_.tex2D);
 }
 
-void GraphicsContext::Update(Camera& camera)
+void GraphicsContext::Update(Camera& camera, MouseInteractor& mouseInteractor)
 {
 
 	if (cpu_or_gpu_ == CpuOrGpu::CPU)
@@ -49,6 +50,8 @@ void GraphicsContext::Update(Camera& camera)
 	{
 		gpu_sim_->UpdateComputeUBO(current_frame_, model_manager_.models[0]);
 		gpu_sim_->UpdateGraphicsUBO(current_frame_);
+
+		gpu_sim_->UpdateMousePushConstant(camera, mouseInteractor, glm::vec2(swapchain_.swapchain_extent_.width, swapchain_.swapchain_extent_.height));
 	}
 
 	UpdateGraphicsUBO(camera);
@@ -61,10 +64,10 @@ void GraphicsContext::UpdateGraphicsUBO(Camera& camera)
 		const uint32_t globalOffset = static_cast<uint32_t>(current_frame_ * ubo_size_.global);
 		auto* dst = static_cast<std::byte*>(ubo_mapped_.global) + globalOffset;
 
-		ubo_data_.global.view = camera.View();
-		ubo_data_.global.proj = camera.Proj(swapchain_.swapchain_extent_.width, swapchain_.swapchain_extent_.height);
+		ubo_datas_.global.view = camera.View();
+		ubo_datas_.global.proj = camera.Proj(swapchain_.swapchain_extent_.width, swapchain_.swapchain_extent_.height);
 
-		std::memcpy(dst, &ubo_data_.global, sizeof(UBOData::Global));
+		std::memcpy(dst, &ubo_datas_.global, sizeof(UBOData::Global));
 	}
 
 	// Object UBO
@@ -75,34 +78,34 @@ void GraphicsContext::UpdateGraphicsUBO(Camera& camera)
 			const uint32_t objOff = baseObjectOffset + i * static_cast<uint32_t>(ubo_size_.object);
 			auto* dst = static_cast<std::byte*>(ubo_mapped_.object) + objOff;
 
-			ubo_data_.object.model = model_manager_.models[i]->world_;
-			ubo_data_.object.albedo_use = model_manager_.models[i]->albedo_use_;
-			ubo_data_.object.albedo_idx = model_manager_.models[i]->texture_idx_.albedo;
-			ubo_data_.object.metallic_idx = model_manager_.models[i]->texture_idx_.metallic;
-			ubo_data_.object.normal_idx = model_manager_.models[i]->texture_idx_.normal;
-			ubo_data_.object.roughness_idx = model_manager_.models[i]->texture_idx_.roughness;
-			ubo_data_.object.ao_idx = model_manager_.models[i]->texture_idx_.ao;
-			ubo_data_.object.height_idx = model_manager_.models[i]->texture_idx_.height;
+			ubo_datas_.object.model = model_manager_.models[i]->world_;
+			ubo_datas_.object.albedo_use = model_manager_.models[i]->albedo_use_;
+			ubo_datas_.object.albedo_idx = model_manager_.models[i]->texture_idx_.albedo;
+			ubo_datas_.object.metallic_idx = model_manager_.models[i]->texture_idx_.metallic;
+			ubo_datas_.object.normal_idx = model_manager_.models[i]->texture_idx_.normal;
+			ubo_datas_.object.roughness_idx = model_manager_.models[i]->texture_idx_.roughness;
+			ubo_datas_.object.ao_idx = model_manager_.models[i]->texture_idx_.ao;
+			ubo_datas_.object.height_idx = model_manager_.models[i]->texture_idx_.height;
 
-			ubo_data_.object.albedo_enable = model_manager_.models[i]->texture_use_.albedo;
-			ubo_data_.object.metallic_enable = model_manager_.models[i]->texture_use_.metallic;
-			ubo_data_.object.normal_enable = model_manager_.models[i]->texture_use_.normal;
-			ubo_data_.object.roughness_enable = model_manager_.models[i]->texture_use_.roughtness;
-			ubo_data_.object.ao_enable = model_manager_.models[i]->texture_use_.ao;
-			ubo_data_.object.height_enable = model_manager_.models[i]->texture_use_.height;
+			ubo_datas_.object.albedo_enable = model_manager_.models[i]->texture_use_.albedo;
+			ubo_datas_.object.metallic_enable = model_manager_.models[i]->texture_use_.metallic;
+			ubo_datas_.object.normal_enable = model_manager_.models[i]->texture_use_.normal;
+			ubo_datas_.object.roughness_enable = model_manager_.models[i]->texture_use_.roughtness;
+			ubo_datas_.object.ao_enable = model_manager_.models[i]->texture_use_.ao;
+			ubo_datas_.object.height_enable = model_manager_.models[i]->texture_use_.height;
 
-			std::memcpy(dst, &ubo_data_.object, sizeof(UBOData::Object));
+			std::memcpy(dst, &ubo_datas_.object, sizeof(UBOData::Object));
 		}
 	}
 
 	// Light
 	{
-		ubo_data_.light.cameraPos = glm::vec4(camera.position, 0.0f);
-		ubo_data_.light.invViewProj = glm::inverse(ubo_data_.global.proj * ubo_data_.global.view);
+		ubo_datas_.light.cameraPos = glm::vec4(camera.position, 0.0f);
+		ubo_datas_.light.invViewProj = glm::inverse(ubo_datas_.global.proj * ubo_datas_.global.view);
 
 		const uint32_t lightOffset = static_cast<uint32_t>(current_frame_ * ubo_size_.light);
 		auto* dst = static_cast<std::byte*>(ubo_mapped_.light) + lightOffset;
-		std::memcpy(dst, &ubo_data_.light, sizeof(UBOData::Light));
+		std::memcpy(dst, &ubo_datas_.light, sizeof(UBOData::Light));
 	}
 }
 
@@ -131,7 +134,7 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 			vk::PipelineStageFlagBits2::eColorAttachmentOutput,
 			vk::ImageAspectFlagBits::eColor
 		);
-	};
+		};
 
 	// G-buffer: Undefined/ShaderReadOnly ¡æ ColorAttachmentOptimal
 	toShaderWrite(geometry_buffers_.albedo_mettalic_image);
@@ -153,7 +156,7 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 
 	std::array<vk::RenderingAttachmentInfo, 3> gbufferAttachments;
 
-	auto renderingAttachmentInfo = [&](vk::raii::ImageView& imageView, vk::ClearValue clearColor){
+	auto renderingAttachmentInfo = [&](vk::raii::ImageView& imageView, vk::ClearValue clearColor) {
 		return vk::RenderingAttachmentInfo{
 			.imageView = *imageView,
 			.imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
@@ -164,7 +167,7 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 			.storeOp = vk::AttachmentStoreOp::eStore,
 			.clearValue = clearColor
 		};
-	};
+		};
 	vk::ClearValue clearColor0 = vk::ClearColorValue(background_color_.r, background_color_.g, background_color_.b, 0.0f); // albedo+metal
 	gbufferAttachments[0] = renderingAttachmentInfo(geometry_buffers_.albedo_mettalic_image_view, clearColor0);
 	vk::ClearValue clearColor1 = vk::ClearColorValue(0.5f, 0.5f, 1.0f, 1.0f); // normal default (0,0,1)
@@ -231,7 +234,7 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 			{ *sets_.global },
 			{ globalOffset }
 		);
-		
+
 		// tex2D
 		cmd.bindDescriptorSets(
 			vk::PipelineBindPoint::eGraphics,
@@ -250,7 +253,7 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 				pipeline_layouts_.model,
 				1,
 				{ *sets_.object },
-				{ objectOffset } 
+				{ objectOffset }
 			);
 
 			cmd.bindVertexBuffers(0, { model_manager_.models[i]->mesh_data_.vertex_buffer }, { 0 });
@@ -754,10 +757,10 @@ void GraphicsContext::CreateDescriptorSetLayout()
 	{
 		std::array layoutBindings{
 			vk::DescriptorSetLayoutBinding(
-				0, 
-				vk::DescriptorType::eUniformBufferDynamic, 
-				1, 
-				vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 
+				0,
+				vk::DescriptorType::eUniformBufferDynamic,
+				1,
+				vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
 				nullptr
 			)
 		};
@@ -892,7 +895,7 @@ void GraphicsContext::CreateUniformBuffers()
 		ubo_memories_.global = std::move(bufferMem);
 		ubo_mapped_.global = ubo_memories_.global.mapMemory(0, totalSize);
 
-		ubo_data_.global.vulkan_thumbnail_index = texture_manager_.vulkan_thumbnail_index_;
+		ubo_datas_.global.vulkan_thumbnail_index = texture_manager_.vulkan_thumbnail_index_;
 	}
 
 	// Object
@@ -951,18 +954,18 @@ void GraphicsContext::CreateUniformBuffers()
 		ubo_memories_.skybox = std::move(bufferMem);
 		ubo_mapped_.skybox = ubo_memories_.skybox.mapMemory(0, totalSize);
 
-		ubo_data_.skybox.model = model_manager_.skybox_->world_;
-		ubo_data_.skybox.envIdx = model_manager_.skybox_->texture_idx_.env;
-		ubo_data_.skybox.radianceIdx = model_manager_.skybox_->texture_idx_.radiance;
-		ubo_data_.skybox.irradianceIdx = model_manager_.skybox_->texture_idx_.irradiance;
-		ubo_data_.skybox.brdfLUTIndex = texture_manager_.brdf_lut_index_;
-		ubo_data_.skybox.specularMipLevels = texture_manager_.textures_[model_manager_.skybox_->texture_idx_.radiance]->mip_levels_;
+		ubo_datas_.skybox.model = model_manager_.skybox_->world_;
+		ubo_datas_.skybox.envIdx = model_manager_.skybox_->texture_idx_.env;
+		ubo_datas_.skybox.radianceIdx = model_manager_.skybox_->texture_idx_.radiance;
+		ubo_datas_.skybox.irradianceIdx = model_manager_.skybox_->texture_idx_.irradiance;
+		ubo_datas_.skybox.brdfLUTIndex = texture_manager_.brdf_lut_index_;
+		ubo_datas_.skybox.specularMipLevels = texture_manager_.textures_[model_manager_.skybox_->texture_idx_.radiance]->mip_levels_;
 
 		auto* dst = static_cast<std::byte*>(ubo_mapped_.skybox);
-		std::memcpy(dst, &ubo_data_.skybox, ubo_size_.skybox);
+		std::memcpy(dst, &ubo_datas_.skybox, ubo_size_.skybox);
 
 		dst += ubo_size_.skybox;
-		std::memcpy(dst, &ubo_data_.skybox, ubo_size_.skybox);
+		std::memcpy(dst, &ubo_datas_.skybox, ubo_size_.skybox);
 	}
 }
 
@@ -1116,7 +1119,7 @@ void GraphicsContext::CreateDescriptorSets()
 
 		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
 		sets_.lighting = std::move(sets.front());
-		
+
 		vk::DescriptorBufferInfo lightUboBufferInfo{ *ubos_.light, 0, sizeof(UBOData::Light) };
 
 		std::array<vk::DescriptorImageInfo, 4> gbufferInfos{
@@ -1310,12 +1313,12 @@ void GraphicsContext::CreateGraphicsPipelines()
 
 		// Pipeline Layout
 		std::array<vk::DescriptorSetLayout, 3> setLayouts(*set_layouts_.global, *set_layouts_.object, *set_layouts_.tex2D);
-		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = setLayouts.size(), .pSetLayouts = setLayouts.data(), .pushConstantRangeCount = 0};
+		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = setLayouts.size(), .pSetLayouts = setLayouts.data(), .pushConstantRangeCount = 0 };
 		pipeline_layouts_.model = vk::raii::PipelineLayout(context_.device_, pipelineLayoutInfo);
 
 		// Pipeline
 		{
-			vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = 
+			vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain =
 			{
 				{
 					.stageCount = 2,
@@ -1329,11 +1332,11 @@ void GraphicsContext::CreateGraphicsPipelines()
 					.pColorBlendState = &colorBlending,
 					.pDynamicState = &dynamicState,
 					.layout = pipeline_layouts_.model,
-					.renderPass = nullptr 
+					.renderPass = nullptr
 				},
 				{
-				  .colorAttachmentCount = static_cast<uint32_t>(geometry_buffers_.formats.size()), 
-				  .pColorAttachmentFormats = geometry_buffers_.formats.data(), 
+				  .colorAttachmentCount = static_cast<uint32_t>(geometry_buffers_.formats.size()),
+				  .pColorAttachmentFormats = geometry_buffers_.formats.data(),
 				  .depthAttachmentFormat = depthFormat
 				}
 			};
@@ -1502,8 +1505,8 @@ void GraphicsContext::CreateGraphicsPipelines()
 
 		// Pipeline Layout
 		std::array<vk::DescriptorSetLayout, 3> setLayouts(
-			*set_layouts_.global, 
-			*set_layouts_.skybox, 
+			*set_layouts_.global,
+			*set_layouts_.skybox,
 			*set_layouts_.texEnv);
 		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = setLayouts.size(), .pSetLayouts = setLayouts.data(), .pushConstantRangeCount = 0 };
 		pipeline_layouts_.skybox = vk::raii::PipelineLayout(context_.device_, pipelineLayoutInfo);
@@ -1599,10 +1602,10 @@ void GraphicsContext::CreateGeometryBuffers()
 		auto& memory = geometry_buffers_.albedo_mettalic_image_memory;
 		geometry_buffers_.formats.push_back(format);
 		vku::CreateImage(
-			context_.physical_device_, context_.device_, 
-			swapchain_.swapchain_extent_.width, swapchain_.swapchain_extent_.height, 
-			1, vk::SampleCountFlagBits::e1, 
-			format, vk::ImageTiling::eOptimal, 
+			context_.physical_device_, context_.device_,
+			swapchain_.swapchain_extent_.width, swapchain_.swapchain_extent_.height,
+			1, vk::SampleCountFlagBits::e1,
+			format, vk::ImageTiling::eOptimal,
 			vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
 			vk::MemoryPropertyFlagBits::eDeviceLocal, image, memory);
 		imageView = vku::CreateImageView(context_.device_, image, format, vk::ImageAspectFlagBits::eColor, 1);

@@ -40,14 +40,14 @@ ModelManager::ModelManager(Context& context, GraphicsContext& graphicsContext, T
 		glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
 		std::unique_ptr<Model> model = std::make_unique<Model>(sphere, vku::VertexIncludeInfo{ true, true }, context, graphicsContext, initPos, angleQuat, initColor, true);
 
-		model->texture_idx_.albedo = textureManager.CreateTexture("assets/Fabric", "color");
-		model->texture_use_.albedo = (model->texture_idx_.albedo != -1) ? 1 : 0;
-		model->texture_idx_.normal = textureManager.CreateTexture("assets/Fabric", "normalgl");
-		model->texture_use_.normal = (model->texture_idx_.normal != -1) ? 1 : 0;
-		model->texture_idx_.height = textureManager.CreateTexture("assets/Fabric", "displacement");
-		model->texture_use_.height = (model->texture_idx_.height != -1) ? 1 : 0;
-		model->texture_idx_.roughness = textureManager.CreateTexture("assets/Fabric", "roughness");
-		model->texture_use_.roughtness = (model->texture_idx_.roughness != -1) ? 1 : 0;
+		//model->texture_idx_.albedo = textureManager.CreateTexture("assets/Fabric", "color");
+		//model->texture_use_.albedo = (model->texture_idx_.albedo != -1) ? 1 : 0;
+		//model->texture_idx_.normal = textureManager.CreateTexture("assets/Fabric", "normalgl");
+		//model->texture_use_.normal = (model->texture_idx_.normal != -1) ? 1 : 0;
+		//model->texture_idx_.height = textureManager.CreateTexture("assets/Fabric", "displacement");
+		//model->texture_use_.height = (model->texture_idx_.height != -1) ? 1 : 0;
+		//model->texture_idx_.roughness = textureManager.CreateTexture("assets/Fabric", "roughness");
+		//model->texture_use_.roughtness = (model->texture_idx_.roughness != -1) ? 1 : 0;
 
 		cloth_ = std::move(model);
 	}

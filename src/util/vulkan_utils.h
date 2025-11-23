@@ -2,6 +2,12 @@
 
 namespace vku
 {
+	enum DepthState {
+		MOUSE_DEPTH_NONE = 0,
+		MOUSE_DEPTH_IN = 1,
+		MOUSE_DEPTH_OUT = 2
+	};
+
 	struct Counts {
 		uint32_t ubo = 0;
 		uint32_t ubo_dynamic = 0;

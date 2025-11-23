@@ -4,6 +4,8 @@ struct Camera;
 class Model;
 struct Ray;
 
+#include "vulkan_utils.h"
+
 class MouseInteractor
 {
 public:
@@ -16,15 +18,20 @@ public:
 
 	void Update(const Camera& camera, const glm::vec2& viewportSize, std::vector<std::unique_ptr<Model>>& models);
 
+	bool is_left_down = false;
 	bool is_left_button_down_event = false;
 	bool is_left_button_up_event = false;
 	bool is_right_button_down_event = false;
 	bool is_right_button_up_event = false;
 
+	vku::DepthState depth_state;
+	float depth_delta = 0.0f;
+
 	glm::vec2 mouse_pos_{0.0f, 0.0f};
 
-private:
 	Ray CalculateMouseRay(const Camera& camera, const glm::vec2& viewportSize);
+
+private:
 	void CalculateMouseNearFar(const Camera& camera, const glm::vec2& vp, glm::vec3& outNear, glm::vec3& outFar);
 
 	bool is_dragging_ = false;

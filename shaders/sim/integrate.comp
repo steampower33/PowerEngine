@@ -1,28 +1,95 @@
 #version 460
+#extension GL_EXT_shader_atomic_float2 : require
+
 #include "../common/params.glsl"
+
 layout(local_size_x = 256) in;
+
+const uint MOUSE_MODE_NONE   = 0u;
+const uint MOUSE_MODE_SELECT = 1u;
+const uint MOUSE_MODE_DRAG   = 2u;
+
+void mouse_select_pass(uint i, vec3 pos)
+{
+    if (pc.mouse.select_mode == MOUSE_MODE_NONE)
+    {
+        grab_state[0].id = 0xFFFFFFFFu;
+        grab_state[0].dist_bits = 0xFFFFFFFFu;
+    }
+
+    if (pc.mouse.select_mode != MOUSE_MODE_SELECT)
+        return;
+
+    vec3 o   = pc.mouse.ray_origin;
+    vec3 dir = pc.mouse.ray_dir;
+
+    vec3 v = pos - o;
+    float t = max(dot(v, dir), 0.0);
+    vec3 c = o + t * dir;
+    float dist2 = dot(pos - c, pos - c);
+
+    float r = pc.mouse.radius;
+    if (dist2 > r * r) return;
+
+    uint distBits = floatBitsToUint(dist2);
+
+    uint old = atomicMin(grab_state[0].dist_bits, distBits);
+
+    if (distBits < old) {
+        grab_state[0].id = i;
+        grab_state[0].t = t;
+    }
+}
+
+void mouse_drag_pass(uint i, inout vec3 xpi, inout vec3 vi)
+{
+    if (pc.mouse.select_mode != MOUSE_MODE_DRAG)
+        return;
+
+    if (grab_state[0].id == 0xFFFFFFFFu)
+        return;
+
+    if (i != grab_state[0].id)
+        return;
+
+    vec3 o   = pc.mouse.ray_origin;
+    vec3 dir = pc.mouse.ray_dir;
+
+    vec3 v_to_ray = xpi - o;
+    float t = grab_state[0].t;
+    vec3 c  = o + t * dir;
+
+    xpi = c;
+    vi  = vec3(0.0);
+}
+
 void main(){
     uint i = gl_GlobalInvocationID.x;
     if (i >= sim.num_particles) return;
     
     vec3 xi = x[i].xyz;
+    vec3 vi = v[i].xyz;
 
     if (w[i] == 0.0) {
         xp[i] = vec4(xi, 1.0);
         v[i]  = vec4(0.0);
         return;
     }
-    vec3 vi = v[i].xyz;
+
+    mouse_select_pass(i, xi);
 
     vec3 wind = vec3(0);
-    if (sim.wind_test==1){
+    if (sim.wind_test == 1){
         float L = length(sim.wind_dir.xyz);
         if (L>1e-8) 
             wind = (sim.wind_dir.xyz/L)*sim.wind_strength;
     }
     vi += (sim.gravity.xyz + wind) * sim.dt;
-    vec3 xpi = xi + vi * sim.dt;
 
-    xp[i] = vec4(xpi,1.0);
-    v[i] = vec4(vi,0.0);
+    vec3 xpi = xi + vi * sim.dt;
+    
+    mouse_drag_pass(i, xpi, vi);
+
+    xp[i] = vec4(xpi, 0.0);
+    v[i] = vec4(vi, 0.0);
 }

@@ -22,11 +22,14 @@ private:
     static void FramebufferResizeCallback(GLFWwindow* w, int width, int height);
     static void KeyCallback(GLFWwindow* w, int key, int scancode, int action, int mods);
     static void MouseButtonCallback(GLFWwindow* w, int button, int action, int mods);
+    static void ScrollCallback(GLFWwindow* w, double xoffset, double yoffset);
 
     void OnFramebufferResize(int width, int height);
     void OnCursorPos(double x, double y);
     void OnKey(int key, int scancode, int action, int mods);
     void OnMouseClick(int button, int action, int mods);
+    void OnMouseWheel(double xoffset, double yoffset);
+
     void ProcessKeyboard(float dt);
 
 private:
@@ -46,5 +49,4 @@ private:
 
     bool print_timestamp_ = false;
     float key_timeout_ = 0.2f;
-
 };

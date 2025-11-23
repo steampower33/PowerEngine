@@ -1,6 +1,26 @@
 #ifndef PARAMS_GLSL
 #define PARAMS_GLSL
 
+struct Solve {
+    uint base;
+    uint count;
+    float compliance;
+    float p0;
+};
+
+struct MouseInteract {
+    vec3 ray_origin;
+    uint select_mode; // 1: none, 2: drag
+    vec3 ray_dir;
+    float radius;
+};
+
+layout(push_constant) uniform PushConstant {
+    Solve solve;
+    MouseInteract mouse;
+} pc;
+
+
 layout(std140, set = 0, binding = 0) uniform SimParams {
     float dt;
     uint   num_particles;
@@ -56,6 +76,11 @@ struct Bend {
 };
 layout(std430, set = 1, binding = 10) buffer Bends { Bend  bends[]; };
 
-
+struct GrabState {
+    uint id;
+    uint dist_bits;
+    float t;
+};
+layout(std430, set = 1, binding = 11) buffer GrabStates { GrabState grab_state[]; };
 
 #endif

@@ -2,6 +2,7 @@
 #include "camera.h"
 #include "mouse_interactor.h"
 #include "renderer.h"
+#include "vulkan_utils.h"
 
 #include "window.h"
 
@@ -30,6 +31,7 @@ Window::Window()
 	glfwSetCursorPosCallback(glfw_window_, &Window::CursorPosCallback);
 	glfwSetKeyCallback(glfw_window_, &Window::KeyCallback);
 	glfwSetMouseButtonCallback(glfw_window_, &Window::MouseButtonCallback);
+	glfwSetScrollCallback(glfw_window_, &Window::ScrollCallback);
 
 	if (!glfw_window_)
 	{
@@ -88,6 +90,13 @@ void Window::MouseButtonCallback(GLFWwindow* w, int button, int action, int mods
 	}
 }
 
+void Window::ScrollCallback(GLFWwindow* w, double xoffset, double yoffset)
+{
+	if (auto* self = static_cast<Window*>(glfwGetWindowUserPointer(w))) {
+		self->OnMouseWheel(xoffset, yoffset);
+	}
+}
+
 void Window::OnFramebufferResize(int, int)
 {
 	framebuffer_resized_ = true;
@@ -137,12 +146,36 @@ void Window::OnKey(int key, int scancode, int action, int mods) {
 void Window::OnMouseClick(int button, int action, int mods)
 {
 	if (button == GLFW_MOUSE_BUTTON_LEFT) {
-		if (action == GLFW_PRESS)   mouse_interactor_->is_left_button_down_event = true;
-		else if (action == GLFW_RELEASE) mouse_interactor_->is_left_button_up_event = true;
+		if (action == GLFW_PRESS) {
+			mouse_interactor_->is_left_button_down_event = true;
+			mouse_interactor_->is_left_down = true;
+		}
+		else if (action == GLFW_RELEASE) {
+			mouse_interactor_->is_left_button_up_event = true;
+			mouse_interactor_->is_left_down = false;
+		}
 	}
 	if (button == GLFW_MOUSE_BUTTON_RIGHT) {
 		if (action == GLFW_PRESS)   mouse_interactor_->is_right_button_down_event = true;
 		else if (action == GLFW_RELEASE) mouse_interactor_->is_right_button_up_event = true;
+	}
+}
+
+void Window::OnMouseWheel(double xoffset, double yoffset)
+{
+	float sensitivity = 0.2f;
+
+	if (yoffset > 0) {
+		//std::cout << "DEPTH IN" << std::endl;
+		//std::cout << yoffset << std::endl;
+		mouse_interactor_->depth_state = vku::DepthState::MOUSE_DEPTH_IN;
+		mouse_interactor_->depth_delta = sensitivity;
+	}
+	else if (yoffset < 0) {
+		//std::cout << "DEPTH OUT" << std::endl;
+		//std::cout << yoffset << std::endl;
+		mouse_interactor_->depth_state = vku::DepthState::MOUSE_DEPTH_OUT;
+		mouse_interactor_->depth_delta = sensitivity;
 	}
 }
 

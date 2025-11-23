@@ -3,8 +3,6 @@
 
 #include "../common/params.glsl"
 
-layout(push_constant) uniform PC { uint base; uint count; float compliance; } pc;
-
 layout(local_size_x = 256) in;
 
 bool isFinite_f(float x){ return !isnan(x) && !isinf(x); }
@@ -12,9 +10,9 @@ float safeLen(in vec3 v){ float l = length(v); return (l < 1e-8) ? 1e-8 : l; }
 
 void main(){
     uint t = gl_GlobalInvocationID.x;
-    if (t >= pc.count) return;
+    if (t >= pc.solve.count) return;
 
-    uint cidx = pc.base + t;
+    uint cidx = pc.solve.base + t;
     if (cidx >= sim.num_bends) return;
 
     Bend bc = bends[cidx];
@@ -50,7 +48,7 @@ void main(){
               -(cross(P4 - P1, n1) + cross(n2, P4 - P1) * c) / A2;
     vec3 q1 = -q2 - q3 - q4;
 
-    float alpha = pc.compliance / (sim.dt * sim.dt);
+    float alpha = pc.solve.compliance / (sim.dt * sim.dt);
 
     float denom = alpha
         + w1*dot(q1,q1) + w2*dot(q2,q2) + w3*dot(q3,q3) + w4*dot(q4,q4);

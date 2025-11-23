@@ -12,6 +12,7 @@ class TextureManager;
 class Model;
 class ModelManager;
 class GUI;
+class MouseInteractor;
 
 class GraphicsContext
 {
@@ -28,7 +29,7 @@ public:
 	TextureManager& texture_manager_;
 	ModelManager& model_manager_;
 
-	void Update(Camera& camera);
+	void Update(Camera& camera, MouseInteractor& mouseInteractor);
 	void Draw(std::unique_ptr<GUI>& gui);
 
 	uint32_t frame_counter_ = 0;
@@ -165,7 +166,7 @@ public:
 		} skybox;
 		static_assert(sizeof(UBOData::SkyBox) % 16 == 0, "std140 must be 16-byte aligned.");
 
-	} ubo_data_;
+	} ubo_datas_;
 
 	struct CommandBuffer {
 		std::vector<vk::raii::CommandBuffer> compute;

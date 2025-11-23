@@ -3,8 +3,6 @@
 
 #include "../common/params.glsl"
 
-layout(push_constant) uniform PC { uint base; uint count; float compliance; } pc;
-
 layout(local_size_x = 256) in;
 
 void accumulate_delta(uint i, vec3 corr)
@@ -48,7 +46,7 @@ void main() {
     vec3 grad1 = e2;
     vec3 grad2 = e1;
 
-    float alpha = pc.compliance / (sim.dt * sim.dt);
+    float alpha = pc.solve.compliance / (sim.dt * sim.dt);
 
     float wsum = 
         w0 * dot(grad0, grad0) + 
