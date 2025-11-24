@@ -511,6 +511,7 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 			float tSolveStretch = 0.0f;
 			float tSolveShear = 0.0f;
 			float tSolveBend = 0.0f;
+			float tSolveArea = 0.0f;
 			float tCollideSdf = 0.0f;
 			float tApplyDeltas = 0.0f;
 			float tUpdate = 0.0f;
@@ -528,14 +529,15 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 					tSolveStretch += delta_ms(iterBase + it * tsCnt + 0, iterBase + it * tsCnt + 1);
 					tSolveShear += delta_ms(iterBase + it * tsCnt + 2, iterBase + it * tsCnt + 3);
 					tSolveBend += delta_ms(iterBase + it * tsCnt + 4, iterBase + it * tsCnt + 5);
-					tCollideSdf += delta_ms(iterBase + it * tsCnt + 6, iterBase + it * tsCnt + 7);
-					tApplyDeltas += delta_ms(iterBase + it * tsCnt + 8, iterBase + it * tsCnt + 9);
+					tSolveArea += delta_ms(iterBase + it * tsCnt + 6, iterBase + it * tsCnt + 7);
+					tCollideSdf += delta_ms(iterBase + it * tsCnt + 8, iterBase + it * tsCnt + 9);
+					tApplyDeltas += delta_ms(iterBase + it * tsCnt + 10, iterBase + it * tsCnt + 11);
 				}
 				uint32_t updateStart = base + 4 + gpu_sim_->iterations_ * tsCnt;
 				tUpdate += delta_ms(updateStart, updateStart + 1);
 			}
 
-			float total = tIntegrate + tClearLambdas + tSolveStretch + tSolveBend + tApplyDeltas + tCollideSdf + tUpdate;
+			float total = tIntegrate + tClearLambdas + tSolveStretch + tSolveBend + tSolveArea + tApplyDeltas + tCollideSdf + tUpdate;
 			uint32_t c = 0;
 			{
 				c = 0;
@@ -544,6 +546,7 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 				label_time_[labels_[c++]] = tSolveStretch;
 				label_time_[labels_[c++]] = tSolveShear;
 				label_time_[labels_[c++]] = tSolveBend;
+				label_time_[labels_[c++]] = tSolveArea;
 				label_time_[labels_[c++]] = tApplyDeltas;
 				label_time_[labels_[c++]] = tCollideSdf;
 				label_time_[labels_[c++]] = tUpdate;
@@ -557,6 +560,7 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 				label_avg_time_[labels_[c++]] += tSolveStretch;
 				label_avg_time_[labels_[c++]] += tSolveShear;
 				label_avg_time_[labels_[c++]] += tSolveBend;
+				label_avg_time_[labels_[c++]] += tSolveArea;
 				label_avg_time_[labels_[c++]] += tApplyDeltas;
 				label_avg_time_[labels_[c++]] += tCollideSdf;
 				label_avg_time_[labels_[c++]] += tUpdate;

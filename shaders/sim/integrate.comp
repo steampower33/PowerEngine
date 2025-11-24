@@ -78,13 +78,7 @@ void main(){
 
     mouse_select_pass(i, xi);
 
-    vec3 wind = vec3(0);
-    if (sim.wind_test == 1){
-        float L = length(sim.wind_dir.xyz);
-        if (L>1e-8) 
-            wind = (sim.wind_dir.xyz/L)*sim.wind_strength;
-    }
-    vi += (sim.gravity.xyz + wind) * sim.dt;
+    vi += sim.gravity.xyz * sim.dt;
 
     vec3 xpi = xi + vi * sim.dt;
     

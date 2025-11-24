@@ -15,4 +15,5 @@ void main(){
     if (id < sim.num_edges) edges[id].lambda = 0.0;
     if (id < sim.num_bends) bends[id].lambda = 0.0;
     if (id < sim.num_shears) shears[id].lambda = 0.0;
+    if (id < sim.num_areas) areas[id].lambda = 0.0;
 }

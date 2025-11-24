@@ -22,25 +22,19 @@ layout(push_constant) uniform PushConstant {
 
 
 layout(std140, set = 0, binding = 0) uniform SimParams {
-    uint   num_particles;
-    uint   num_edges;
-    uint   num_shears;
-    uint   num_bends;
-    vec4  gravity;
-    float dt;
-    float p0;
+    vec4 gravity;
+    vec4 sphere_center;
     float sphere_radius;
-    float max_speed;
-    vec4  wind_dir;
-    int   wind_test;
-    float wind_strength;
-    float collision_margin;
     float thickness;
-    vec4  sphere_center;
     float friction;
+    float dt;
     float air_damping;
-    float p1;
-    float p2;
+    float relaxation_factor;
+    uint num_particles;
+    uint num_edges;
+    uint num_shears;
+    uint num_bends;
+    uint num_areas;
 } sim;
 
 layout(std430, set = 1, binding = 0) buffer X { vec4 x[]; };
@@ -85,5 +79,13 @@ struct GrabState {
     float t;
 };
 layout(std430, set = 1, binding = 11) buffer GrabStates { GrabState grab_state[]; };
+
+struct Area {
+    uint i0, i1, i2;
+    float rest_area;
+    vec3 rest_normal;
+    float lambda;
+};
+layout(std430, set = 1, binding = 12) buffer Areas { Area areas[]; };
 
 #endif

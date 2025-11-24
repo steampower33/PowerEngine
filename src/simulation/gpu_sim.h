@@ -38,7 +38,7 @@ public:
 	void CopyDatas(const vk::raii::CommandBuffer& cmd);
 	void UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene);
 
-	uint32_t iteration_timestamp_count_ = 10;
+	uint32_t iteration_timestamp_count_ = 12;
 
 	const uint32_t nx_ = 64;
 	const uint32_t ny_ = 64;
@@ -47,20 +47,20 @@ public:
 	float spacing_x_ = cloth_size_.x / nx_;
 	float spacing_y_ = cloth_size_.y / ny_;
 	float cloth_height_ = 2.0f;
-	float mass_ = 1.0f;
+	float mass_ = 0.2f;
 
 	struct Compliance {
-		float stretch = 5e-7f;
-		float diagonal = 3e-6f;
-		float shear = 4e-7f;
-		float bend = 0.5f;
+		float stretch = 1e-9f;
+		float shear = 1e-9f;
+		float bend = 0.8f;
+		float area = 0.8f;
 	} compliance_;
 
 	struct Beta {
-		float stretch = 50.0f;
-		float diagonal= 350.0f;
-		float shear = 40.0f;
-		float bend = 500.0f;
+		float stretch = 300.0f;
+		float shear = 300.0f;
+		float bend = 300.0f;
+		float area = 300.0f;
 	} beta_;
 
 	uint32_t particles_size_ = nx_ * ny_;
@@ -68,6 +68,7 @@ public:
 	uint32_t edge_size_ = 0;
 	uint32_t shear_size_ = 0;
 	uint32_t bend_size_ = 0;
+	uint32_t area_size_ = 0;
 
 	float frame_dt_ = 60.0f;
 	int substeps_ = 10;
@@ -119,6 +120,15 @@ public:
 		};
 		static_assert(sizeof(Bend) == 32, "Bend must be 32 bytes");
 		std::vector<Data::Bend> bends;
+
+		struct Area {
+			uint32_t i0, i1, i2;
+			float rest_area;
+			glm::vec3 rest_normal;
+			float lambda;
+		};
+		static_assert(sizeof(Area) == 32, "Area must be 32 bytes");
+		std::vector<Data::Area> areas;
 	} datas_;
 
 	struct EdgeKey
@@ -145,25 +155,19 @@ public:
 
 	struct UBOData {
 		struct SimParams {
-			alignas(4)  uint32_t num_particles;
-			alignas(4)  uint32_t num_edges;
-			alignas(4)  uint32_t num_shears;
-			alignas(4)  uint32_t num_bends;
 			alignas(16) glm::vec4 gravity = glm::vec4(0.0f, -9.8f, 0.0f, 0.0f);
-			alignas(4)  float dt = 0.0f;
-			alignas(4)  float p0;
-			alignas(4)  float sphere_radius;
-			alignas(4)  float max_speed;
-			alignas(16) glm::vec4 wind_dir = glm::vec4(0.0f, 0.0f, -1.0f, 0.0f);
-			alignas(4)  int windTest = 0;
-			alignas(4)  float wind_strength = 1.0f;
-			alignas(4)  float collision_margin = 0.1f;
-			alignas(4) float thickness = 0.02f;
 			alignas(16) glm::vec4 sphere_center;
+			alignas(4) float sphere_radius;
+			alignas(4) float thickness = 0.02f;
 			alignas(4) float friction = 0.1f;
+			alignas(4) float dt = 0.0f;
 			alignas(4) float air_damping = 1.0f;
-			alignas(4) float p1;
-			alignas(4) float p2;
+			alignas(4) float relaxation_factor = 2.0f;
+			alignas(4) uint32_t num_particles;
+			alignas(4) uint32_t num_edges;
+			alignas(4) uint32_t num_shears;
+			alignas(4) uint32_t num_bends;
+			alignas(4) uint32_t num_areas;
 		} sim_params;
 		static_assert(sizeof(UBOData::SimParams) % 16 == 0, "std140 must be 16-byte aligned.");
 
@@ -269,6 +273,7 @@ public:
 		vk::raii::Pipeline solve_stretch{ nullptr };
 		vk::raii::Pipeline solve_shear{ nullptr };
 		vk::raii::Pipeline solve_bend{ nullptr };
+		vk::raii::Pipeline solve_area{ nullptr };
 		vk::raii::Pipeline apply_deltas{ nullptr };
 		vk::raii::Pipeline collide_sdf{ nullptr };
 		vk::raii::Pipeline update_velocity{ nullptr };
@@ -292,6 +297,7 @@ public:
 		vk::raii::Buffer shear{ nullptr };
 		vk::raii::Buffer bend{ nullptr };
 		vk::raii::Buffer grab_state{ nullptr };
+		vk::raii::Buffer area{ nullptr };
 	} ssbos_;
 
 	struct SSBOMemory {
@@ -307,6 +313,7 @@ public:
 		vk::raii::DeviceMemory shear{ nullptr };
 		vk::raii::DeviceMemory bend{ nullptr };
 		vk::raii::DeviceMemory grab_state{ nullptr };
+		vk::raii::DeviceMemory area{ nullptr };
 	} ssbo_memories_;
 
 	struct SSBOSize {
@@ -322,6 +329,7 @@ public:
 		uint32_t shear = 0;
 		uint32_t bend = 0;
 		uint32_t grab_state = 0;
+		uint32_t area = 0;
 	} ssbo_size_;
 
 	struct Staging {
@@ -332,6 +340,7 @@ public:
 		vk::raii::Buffer edge{ nullptr };
 		vk::raii::Buffer shear{ nullptr };
 		vk::raii::Buffer bend{ nullptr };
+		vk::raii::Buffer area{ nullptr };
 	} staging_;
 
 	struct StagingMemory {
@@ -342,6 +351,7 @@ public:
 		vk::raii::DeviceMemory edge{ nullptr };
 		vk::raii::DeviceMemory shear{ nullptr };
 		vk::raii::DeviceMemory bend{ nullptr };
+		vk::raii::DeviceMemory area{ nullptr };
 	} staging_memories_;
 
 	struct StagingMapped {
@@ -352,6 +362,7 @@ public:
 		void* edge{ nullptr };
 		void* shear{ nullptr };
 		void* bend{ nullptr };
+		void* area{ nullptr };
 	} staging_mapped_;
 
 private:
@@ -369,7 +380,8 @@ private:
 		uint32_t p1, uint32_t p2,
 		uint32_t p3, uint32_t p4,
 		const std::vector<glm::vec4>& pos);
-	void BuildBendConstraintsFromTriangles();
+	void BuildBendConstraints();
 	void ResetConstraints();
+	void BuildAreaConstraints();
 
 };

@@ -1,0 +1,91 @@
+#version 460
+#extension GL_EXT_shader_atomic_float : require
+
+#include "../common/params.glsl"
+
+layout(local_size_x = 256) in;
+
+void accumulate_delta(uint i, vec3 corr)
+{
+    atomicAdd(delta_x[i], corr.x);
+    atomicAdd(delta_y[i], corr.y);
+    atomicAdd(delta_z[i], corr.z);
+    atomicAdd(delta_count[i], 1u);
+}
+
+void main() {
+    uint gid  = gl_GlobalInvocationID.x;
+    if (gid >= sim.num_areas) return;
+
+    Area area = areas[gid];
+
+    uint i0 = area.i0;
+    uint i1 = area.i1;
+    uint i2 = area.i2;
+
+    float w0 = w[i0];
+    float w1 = w[i1];
+    float w2 = w[i2];
+
+    if (w0 + w1 + w2 == 0.0)
+        return;
+
+    vec3 x0  = xp[i0].xyz;
+    vec3 x1  = xp[i1].xyz;
+    vec3 x2  = xp[i2].xyz;
+
+    vec3 x0_prev = x[i0].xyz;
+    vec3 x1_prev = x[i1].xyz;
+    vec3 x2_prev = x[i2].xyz;
+
+    vec3 e1 = x1 - x0;
+    vec3 e2 = x2 - x0;
+
+    // Oriented area
+    float a = 0.5f * dot(cross(e1, e2), area.rest_normal);
+    float C = a - area.rest_area;
+
+    vec3 g1 = 0.5f * cross(area.rest_normal, e2);
+    vec3 g2 = 0.5f * cross(e1, area.rest_normal);
+    vec3 g0 = -g1 - g2;
+    
+
+    float dt = sim.dt;
+    float alpha_tilde = pc.solve.compliance / (dt * dt);
+
+    float beta       = pc.solve.beta;
+    float beta_tilde = dt * dt * beta;
+    float gamma      = (alpha_tilde * beta_tilde) / dt;
+    
+    float wsum_grad = w0 * dot(g0, g0) +
+                  w1 * dot(g1, g1) +
+                  w2 * dot(g2, g2);
+
+    float denom = (1.0 + gamma) * wsum_grad + alpha_tilde;
+    if (denom < 1e-8) return;
+
+    vec3 dp0 = x0 - x0_prev;
+    vec3 dp1 = x1 - x1_prev;
+    vec3 dp2 = x2 - x2_prev;
+
+    float rel =
+        dot(g0, dp0) +
+        dot(g1, dp1) +
+        dot(g2, dp2);
+
+    float lambda_old = area.lambda;
+    float rhs = C + alpha_tilde * lambda_old + gamma * rel;
+
+    float dLambda = -rhs / denom;
+    float lambda_new = lambda_old + dLambda;
+
+    shears[gid].lambda = lambda_new;
+
+    vec3 corr0 = w0 * dLambda * g0;
+    vec3 corr1 = w1 * dLambda * g1;
+    vec3 corr2 = w2 * dLambda * g2;
+
+    accumulate_delta(i0, corr0);
+    accumulate_delta(i1, corr1);
+    accumulate_delta(i2, corr2);
+}
