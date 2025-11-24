@@ -38,7 +38,7 @@ public:
 	void CopyDatas(const vk::raii::CommandBuffer& cmd);
 	void UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene);
 
-	uint32_t iteration_timestamp_count_ = 12;
+	uint32_t iteration_timestamp_count_ = 10;
 
 	const uint32_t nx_ = 64;
 	const uint32_t ny_ = 64;
@@ -95,8 +95,8 @@ public:
 		};
 		static_assert(sizeof(Edge) == 16, "Edge must be 32 bytes");
 		std::vector<Edge> edges;
-		std::array<uint32_t, 6> pass_offsets;
-		std::vector<std::pair<uint32_t, uint32_t>> passes[6];
+		std::array<uint32_t, 5> pass_offsets;
+		std::vector<std::pair<uint32_t, uint32_t>> passes[5];
 
 		struct Shear {
 			uint32_t i0, i1, i2;
@@ -158,7 +158,7 @@ public:
 			alignas(4)  int windTest = 0;
 			alignas(4)  float wind_strength = 1.0f;
 			alignas(4)  float collision_margin = 0.1f;
-			alignas(4) float thickness = 0.05f;
+			alignas(4) float thickness = 0.02f;
 			alignas(16) glm::vec4 sphere_center;
 			alignas(4) float friction = 0.1f;
 			alignas(4) float air_damping = 1.0f;
@@ -266,8 +266,7 @@ public:
 	struct Pipeline {
 		vk::raii::Pipeline clear_lambdas{ nullptr };
 		vk::raii::Pipeline integrate{ nullptr };
-		vk::raii::Pipeline solve_coloring{ nullptr };
-		vk::raii::Pipeline solve_diagonal{ nullptr };
+		vk::raii::Pipeline solve_stretch{ nullptr };
 		vk::raii::Pipeline solve_shear{ nullptr };
 		vk::raii::Pipeline solve_bend{ nullptr };
 		vk::raii::Pipeline apply_deltas{ nullptr };

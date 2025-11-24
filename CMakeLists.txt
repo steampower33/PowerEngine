@@ -167,8 +167,7 @@ set(GLSL_SHADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/skybox.frag
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/clear_lambdas.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/integrate.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_coloring.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_diagonal.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_stretch.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_shear.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_bend.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/apply_deltas.comp

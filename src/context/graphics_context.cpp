@@ -509,7 +509,6 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 			float tIntegrate = 0.0f;
 			float tClearLambdas = 0.0f;
 			float tSolveStretch = 0.0f;
-			float tSolveDiag = 0.0f;
 			float tSolveShear = 0.0f;
 			float tSolveBend = 0.0f;
 			float tCollideSdf = 0.0f;
@@ -527,25 +526,22 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 				for (uint32_t it = 0; it < gpu_sim_->iterations_; it++)
 				{
 					tSolveStretch += delta_ms(iterBase + it * tsCnt + 0, iterBase + it * tsCnt + 1);
-					tSolveDiag += delta_ms(iterBase + it * tsCnt + 2, iterBase + it * tsCnt + 3);
-					tSolveShear += delta_ms(iterBase + it * tsCnt + 4, iterBase + it * tsCnt + 5);
-					tSolveBend += delta_ms(iterBase + it * tsCnt + 6, iterBase + it * tsCnt + 7);
-					tCollideSdf += delta_ms(iterBase + it * tsCnt + 8, iterBase + it * tsCnt + 9);
-					tApplyDeltas += delta_ms(iterBase + it * tsCnt + 10, iterBase + it * tsCnt + 11);
+					tSolveShear += delta_ms(iterBase + it * tsCnt + 2, iterBase + it * tsCnt + 3);
+					tSolveBend += delta_ms(iterBase + it * tsCnt + 4, iterBase + it * tsCnt + 5);
+					tCollideSdf += delta_ms(iterBase + it * tsCnt + 6, iterBase + it * tsCnt + 7);
+					tApplyDeltas += delta_ms(iterBase + it * tsCnt + 8, iterBase + it * tsCnt + 9);
 				}
 				uint32_t updateStart = base + 4 + gpu_sim_->iterations_ * tsCnt;
 				tUpdate += delta_ms(updateStart, updateStart + 1);
 			}
 
-			float total = tIntegrate + tClearLambdas + tSolveStretch +
-				tSolveDiag + tSolveBend + tApplyDeltas + tCollideSdf + tUpdate;
+			float total = tIntegrate + tClearLambdas + tSolveStretch + tSolveBend + tApplyDeltas + tCollideSdf + tUpdate;
 			uint32_t c = 0;
 			{
 				c = 0;
 				label_time_[labels_[c++]] = tIntegrate;
 				label_time_[labels_[c++]] = tClearLambdas;
 				label_time_[labels_[c++]] = tSolveStretch;
-				label_time_[labels_[c++]] = tSolveDiag;
 				label_time_[labels_[c++]] = tSolveShear;
 				label_time_[labels_[c++]] = tSolveBend;
 				label_time_[labels_[c++]] = tApplyDeltas;
@@ -559,7 +555,6 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 				label_avg_time_[labels_[c++]] += tIntegrate;
 				label_avg_time_[labels_[c++]] += tClearLambdas;
 				label_avg_time_[labels_[c++]] += tSolveStretch;
-				label_avg_time_[labels_[c++]] += tSolveDiag;
 				label_avg_time_[labels_[c++]] += tSolveShear;
 				label_avg_time_[labels_[c++]] += tSolveBend;
 				label_avg_time_[labels_[c++]] += tApplyDeltas;

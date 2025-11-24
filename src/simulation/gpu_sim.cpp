@@ -128,7 +128,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 		{
 			// Solve Coloring - Stretch
 			TS(timestampSteps);
-			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_coloring);
+			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_stretch);
 
 			for (uint32_t c = 0; c < 4; ++c) {
 				uint32_t base = datas_.pass_offsets[c];
@@ -153,30 +153,6 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 					vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 			}
 			TS(timestampSteps);
-
-			{
-				// Solve Diagonal
-				TS(timestampSteps);
-				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_diagonal);
-				uint32_t base = datas_.pass_offsets[4];
-				uint32_t count = datas_.pass_offsets[5] - datas_.pass_offsets[4];
-				push_constants_.solve.base = base;
-				push_constants_.solve.count = count;
-				push_constants_.solve.compliance = compliance_.diagonal;
-				push_constants_.solve.beta = beta_.diagonal;
-				cmd.pushConstants<PushConstant::Solve>(
-					*pipeline_layouts_.common,
-					vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
-
-				uint32_t group = (count + 256 - 1) / 256;
-				cmd.dispatch(group, 1, 1);
-				TS(timestampSteps);
-				vku::barrier2(cmd,
-					vk::PipelineStageFlagBits2::eComputeShader,
-					vk::AccessFlagBits2::eShaderStorageWrite,
-					vk::PipelineStageFlagBits2::eComputeShader,
-					vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
-			}
 
 			{
 				// Solve Shear
@@ -735,17 +711,10 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		for (int x = 1; x + 1 < nx1; x += 2)
 			datas_.passes[3].push_back({ vid(x,y), vid(x + 1,y) });
 
-	// Set diagonal edge coloring
-	for (int y = 0; y + 1 < ny1; ++y)
-		for (int x = 0; x + 1 < nx1; ++x) {
-			datas_.passes[4].push_back({ vid(x,y),     vid(x + 1,y + 1) }); // "\"
-			datas_.passes[4].push_back({ vid(x + 1,y),   vid(x,  y + 1) }); // "/"
-		}
-
 	// Set Edges using coloring
 	datas_.pass_offsets[0] = 0;
 
-	for (int p = 0; p < 5; ++p) {
+	for (int p = 0; p < datas_.pass_offsets.size() - 1; ++p) {
 		for (auto [i, j] : datas_.passes[p]) {
 			glm::vec3 pi = glm::vec3(datas_.positions[i]);
 			glm::vec3 pj = glm::vec3(datas_.positions[j]);
@@ -757,9 +726,9 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	}
 
 	edge_size_ = static_cast<uint32_t>(datas_.edges.size());
-	if (edge_size_ != ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)) + (nx_ * ny_) * 2)
+	if (edge_size_ != ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)))
 	{
-		std::cout << edge_size_ << " " << ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)) + (nx_ * ny_) * 2 << std::endl;
+		std::cout << edge_size_ << " " << ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)) << std::endl;
 		throw std::runtime_error("edge size is not right");
 	}
 
@@ -1197,26 +1166,15 @@ void GpuSim::CreateComputePipelines(Context& context)
 		pipelines_.integrate = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
 	}
 
-	// solve_coloring
+	// solve_stretch
 	{
-		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/solve_coloring.comp.spv"));
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/solve_stretch.comp.spv"));
 
 		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common,
 		};
-		pipelines_.solve_coloring = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
-	}
-
-	// solve_diagonal
-	{
-		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/solve_diagonal.comp.spv"));
-
-		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
-
-		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common,
-		};
-		pipelines_.solve_diagonal = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
+		pipelines_.solve_stretch = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
 	}
 
 	// solve_shear
@@ -1525,7 +1483,7 @@ void GpuSim::ResetConstraints()
 	// Edge - Stretch, Diagonal
 	{
 		uint32_t idx = 0;
-		for (int p = 0; p < 5; ++p) {
+		for (int p = 0; p < datas_.pass_offsets.size(); ++p) {
 			for (auto [i, j] : datas_.passes[p]) {
 				glm::vec3 pi = glm::vec3(datas_.positions[i]);
 				glm::vec3 pj = glm::vec3(datas_.positions[j]);
