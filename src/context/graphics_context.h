@@ -133,21 +133,22 @@ public:
 
 			uint32_t ao_enable = 0;
 			uint32_t height_enable = 0;
-			uint32_t p3;
+			uint32_t checker_board_enable = 1;
 			uint32_t p4;
 		} object;
 		static_assert(sizeof(UBOData::Object) % 16 == 0, "std140 must be 16-byte aligned.");
 
 		struct Light {
-			glm::vec4 cameraPos{};
-			glm::vec4 spotPos_range{ 0.0f, 10.0f, 0.0f, 30.0f };
-			glm::vec4 spotDir_inner{ 0.0f, -1.0f, 0.0f, 0.0f };
-			glm::vec4 spotColor_outer{ 1.0f, 1.0f, 1.0f, 0.0f };
 			glm::mat4 invViewProj{};
+			glm::vec4 cameraPos{};
+			glm::vec3 position{ 0.0f, 5.0f, 5.0f };
+			float intensity = 20.0f;
+			glm::vec3 direction{ 0.0f, -1.0f, -1.0f };
+			float inner = 0.0f;
+			float outer = 90.0f;
+			uint32_t light_enable = 1;
+			uint32_t pbr_enable = 0;
 			float exposure = 0.5f;
-			float p0;
-			float p1;
-			float p2;
 		} light;
 		static_assert(sizeof(UBOData::Light) % 16 == 0, "std140 must be 16-byte aligned.");
 

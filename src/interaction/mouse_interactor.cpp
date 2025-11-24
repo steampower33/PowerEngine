@@ -17,7 +17,7 @@ std::pair<int, float> MouseInteractor::PickClosestModel(
 
     for (int i = 0; i < static_cast<int>(models.size()); ++i) {
         float dist = 0.0f;
-        if (ray.Intersects(*models[i], dist)) {
+        if (models[i]->movable_ && ray.Intersects(*models[i], dist)) {
             if (dist < minDist) {
                 minDist = dist;
                 picked = i;
@@ -92,7 +92,7 @@ void MouseInteractor::Update(const Camera& camera,
         float dist = 0.0f;
         Model& model = *models[selected_];
 
-        if (model.moveble_ && ray.Intersects(model, dist)) {
+        if (model.movable_ && ray.Intersects(model, dist)) {
             glm::vec3 center = model.position_;
             glm::vec3 pickPoint = ray.origin + ray.direction * dist;
             glm::vec3 v = pickPoint - center;

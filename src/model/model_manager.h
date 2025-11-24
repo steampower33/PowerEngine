@@ -18,7 +18,6 @@ public:
 	~ModelManager();
 
 	static constexpr uint32_t kMaxObjects = 2;
-	std::vector<std::unique_ptr<Model>> models;
+	std::vector<std::unique_ptr<Model>> models_;
 	std::unique_ptr<Skybox> skybox_;
-	std::unique_ptr<Model> cloth_;
 };

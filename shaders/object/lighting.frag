@@ -3,15 +3,16 @@
 #extension GL_EXT_nonuniform_qualifier : require
 
 layout(set = 0, binding = 0) uniform LightUBO {
-    vec4 camera_pos;
-    vec4 spotPos_range;
-    vec4 spotDir_inner;
-    vec4 spotColor_outer;
     mat4 inv_view_proj;
+    vec4 camera_pos;
+    vec3 position;
+    float intensity;
+    vec3 direction;
+    float inner;
+    float outer;
+    uint light_enable;
+    uint pbr_enable;
     float exposure;
-    float p0;
-    float p1;
-    float p2;
 } light;
 
 layout(set = 0, binding = 1) uniform sampler2D out_albedo_metal;
@@ -74,12 +75,6 @@ void main()
     
     vec3 world_pos = reconstruct_world_pos(in_uv, depth);
     
-    if (depth >= 1.0 - 1e-5) {
-        vec3 sky = texture(env_tex[nonuniformEXT(skybox.radiance_idx)], world_pos).rgb; // or º°µµ skyboxCube
-        out_color = vec4(sky, 1.0);
-        return;
-    }
-    
     vec4 am = texture(out_albedo_metal, in_uv);
     vec4 nr = texture(out_normal_rough, in_uv);
     vec4 ha = texture(out_height_ao, in_uv);
@@ -95,41 +90,76 @@ void main()
     vec3 camera_pos = light.camera_pos.xyz;
 
     vec3 N = normalize(normal);
-    vec3 V = normalize(camera_pos - world_pos);
-    float n_dot_v = max(dot(N, V), 0.0);
 
-    vec3 F0 = mix(vec3(0.04), albedo, metallic);
-
-    vec3 diffuse_irr = texture(env_tex[nonuniformEXT(skybox.irradiance_idx)], N).rgb;
-    vec3 diffuse_ibl = diffuse_irr * albedo;
-
-    vec3 R = reflect(-V, N);
-
-    float max_mip = float(skybox.specular_mip_levels);
-    float lod = roughness * max_mip;
-
-    vec3 prefiltered_color = textureLod(env_tex[nonuniformEXT(skybox.radiance_idx)], R, lod).rgb;
-
-    vec2 brdf = texture(tex[nonuniformEXT(skybox.brdf_lut_index)], vec2(n_dot_v, roughness)).rg;
-
-    vec3 F = fresnel_schlick_roughness(n_dot_v, F0, roughness);
-    vec3 kS = F;
-    vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
-
-    vec3 specular_ibl = prefiltered_color * (F * brdf.x + brdf.y);
-
-    vec3 ambient_diffuse = kD * diffuse_ibl * ao;
-    vec3 ambient_spec    = specular_ibl;
-
-    vec3 color = ambient_diffuse + ambient_spec;
-
-    color = max(color, vec3(0.0));
+    vec3 color = albedo;
+    if (light.pbr_enable == 1u)
+    {
     
-    float exposure = light.exposure;
-    color *= exposure;
-    color  = tonemap_aces(color);
+        if (depth >= 1.0 - 1e-5) {
+            vec3 sky = texture(env_tex[nonuniformEXT(skybox.radiance_idx)], world_pos).rgb;
+            out_color = vec4(sky, 1.0);
+            return;
+        }
 
-    color = pow(color, vec3(1.0 / 2.2));
-     
+        vec3 V = normalize(camera_pos - world_pos);
+        float n_dot_v = max(dot(N, V), 0.0);
+
+        vec3 F0 = mix(vec3(0.04), albedo, metallic);
+
+        vec3 diffuse_irr = texture(env_tex[nonuniformEXT(skybox.irradiance_idx)], N).rgb;
+        vec3 diffuse_ibl = diffuse_irr * albedo;
+
+        vec3 R = reflect(-V, N);
+
+        float max_mip = float(skybox.specular_mip_levels);
+        float lod = roughness * max_mip;
+
+        vec3 prefiltered_color = textureLod(env_tex[nonuniformEXT(skybox.radiance_idx)], R, lod).rgb;
+
+        vec2 brdf = texture(tex[nonuniformEXT(skybox.brdf_lut_index)], vec2(n_dot_v, roughness)).rg;
+
+        vec3 F = fresnel_schlick_roughness(n_dot_v, F0, roughness);
+        vec3 kS = F;
+        vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
+
+        vec3 specular_ibl = prefiltered_color * (F * brdf.x + brdf.y);
+
+        vec3 ambient_diffuse = kD * diffuse_ibl * ao;
+        vec3 ambient_spec    = specular_ibl;
+
+        color = ambient_diffuse + ambient_spec;
+
+        color = max(color, vec3(0.0));
+    
+        float exposure = light.exposure;
+        color *= exposure;
+        color  = tonemap_aces(color);
+
+        color = pow(color, vec3(1.0 / 2.2));
+    }
+    
+    if (light.light_enable == 1u)
+    {
+        if (depth >= 1.0 - 1e-5) {
+            out_color = vec4(0.0f);
+            return;
+        }
+        vec3 light_pos = light.position;
+        vec3 V = normalize(light.camera_pos.xyz - world_pos);
+        vec3 L = normalize(light_pos - world_pos);
+        vec3 H = normalize(L + V);
+        vec3 L_dir = normalize(light.direction);
+        float cos_theta = dot(-L_dir, L);
+        float spot = smoothstep(cos(radians(light.outer)), cos(radians(light.inner)), cos_theta);
+        float dist = length(light_pos - world_pos);
+        float attenuation = 1.0 / (dist * dist);
+        float diff = max(dot(N, L), 0.0);
+        float spec = pow(max(dot(N, H), 0.0), 1000.0f);
+        vec3 specular_color = vec3(1.0);
+        color = (color * diff + specular_color * spec) 
+              * light.intensity
+              * attenuation 
+              * spot;
+    }
     out_color = vec4(color, 1.0);
 }

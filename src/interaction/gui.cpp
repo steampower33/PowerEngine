@@ -138,17 +138,30 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 	{
 		if (ImGui::CollapsingHeader("Rendering", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			if (ImGui::BeginTable("Rendering", 2,
+			ImGui::SeparatorText("SpotLight");
+			if (ImGui::BeginTable("SpotLight", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
-				row("Exposure", [&] { ImGui::DragFloat("##Exposure", &graphicsContext.ubo_datas_.light.exposure, 0.1f, 0.0f, 2.0f); });
+				row("Enable", [&] { bool enable = graphicsContext.ubo_datas_.light.light_enable; ImGui::Checkbox("##Enable", &enable); graphicsContext.ubo_datas_.light.light_enable = enable; });
+				row("Pos", [&] { ImGui::DragFloat3("##Pos", &graphicsContext.ubo_datas_.light.position[0], 0.1f); });
+				row("Dir", [&] { ImGui::DragFloat3("##Dir", &graphicsContext.ubo_datas_.light.direction[0], 0.1f); });
+				row("Inner", [&] { ImGui::DragFloat("##Inner", &graphicsContext.ubo_datas_.light.inner, 0.1f); });
+				row("Outer", [&] { ImGui::DragFloat("##Outer", &graphicsContext.ubo_datas_.light.outer, 0.1f); });
+				row("Intensity", [&] { ImGui::DragFloat("##Intensity", &graphicsContext.ubo_datas_.light.intensity, 0.1f, 0.0f, 100.0f); });
 				ImGui::EndTable();
 			}
 
+			ImGui::SeparatorText("PBR");
+			if (ImGui::BeginTable("PBR", 2,
+				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+			{
+				row("Enable", [&] { bool enable = graphicsContext.ubo_datas_.light.pbr_enable; ImGui::Checkbox("##Enable", &enable); graphicsContext.ubo_datas_.light.pbr_enable = enable; });
+				row("Exposure", [&] { ImGui::DragFloat("##Exposure", &graphicsContext.ubo_datas_.light.exposure, 0.1f, 0.0f, 2.0f); });
+				ImGui::EndTable();
+			}
 		}
 
 		//SetObjectGUI(row, graphicsContext.gpu_sim_->ubo_datas_.render);
-		//SetLightGUI(row, graphicsContext.ubo_datas_);
 		SetSolverTimeingGUI(row, graphicsContext);
 		SetSimulationGUI(row, graphicsContext);
 		SetTestSceneGUI(row, graphicsContext.test_scene_);
@@ -204,27 +217,6 @@ void GUI::DisplayKernelTiming(const std::string name, std::unordered_map<std::st
 	if (shouldPop)
 	{
 		ImGui::PopStyleColor();
-	}
-}
-
-template<typename RowFn, typename UBOData>
-void GUI::SetLightGUI(RowFn&& row, UBOData& data) {
-	if (ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen))
-	{
-
-		if (ImGui::BeginTable("LightTable", 2,
-			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
-		{
-			row("Pos", [&] { ImGui::DragFloat3("##Pos", &data.light.spotPos_range[0], 0.1f); });
-			row("Range", [&] { ImGui::DragFloat("##Range", &data.light.spotPos_range[3], 0.1f); });
-			row("Dir", [&] { ImGui::DragFloat3("##Dir", &data.light.spotDir_inner[0], 0.1f); });
-			row("Color", [&] { ImGui::DragFloat3("##Color", &data.light.spotColor_outer[0], 0.1f); });
-			row("Inner", [&] { ImGui::DragFloat("##Inner", &data.light.spotDir_inner[3], 0.1f); });
-			row("Outer", [&] { ImGui::DragFloat("##Outer", &data.light.spotColor_outer[3], 0.1f); });
-
-
-			ImGui::EndTable();
-		}
 	}
 }
 

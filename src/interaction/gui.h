@@ -30,8 +30,6 @@ public:
 	void DisplayKernelTiming(const std::string name, std::unordered_map<std::string, double>& labelToTime, std::unordered_map<std::string, double>& labelToAvgTime, bool autoColor = true);
 
 	template<typename RowFn, typename UBOData>
-	void SetLightGUI(RowFn&& row, UBOData& data);
-	template<typename RowFn, typename UBOData>
 	void SetObjectGUI(RowFn&& row, UBOData& data);
 	template<typename RowFn>
 	void SetSolverTimeingGUI(RowFn&& row, GraphicsContext& graphicsContext);

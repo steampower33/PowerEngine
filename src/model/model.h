@@ -29,8 +29,8 @@ public:
 	glm::quat rotation_{ 1.0f, 0.0f, 0.0f, 0.0f };
 	glm::vec3 scale_{ 1.0f, 1.0f, 1.0f };
 	float radius_ = 1.0f;
-
-	bool moveble_ = false;
+	bool checker_board_enable_ = false;
+	bool movable_ = false;
 
 	MeshData mesh_data_;
 

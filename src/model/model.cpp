@@ -8,7 +8,7 @@
 
 #include "model.h"
 
-Model::Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, GraphicsContext& graphicsContext, TextureManager& textureManager, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble)
+Model::Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, GraphicsContext& graphicsContext, TextureManager& textureManager, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool movable)
 {
     LoadModel(modelPath, vertexIncludeInfo, textureManager);
 
@@ -16,7 +16,7 @@ Model::Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, C
     vku::CreateIndexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, mesh_data_.indices, mesh_data_.index_buffer, mesh_data_.index_buffer_memory);
 
     albedo_use_ = colorUse;
-    moveble_ = moveble;
+    movable_ = movable;
 
     ApplyTransform(initRotation, initPos);
 }
@@ -29,7 +29,7 @@ Model::Model(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Conte
     vku::CreateIndexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, mesh_data_.indices, mesh_data_.index_buffer, mesh_data_.index_buffer_memory);
 
     albedo_use_ = colorUse;
-    moveble_ = moveble;
+    movable_ = moveble;
 
     ApplyTransform(initRotation, initPos);
 }

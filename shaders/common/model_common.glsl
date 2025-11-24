@@ -38,7 +38,7 @@ layout(set = 1, binding = 0) uniform ObjectUBO {
 
     uint ao_enable;
     uint height_enable;
-    uint p3;
+    uint checker_board_enable;
     uint p4;
 } object;
 

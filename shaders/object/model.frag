@@ -34,7 +34,14 @@ void main() {
         normalTS = normalize(normal * TBN);
     }
 
-    // RT0: albedo.rgb + metallic 
+    if (object.checker_board_enable == 1u)
+    {
+        vec2 uv = in_pos_world.xz * 0.5;
+        ivec2 cell = ivec2(floor(uv));
+        int c = (cell.x + cell.y) & 1;
+        albedo.xyz = (c == 0) ? vec3(0.9) : vec3(0.7);
+    }
+    // RT0: albedo.rgb + metallic
     out_albedo_metal = vec4(albedo.xyz, metallic);
 
     // RT1: world-normal + roughness (여기선 예시로 그냥 tangent-space normal)

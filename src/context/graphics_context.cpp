@@ -43,12 +43,12 @@ void GraphicsContext::Update(Camera& camera, MouseInteractor& mouseInteractor)
 	if (cpu_or_gpu_ == CpuOrGpu::CPU)
 	{
 		cpu_sim_->SimulateClothXPBD_CPU(
-			model_manager_.models[0]->position_, model_manager_.models[0]->radius_
+			model_manager_.models_[0]->position_, model_manager_.models_[0]->radius_
 		);
 	}
 	else if (cpu_or_gpu_ == CpuOrGpu::GPU)
 	{
-		gpu_sim_->UpdateComputeUBO(current_frame_, model_manager_.models[0]);
+		gpu_sim_->UpdateComputeUBO(current_frame_, model_manager_.models_[0]);
 		gpu_sim_->UpdateGraphicsUBO(current_frame_);
 
 		gpu_sim_->UpdateMousePushConstant(camera, mouseInteractor, glm::vec2(swapchain_.swapchain_extent_.width, swapchain_.swapchain_extent_.height));
@@ -73,26 +73,28 @@ void GraphicsContext::UpdateGraphicsUBO(Camera& camera)
 	// Object UBO
 	{
 		const uint32_t baseObjectOffset = static_cast<uint32_t>(current_frame_ * ubo_size_.object * model_manager_.kMaxObjects);
-		for (uint32_t i = 0; i < model_manager_.models.size(); i++)
+		for (uint32_t i = 0; i < model_manager_.models_.size(); i++)
 		{
 			const uint32_t objOff = baseObjectOffset + i * static_cast<uint32_t>(ubo_size_.object);
 			auto* dst = static_cast<std::byte*>(ubo_mapped_.object) + objOff;
 
-			ubo_datas_.object.model = model_manager_.models[i]->world_;
-			ubo_datas_.object.albedo_use = model_manager_.models[i]->albedo_use_;
-			ubo_datas_.object.albedo_idx = model_manager_.models[i]->texture_idx_.albedo;
-			ubo_datas_.object.metallic_idx = model_manager_.models[i]->texture_idx_.metallic;
-			ubo_datas_.object.normal_idx = model_manager_.models[i]->texture_idx_.normal;
-			ubo_datas_.object.roughness_idx = model_manager_.models[i]->texture_idx_.roughness;
-			ubo_datas_.object.ao_idx = model_manager_.models[i]->texture_idx_.ao;
-			ubo_datas_.object.height_idx = model_manager_.models[i]->texture_idx_.height;
+			ubo_datas_.object.model = model_manager_.models_[i]->world_;
+			ubo_datas_.object.albedo_use = model_manager_.models_[i]->albedo_use_;
+			ubo_datas_.object.albedo_idx = model_manager_.models_[i]->texture_idx_.albedo;
+			ubo_datas_.object.metallic_idx = model_manager_.models_[i]->texture_idx_.metallic;
+			ubo_datas_.object.normal_idx = model_manager_.models_[i]->texture_idx_.normal;
+			ubo_datas_.object.roughness_idx = model_manager_.models_[i]->texture_idx_.roughness;
+			ubo_datas_.object.ao_idx = model_manager_.models_[i]->texture_idx_.ao;
+			ubo_datas_.object.height_idx = model_manager_.models_[i]->texture_idx_.height;
 
-			ubo_datas_.object.albedo_enable = model_manager_.models[i]->texture_use_.albedo;
-			ubo_datas_.object.metallic_enable = model_manager_.models[i]->texture_use_.metallic;
-			ubo_datas_.object.normal_enable = model_manager_.models[i]->texture_use_.normal;
-			ubo_datas_.object.roughness_enable = model_manager_.models[i]->texture_use_.roughtness;
-			ubo_datas_.object.ao_enable = model_manager_.models[i]->texture_use_.ao;
-			ubo_datas_.object.height_enable = model_manager_.models[i]->texture_use_.height;
+			ubo_datas_.object.albedo_enable = model_manager_.models_[i]->texture_use_.albedo;
+			ubo_datas_.object.metallic_enable = model_manager_.models_[i]->texture_use_.metallic;
+			ubo_datas_.object.normal_enable = model_manager_.models_[i]->texture_use_.normal;
+			ubo_datas_.object.roughness_enable = model_manager_.models_[i]->texture_use_.roughtness;
+			ubo_datas_.object.ao_enable = model_manager_.models_[i]->texture_use_.ao;
+			ubo_datas_.object.height_enable = model_manager_.models_[i]->texture_use_.height;
+
+			ubo_datas_.object.checker_board_enable = model_manager_.models_[i]->checker_board_enable_;
 
 			std::memcpy(dst, &ubo_datas_.object, sizeof(UBOData::Object));
 		}
@@ -244,7 +246,7 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 			{ }
 		);
 
-		for (uint32_t i = 0; i < model_manager_.models.size(); ++i) {
+		for (uint32_t i = 0; i < model_manager_.models_.size(); ++i) {
 			uint32_t objectOffset = baseObjectOffset + i * static_cast<uint32_t>(ubo_size_.object);
 
 			// Object set
@@ -256,9 +258,9 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 				{ objectOffset }
 			);
 
-			cmd.bindVertexBuffers(0, { model_manager_.models[i]->mesh_data_.vertex_buffer }, { 0 });
-			cmd.bindIndexBuffer(*model_manager_.models[i]->mesh_data_.index_buffer, 0, vk::IndexType::eUint32);
-			cmd.drawIndexed(model_manager_.models[i]->mesh_data_.indices_count, 1, 0, 0, 0);
+			cmd.bindVertexBuffers(0, { model_manager_.models_[i]->mesh_data_.vertex_buffer }, { 0 });
+			cmd.bindIndexBuffer(*model_manager_.models_[i]->mesh_data_.index_buffer, 0, vk::IndexType::eUint32);
+			cmd.drawIndexed(model_manager_.models_[i]->mesh_data_.indices_count, 1, 0, 0, 0);
 		}
 	}
 

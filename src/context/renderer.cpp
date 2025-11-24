@@ -34,7 +34,7 @@ void Renderer::Update(Camera& camera, MouseInteractor& mouse_interactor, float d
 	gui_->Update(*context_, *graphics_context_, *swapchain_);
 	graphics_context_->Update(camera, mouse_interactor);
 
-	mouse_interactor.Update(camera, glm::vec2(swapchain_->swapchain_extent_.width, swapchain_->swapchain_extent_.height), model_manager_->models);
+	mouse_interactor.Update(camera, glm::vec2(swapchain_->swapchain_extent_.width, swapchain_->swapchain_extent_.height), model_manager_->models_);
 }
 
 void Renderer::Draw()
