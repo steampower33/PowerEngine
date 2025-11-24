@@ -361,7 +361,84 @@ namespace vku
 		}
 	}
 
-	inline void barrier2(
+	inline void BufferBarrier2(
+		const vk::raii::CommandBuffer& cmd,
+		const vk::Buffer& buffer,
+		vk::DeviceSize offset,
+		vk::DeviceSize size,
+		vk::PipelineStageFlags2 srcStage,
+		vk::AccessFlags2        srcAccess,
+		vk::PipelineStageFlags2 dstStage,
+		vk::AccessFlags2        dstAccess)
+	{
+		vk::BufferMemoryBarrier2 buf{};
+		buf.srcStageMask = srcStage;
+		buf.srcAccessMask = srcAccess;
+		buf.dstStageMask = dstStage;
+		buf.dstAccessMask = dstAccess;
+		buf.buffer = buffer;
+		buf.offset = offset;
+		buf.size = size;
+
+		vk::DependencyInfo dep{};
+		dep.setBufferMemoryBarriers(buf);
+
+		cmd.pipelineBarrier2(dep);
+	}
+
+	inline void ssboCompWtoCompR(
+		const vk::raii::CommandBuffer& cmd,
+		const vk::Buffer& buffer)
+	{
+		BufferBarrier2(
+			cmd, buffer, 0, VK_WHOLE_SIZE,
+			vk::PipelineStageFlagBits2::eComputeShader,
+			vk::AccessFlagBits2::eShaderStorageWrite,
+			vk::PipelineStageFlagBits2::eComputeShader,
+			vk::AccessFlagBits2::eShaderStorageRead
+		);
+	}
+
+	inline void ssboCompWtoCompW(
+		const vk::raii::CommandBuffer& cmd,
+		const vk::Buffer& buffer)
+	{
+		BufferBarrier2(
+			cmd, buffer, 0, VK_WHOLE_SIZE,
+			vk::PipelineStageFlagBits2::eComputeShader,
+			vk::AccessFlagBits2::eShaderStorageWrite,
+			vk::PipelineStageFlagBits2::eComputeShader,
+			vk::AccessFlagBits2::eShaderStorageWrite
+		);
+	}
+
+	inline void ssboCompWtoCompRW(
+		const vk::raii::CommandBuffer& cmd,
+		const vk::Buffer& buffer)
+	{
+		BufferBarrier2(
+			cmd, buffer, 0, VK_WHOLE_SIZE,
+			vk::PipelineStageFlagBits2::eComputeShader,
+			vk::AccessFlagBits2::eShaderStorageWrite,
+			vk::PipelineStageFlagBits2::eComputeShader,
+			vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite
+		);
+	}
+
+	inline void ssboCompWtoVertR(
+		const vk::raii::CommandBuffer& cmd,
+		const vk::Buffer& buffer)
+	{
+		BufferBarrier2(
+			cmd, buffer, 0, VK_WHOLE_SIZE,
+			vk::PipelineStageFlagBits2::eComputeShader,
+			vk::AccessFlagBits2::eShaderStorageWrite,
+			vk::PipelineStageFlagBits2::eVertexShader,
+			vk::AccessFlagBits2::eShaderStorageRead
+		);
+	}
+
+	inline void Barrier2(
 		const vk::raii::CommandBuffer& cmd,
 		vk::PipelineStageFlags2 srcStage,
 		vk::AccessFlags2        srcAccess,
