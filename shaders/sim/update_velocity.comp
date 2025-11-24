@@ -11,6 +11,6 @@ void main() {
     vec3 new_pos = xp[i].xyz;
     vec3 new_vel = (new_pos - x[i].xyz) / sim.dt;
 
-    v[i].xyz = new_vel * (1.0f - sim.air_damping * sim.dt);
+    v[i].xyz = new_vel * (1.0f - sim.global_damping * sim.dt);
     x[i].xyz = new_pos;
 }

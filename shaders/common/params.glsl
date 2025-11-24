@@ -28,13 +28,14 @@ layout(std140, set = 0, binding = 0) uniform SimParams {
     float thickness;
     float friction;
     float dt;
-    float air_damping;
+    float global_damping;
     float relaxation_factor;
     uint num_particles;
     uint num_edges;
     uint num_shears;
     uint num_bends;
     uint num_areas;
+    float p0;
 } sim;
 
 layout(std430, set = 1, binding = 0) buffer X { vec4 x[]; };

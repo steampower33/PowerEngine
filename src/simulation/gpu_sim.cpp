@@ -597,9 +597,9 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	for (int y = 0; y < ny1; ++y) {
 		for (int x = 0; x < nx1; ++x) {
 			uint32_t id = vid(x, y);
-			float px = (x - 0.5f * nx_) * spacing_x_;
+			float px = (-0.5f * nx_ + x) * spacing_x_;
 			float py = cloth_height_;
-			float pz = (y - 0.5f * ny_) * spacing_y_;
+			float pz = (-0.5f * ny_ + y) * spacing_y_;
 
 			datas_.positions[id] = { px, py, pz, 0.0f };
 			datas_.velocities[id] = glm::vec4(0);
@@ -615,8 +615,8 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 			uint32_t i1 = vid(x + 1, y);
 			uint32_t i2 = vid(x, y + 1);
 			uint32_t i3 = vid(x + 1, y + 1);
-			datas_.indices.push_back(i0); datas_.indices.push_back(i1); datas_.indices.push_back(i2);
-			datas_.indices.push_back(i1); datas_.indices.push_back(i3); datas_.indices.push_back(i2);
+			datas_.indices.push_back(i0); datas_.indices.push_back(i2); datas_.indices.push_back(i1);
+			datas_.indices.push_back(i1); datas_.indices.push_back(i2); datas_.indices.push_back(i3);
 		}
 	}
 	indices_size_ = static_cast<uint32_t>(datas_.indices.size());

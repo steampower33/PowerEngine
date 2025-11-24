@@ -327,7 +327,7 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext)
 			row("Substeps", [&] { ImGui::DragInt("##Substeps", &graphicsContext.gpu_sim_->substeps_, 1, 1, 40); });
 			row("Iterations", [&] { ImGui::DragInt("##Iterations", &graphicsContext.gpu_sim_->iterations_, 1, 1, 40); });
 			row("Mass", [&] { ImGui::DragFloat("##Mass", &graphicsContext.gpu_sim_->mass_, 0.001f, 0.0f, 10.0f); });
-			row("AirDamping", [&] { ImGui::DragFloat("##AirDamping", &graphicsContext.gpu_sim_->ubo_datas_.sim_params.air_damping, 0.1f, 0.0f, 10.0f); });
+			row("GlobalDamping", [&] { ImGui::DragFloat("##GlobalDamping", &graphicsContext.gpu_sim_->ubo_datas_.sim_params.global_damping, 0.1f, 0.0f, 10.0f); });
 			row("RelaxationFactor", [&] { ImGui::DragFloat("##RelaxationFactor", &graphicsContext.gpu_sim_->ubo_datas_.sim_params.relaxation_factor, 0.1f, 1.0f, 2.0f); });
 			row("ClothSize", [&] { ImGui::DragFloat2("##ClothSize", &graphicsContext.gpu_sim_->cloth_size_[0], 0.1f, 0.0f, 10.0f); });
 			row("ClothHeight", [&] { ImGui::DragFloat("##ClothHeight", &graphicsContext.gpu_sim_->cloth_height_, 0.1f, 0.0f, 100.0f); });

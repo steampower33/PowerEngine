@@ -155,19 +155,20 @@ public:
 
 	struct UBOData {
 		struct SimParams {
-			alignas(16) glm::vec4 gravity = glm::vec4(0.0f, -9.8f, 0.0f, 0.0f);
-			alignas(16) glm::vec4 sphere_center;
-			alignas(4) float sphere_radius;
-			alignas(4) float thickness = 0.02f;
-			alignas(4) float friction = 0.1f;
-			alignas(4) float dt = 0.0f;
-			alignas(4) float air_damping = 1.0f;
-			alignas(4) float relaxation_factor = 2.0f;
-			alignas(4) uint32_t num_particles;
-			alignas(4) uint32_t num_edges;
-			alignas(4) uint32_t num_shears;
-			alignas(4) uint32_t num_bends;
-			alignas(4) uint32_t num_areas;
+			glm::vec4 gravity = glm::vec4(0.0f, -9.8f, 0.0f, 0.0f);
+			glm::vec4 sphere_center;
+			float sphere_radius;
+			float thickness = 0.02f;
+			float friction = 0.1f;
+			float dt = 0.0f;
+			float global_damping = 1.0f;
+			float relaxation_factor = 2.0f;
+			uint32_t num_particles;
+			uint32_t num_edges;
+			uint32_t num_shears;
+			uint32_t num_bends;
+			uint32_t num_areas;
+			float p0;
 		} sim_params;
 		static_assert(sizeof(UBOData::SimParams) % 16 == 0, "std140 must be 16-byte aligned.");
 

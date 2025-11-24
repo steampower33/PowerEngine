@@ -43,7 +43,7 @@ layout(location = 2) out vec4 out_height_ao;
 
 void main() {
     vec4 albedo    = (render.albedo_enable == 0u) ? vec4(render.albedo_use.xyz, 0.0): texture(tex[nonuniformEXT(render.albedo_idx)], in_uv);
-    vec3 normal  = in_world_normal;
+    vec3 normal  = (!gl_FrontFacing) ? -in_world_normal : in_world_normal;
     float metallic = (render.metallic_enable == 0u) ? render.metallic_factor : texture(tex[nonuniformEXT(render.metallic_idx)], in_uv).r;
     float roughness = (render.roughness_enable == 0u) ? render.roughness_factor : texture(tex[nonuniformEXT(render.roughness_idx)], in_uv).r;
     float ao       = (render.ao_enable == 0u) ? render.ao_factor : texture(tex[nonuniformEXT(render.ao_idx)], in_uv).r;
