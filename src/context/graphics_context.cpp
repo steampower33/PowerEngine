@@ -41,7 +41,7 @@ GraphicsContext::GraphicsContext(GLFWwindow* glfwWindow, Context& context, Swapc
 void GraphicsContext::Update(Camera& camera, MouseInteractor& mouseInteractor)
 {
 
-	if (cpu_or_gpu_ == CpuOrGpu::CPU)
+	if (cpu_or_gpu_ == vku::CpuOrGpu::CPU)
 	{
 		cpu_sim_->UpdateGraphicsUBO(current_frame_);
 
@@ -51,7 +51,7 @@ void GraphicsContext::Update(Camera& camera, MouseInteractor& mouseInteractor)
 			model_manager_.models_[0]->position_, model_manager_.models_[0]->radius_
 		);
 	}
-	else if (cpu_or_gpu_ == CpuOrGpu::GPU)
+	else if (cpu_or_gpu_ == vku::CpuOrGpu::GPU)
 	{
 		gpu_sim_->UpdateComputeUBO(current_frame_, model_manager_.models_[0]);
 		gpu_sim_->UpdateGraphicsUBO(current_frame_);
@@ -123,7 +123,7 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 	cmd.reset();
 	cmd.begin({});
 
-	if (cpu_or_gpu_ == CpuOrGpu::CPU)
+	if (cpu_or_gpu_ == vku::CpuOrGpu::CPU)
 	{
 		cpu_sim_->CopyPositions(current_frame_, cmd);
 	}
@@ -215,11 +215,11 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 	uint32_t globalOffset = static_cast<uint32_t>(current_frame_ * ubo_size_.global);
 	const uint32_t baseObjectOffset = static_cast<uint32_t>(current_frame_ * ubo_size_.object * model_manager_.kMaxObjects);
 
-	if (cpu_or_gpu_ == CpuOrGpu::CPU)
+	if (cpu_or_gpu_ == vku::CpuOrGpu::CPU)
 	{
 		cpu_sim_->RecordGraphics(current_frame_, cmd, sets_.global, globalOffset, polygon_mode_, sets_.tex2D);
 	}
-	else if (cpu_or_gpu_ == CpuOrGpu::GPU)
+	else if (cpu_or_gpu_ == vku::CpuOrGpu::GPU)
 	{
 		gpu_sim_->RecordGraphics(current_frame_, cmd, sets_.global, globalOffset, polygon_mode_, sets_.tex2D);
 	}
@@ -450,7 +450,7 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 	uint64_t graphicsWaitValue;
 	uint64_t graphicsSignalValue;
 
-	if (cpu_or_gpu_ == CpuOrGpu::GPU)
+	if (cpu_or_gpu_ == vku::CpuOrGpu::GPU)
 	{
 		computeWaitValue = timeline_value_;
 		computeSignalValue = ++timeline_value_;
@@ -578,7 +578,7 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 
 		}
 	}
-	else if (cpu_or_gpu_ == CpuOrGpu::CPU)
+	else if (cpu_or_gpu_ == vku::CpuOrGpu::CPU)
 	{
 		graphicsWaitValue = timeline_value_;
 		graphicsSignalValue = ++timeline_value_;
@@ -670,7 +670,7 @@ void GraphicsContext::CreateCommandBuffers()
 void GraphicsContext::CreateQueryPool() {
 	vk::QueryPoolCreateInfo queryInfo = {};
 	queryInfo.queryType = vk::QueryType::eTimestamp;
-	queryInfo.queryCount = 4096;
+	queryInfo.queryCount = 1024;
 
 	timestamp_pool_ = context_.device_.createQueryPool(queryInfo);
 }

@@ -2,6 +2,11 @@
 
 namespace vku
 {
+	enum CpuOrGpu {
+		CPU,
+		GPU
+	};
+
 	enum DepthState {
 		MOUSE_DEPTH_NONE = 0,
 		MOUSE_DEPTH_IN = 1,

@@ -103,4 +103,39 @@ private:
 	void CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLayout& globalSetLayout,
 		std::vector<vk::Format>& formats,
 		vk::raii::DescriptorSetLayout& tex2DSetLayout);
+
+private:
+	struct CellKey
+	{
+		int x, y, z;
+		bool operator==(const CellKey& o) const noexcept {
+			return x == o.x && y == o.y && z == o.z;
+		}
+	};
+
+	struct CellKeyHash
+	{
+		size_t operator()(const CellKey& k) const noexcept {
+			size_t h = 1469598103934665603ull;
+			auto mix = [&](int v) {
+				h ^= std::hash<int>{}(v)+0x9e3779b97f4a7c15ull + (h << 6) + (h >> 2);
+				};
+			mix(k.x);
+			mix(k.y);
+			mix(k.z);
+			return h;
+		}
+	};
+
+	using CellMap = std::unordered_map<CellKey, std::vector<uint32_t>, CellKeyHash>;
+
+	struct CollisionPair
+	{
+		uint32_t i;
+		uint32_t j;
+	};
+
+	void BuildSpatialHash(float cellSize, CellMap& outCells);
+	void BuildCollisionPairs(const CellMap& cells, float cellSize, std::vector<CollisionPair>& outPairs);
+	void SolveSelfCollision(const std::vector<CollisionPair>& pairs, float thickness);
 };

@@ -53,12 +53,7 @@ public:
 	std::unordered_map<std::string, double> label_avg_time_;
 	uint32_t time_count_ = 0;
 
-	enum CpuOrGpu {
-		CPU,
-		GPU
-	};
-
-	CpuOrGpu cpu_or_gpu_ = CpuOrGpu::CPU;
+	vku::CpuOrGpu cpu_or_gpu_ = vku::CpuOrGpu::GPU;
 	vku::TestScene test_scene_;
 
 	std::unique_ptr<CpuSim> cpu_sim_;

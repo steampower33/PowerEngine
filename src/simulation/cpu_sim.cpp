@@ -123,6 +123,13 @@ void CpuSim::ComputeSolve(const glm::vec3& sphereCenter, float sphereRadius)
 		//std::cout << "[Drag] id : " << id << ", dist2 : " << dist2 << ", T : " << T << std::endl;
 		};
 
+	CellMap cells;
+	std::vector<CollisionPair> collisionPairs;
+
+	const float baseSpacing = std::max(d.spacing_x_, d.spacing_y_);
+	const float cellSize = baseSpacing * 1.0f;   // broadphase cell size
+	const float thickness = baseSpacing * 0.8f;   // Real minimum distance
+
 	for (int step = 0; step < substeps; ++step)
 	{
 		for (uint32_t i = 0; i < N; ++i)
@@ -151,6 +158,9 @@ void CpuSim::ComputeSolve(const glm::vec3& sphereCenter, float sphereRadius)
 		for (auto& e : d.edges) {
 			e.lambda = 0.0f;
 		}
+
+		BuildSpatialHash(cellSize, cells);
+		BuildCollisionPairs(cells, cellSize, collisionPairs);
 
 		for (int iter = 0; iter < iterations; ++iter)
 		{
@@ -205,8 +215,15 @@ void CpuSim::ComputeSolve(const glm::vec3& sphereCenter, float sphereRadius)
 					p = sphereCenter + n * sphereRadius;
 					d.pred_positions[i] = glm::vec4(p, 1.0f);
 				}
+
+				if (p.y < 0.0f)
+				{
+					d.pred_positions[i].y = 0.0f;
+				}
 			}
 
+			SolveSelfCollision(collisionPairs, thickness);
+				
 			// shear / bend / area
 		}
 
@@ -413,8 +430,8 @@ void CpuSim::CreateDatas(Context& context)
 		for (int x = 0; x < nx1; ++x) {
 			uint32_t id = vid(x, y);
 			float px = (-0.5f * datas_.nx_ + x) * datas_.spacing_x_;
-			float py = datas_.cloth_height_;
-			float pz = (-0.5f * datas_.ny_ + y) * datas_.spacing_y_;
+			float py = datas_.cloth_height_ + (-0.5f * datas_.ny_ + y) * datas_.spacing_y_;
+			float pz = 0.0f;
 
 			datas_.positions[id] = { px, py, pz, 0.0f };
 			datas_.velocities[id] = glm::vec4(0);
@@ -497,8 +514,8 @@ void CpuSim::CreateDatas(Context& context)
 			datas_.inverse_masses[i] = 0.0f;
 	}
 
-	datas_.inverse_masses[0] = 0.0f;
-	datas_.inverse_masses[nx1 - 1] = 0.0f;
+	//datas_.inverse_masses[0] = 0.0f;
+	//datas_.inverse_masses[nx1 - 1] = 0.0f;
 
 	// Set stretch edges coloring
 	for (int x = 0; x < nx1; ++x)
@@ -777,5 +794,103 @@ void CpuSim::CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLa
 
 		rasterizer.polygonMode = vk::PolygonMode::ePoint;
 		pipelines_.cloth_point = vk::raii::Pipeline(context.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+	}
+}
+
+void CpuSim::BuildSpatialHash(float cellSize, CellMap& outCells)
+{
+	outCells.clear();
+
+	auto& d = datas_;
+	const uint32_t N = d.particles_size_;
+	if (N == 0) return;
+
+	const float invCell = 1.0f / cellSize;
+
+	for (uint32_t i = 0; i < N; ++i)
+	{
+		glm::vec3 p = glm::vec3(d.pred_positions[i]);
+
+		int ix = static_cast<int>(std::floor(p.x * invCell));
+		int iy = static_cast<int>(std::floor(p.y * invCell));
+		int iz = static_cast<int>(std::floor(p.z * invCell));
+
+		CellKey key{ ix, iy, iz };
+		outCells[key].push_back(i);
+	}
+}
+
+void CpuSim::BuildCollisionPairs(const CellMap& cells, float cellSize, std::vector<CollisionPair>& outPairs)
+{
+	outPairs.clear();
+
+	auto& d = datas_;
+	const uint32_t N = d.particles_size_;
+	if (N == 0) return;
+
+	const float invCell = 1.0f / cellSize;
+
+	for (uint32_t i = 0; i < N; ++i)
+	{
+		glm::vec3 p = glm::vec3(d.pred_positions[i]);
+		int ix = static_cast<int>(std::floor(p.x * invCell));
+		int iy = static_cast<int>(std::floor(p.y * invCell));
+		int iz = static_cast<int>(std::floor(p.z * invCell));
+
+		for (int dz = -1; dz <= 1; ++dz)
+			for (int dy = -1; dy <= 1; ++dy)
+				for (int dx = -1; dx <= 1; ++dx)
+				{
+					CellKey key{ ix + dx, iy + dy, iz + dz };
+					auto it = cells.find(key);
+					if (it == cells.end()) continue;
+
+					const auto& bucket = it->second;
+					for (uint32_t j : bucket)
+					{
+						if (j <= i) continue;
+
+						outPairs.push_back({ i, j });
+					}
+				}
+	}
+}
+
+void CpuSim::SolveSelfCollision(const std::vector<CollisionPair>& pairs, float thickness)
+{
+	auto& d = datas_;
+	const float thickness2 = thickness * thickness;
+
+	for (const auto& pair : pairs)
+	{
+		uint32_t i = pair.i;
+		uint32_t j = pair.j;
+
+		float wi = d.inverse_masses[i];
+		float wj = d.inverse_masses[j];
+		if (wi + wj <= 0.0f) continue;
+
+		glm::vec3 xi = glm::vec3(d.pred_positions[i]);
+		glm::vec3 xj = glm::vec3(d.pred_positions[j]);
+
+		glm::vec3 dvec = xi - xj;
+		float dist2 = glm::dot(dvec, dvec);
+		if (dist2 < 1e-12f) continue;
+
+		if (dist2 >= thickness2) continue;
+
+		float dist = std::sqrt(dist2);
+		glm::vec3 n = dvec / dist;
+
+		float C = thickness - dist;
+		if (C <= 0.0f) continue;
+
+		float wSum = wi + wj;
+		glm::vec3 corr = (C / wSum) * n;
+
+		if (wi > 0.0f)
+			d.pred_positions[i] += glm::vec4(wi * corr, 0.0f);
+		if (wj > 0.0f)
+			d.pred_positions[j] -= glm::vec4(wj * corr, 0.0f);
 	}
 }

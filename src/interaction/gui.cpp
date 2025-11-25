@@ -164,7 +164,10 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 
 		//SetObjectGUI(row, graphicsContext.gpu_sim_->ubo_datas_.render);
 		SetSolverTimeingGUI(row, graphicsContext);
-		SetSimulationGUI(row, graphicsContext, graphicsContext.cpu_sim_);
+		if (graphicsContext.cpu_or_gpu_ == vku::CpuOrGpu::CPU)
+			SetSimulationGUI(row, graphicsContext, graphicsContext.cpu_sim_);
+		else if (graphicsContext.cpu_or_gpu_ == vku::CpuOrGpu::GPU)
+			SetSimulationGUI(row, graphicsContext, graphicsContext.gpu_sim_);
 		SetTestSceneGUI(row, graphicsContext.test_scene_);
 
 		ImGui::End();
