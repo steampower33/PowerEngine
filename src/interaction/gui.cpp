@@ -6,6 +6,7 @@
 #include "graphics_context.h"
 #include "texture_manager.h"
 #include "gpu_sim.h"
+#include "cpu_sim.h"
 
 #include "gui.h"
 
@@ -163,7 +164,7 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 
 		//SetObjectGUI(row, graphicsContext.gpu_sim_->ubo_datas_.render);
 		SetSolverTimeingGUI(row, graphicsContext);
-		SetSimulationGUI(row, graphicsContext);
+		SetSimulationGUI(row, graphicsContext, graphicsContext.cpu_sim_);
 		SetTestSceneGUI(row, graphicsContext.test_scene_);
 
 		ImGui::End();
@@ -300,8 +301,8 @@ void GUI::SetSolverTimeingGUI(RowFn&& row, GraphicsContext& graphicsContext)
 	}
 }
 
-template<typename RowFn>
-void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext)
+template<typename RowFn, typename Sim>
+void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& sim)
 {
 	if (ImGui::CollapsingHeader("Simulation", ImGuiTreeNodeFlags_DefaultOpen))
 	{
@@ -318,22 +319,22 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext)
 		if (ImGui::BeginTable("Parameter", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
-			row("Nx x Ny", [&] { ImGui::Text("%u x %u", graphicsContext.gpu_sim_->datas_.nx_, graphicsContext.gpu_sim_->datas_.ny_); });
-			row("NumParticles", [&] { ImGui::Text("%u", graphicsContext.gpu_sim_->datas_.particles_size_); });
-			row("NumEdges", [&] { ImGui::Text("%u", graphicsContext.gpu_sim_->datas_.edge_size_); });
-			row("NumShears", [&] { ImGui::Text("%u", graphicsContext.gpu_sim_->datas_.shear_size_); });
-			row("NumBends", [&] { ImGui::Text("%u", graphicsContext.gpu_sim_->datas_.bend_size_); });
-			row("1 / FrameDt", [&] { ImGui::DragFloat("##FrameDt", &graphicsContext.gpu_sim_->datas_.frame_dt_, 1.0f, 60.0f, 240.0f); });
-			row("Substeps", [&] { ImGui::DragInt("##Substeps", &graphicsContext.gpu_sim_->datas_.substeps_, 1, 1, 40); });
-			row("Iterations", [&] { ImGui::DragInt("##Iterations", &graphicsContext.gpu_sim_->datas_.iterations_, 1, 1, 40); });
-			row("Mass", [&] { ImGui::DragFloat("##Mass", &graphicsContext.gpu_sim_->datas_.mass_, 0.001f, 0.0f, 10.0f); });
-			row("GlobalDamping", [&] { ImGui::DragFloat("##GlobalDamping", &graphicsContext.gpu_sim_->ubo_.datas_.sim_params.global_damping, 0.1f, 0.0f, 10.0f); });
-			row("RelaxationFactor", [&] { ImGui::DragFloat("##RelaxationFactor", &graphicsContext.gpu_sim_->ubo_.datas_.sim_params.relaxation_factor, 0.1f, 1.0f, 2.0f); });
-			row("ClothSize", [&] { ImGui::DragFloat2("##ClothSize", &graphicsContext.gpu_sim_->datas_.cloth_size_[0], 0.1f, 0.0f, 10.0f); });
-			row("ClothHeight", [&] { ImGui::DragFloat("##ClothHeight", &graphicsContext.gpu_sim_->datas_.cloth_height_, 0.1f, 0.0f, 100.0f); });
+			row("Nx x Ny", [&] { ImGui::Text("%u x %u", sim->datas_.nx_, sim->datas_.ny_); });
+			row("NumParticles", [&] { ImGui::Text("%u", sim->datas_.particles_size_); });
+			row("NumEdges", [&] { ImGui::Text("%u", sim->datas_.edge_size_); });
+			row("NumShears", [&] { ImGui::Text("%u", sim->datas_.shear_size_); });
+			row("NumBends", [&] { ImGui::Text("%u", sim->datas_.bend_size_); });
+			row("1 / FrameDt", [&] { ImGui::DragFloat("##FrameDt", &sim->datas_.frame_dt_, 1.0f, 60.0f, 240.0f); });
+			row("Substeps", [&] { ImGui::DragInt("##Substeps", &sim->datas_.substeps_, 1, 1, 40); });
+			row("Iterations", [&] { ImGui::DragInt("##Iterations", &sim->datas_.iterations_, 1, 1, 40); });
+			row("Mass", [&] { ImGui::DragFloat("##Mass", &sim->datas_.mass_, 0.001f, 0.0f, 10.0f); });
+			row("GlobalDamping", [&] { ImGui::DragFloat("##GlobalDamping", &sim->ubo_.datas_.sim_params.global_damping, 0.1f, 0.0f, 10.0f); });
+			row("RelaxationFactor", [&] { ImGui::DragFloat("##RelaxationFactor", &sim->ubo_.datas_.sim_params.relaxation_factor, 0.1f, 1.0f, 2.0f); });
+			row("ClothSize", [&] { ImGui::DragFloat2("##ClothSize", &sim->datas_.cloth_size_[0], 0.1f, 0.0f, 10.0f); });
+			row("ClothHeight", [&] { ImGui::DragFloat("##ClothHeight", &sim->datas_.cloth_height_, 0.1f, 0.0f, 100.0f); });
 
-			row("Thickness", [&] { ImGui::DragFloat("##Thickness", &graphicsContext.gpu_sim_->ubo_.datas_.sim_params.thickness, 0.001f, 0.0f, 1.0f, "%.3f"); });
-			row("Friction", [&] { ImGui::DragFloat("##Friction", &graphicsContext.gpu_sim_->ubo_.datas_.sim_params.friction, 0.001f, 0.0f, 1.0f, "%.3f"); });
+			row("Thickness", [&] { ImGui::DragFloat("##Thickness", &sim->ubo_.datas_.sim_params.thickness, 0.001f, 0.0f, 1.0f, "%.3f"); });
+			row("Friction", [&] { ImGui::DragFloat("##Friction", &sim->ubo_.datas_.sim_params.friction, 0.001f, 0.0f, 1.0f, "%.3f"); });
 			ImGui::EndTable();
 		}
 
@@ -341,12 +342,12 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext)
 		if (ImGui::BeginTable("Compliance", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
-			row("Stretch", [&] { ImGui::DragFloat("##Stretch", &graphicsContext.gpu_sim_->datas_.compliance_.stretch, 1e-10f, 0.0f, 1.0f, "%.10f"); });
-			row("Shear", [&] { ImGui::DragFloat("##Shear", &graphicsContext.gpu_sim_->datas_.compliance_.shear
+			row("Stretch", [&] { ImGui::DragFloat("##Stretch", &sim->datas_.compliance_.stretch, 1e-10f, 0.0f, 1.0f, "%.10f"); });
+			row("Shear", [&] { ImGui::DragFloat("##Shear", &sim->datas_.compliance_.shear
 				, 1e-10f, 0.0f, 1.0f, "%.10f"); });
-			row("Bend", [&] { ImGui::DragFloat("##Bend", &graphicsContext.gpu_sim_->datas_.compliance_.bend
+			row("Bend", [&] { ImGui::DragFloat("##Bend", &sim->datas_.compliance_.bend
 				, 1e-2f, 0.0f, 1.0f, "%.10f"); });
-			row("Area", [&] { ImGui::DragFloat("##Area", &graphicsContext.gpu_sim_->datas_.compliance_.area
+			row("Area", [&] { ImGui::DragFloat("##Area", &sim->datas_.compliance_.area
 				, 1e-2f, 0.0f, 1.0f, "%.10f"); });
 			ImGui::EndTable();
 		}
@@ -355,12 +356,12 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext)
 		if (ImGui::BeginTable("Beta", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
-			row("Stretch", [&] { ImGui::DragFloat("##Stretch", &graphicsContext.gpu_sim_->datas_.beta_.stretch, 1.0f, 0.0f, 1000.0f, "%.1f"); });
-			row("Shear", [&] { ImGui::DragFloat("##Shear", &graphicsContext.gpu_sim_->datas_.beta_.shear
+			row("Stretch", [&] { ImGui::DragFloat("##Stretch", &sim->datas_.beta_.stretch, 1.0f, 0.0f, 1000.0f, "%.1f"); });
+			row("Shear", [&] { ImGui::DragFloat("##Shear", &sim->datas_.beta_.shear
 				, 1.0f, 0.0f, 1000.0f, "%.1f"); });
-			row("Bend", [&] { ImGui::DragFloat("##Bend", &graphicsContext.gpu_sim_->datas_.beta_.bend
+			row("Bend", [&] { ImGui::DragFloat("##Bend", &sim->datas_.beta_.bend
 				, 1.0f, 0.0f, 1000.0f, "%.1f"); });
-			row("Area", [&] { ImGui::DragFloat("##Area", &graphicsContext.gpu_sim_->datas_.beta_.area
+			row("Area", [&] { ImGui::DragFloat("##Area", &sim->datas_.beta_.area
 				, 1.0f, 0.0f, 1000.0f, "%.1f"); });
 
 			ImGui::EndTable();

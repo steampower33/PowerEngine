@@ -43,10 +43,13 @@ void GraphicsContext::Update(Camera& camera, MouseInteractor& mouseInteractor)
 
 	if (cpu_or_gpu_ == CpuOrGpu::CPU)
 	{
+		cpu_sim_->UpdateGraphicsUBO(current_frame_);
+
+		cpu_sim_->UpdateMousePushConstant(camera, mouseInteractor, glm::vec2(swapchain_.swapchain_extent_.width, swapchain_.swapchain_extent_.height));
+
 		cpu_sim_->ComputeSolve(
 			model_manager_.models_[0]->position_, model_manager_.models_[0]->radius_
 		);
-		cpu_sim_->UpdateGraphicsUBO(current_frame_);
 	}
 	else if (cpu_or_gpu_ == CpuOrGpu::GPU)
 	{

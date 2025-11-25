@@ -4,6 +4,8 @@
 #include "texture.h"
 #include "texture_manager.h"
 #include "vulkan_utils.h"
+#include "ray.h"
+#include "mouse_interactor.h"
 
 #include "cpu_sim.h"
 
@@ -24,6 +26,31 @@ CpuSim::CpuSim(
 	CreateGraphicsPipelines(context, globalSetLayout, formats, tex2DSetLayout);
 }
 
+void CpuSim::UpdateMousePushConstant(Camera& camera, MouseInteractor& mouseInteractor, glm::vec2 viewportSize)
+{
+	if (mouseInteractor.is_left_button_down_event)
+	{
+		push_constants_.mouse_interact.select_mode = 1;
+
+		Ray ray = mouseInteractor.CalculateMouseRay(camera, viewportSize);
+
+		push_constants_.mouse_interact.ray_origin = ray.origin;
+		push_constants_.mouse_interact.ray_dir = ray.direction;
+
+	}
+	else if (!mouseInteractor.is_left_button_down_event && mouseInteractor.is_left_down)
+	{
+		push_constants_.mouse_interact.select_mode = 2;
+
+		Ray ray = mouseInteractor.CalculateMouseRay(camera, viewportSize);
+
+		push_constants_.mouse_interact.ray_origin = ray.origin;
+		push_constants_.mouse_interact.ray_dir = ray.direction;
+	}
+	else
+		push_constants_.mouse_interact.select_mode = 0;
+}
+
 void CpuSim::ComputeSolve(const glm::vec3& sphereCenter, float sphereRadius)
 {
 	auto& d = datas_;
@@ -40,6 +67,62 @@ void CpuSim::ComputeSolve(const glm::vec3& sphereCenter, float sphereRadius)
 	const glm::vec3 gravity(0.0f, -9.81f, 0.0f);
 	const float velocity_damping = 0.01f;
 
+	auto& pc = push_constants_.mouse_interact;
+
+	auto mouse_select = [&](int i, glm::vec3& pos) {
+		if (pc.select_mode == 0)
+		{
+			id = -1;
+			dist2 = 1000.0f;
+			T = 1000.0f;
+		}
+
+		if (pc.select_mode != 1)
+			return;
+
+		glm::vec3 o = pc.ray_origin;
+		glm::vec3 dir = pc.ray_dir;
+
+		glm::vec3 v = pos - o;
+		float t = std::max(dot(v, dir), 0.0f);
+		glm::vec3 c = o + dir * t;
+		float d2 = dot(pos - c, pos - c);
+
+		float r = pc.radius;
+		if (d2 > r * r) return;
+
+		if (dist2 > d2)
+		{
+			id = i;
+			dist2 = d2;
+			T = t;
+			//std::cout << "[Select] id : " << id << ", dist2 : " << dist2 << ", T : " << T << std::endl;
+		}
+
+		};
+
+	auto mouse_drag = [&](int i, glm::vec3& xpi, glm::vec3& vi) {
+		if (pc.select_mode != 2)
+			return;
+
+		if (dist2 >= 999.9f)
+			return;
+
+		if (i != id)
+			return;
+
+		glm::vec3 o = pc.ray_origin;
+		glm::vec3 dir = pc.ray_dir;
+
+		float t = T;
+		glm::vec3 c = o + t * dir;
+
+		xpi = c;
+		vi = glm::vec3(0.0f);
+
+		//std::cout << "[Drag] id : " << id << ", dist2 : " << dist2 << ", T : " << T << std::endl;
+		};
+
 	for (int step = 0; step < substeps; ++step)
 	{
 		for (uint32_t i = 0; i < N; ++i)
@@ -53,10 +136,15 @@ void CpuSim::ComputeSolve(const glm::vec3& sphereCenter, float sphereRadius)
 				continue;
 			}
 
-			v += gravity * dt;
-			x += v * dt;
+			mouse_select(i, x);
 
-			d.pred_positions[i] = glm::vec4(x, 1.0f);
+			v += gravity * dt;
+
+			glm::vec3 xpi = x + v * dt;
+
+			mouse_drag(i, xpi, v);
+
+			d.pred_positions[i] = glm::vec4(xpi, 0.0f);
 			d.velocities[i] = glm::vec4(v, 0.0f);
 		}
 
@@ -496,7 +584,7 @@ void CpuSim::CreateDatas(Context& context)
 		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
 		vk::MemoryPropertyFlagBits::eDeviceLocal,
 		pos_ssbo_, pos_ssbo_mem_,
-		&pos_staging_,&pos_staging_mem_);
+		&pos_staging_, &pos_staging_mem_);
 	pos_staging_map_ = pos_staging_mem_.mapMemory(0, pos_ssbo_size_);
 }
 

@@ -4,6 +4,7 @@ class Context;
 class Swapchain;
 class GraphicsContext;
 class GpuSim;
+class CpuSim;
 
 class GUI
 {
@@ -33,8 +34,8 @@ public:
 	void SetObjectGUI(RowFn&& row, UBOData& data);
 	template<typename RowFn>
 	void SetSolverTimeingGUI(RowFn&& row, GraphicsContext& graphicsContext);
-	template<typename RowFn>
-	void SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext);
+	template<typename RowFn, typename Sim>
+	void SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& sim);
 	template<typename RowFn, typename Scene>
 	void SetTestSceneGUI(RowFn&& row, Scene& scene);
 };
