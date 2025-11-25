@@ -55,22 +55,22 @@ void GpuSim::UpdateMousePushConstant(Camera& camera, MouseInteractor& mouseInter
 
 void GpuSim::UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& model)
 {
-	ubo_datas_.sim_params.dt = 1.0f / frame_dt_ / substeps_;
-	ubo_datas_.sim_params.num_particles = particles_size_;
-	ubo_datas_.sim_params.num_edges = edge_size_;
-	ubo_datas_.sim_params.num_bends = bend_size_;
-	ubo_datas_.sim_params.num_shears = shear_size_;
-	ubo_datas_.sim_params.num_areas = area_size_;
-	ubo_datas_.sim_params.sphere_center = glm::vec4(model->position_, 0.0f);
-	ubo_datas_.sim_params.sphere_radius = model->radius_;
+	ubo_.datas_.sim_params.dt = 1.0f / datas_.frame_dt_ / datas_.substeps_;
+	ubo_.datas_.sim_params.num_particles = datas_.particles_size_;
+	ubo_.datas_.sim_params.num_edges = datas_.edge_size_;
+	ubo_.datas_.sim_params.num_bends = datas_.bend_size_;
+	ubo_.datas_.sim_params.num_shears = datas_.shear_size_;
+	ubo_.datas_.sim_params.num_areas = datas_.area_size_;
+	ubo_.datas_.sim_params.sphere_center = glm::vec4(model->position_, 0.0f);
+	ubo_.datas_.sim_params.sphere_radius = model->radius_;
 
-	const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_size_.sim_params);
-	auto* dst = static_cast<std::byte*>(ubo_mapped_.sim_params) + baseOffset;
+	const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_.size_.sim_params);
+	auto* dst = static_cast<std::byte*>(ubo_.mapped_.sim_params) + baseOffset;
 
-	std::memcpy(dst, &ubo_datas_.sim_params, sizeof(UBOData::SimParams));
+	std::memcpy(dst, &ubo_.datas_.sim_params, sizeof(SimUBO::Data::SimParams));
 }
 
-void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& timestampSteps, vku::TestScene& testScene)
+void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& timestampSteps, vku::TestScene& testScene)
 {
 	cmd.reset();
 	cmd.begin({});
@@ -78,7 +78,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 	UpdateTestScene(cmd, testScene);
 
 	timestampSteps = 0;
-	uint32_t kSlotsPerIterPair = substeps_ * (4 + iteration_timestamp_count_ * iterations_ + 2);
+	uint32_t kSlotsPerIterPair = datas_.substeps_ * (4 + iteration_timestamp_count_ * datas_.iterations_ + 2);
 	const auto stage = vk::PipelineStageFlagBits2::eComputeShader;
 	auto TS = [&](uint32_t& idx) {
 		cmd.writeTimestamp2(stage, *timestampPool, idx++);
@@ -86,7 +86,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 	cmd.resetQueryPool(*timestampPool, 0, kSlotsPerIterPair);
 
-	uint32_t simparamOffset = currentFrame * static_cast<uint32_t>(ubo_size_.sim_params);
+	uint32_t simparamOffset = currentFrame * static_cast<uint32_t>(ubo_.size_.sim_params);
 	cmd.bindDescriptorSets(
 		vk::PipelineBindPoint::eCompute, pipeline_layouts_.common,
 		0,
@@ -95,10 +95,10 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 	);
 
 	auto ceil_div = [](uint32_t n, uint32_t d) { return (n + d - 1) / d; };
-	uint32_t groupsP = ceil_div(particles_size_, 256u);
-	uint32_t groupsEdges = ceil_div(edge_size_, 256u);
+	uint32_t groupsP = ceil_div(datas_.particles_size_, 256u);
+	uint32_t groupsEdges = ceil_div(datas_.edge_size_, 256u);
 
-	for (uint32_t step = 0; step < substeps_; step++)
+	for (uint32_t step = 0; step < datas_.substeps_; step++)
 	{
 		// Integrate
 		TS(timestampSteps);
@@ -118,7 +118,7 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 		cmd.dispatch(groupsEdges, 1, 1);
 		TS(timestampSteps);
 
-		for (uint32_t iter = 0; iter < iterations_; iter++)
+		for (uint32_t iter = 0; iter < datas_.iterations_; iter++)
 		{
 			// Solve Coloring - Stretch
 			TS(timestampSteps);
@@ -131,8 +131,8 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 				push_constants_.solve.base = base;
 				push_constants_.solve.count = count;
-				push_constants_.solve.compliance = compliance_.stretch;
-				push_constants_.solve.beta = beta_.stretch;
+				push_constants_.solve.compliance = datas_.compliance_.stretch;
+				push_constants_.solve.beta = datas_.beta_.stretch;
 
 				cmd.pushConstants<PushConstant::Solve>(
 					*pipeline_layouts_.common,
@@ -148,14 +148,14 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				// Solve Shear
 				TS(timestampSteps);
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_shear);
-				push_constants_.solve.compliance = compliance_.shear;
-				push_constants_.solve.beta = beta_.shear;
+				push_constants_.solve.compliance = datas_.compliance_.shear;
+				push_constants_.solve.beta = datas_.beta_.shear;
 
 				cmd.pushConstants<PushConstant::Solve>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
 
-				uint32_t group = (shear_size_ + 256 - 1) / 256;
+				uint32_t group = (datas_.shear_size_ + 256 - 1) / 256;
 				cmd.dispatch(group, 1, 1);
 				TS(timestampSteps);
 			}
@@ -165,11 +165,11 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				TS(timestampSteps);
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_bend);
 				uint32_t base = 0;
-				uint32_t count = bend_size_;
+				uint32_t count = datas_.bend_size_;
 				push_constants_.solve.base = base;
 				push_constants_.solve.count = count;
-				push_constants_.solve.compliance = compliance_.bend;
-				push_constants_.solve.beta = beta_.bend;
+				push_constants_.solve.compliance = datas_.compliance_.bend;
+				push_constants_.solve.beta = datas_.beta_.bend;
 				cmd.pushConstants<PushConstant::Solve>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
@@ -184,11 +184,11 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				TS(timestampSteps);
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_area);
 				uint32_t base = 0;
-				uint32_t count = area_size_;
+				uint32_t count = datas_.area_size_;
 				push_constants_.solve.base = base;
 				push_constants_.solve.count = count;
-				push_constants_.solve.compliance = compliance_.area;
-				push_constants_.solve.beta = beta_.area;
+				push_constants_.solve.compliance = datas_.compliance_.area;
+				push_constants_.solve.beta = datas_.beta_.area;
 				cmd.pushConstants<PushConstant::Solve>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
@@ -229,13 +229,13 @@ void GpuSim::ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 void GpuSim::UpdateGraphicsUBO(uint32_t currentFrame)
 {
-	const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_size_.render);
-	auto* dst = static_cast<std::byte*>(ubo_mapped_.render) + baseOffset;
+	const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_.size_.render);
+	auto* dst = static_cast<std::byte*>(ubo_.mapped_.render) + baseOffset;
 
-	std::memcpy(dst, &ubo_datas_.render, sizeof(UBOData::Render));
+	std::memcpy(dst, &ubo_.datas_.render, sizeof(SimUBO::Data::Render));
 }
 
-void GpuSim::GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset, vku::PolygonMode mode,
+void GpuSim::RecordGraphics(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset, vku::PolygonMode mode,
 	vk::raii::DescriptorSet& tex2DSet)
 {
 	// Cloth
@@ -266,7 +266,7 @@ void GpuSim::GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer
 		);
 
 		// Render
-		const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_size_.render);
+		const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_.size_.render);
 		cmd.bindDescriptorSets(
 			vk::PipelineBindPoint::eGraphics,
 			pipeline_layouts_.cloth_graphics,
@@ -292,7 +292,7 @@ void GpuSim::GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer
 		);
 
 		cmd.bindIndexBuffer(*index_buffer_, 0, vk::IndexType::eUint32);
-		cmd.drawIndexed(indices_size_, 1, 0, 0, 0);
+		cmd.drawIndexed(datas_.indices_size_, 1, 0, 0, 0);
 	}
 }
 
@@ -329,15 +329,15 @@ void GpuSim::CopyDatas(const vk::raii::CommandBuffer& cmd)
 
 void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene)
 {
-	spacing_x_ = cloth_size_.x / nx_;
-	spacing_y_ = cloth_size_.y / ny_;
+	datas_.spacing_x_ = datas_.cloth_size_.x / datas_.nx_;
+	datas_.spacing_y_ = datas_.cloth_size_.y / datas_.ny_;
 
 	if (testScene.sphereCollision)
 	{
 		testScene.sphereCollision = false;
 
-		const int nxCells = nx_;
-		const int nyCells = ny_;
+		const int nxCells = datas_.nx_;
+		const int nyCells = datas_.ny_;
 		const int nx1 = nxCells + 1;
 		const int ny1 = nyCells + 1;
 
@@ -348,24 +348,24 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 		for (int y = 0; y < ny1; ++y) {
 			for (int x = 0; x < nx1; ++x) {
 				uint32_t id = vid(x, y);
-				float px = (x - 0.5f * nx_) * spacing_x_;
-				float py = cloth_height_;
-				float pz = (y - 0.5f * ny_) * spacing_y_;
+				float px = (x - 0.5f * datas_.nx_) * datas_.spacing_x_;
+				float py = datas_.cloth_height_;
+				float pz = (y - 0.5f * datas_.ny_) * datas_.spacing_y_;
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0.0f);
 				datas_.pred_positions[id] = datas_.positions[id];
 			}
 		}
 
-		ResetConstraints();
+		datas_.ResetConstraints();
 		CopyDatas(cmd);
 	}
 	else if (testScene.pinnedCorner)
 	{
 		testScene.pinnedCorner = false;
 
-		const int nxCells = nx_;
-		const int nyCells = ny_;
+		const int nxCells = datas_.nx_;
+		const int nyCells = datas_.ny_;
 		const int nx1 = nxCells + 1;
 		const int ny1 = nyCells + 1;
 
@@ -376,16 +376,16 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 		for (int y = 0; y < ny1; ++y) {
 			for (int x = 0; x < nx1; ++x) {
 				uint32_t id = vid(x, y);
-				float px = (x - 0.5f * nx_) * spacing_x_;
-				float py = cloth_height_;
-				float pz = (y - 0.5f * ny_) * spacing_y_;
+				float px = (x - 0.5f * datas_.nx_) * datas_.spacing_x_;
+				float py = datas_.cloth_height_;
+				float pz = (y - 0.5f * datas_.ny_) * datas_.spacing_y_;
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0.0f);
 				datas_.pred_positions[id] = datas_.positions[id];
 			}
 		}
 
-		ResetConstraints();
+		datas_.ResetConstraints();
 
 		datas_.inverse_masses[0] = 0.0f;
 		datas_.inverse_masses[nx1 - 1] = 0.0f;
@@ -398,8 +398,8 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 	{
 		testScene.topPinnedCorner = false;
 
-		const int nxCells = nx_;
-		const int nyCells = ny_;
+		const int nxCells = datas_.nx_;
+		const int nyCells = datas_.ny_;
 		const int nx1 = nxCells + 1;
 		const int ny1 = nyCells + 1;
 
@@ -410,16 +410,16 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 		for (int y = 0; y < ny1; ++y) {
 			for (int x = 0; x < nx1; ++x) {
 				uint32_t id = vid(x, y);
-				float px = (x - 0.5f * nx_) * spacing_x_;
-				float py = cloth_height_;
-				float pz = (y - 0.5f * ny_) * spacing_y_;
+				float px = (x - 0.5f * datas_.nx_) * datas_.spacing_x_;
+				float py = datas_.cloth_height_;
+				float pz = (y - 0.5f * datas_.ny_) * datas_.spacing_y_;
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0.0f);
 				datas_.pred_positions[id] = datas_.positions[id];
 			}
 		}
 
-		ResetConstraints();
+		datas_.ResetConstraints();
 
 		datas_.inverse_masses[0] = 0.0f;
 		datas_.inverse_masses[nx1 - 1] = 0.0f;
@@ -523,68 +523,60 @@ void GpuSim::CreateUniformBuffers(Context& context,
 {
 	// Sim params UBO
 	{
-		ubos_.sim_params.clear();
-		ubo_memories_.sim_params.clear();
-		ubo_mapped_.sim_params = nullptr;
+		ubo_.ubos_.sim_params.clear();
+		ubo_.memories_.sim_params.clear();
+		ubo_.mapped_.sim_params = nullptr;
 
 		auto limits = context.physical_device_.getProperties().limits;
-		ubo_size_.sim_params = (sizeof(UBOData::SimParams) + limits.minUniformBufferOffsetAlignment - 1)
+		ubo_.size_.sim_params = (sizeof(SimUBO::Data::SimParams) + limits.minUniformBufferOffsetAlignment - 1)
 			& ~(limits.minUniformBufferOffsetAlignment - 1);
-		vk::DeviceSize totalSize = ubo_size_.sim_params * MAX_FRAMES_IN_FLIGHT;
+		vk::DeviceSize totalSize = ubo_.size_.sim_params * MAX_FRAMES_IN_FLIGHT;
 
 		vk::raii::Buffer buffer({});
 		vk::raii::DeviceMemory bufferMem({});
 		vku::CreateBuffer(context.physical_device_, context.device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
-		ubos_.sim_params = std::move(buffer);
-		ubo_memories_.sim_params = std::move(bufferMem);
-		ubo_mapped_.sim_params = ubo_memories_.sim_params.mapMemory(0, totalSize);
+		ubo_.ubos_.sim_params = std::move(buffer);
+		ubo_.memories_.sim_params = std::move(bufferMem);
+		ubo_.mapped_.sim_params = ubo_.memories_.sim_params.mapMemory(0, totalSize);
 	}
 
 	// Render UBO
 	{
-		ubos_.render.clear();
-		ubo_memories_.render.clear();
-		ubo_mapped_.render = nullptr;
+		ubo_.ubos_.render.clear();
+		ubo_.memories_.render.clear();
+		ubo_.mapped_.render = nullptr;
 
 		auto limits = context.physical_device_.getProperties().limits;
-		ubo_size_.render = (sizeof(UBOData::Render) + limits.minUniformBufferOffsetAlignment - 1)
+		ubo_.size_.render = (sizeof(SimUBO::Data::Render) + limits.minUniformBufferOffsetAlignment - 1)
 			& ~(limits.minUniformBufferOffsetAlignment - 1);
-		vk::DeviceSize totalSize = ubo_size_.render * MAX_FRAMES_IN_FLIGHT;
+		vk::DeviceSize totalSize = ubo_.size_.render * MAX_FRAMES_IN_FLIGHT;
 
 		vk::raii::Buffer buffer({});
 		vk::raii::DeviceMemory bufferMem({});
 		vku::CreateBuffer(context.physical_device_, context.device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
-		ubos_.render = std::move(buffer);
-		ubo_memories_.render = std::move(bufferMem);
-		ubo_mapped_.render = ubo_memories_.render.mapMemory(0, totalSize);
+		ubo_.ubos_.render = std::move(buffer);
+		ubo_.memories_.render = std::move(bufferMem);
+		ubo_.mapped_.render = ubo_.memories_.render.mapMemory(0, totalSize);
 
-		ubo_datas_.render.albedo_enable = 1;
-		ubo_datas_.render.albedo_idx = 0;
-		//ubo_datas_.render.albedo_idx = modelManager.cloth_->texture_idx_.albedo;
-		//ubo_datas_.render.albedo_enable = modelManager.cloth_->texture_use_.albedo;
-		//ubo_datas_.render.normal_idx = modelManager.cloth_->texture_idx_.normal;
-		//ubo_datas_.render.normal_enable = modelManager.cloth_->texture_use_.normal;
-		//ubo_datas_.render.height_idx = modelManager.cloth_->texture_idx_.height;
-		//ubo_datas_.render.height_enable = modelManager.cloth_->texture_use_.height;
-		//ubo_datas_.render.roughness_idx = modelManager.cloth_->texture_idx_.roughness;
-		//ubo_datas_.render.roughtnessEnable = modelManager.cloth_->texture_use_.roughtness;
+		ubo_.datas_.render.albedo_enable = 1;
+		ubo_.datas_.render.albedo_idx = 0;
 	}
 }
 
 void GpuSim::CreateSSBOBuffers(Context& context)
 {
-	const int nxCells = nx_;
-	const int nyCells = ny_;
+	const int nxCells = datas_.nx_;
+	const int nyCells = datas_.ny_;
 	const int nx1 = nxCells + 1;
 	const int ny1 = nyCells + 1;
 
 	auto vid = [&](int x, int y) { return uint32_t(y * nx1 + x); };
 
 	const uint32_t N = nx1 * ny1;
-	particles_size_ = N;
+	datas_.particles_size_ = N;
 
-	spacing_x_ = cloth_size_.x / nx_;
-	spacing_y_ = cloth_size_.y / ny_;
+	datas_.spacing_x_ = datas_.cloth_size_.x / datas_.nx_;
+	datas_.spacing_y_ = datas_.cloth_size_.y / datas_.ny_;
 
 	datas_.positions.resize(N);
 	datas_.velocities.resize(N);
@@ -597,9 +589,9 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	for (int y = 0; y < ny1; ++y) {
 		for (int x = 0; x < nx1; ++x) {
 			uint32_t id = vid(x, y);
-			float px = (-0.5f * nx_ + x) * spacing_x_;
-			float py = cloth_height_;
-			float pz = (-0.5f * ny_ + y) * spacing_y_;
+			float px = (-0.5f * datas_.nx_ + x) * datas_.spacing_x_;
+			float py = datas_.cloth_height_;
+			float pz = (-0.5f * datas_.ny_ + y) * datas_.spacing_y_;
 
 			datas_.positions[id] = { px, py, pz, 0.0f };
 			datas_.velocities[id] = glm::vec4(0);
@@ -608,9 +600,9 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	}
 
 	// Set indices
-	datas_.indices.reserve(nx_ * ny_ * 6);
-	for (int y = 0; y < ny_; ++y) {
-		for (int x = 0; x < nx_; ++x) {
+	datas_.indices.reserve(datas_.nx_ * datas_.ny_ * 6);
+	for (int y = 0; y < datas_.ny_; ++y) {
+		for (int x = 0; x < datas_.nx_; ++x) {
 			uint32_t i0 = vid(x, y);
 			uint32_t i1 = vid(x + 1, y);
 			uint32_t i2 = vid(x, y + 1);
@@ -619,14 +611,14 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 			datas_.indices.push_back(i1); datas_.indices.push_back(i2); datas_.indices.push_back(i3);
 		}
 	}
-	indices_size_ = static_cast<uint32_t>(datas_.indices.size());
+	datas_.indices_size_ = static_cast<uint32_t>(datas_.indices.size());
 	vku::CreateIndexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, datas_.indices, index_buffer_, index_buffer_memory_);
 
 	datas_.masses.resize(N, 0.0f);
 
 	// Total area
 	float totalArea = 0.0f;
-	for (size_t t = 0; t < indices_size_; t += 3) {
+	for (size_t t = 0; t < datas_.indices_size_; t += 3) {
 		uint32_t i0 = datas_.indices[t + 0];
 		uint32_t i1 = datas_.indices[t + 1];
 		uint32_t i2 = datas_.indices[t + 2];
@@ -642,7 +634,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		totalArea += area;
 	}
 
-	float totalMassTarget = mass_;
+	float totalMassTarget = datas_.mass_;
 
 	// Area zero defence
 	float density = 0.0f;
@@ -651,7 +643,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	}
 
 	// Distribute mass to each triangle in proportion to area
-	for (size_t t = 0; t < indices_size_; t += 3) {
+	for (size_t t = 0; t < datas_.indices_size_; t += 3) {
 		uint32_t i0 = datas_.indices[t + 0];
 		uint32_t i1 = datas_.indices[t + 1];
 		uint32_t i2 = datas_.indices[t + 2];
@@ -716,10 +708,10 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		datas_.pass_offsets[p + 1] = static_cast<uint32_t>(datas_.edges.size());
 	}
 
-	edge_size_ = static_cast<uint32_t>(datas_.edges.size());
-	if (edge_size_ != ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)))
+	datas_.edge_size_ = static_cast<uint32_t>(datas_.edges.size());
+	if (datas_.edge_size_ != ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)))
 	{
-		std::cout << edge_size_ << " " << ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)) << std::endl;
+		std::cout << datas_.edge_size_ << " " << ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)) << std::endl;
 		throw std::runtime_error("edge size is not right");
 	}
 
@@ -742,7 +734,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 		float restDot = glm::dot(e1, e2);
 
-		Data::Shear c;
+		SimData::Shear c;
 		c.i0 = i0;
 		c.i1 = i1;
 		c.i2 = i2;
@@ -751,13 +743,13 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 		datas_.shears.push_back(c);
 	}
-	shear_size_ = static_cast<uint32_t>(datas_.shears.size());
+	datas_.shear_size_ = static_cast<uint32_t>(datas_.shears.size());
 
-	BuildBendConstraints();
-	bend_size_ = static_cast<uint32_t>(datas_.bends.size());
+	datas_.BuildBendConstraints();
+	datas_.bend_size_ = static_cast<uint32_t>(datas_.bends.size());
 
-	BuildAreaConstraints();
-	area_size_ = static_cast<uint32_t>(datas_.areas.size());
+	datas_.BuildAreaConstraints();
+	datas_.area_size_ = static_cast<uint32_t>(datas_.areas.size());
 
 	// position
 	ssbo_size_.position = sizeof(glm::vec4) * N;
@@ -843,7 +835,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		ssbos_.delta_count, ssbo_memories_.delta_count);
 
 	// edges
-	ssbo_size_.edge = sizeof(Data::Edge) * edge_size_;
+	ssbo_size_.edge = sizeof(SimData::Edge) * datas_.edge_size_;
 	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
 		ssbo_size_.edge,
 		vk::BufferUsageFlagBits::eTransferSrc,
@@ -869,7 +861,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	staging_mapped_.pred_position = staging_memories_.pred_position.mapMemory(0, ssbo_size_.pred_position);
 
 	// Bend
-	ssbo_size_.bend = sizeof(Data::Bend) * bend_size_;
+	ssbo_size_.bend = sizeof(SimData::Bend) * datas_.bend_size_;
 	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
 		ssbo_size_.bend,
 		vk::BufferUsageFlagBits::eTransferSrc,
@@ -882,7 +874,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	staging_mapped_.bend = staging_memories_.bend.mapMemory(0, ssbo_size_.bend);
 
 	// Shear
-	ssbo_size_.shear = sizeof(Data::Shear) * shear_size_;
+	ssbo_size_.shear = sizeof(SimData::Shear) * datas_.shear_size_;
 	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
 		ssbo_size_.shear,
 		vk::BufferUsageFlagBits::eTransferSrc,
@@ -912,7 +904,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		ssbos_.grab_state, ssbo_memories_.grab_state);
 
 	// Area
-	ssbo_size_.area = sizeof(Data::Area) * area_size_;
+	ssbo_size_.area = sizeof(SimData::Area) * datas_.area_size_;
 	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
 		ssbo_size_.area,
 		vk::BufferUsageFlagBits::eTransferSrc,
@@ -938,7 +930,7 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 		auto sets = vk::raii::DescriptorSets{ context.device_, allocInfo };
 		sets_.sim_params = std::move(sets.front());
 
-		vk::DescriptorBufferInfo simParamsUboInfo{ *ubos_.sim_params, 0, sizeof(UBOData::SimParams) };
+		vk::DescriptorBufferInfo simParamsUboInfo{ *ubo_.ubos_.sim_params, 0, sizeof(SimUBO::Data::SimParams) };
 		std::array descriptorWrites{
 			vk::WriteDescriptorSet{
 				.dstSet = *sets_.sim_params,
@@ -963,7 +955,7 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 		auto sets = vk::raii::DescriptorSets{ context.device_, allocInfo };
 		sets_.render = std::move(sets.front());
 
-		vk::DescriptorBufferInfo renderUboInfo{ *ubos_.render, 0, sizeof(UBOData::Render) };
+		vk::DescriptorBufferInfo renderUboInfo{ *ubo_.ubos_.render, 0, sizeof(SimUBO::Data::Render) };
 		std::array descriptorWrites{
 			vk::WriteDescriptorSet{
 				.dstSet = *sets_.render,
@@ -1346,8 +1338,8 @@ void GpuSim::CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLa
 			.offset = 0,
 			.size = static_cast<uint32_t>(sizeof(PushConstant::ClothRender))
 		};
-		push_constants_.cloth_render.nx1 = nx_ + 1;
-		push_constants_.cloth_render.ny1 = ny_ + 1;
+		push_constants_.cloth_render.nx1 = datas_.nx_ + 1;
+		push_constants_.cloth_render.ny1 = datas_.ny_ + 1;
 
 		// Pipeline Layout
 		std::array<vk::DescriptorSetLayout, 4> setLayouts(
@@ -1389,248 +1381,5 @@ void GpuSim::CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLa
 
 		rasterizer.polygonMode = vk::PolygonMode::ePoint;
 		pipelines_.cloth_point = vk::raii::Pipeline(context.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
-	}
-
-}
-
-float GpuSim::ComputeRestBendAngle(
-	uint32_t i1, uint32_t i2,
-	uint32_t i3, uint32_t i4,
-	const std::vector<glm::vec4>& pos)
-{
-	glm::vec3 p1 = glm::vec3(pos[i1]);
-	glm::vec3 p2 = glm::vec3(pos[i2]);
-	glm::vec3 p3 = glm::vec3(pos[i3]);
-	glm::vec3 p4 = glm::vec3(pos[i4]);
-
-	glm::vec3 e = p2 - p1;
-	float el = glm::length(e);
-	if (el < 1e-8f) return 0.0f;
-	glm::vec3 ehat = e / el;
-
-	glm::vec3 n1 = glm::normalize(glm::cross(p2 - p1, p3 - p1));
-	glm::vec3 n2 = glm::normalize(glm::cross(p2 - p1, p4 - p1));
-
-	float c = glm::clamp(glm::dot(n1, n2), -1.0f, 1.0f);
-	glm::vec3 cross_n1n2 = glm::cross(n1, n2);
-	float s = glm::dot(ehat, cross_n1n2);
-
-	float phi = std::atan2(s, c); // atan(s,c)¿Í µ¿ÀÏ
-
-	return phi;
-}
-
-void GpuSim::BuildBendConstraints()
-{
-	datas_.bends.clear();
-
-	const auto& indices = datas_.indices;
-	const auto& positions = datas_.positions;
-
-	const size_t numTris = indices.size() / 3;
-
-	std::unordered_map<EdgeKey, std::pair<TriRef, TriRef>, EdgeKeyHash> edgeMap;
-	edgeMap.reserve(numTris * 3);
-
-	auto make_edge = [](uint32_t i, uint32_t j) {
-		EdgeKey k;
-		if (i < j) { k.a = i; k.b = j; }
-		else { k.a = j; k.b = i; }
-		return k;
-		};
-
-	for (uint32_t t = 0; t < numTris; ++t)
-	{
-		uint32_t i0 = indices[3 * t + 0];
-		uint32_t i1 = indices[3 * t + 1];
-		uint32_t i2 = indices[3 * t + 2];
-
-		// tri edges: (i0,i1), (i1,i2), (i2,i0)
-		EdgeKey e01 = make_edge(i0, i1);
-		EdgeKey e12 = make_edge(i1, i2);
-		EdgeKey e20 = make_edge(i2, i0);
-
-		TriRef r0{ t, i2 };
-		TriRef r1{ t, i0 };
-		TriRef r2{ t, i1 };
-
-		auto insert_ref = [&](const EdgeKey& e, const TriRef& r)
-			{
-				auto it = edgeMap.find(e);
-				if (it == edgeMap.end())
-				{
-					edgeMap.emplace(e, std::make_pair(r, TriRef{ UINT32_MAX, UINT32_MAX }));
-				}
-				else
-				{
-					if (it->second.second.triIndex == UINT32_MAX)
-						it->second.second = r;
-				}
-			};
-
-		insert_ref(e01, r0);
-		insert_ref(e12, r1);
-		insert_ref(e20, r2);
-	}
-
-	datas_.bends.reserve(edgeMap.size());
-
-	for (const auto& kv : edgeMap)
-	{
-		const EdgeKey& e = kv.first;
-		const TriRef& t0 = kv.second.first;
-		const TriRef& t1 = kv.second.second;
-
-		if (t1.triIndex == UINT32_MAX)
-			continue;
-
-		uint32_t i1 = e.a;         // hinge start
-		uint32_t i2 = e.b;         // hinge end
-		uint32_t i3 = t0.oppVertex;// tri0 opposite
-		uint32_t i4 = t1.oppVertex;// tri1 opposite
-
-		float restAngle = ComputeRestBendAngle(i1, i2, i3, i4, positions);
-
-		Data::Bend bc;
-		bc.i0 = i1;
-		bc.i1 = i2;
-		bc.i2 = i3;
-		bc.i3 = i4;
-		bc.rest_angle = restAngle;
-		bc.lambda = 0.0f;
-
-		datas_.bends.push_back(bc);
-	}
-
-	bend_size_ = static_cast<uint32_t>(datas_.bends.size());
-}
-
-void GpuSim::ResetConstraints()
-{
-	// Edge - Stretch, Diagonal
-	{
-		uint32_t idx = 0;
-		for (int p = 0; p < datas_.pass_offsets.size(); ++p) {
-			for (auto [i, j] : datas_.passes[p]) {
-				glm::vec3 pi = glm::vec3(datas_.positions[i]);
-				glm::vec3 pj = glm::vec3(datas_.positions[j]);
-				float rest = glm::length(pj - pi);
-				datas_.edges[idx].rest = rest;
-				datas_.edges[idx].lambda = 0.0f;
-				idx++;
-			}
-		}
-	}
-
-	// Shear
-	{
-		for (int i = 0; i < shear_size_; i++)
-		{
-			datas_.shears[i].lambda = 0.0f;
-		}
-
-	}
-
-	// Bend
-	{
-		for (int i = 0; i < bend_size_; i++)
-		{
-			datas_.bends[i].lambda = 0.0f;
-		}
-	}
-
-	// mass
-	{
-		// Total area
-		float totalArea = 0.0f;
-		for (size_t t = 0; t < indices_size_; t += 3) {
-			uint32_t i0 = datas_.indices[t + 0];
-			uint32_t i1 = datas_.indices[t + 1];
-			uint32_t i2 = datas_.indices[t + 2];
-
-			glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
-			glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
-			glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
-
-			glm::vec3 e1 = p1 - p0;
-			glm::vec3 e2 = p2 - p0;
-
-			float area = 0.5f * glm::length(glm::cross(e1, e2)); // Triangle area
-			totalArea += area;
-		}
-
-		float totalMassTarget = mass_;
-
-		// Area zero defence
-		float density = 0.0f;
-		if (totalArea > 0.0f) {
-			density = totalMassTarget / totalArea; // kg/m©÷
-		}
-
-		// Distribute mass to each triangle in proportion to area
-		for (size_t t = 0; t < indices_size_; t += 3) {
-			uint32_t i0 = datas_.indices[t + 0];
-			uint32_t i1 = datas_.indices[t + 1];
-			uint32_t i2 = datas_.indices[t + 2];
-
-			glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
-			glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
-			glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
-
-			glm::vec3 e1 = p1 - p0;
-			glm::vec3 e2 = p2 - p0;
-
-			float area = 0.5f * glm::length(glm::cross(e1, e2));
-
-			float triMass = density * area;
-
-			float share = triMass / 3.0f;
-			datas_.masses[i0] += share;
-			datas_.masses[i1] += share;
-			datas_.masses[i2] += share;
-		}
-
-		// Set inverse masses using mass
-		for (uint32_t i = 0; i < particles_size_; ++i) {
-			float m = datas_.masses[i];
-			if (m > 0.0f)
-				datas_.inverse_masses[i] = 1.0f / m;
-			else
-				datas_.inverse_masses[i] = 0.0f;
-		}
-	}
-
-}
-
-void GpuSim::BuildAreaConstraints()
-{
-	datas_.areas.reserve(indices_size_ / 3);
-	for (size_t t = 0; t < indices_size_; t += 3)
-	{
-		uint32_t i0 = datas_.indices[t];
-		uint32_t i1 = datas_.indices[t + 1];
-		uint32_t i2 = datas_.indices[t + 2];
-
-		glm::vec3 p0 = datas_.positions[i0];
-		glm::vec3 p1 = datas_.positions[i1];
-		glm::vec3 p2 = datas_.positions[i2];
-
-		glm::vec3 e0 = p1 - p0;
-		glm::vec3 e1 = p2 - p0;
-
-		glm::vec3 restNormal = glm::cross(e0, e1);
-		float restArea = 0.5f * glm::length(restNormal);
-
-		glm::vec3 nHat = (restArea > 0.0f) ? (restNormal / (2.0f * restArea)) : glm::vec3(0, 1, 0);
-
-		Data::Area area;
-		area.i0 = i0;
-		area.i1 = i1;
-		area.i2 = i2;
-		area.lambda = 0.0f;
-		area.rest_area = restArea;
-		area.rest_normal = nHat;
-
-		datas_.areas.push_back(area);
 	}
 }

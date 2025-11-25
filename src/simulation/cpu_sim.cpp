@@ -11,470 +11,683 @@ CpuSim::CpuSim(
 	Context& context,
 	Swapchain& swapchain,
 	TextureManager& textureManager,
+	ModelManager& modelManager,
 	vk::raii::DescriptorSetLayout& globalSetLayout,
-	uint32_t Nx, uint32_t Ny, float spacing)
+	std::vector<vk::Format>& formats,
+	vk::raii::DescriptorSetLayout& tex2DSetLayout)
 {
-	Nx_ = Nx;
-	Ny_ = Ny;
-	particles_size_ = Nx_ * Ny_;
-	spacing_ = spacing;
+	CreateDescriptorSetLayout(context);
+	CreateDescriptorPools(context);
+	CreateUniformBuffers(context, modelManager);
+	CreateDatas(context);
+	CreateDescriptorSets(context, textureManager);
+	CreateGraphicsPipelines(context, globalSetLayout, formats, tex2DSetLayout);
+}
 
+void CpuSim::ComputeSolve(const glm::vec3& sphereCenter, float sphereRadius)
+{
+	auto& d = datas_;
+
+	const uint32_t N = d.particles_size_;
+	if (N == 0) return;
+
+	const float frame_dt = 1.0f / d.frame_dt_;
+	const int   substeps = std::max(1, d.substeps_);
+	const float dt = frame_dt / static_cast<float>(substeps);
+
+	const int iterations = std::max(1, d.iterations_);
+
+	const glm::vec3 gravity(0.0f, -9.81f, 0.0f);
+	const float velocity_damping = 0.01f;
+
+	for (int step = 0; step < substeps; ++step)
 	{
-		CreateClothData_CPU(context.physical_device_, context.device_, context.queue_, context.command_pool_);
-	}
-
-	// Descriptor set layout
-	{
-		std::array<vk::DescriptorSetLayoutBinding, 2> layoutBindings{
-			vk::DescriptorSetLayoutBinding{ 0, vk::DescriptorType::eStorageBuffer,        1, vk::ShaderStageFlagBits::eVertex },
-			vk::DescriptorSetLayoutBinding{ 1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment },
-		};
-		counts_.sb += 1 * MAX_FRAMES_IN_FLIGHT;
-		counts_.sampler += textureManager.max_texture_size;
-		counts_.layout += 1 * MAX_FRAMES_IN_FLIGHT;
-
-
-		std::array<vk::DescriptorBindingFlags, 2> bindingFlags{
-			vk::DescriptorBindingFlags{},
-			vk::DescriptorBindingFlagBits::ePartiallyBound |
-			vk::DescriptorBindingFlagBits::eVariableDescriptorCount
-		};
-
-		vk::DescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{
-			.bindingCount = static_cast<uint32_t>(bindingFlags.size()),
-			.pBindingFlags = bindingFlags.data()
-		};
-
-		vk::DescriptorSetLayoutCreateInfo layoutInfo{
-			.pNext = &flagsInfo,
-			.bindingCount = static_cast<uint32_t>(layoutBindings.size()),
-			.pBindings = layoutBindings.data()
-		};
-
-		sim_cpu_descriptor_set_layout_ = vk::raii::DescriptorSetLayout(context.device_, layoutInfo);
-
-	}
-
-	// Descriptor Pool
-	{
-		std::vector<vk::DescriptorPoolSize> poolSizes;
-
-		if (counts_.ubo > 0) {
-			poolSizes.emplace_back(vk::DescriptorType::eUniformBuffer, counts_.ubo);
-		}
-		if (counts_.ubo_dynamic > 0) {
-			poolSizes.emplace_back(vk::DescriptorType::eUniformBufferDynamic, counts_.ubo_dynamic);
-		}
-		if (counts_.sampler > 0) {
-			poolSizes.emplace_back(vk::DescriptorType::eCombinedImageSampler, counts_.sampler);
-		}
-		if (counts_.sb > 0) {
-			poolSizes.emplace_back(vk::DescriptorType::eStorageBuffer, counts_.sb);
-		}
-
-		vk::DescriptorPoolCreateInfo poolInfo{
-			.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-			.maxSets = counts_.layout,
-			.poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
-			.pPoolSizes = poolSizes.data()
-		};
-
-		descriptor_pool_ = vk::raii::DescriptorPool(context.device_, poolInfo);
-	}
-
-	// Descriptor Set
-	{
-		std::vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, sim_cpu_descriptor_set_layout_);
-		vk::DescriptorSetAllocateInfo allocInfo{
-			.descriptorPool = *descriptor_pool_,
-			.descriptorSetCount = static_cast<uint32_t>(layouts.size()),
-			.pSetLayouts = layouts.data()
-		};
-
-		sim_cpu_descriptor_set_.clear();
-		sim_cpu_descriptor_set_ = vk::raii::DescriptorSets{ context.device_, allocInfo };
-
-		for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+		for (uint32_t i = 0; i < N; ++i)
 		{
-			vk::DescriptorBufferInfo positions(pos_ssbo_[i], 0, VK_WHOLE_SIZE);
+			float w = d.inverse_masses[i];
+			glm::vec3 x = glm::vec3(d.positions[i]);
+			glm::vec3 v = glm::vec3(d.velocities[i]);
 
-			std::vector<vk::DescriptorImageInfo> imageInfos;
-			for (auto& tex : textureManager.textures_) {
-				imageInfos.push_back(vk::DescriptorImageInfo{
-					.sampler = *tex->texture_sampler_,
-					.imageView = *tex->texture_image_view_,
-					.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
-					});
+			if (w == 0.0f) {
+				d.pred_positions[i] = d.positions[i];
+				continue;
 			}
-			std::array descriptorWrites{
-				vk::WriteDescriptorSet{
-					.dstSet = *sim_cpu_descriptor_set_[i],
-					.dstBinding = 0,
-					.dstArrayElement = 0,
-					.descriptorCount = 1,
-					.descriptorType = vk::DescriptorType::eStorageBuffer,
-					.pBufferInfo = &positions
-				},
-				vk::WriteDescriptorSet{
-					.dstSet = *sim_cpu_descriptor_set_[i],
-					.dstBinding = 1,
-					.dstArrayElement = 0,
-					.descriptorCount = static_cast<uint32_t>(imageInfos.size()),
-					.descriptorType = vk::DescriptorType::eCombinedImageSampler,
-					.pImageInfo = imageInfos.data(),
+
+			v += gravity * dt;
+			x += v * dt;
+
+			d.pred_positions[i] = glm::vec4(x, 1.0f);
+			d.velocities[i] = glm::vec4(v, 0.0f);
+		}
+
+		for (auto& e : d.edges) {
+			e.lambda = 0.0f;
+		}
+
+		for (int iter = 0; iter < iterations; ++iter)
+		{
+			const float alpha_stretch = d.compliance_.stretch / (dt * dt);
+
+			for (auto& e : d.edges)
+			{
+				uint32_t i = e.i;
+				uint32_t j = e.j;
+
+				float wi = d.inverse_masses[i];
+				float wj = d.inverse_masses[j];
+				if (wi + wj <= 0.0f)
+					continue;
+
+				glm::vec3 xi = glm::vec3(d.pred_positions[i]);
+				glm::vec3 xj = glm::vec3(d.pred_positions[j]);
+
+				glm::vec3 n = xi - xj;
+				float L = glm::length(n);
+				if (L < 1e-8f)
+					continue;
+
+				n /= L;
+
+				float C = L - e.rest;
+
+				float denom = wi + wj + alpha_stretch;
+				float dl = -(C + alpha_stretch * e.lambda) / denom;
+				e.lambda += dl;
+
+				glm::vec3 corr = dl * n;
+
+				if (wi > 0.0f)
+					d.pred_positions[i] += glm::vec4(wi * corr, 0.0f);
+				if (wj > 0.0f)
+					d.pred_positions[j] -= glm::vec4(wj * corr, 0.0f);
+			}
+
+			for (uint32_t i = 0; i < N; ++i)
+			{
+				float w = d.inverse_masses[i];
+				if (w == 0.0f) continue;
+
+				glm::vec3 p = glm::vec3(d.pred_positions[i]);
+				glm::vec3 dvec = p - sphereCenter;
+				float dist = glm::length(dvec);
+
+				if (dist < sphereRadius)
+				{
+					glm::vec3 n = (dist > 1e-8f) ? (dvec / dist) : glm::vec3(0, 1, 0);
+					p = sphereCenter + n * sphereRadius;
+					d.pred_positions[i] = glm::vec4(p, 1.0f);
 				}
-			};
+			}
 
-			context.device_.updateDescriptorSets(descriptorWrites, {});
+			// shear / bend / area
 		}
-	}
 
-	// pipeline
-	{
+		for (uint32_t i = 0; i < N; ++i)
 		{
-			vk::PipelineInputAssemblyStateCreateInfo inputAssembly{
-				.topology = vk::PrimitiveTopology::eTriangleList,
-				.primitiveRestartEnable = vk::False
-			};
-			vk::PipelineViewportStateCreateInfo viewportState{
-				.viewportCount = 1,
-				.scissorCount = 1
-			};
-			vk::PipelineRasterizationStateCreateInfo rasterizer{
-				.depthClampEnable = vk::False,
-				.rasterizerDiscardEnable = vk::False,
-				.polygonMode = vk::PolygonMode::eFill,
-				.cullMode = vk::CullModeFlagBits::eBack,
-				.frontFace = vk::FrontFace::eCounterClockwise,
-				.depthBiasEnable = vk::False
-			};
-			rasterizer.lineWidth = 1.0f;
-			vk::PipelineMultisampleStateCreateInfo multisampling{
-				.rasterizationSamples = vk::SampleCountFlagBits::e1,
-				.sampleShadingEnable = vk::False
-			};
-			vk::PipelineDepthStencilStateCreateInfo depthStencil{
-				.depthTestEnable = vk::True,
-				.depthWriteEnable = vk::True,
-				.depthCompareOp = vk::CompareOp::eLess,
-				.depthBoundsTestEnable = vk::False,
-				.stencilTestEnable = vk::False
-			};
-			vk::PipelineColorBlendAttachmentState colorBlendAttachment;
-			colorBlendAttachment.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
-			colorBlendAttachment.blendEnable = vk::False;
+			float w = d.inverse_masses[i];
+			glm::vec3 x_old = glm::vec3(d.positions[i]);
+			glm::vec3 x_new = glm::vec3(d.pred_positions[i]);
 
-			vk::PipelineColorBlendStateCreateInfo colorBlending{
-				.logicOpEnable = vk::False,
-				.logicOp = vk::LogicOp::eCopy,
-				.attachmentCount = 1,
-				.pAttachments = &colorBlendAttachment
-			};
-
-			std::vector dynamicStates = {
-				vk::DynamicState::eViewport,
-				vk::DynamicState::eScissor
-			};
-			vk::PipelineDynamicStateCreateInfo dynamicState{ .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()), .pDynamicStates = dynamicStates.data() };
-
-			vk::Format depthFormat = vku::FindDepthFormat(context.physical_device_);
-
-			// Shader
-			auto vertCode = vku::ReadFile("shaders/spv/cloth.vert.spv");
-			auto fragCode = vku::ReadFile("shaders/spv/cloth.frag.spv");
-
-			vk::raii::ShaderModule vertModule = vku::CreateShaderModule(context.device_, vertCode);
-			vk::raii::ShaderModule fragModule = vku::CreateShaderModule(context.device_, fragCode);
-
-			vk::PipelineShaderStageCreateInfo vertStage{
-				.stage = vk::ShaderStageFlagBits::eVertex,
-				.module = *vertModule,
-				.pName = "main"
-			};
-			vk::PipelineShaderStageCreateInfo fragStage{
-				.stage = vk::ShaderStageFlagBits::eFragment,
-				.module = *fragModule,
-				.pName = "main"
-			};
-			std::array<vk::PipelineShaderStageCreateInfo, 2> stages{ vertStage, fragStage };
-
-			// SSBO Vertex Pulling
-			vk::PipelineVertexInputStateCreateInfo vertexInputInfo{
-				.vertexBindingDescriptionCount = 0,
-				.pVertexBindingDescriptions = nullptr,
-				.vertexAttributeDescriptionCount = 0,
-				.pVertexAttributeDescriptions = nullptr
-			};
-
-			vk::PushConstantRange pcRange{
-				.stageFlags = vk::ShaderStageFlagBits::eVertex,
-				.offset = 0,
-				.size = static_cast<uint32_t>(sizeof(ClothPC))
-			};
-
-			// Pipeline Layout
-			std::array<vk::DescriptorSetLayout, 2> setLayouts(*globalSetLayout, *sim_cpu_descriptor_set_layout_);
-			vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
-				.setLayoutCount = 2,
-				.pSetLayouts = setLayouts.data(),
-				.pushConstantRangeCount = 1,
-				.pPushConstantRanges = &pcRange
-			};
-			sim_cpu_pipeline_layout_ = vk::raii::PipelineLayout(context.device_, pipelineLayoutInfo);
-
-			rasterizer.cullMode = vk::CullModeFlagBits::eNone;
-
-			// Pipeline
-			vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
-			  {
-				.stageCount = 2,
-				.pStages = stages.data(),
-				.pVertexInputState = &vertexInputInfo,
-				.pInputAssemblyState = &inputAssembly,
-				.pViewportState = &viewportState,
-				.pRasterizationState = &rasterizer,
-				.pMultisampleState = &multisampling,
-				.pDepthStencilState = &depthStencil,
-				.pColorBlendState = &colorBlending,
-				.pDynamicState = &dynamicState,
-				.layout = sim_cpu_pipeline_layout_,
-				.renderPass = nullptr },
-			  {.colorAttachmentCount = 1, .pColorAttachmentFormats = &swapchain.swapchain_surface_format_.format, .depthAttachmentFormat = depthFormat }
-			};
-			sim_cpu_pipeline_ = vk::raii::Pipeline(context.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
-		}
-	}
-}
-
-void CpuSim::CreateClothData_CPU(
-	vk::raii::PhysicalDevice& physicalDevice, 
-	vk::raii::Device& device,
-	vk::raii::Queue& queue,
-	vk::raii::CommandPool& commandPool)
-{
-	particles_size_ = Nx_ * Ny_;
-	const int N = particles_size_;
-	positions_.resize(N);
-	velocities_.resize(N, glm::vec4(0.0f));
-	inv_mass_.resize(N, 1.0f);
-
-	const float width = spacing_ * (Nx_ - 1);
-	const float height = spacing_ * (Ny_ - 1);
-
-	const float originX = -width * 0.5f;
-	const float originY = -height * 0.5f;
-	const float zPlane = 0.0f;
-
-	for (int y = 0; y < Ny_; ++y)
-		for (int x0 = 0; x0 < Nx_; ++x0) {
-			int id = y * Nx_ + x0;
-
-			float px = originX + x0 * spacing_;
-			float py = originY + y * spacing_;
-			float pz = zPlane;
-			glm::vec3 pos(originX + x0 * spacing_, 2.0f, -originY - y * spacing_);
-			positions_[id] = glm::vec4(pos, 1.0f);
-		}
-
-
-	auto idx = [&](int x, int y) { return y * Nx_ + x; };
-
-	indices_size_ = (Nx_ - 1) * (Ny_ - 1) * 6;
-
-	for (int y = 0; y < Ny_ - 1; ++y) {
-		for (int x = 0; x < Nx_ - 1; ++x) {
-			uint32_t i0 = idx(x, y);
-			uint32_t i1 = idx(x + 1, y);
-			uint32_t i2 = idx(x, y + 1);
-			uint32_t i3 = idx(x + 1, y + 1);
-
-			indices_cpu.push_back(i1); indices_cpu.push_back(i2); indices_cpu.push_back(i0);
-			indices_cpu.push_back(i1); indices_cpu.push_back(i3); indices_cpu.push_back(i2);
-		}
-	}
-	vku::CreateIndexBuffer(physicalDevice, device, queue, commandPool, indices_cpu, ib, ibm);
-
-	VkDeviceSize posSize = sizeof(glm::vec4) * particles_size_;
-	pos_ssbo_.reserve(MAX_FRAMES_IN_FLIGHT);
-	pos_ssbo_mem_.reserve(MAX_FRAMES_IN_FLIGHT);
-	pos_staging_.reserve(MAX_FRAMES_IN_FLIGHT);
-	pos_staging_mem_.reserve(MAX_FRAMES_IN_FLIGHT);
-	pos_staging_map_.resize(MAX_FRAMES_IN_FLIGHT);
-
-	for (uint32_t k = 0; k < MAX_FRAMES_IN_FLIGHT; ++k) {
-		// Staging (HOST_VISIBLE | HOST_COHERENT, TRANSFER_SRC)
-		vk::raii::Buffer stagingBuf{ nullptr };
-		vk::raii::DeviceMemory stagingMem{ nullptr };
-		vk::raii::Buffer devBuf{ nullptr };
-		vk::raii::DeviceMemory devMem{ nullptr };
-
-		vku::CreateBuffer(
-			physicalDevice, device, posSize,
-			vk::BufferUsageFlagBits::eTransferSrc,
-			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-			stagingBuf, stagingMem
-		);
-
-		// Device-local target (STORAGE | TRANSFER_DST)
-		vku::CreateBuffer(
-			physicalDevice, device, posSize,
-			vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
-			vk::MemoryPropertyFlagBits::eDeviceLocal,
-			devBuf, devMem
-		);
-
-		pos_staging_.push_back(std::move(stagingBuf));
-		pos_staging_mem_.push_back(std::move(stagingMem));
-		pos_ssbo_.push_back(std::move(devBuf));
-		pos_ssbo_mem_.push_back(std::move(devMem));
-
-		pos_staging_map_[k] = pos_staging_mem_[k].mapMemory(0, posSize);
-	}
-
-	std::memcpy(pos_staging_map_[0], positions_.data(), (size_t)posSize);
-	vku::CopyBuffer(device, queue, commandPool, pos_staging_[0], pos_ssbo_[0], posSize);
-
-	// --- top row pin ---
-	for (int x0 = 0; x0 < Nx_; ++x0)
-		inv_mass_[(Ny_ - 1) * Nx_ + x0] = 0.0f;
-
-	// --- edges (structural only) ---
-	edges_.clear();
-
-	for (int y = 0; y < Ny_; ++y) {
-		for (int x0 = 0; x0 < Nx_; ++x0) {
-			uint32_t i = idx(x0, y);
-			if (x0 < Nx_ - 1) { // horizontal
-				uint32_t j = idx(x0 + 1, y);
-				edges_.push_back({ i, j, spacing_, 0.0f });
+			if (w == 0.0f) {
+				d.positions[i] = glm::vec4(x_old, 1.0f);
+				d.velocities[i] = glm::vec4(0.0f);
+				continue;
 			}
-			if (y < Ny_ - 1) { // vertical
-				uint32_t j = idx(x0, y + 1);
-				edges_.push_back({ i, j, spacing_, 0.0f });
-			}
+
+			glm::vec3 v = (x_new - x_old) / dt;
+			v *= (1.0f - velocity_damping);
+
+			d.positions[i] = glm::vec4(x_new, 1.0f);
+			d.velocities[i] = glm::vec4(v, 0.0f);
 		}
-	}
-
-	// --- optional shear / bend edges (for realism) ---
-	for (uint32_t y = 0; y < Ny_ - 1; ++y) {
-		for (uint32_t x0 = 0; x0 < Nx_ - 1; ++x0) {
-			uint32_t i = idx(x0, y);
-			edges_.push_back({ i, idx(x0 + 1, y + 1), spacing_ * 1.414f, 0.0f });
-			edges_.push_back({ idx(x0 + 1, y), idx(x0, y + 1), spacing_ * 1.414f, 0.0f });
-		}
-	}
-}
-
-void CpuSim::SimulateClothXPBD_CPU(
-	const glm::vec3& sphereCenter,
-	float sphereRadius
-) {
-	const size_t N = particles_size_;
-	std::vector<glm::vec4> xp(N);
-
-	for (size_t i = 0; i < N; ++i) {
-		if (inv_mass_[i] == 0.0f) { xp[i] = positions_[i]; continue; }
-		glm::vec3 xi = glm::vec3(positions_[i]);
-		glm::vec3 vi = glm::vec3(velocities_[i]);
-		vi += gravity_ * dt_;
-		xi += vi * dt_;
-		xp[i] = glm::vec4(xi, 1.0f);
-		velocities_[i] = glm::vec4(vi, 0.0f);
-	}
-
-	for (auto& e : edges_) {
-		e.lambda = 0.0f;
-	}
-
-	for (int iter = 0; iter < iterations_; ++iter) {
-		for (auto& e : edges_) {
-			uint32_t i = e.i, j = e.j;
-			float wi = inv_mass_[i], wj = inv_mass_[j];
-			if (wi + wj < 1e-8f) continue;
-
-			glm::vec3 xi = glm::vec3(xp[i]);
-			glm::vec3 xj = glm::vec3(xp[j]);
-			glm::vec3 n = xi - xj;
-			float L = glm::length(n);
-			if (L < 1e-8f) continue;
-			n /= L;
-
-			float C = L - e.rest;
-			float alpha = compliance_ / (dt_ * dt_);
-			float denom = wi + wj + alpha;
-			float dl = -(C + alpha * e.lambda) / denom;
-			e.lambda += dl;
-
-			glm::vec3 corr = n * dl;
-			if (wi > 0.0f) xp[i] += glm::vec4(wi * corr, 0.0f);
-			if (wj > 0.0f) xp[j] -= glm::vec4(wj * corr, 0.0f);
-		}
-
-		for (size_t i = 0; i < N; ++i) {
-			if (inv_mass_[i] == 0.0f) continue;
-			glm::vec3 p = glm::vec3(xp[i]);
-			glm::vec3 d = p - sphereCenter;
-			float dist = glm::length(d);
-			if (dist < sphereRadius) {
-				glm::vec3 n = (dist > 1e-8f) ? (d / dist) : glm::vec3(0, 1, 0);
-				float beta = 0.3f;
-				p += (sphereRadius - dist) * beta * n;
-				xp[i] = glm::vec4(p, 1.0f);
-			}
-		}
-	}
-
-	for (size_t i = 0; i < N; ++i) {
-		if (inv_mass_[i] == 0.0f) continue;
-		glm::vec3 newV = (glm::vec3(xp[i]) - glm::vec3(positions_[i])) / dt_;
-		newV *= (1.0f - damping_);
-		velocities_[i] = glm::vec4(newV, 0.0f);
-		positions_[i] = xp[i];
 	}
 }
 
 void CpuSim::CopyPositions(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd)
 {
-	VkDeviceSize size = sizeof(glm::vec4) * particles_size_;
-
-	vku::CopyStagingToSSBO(cmd, size, pos_staging_map_[currentFrame], positions_, pos_staging_[currentFrame], pos_ssbo_[currentFrame], vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::PipelineStageFlagBits2::eVertexShader, vk::AccessFlagBits2::eShaderStorageRead);
+	vku::CopyStagingToSSBO(cmd, pos_ssbo_size_, pos_staging_map_, datas_.positions, pos_staging_, pos_ssbo_, vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite, vk::PipelineStageFlagBits2::eVertexShader, vk::AccessFlagBits2::eShaderStorageRead);
 }
 
-void CpuSim::UpdatePushContants()
+void CpuSim::UpdateGraphicsUBO(uint32_t currentFrame)
 {
-	cloth_pc_.Nx = Nx_;
-	cloth_pc_.Ny = Ny_;
+	const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_.size_.render);
+	auto* dst = static_cast<std::byte*>(ubo_.mapped_.render) + baseOffset;
+
+	std::memcpy(dst, &ubo_.datas_.render, sizeof(SimUBO::Data::Render));
 }
 
-void CpuSim::Record(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset)
+void CpuSim::RecordGraphics(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset, vku::PolygonMode mode,
+	vk::raii::DescriptorSet& tex2DSet)
 {
-	UpdatePushContants();
+	// Cloth
+	{
+		if (mode == vku::PolygonMode::WIREFRAME)
+			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.cloth_wireframe);
+		else if (mode == vku::PolygonMode::POINT)
+			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.cloth_point);
+		else
+			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.cloth_solid);
 
-	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *sim_cpu_pipeline_);
+		// Global Set
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			pipeline_layouts_.cloth_graphics,
+			0,
+			{ *globalSet },
+			{ globalOffset }
+		);
 
-	// Global Set
-	cmd.bindDescriptorSets(
-		vk::PipelineBindPoint::eGraphics,
-		sim_cpu_pipeline_layout_,
-		0,
-		{ *globalSet },
-		{ globalOffset }
-	);
-	cmd.bindDescriptorSets(
-		vk::PipelineBindPoint::eGraphics,
-		sim_cpu_pipeline_layout_,
-		1,
-		{ *sim_cpu_descriptor_set_[currentFrame] },
-		{}
-	);
+		// Graphics
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			pipeline_layouts_.cloth_graphics,
+			1,
+			{ *sets_.cloth_graphics },
+			{ }
+		);
 
-	cmd.pushConstants<ClothPC>(
-		*sim_cpu_pipeline_layout_,
-		vk::ShaderStageFlagBits::eVertex,
-		/*offset=*/0,
-		cloth_pc_
-	);
+		// Render
+		const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_.size_.render);
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			pipeline_layouts_.cloth_graphics,
+			2,
+			{ *sets_.render },
+			{ baseOffset }
+		);
 
-	cmd.bindIndexBuffer(*ib, 0, vk::IndexType::eUint32);
-	cmd.drawIndexed(indices_size_, 1, 0, 0, 0);
+		// Tex
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			pipeline_layouts_.cloth_graphics,
+			3,
+			{ *tex2DSet },
+			{ }
+		);
+
+		cmd.pushConstants<PushConstant::ClothRender>(
+			*pipeline_layouts_.cloth_graphics,
+			vk::ShaderStageFlagBits::eVertex,
+			/*offset=*/0,
+			push_constants_.cloth_render
+		);
+
+		cmd.bindIndexBuffer(*index_buffer_, 0, vk::IndexType::eUint32);
+		cmd.drawIndexed(datas_.indices_size_, 1, 0, 0, 0);
+	}
+}
+
+void CpuSim::CreateDescriptorSetLayout(Context& context)
+{
+	// Render
+	{
+		std::array layoutBindings{
+			vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, nullptr)
+		};
+		counts_.ubo_dynamic += 1;
+		counts_.layout += 1;
+
+		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
+		set_layouts_.render = vk::raii::DescriptorSetLayout(context.device_, layoutInfo);
+	}
+
+	// Cloth graphics
+	{
+		std::array layoutBindings{
+			vk::DescriptorSetLayoutBinding{ 0, vk::DescriptorType::eStorageBuffer,        1, vk::ShaderStageFlagBits::eVertex }
+		};
+		counts_.sb += 1;
+		counts_.layout += 1;
+
+		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
+		set_layouts_.cloth_graphics = vk::raii::DescriptorSetLayout(context.device_, layoutInfo);
+	}
+}
+
+
+void CpuSim::CreateDescriptorPools(Context& context)
+{
+	std::vector<vk::DescriptorPoolSize> poolSizes;
+
+	if (counts_.ubo > 0) {
+		poolSizes.emplace_back(vk::DescriptorType::eUniformBuffer, counts_.ubo);
+	}
+	if (counts_.ubo_dynamic > 0) {
+		poolSizes.emplace_back(vk::DescriptorType::eUniformBufferDynamic, counts_.ubo_dynamic);
+	}
+	if (counts_.sampler > 0) {
+		poolSizes.emplace_back(vk::DescriptorType::eCombinedImageSampler, counts_.sampler);
+	}
+	if (counts_.sb > 0) {
+		poolSizes.emplace_back(vk::DescriptorType::eStorageBuffer, counts_.sb);
+	}
+
+	vk::DescriptorPoolCreateInfo poolInfo{
+		.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+		.maxSets = counts_.layout,
+		.poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
+		.pPoolSizes = poolSizes.data()
+	};
+
+	descriptor_pool_ = vk::raii::DescriptorPool(context.device_, poolInfo);
+}
+
+void CpuSim::CreateUniformBuffers(Context& context,
+	ModelManager& modelManager)
+{
+	// Render UBO
+	{
+		ubo_.ubos_.render.clear();
+		ubo_.memories_.render.clear();
+		ubo_.mapped_.render = nullptr;
+
+		auto limits = context.physical_device_.getProperties().limits;
+		ubo_.size_.render = (sizeof(SimUBO::Data::Render) + limits.minUniformBufferOffsetAlignment - 1)
+			& ~(limits.minUniformBufferOffsetAlignment - 1);
+		vk::DeviceSize totalSize = ubo_.size_.render * MAX_FRAMES_IN_FLIGHT;
+
+		vk::raii::Buffer buffer({});
+		vk::raii::DeviceMemory bufferMem({});
+		vku::CreateBuffer(context.physical_device_, context.device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
+		ubo_.ubos_.render = std::move(buffer);
+		ubo_.memories_.render = std::move(bufferMem);
+		ubo_.mapped_.render = ubo_.memories_.render.mapMemory(0, totalSize);
+
+		ubo_.datas_.render.albedo_enable = 1;
+		ubo_.datas_.render.albedo_idx = 0;
+	}
+}
+
+void CpuSim::CreateDatas(Context& context)
+{
+	const int nxCells = datas_.nx_;
+	const int nyCells = datas_.ny_;
+	const int nx1 = nxCells + 1;
+	const int ny1 = nyCells + 1;
+
+	auto vid = [&](int x, int y) { return uint32_t(y * nx1 + x); };
+
+	const uint32_t N = nx1 * ny1;
+	datas_.particles_size_ = N;
+
+	datas_.spacing_x_ = datas_.cloth_size_.x / datas_.nx_;
+	datas_.spacing_y_ = datas_.cloth_size_.y / datas_.ny_;
+
+	datas_.positions.resize(N);
+	datas_.velocities.resize(N);
+	datas_.inverse_masses.resize(N);
+	datas_.pred_positions.resize(N);
+	std::vector<float > deltaX(N, 0.0f), deltaY(N, 0.0f), deltaZ(N, 0.0f);
+	std::vector<uint32_t>  delta_count(N, 0);
+
+	// Set positions, velocities, pred_positions
+	for (int y = 0; y < ny1; ++y) {
+		for (int x = 0; x < nx1; ++x) {
+			uint32_t id = vid(x, y);
+			float px = (-0.5f * datas_.nx_ + x) * datas_.spacing_x_;
+			float py = datas_.cloth_height_;
+			float pz = (-0.5f * datas_.ny_ + y) * datas_.spacing_y_;
+
+			datas_.positions[id] = { px, py, pz, 0.0f };
+			datas_.velocities[id] = glm::vec4(0);
+			datas_.pred_positions[id] = datas_.positions[id];
+		}
+	}
+
+	// Set indices
+	datas_.indices.reserve(datas_.nx_ * datas_.ny_ * 6);
+	for (int y = 0; y < datas_.ny_; ++y) {
+		for (int x = 0; x < datas_.nx_; ++x) {
+			uint32_t i0 = vid(x, y);
+			uint32_t i1 = vid(x + 1, y);
+			uint32_t i2 = vid(x, y + 1);
+			uint32_t i3 = vid(x + 1, y + 1);
+			datas_.indices.push_back(i0); datas_.indices.push_back(i2); datas_.indices.push_back(i1);
+			datas_.indices.push_back(i1); datas_.indices.push_back(i2); datas_.indices.push_back(i3);
+		}
+	}
+	datas_.indices_size_ = static_cast<uint32_t>(datas_.indices.size());
+	vku::CreateIndexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, datas_.indices, index_buffer_, index_buffer_memory_);
+
+	datas_.masses.resize(N, 0.0f);
+
+	// Total area
+	float totalArea = 0.0f;
+	for (size_t t = 0; t < datas_.indices_size_; t += 3) {
+		uint32_t i0 = datas_.indices[t + 0];
+		uint32_t i1 = datas_.indices[t + 1];
+		uint32_t i2 = datas_.indices[t + 2];
+
+		glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
+		glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
+		glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
+
+		glm::vec3 e1 = p1 - p0;
+		glm::vec3 e2 = p2 - p0;
+
+		float area = 0.5f * glm::length(glm::cross(e1, e2)); // Triangle area
+		totalArea += area;
+	}
+
+	float totalMassTarget = datas_.mass_;
+
+	// Area zero defence
+	float density = 0.0f;
+	if (totalArea > 0.0f) {
+		density = totalMassTarget / totalArea; // kg/m©÷
+	}
+
+	// Distribute mass to each triangle in proportion to area
+	for (size_t t = 0; t < datas_.indices_size_; t += 3) {
+		uint32_t i0 = datas_.indices[t + 0];
+		uint32_t i1 = datas_.indices[t + 1];
+		uint32_t i2 = datas_.indices[t + 2];
+
+		glm::vec3 p0 = glm::vec3(datas_.positions[i0]);
+		glm::vec3 p1 = glm::vec3(datas_.positions[i1]);
+		glm::vec3 p2 = glm::vec3(datas_.positions[i2]);
+
+		glm::vec3 e1 = p1 - p0;
+		glm::vec3 e2 = p2 - p0;
+
+		float area = 0.5f * glm::length(glm::cross(e1, e2));
+
+		float triMass = density * area;
+
+		float share = triMass / 3.0f;
+		datas_.masses[i0] += share;
+		datas_.masses[i1] += share;
+		datas_.masses[i2] += share;
+	}
+
+	// Set inverse masses using mass
+	for (uint32_t i = 0; i < N; ++i) {
+		float m = datas_.masses[i];
+		if (m > 0.0f)
+			datas_.inverse_masses[i] = 1.0f / m;
+		else
+			datas_.inverse_masses[i] = 0.0f;
+	}
+
+	datas_.inverse_masses[0] = 0.0f;
+	datas_.inverse_masses[nx1 - 1] = 0.0f;
+
+	// Set stretch edges coloring
+	for (int x = 0; x < nx1; ++x)
+		for (int y = 0; y + 1 < ny1; y += 2)
+			datas_.passes[0].push_back({ vid(x,y), vid(x,y + 1) });
+
+	for (int x = 0; x < nx1; ++x)
+		for (int y = 1; y + 1 < ny1; y += 2)
+			datas_.passes[1].push_back({ vid(x,y), vid(x,y + 1) });
+
+	for (int y = 0; y < ny1; ++y)
+		for (int x = 0; x + 1 < nx1; x += 2)
+			datas_.passes[2].push_back({ vid(x,y), vid(x + 1,y) });
+
+	for (int y = 0; y < ny1; ++y)
+		for (int x = 1; x + 1 < nx1; x += 2)
+			datas_.passes[3].push_back({ vid(x,y), vid(x + 1,y) });
+
+	// Set Edges using coloring
+	datas_.pass_offsets[0] = 0;
+
+	for (int p = 0; p < datas_.pass_offsets.size() - 1; ++p) {
+		for (auto [i, j] : datas_.passes[p]) {
+			glm::vec3 pi = glm::vec3(datas_.positions[i]);
+			glm::vec3 pj = glm::vec3(datas_.positions[j]);
+			float rest = glm::length(pj - pi);
+
+			datas_.edges.push_back({ i, j, rest, 0.0f });
+		}
+		datas_.pass_offsets[p + 1] = static_cast<uint32_t>(datas_.edges.size());
+	}
+
+	datas_.edge_size_ = static_cast<uint32_t>(datas_.edges.size());
+	if (datas_.edge_size_ != ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)))
+	{
+		std::cout << datas_.edge_size_ << " " << ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)) << std::endl;
+		throw std::runtime_error("edge size is not right");
+	}
+
+	// Set shears
+	const size_t numTris = datas_.indices.size() / 3;
+	datas_.shears.reserve(numTris);
+
+	for (size_t t = 0; t < numTris; ++t)
+	{
+		uint32_t i0 = datas_.indices[3 * t + 0];
+		uint32_t i1 = datas_.indices[3 * t + 1];
+		uint32_t i2 = datas_.indices[3 * t + 2];
+
+		const glm::vec3& x0 = datas_.positions[i0];
+		const glm::vec3& x1 = datas_.positions[i1];
+		const glm::vec3& x2 = datas_.positions[i2];
+
+		glm::vec3 e1 = x1 - x0;
+		glm::vec3 e2 = x2 - x0;
+
+		float restDot = glm::dot(e1, e2);
+
+		SimData::Shear c;
+		c.i0 = i0;
+		c.i1 = i1;
+		c.i2 = i2;
+		c.rest_dot = restDot;
+		c.lambda = 0.0f;
+
+		datas_.shears.push_back(c);
+	}
+	datas_.shear_size_ = static_cast<uint32_t>(datas_.shears.size());
+
+	datas_.BuildBendConstraints();
+	datas_.bend_size_ = static_cast<uint32_t>(datas_.bends.size());
+
+	datas_.BuildAreaConstraints();
+	datas_.area_size_ = static_cast<uint32_t>(datas_.areas.size());
+
+	// position
+	pos_ssbo_size_ = sizeof(glm::vec4) * N;
+	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+		pos_ssbo_size_,
+		vk::BufferUsageFlagBits::eTransferSrc,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+		datas_.positions,
+		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+		vk::MemoryPropertyFlagBits::eDeviceLocal,
+		pos_ssbo_, pos_ssbo_mem_,
+		&pos_staging_,&pos_staging_mem_);
+	pos_staging_map_ = pos_staging_mem_.mapMemory(0, pos_ssbo_size_);
+}
+
+void CpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManager)
+{
+	// Render
+	{
+		vk::DescriptorSetAllocateInfo allocInfo{
+			.descriptorPool = *descriptor_pool_,
+			.descriptorSetCount = 1,
+			.pSetLayouts = &*set_layouts_.render
+		};
+
+		auto sets = vk::raii::DescriptorSets{ context.device_, allocInfo };
+		sets_.render = std::move(sets.front());
+
+		vk::DescriptorBufferInfo renderUboInfo{ *ubo_.ubos_.render, 0, sizeof(SimUBO::Data::Render) };
+		std::array descriptorWrites{
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.render,
+				.dstBinding = 0,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
+				.pBufferInfo = &renderUboInfo
+			}
+		};
+		context.device_.updateDescriptorSets(descriptorWrites, {});
+	}
+
+	// Cloth Graphics
+	{
+		vk::DescriptorSetAllocateInfo allocInfo{
+			.descriptorPool = *descriptor_pool_,
+			.descriptorSetCount = 1,
+			.pSetLayouts = &*set_layouts_.cloth_graphics
+		};
+
+		auto sets = vk::raii::DescriptorSets{ context.device_, allocInfo };
+		sets_.cloth_graphics = std::move(sets.front());
+
+		vk::DescriptorBufferInfo positions(pos_ssbo_, 0, VK_WHOLE_SIZE);
+
+		std::array descriptorWrites{
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.cloth_graphics,
+				.dstBinding = 0,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &positions
+			},
+
+		};
+		context.device_.updateDescriptorSets(descriptorWrites, {});
+	}
+}
+
+void CpuSim::CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLayout& globalSetLayout, std::vector<vk::Format>& formats, vk::raii::DescriptorSetLayout& tex2DSetLayout)
+{
+
+	vk::PipelineInputAssemblyStateCreateInfo inputAssembly{
+		.topology = vk::PrimitiveTopology::eTriangleList,
+		.primitiveRestartEnable = vk::False
+	};
+	vk::PipelineViewportStateCreateInfo viewportState{
+		.viewportCount = 1,
+		.scissorCount = 1
+	};
+	vk::PipelineRasterizationStateCreateInfo rasterizer{
+		.depthClampEnable = vk::False,
+		.rasterizerDiscardEnable = vk::False,
+		.polygonMode = vk::PolygonMode::eFill,
+		.cullMode = vk::CullModeFlagBits::eNone,
+		.frontFace = vk::FrontFace::eCounterClockwise,
+		.depthBiasEnable = vk::False
+	};
+	rasterizer.lineWidth = 1.0f;
+	vk::PipelineMultisampleStateCreateInfo multisampling{
+		.rasterizationSamples = vk::SampleCountFlagBits::e1,
+		.sampleShadingEnable = vk::False
+	};
+	vk::PipelineDepthStencilStateCreateInfo depthStencil{
+		.depthTestEnable = vk::True,
+		.depthWriteEnable = vk::True,
+		.depthCompareOp = vk::CompareOp::eLess,
+		.depthBoundsTestEnable = vk::False,
+		.stencilTestEnable = vk::False
+	};
+
+	std::array<vk::PipelineColorBlendAttachmentState, 3> colorBlendAttachments{};
+	for (auto& a : colorBlendAttachments) {
+		a.colorWriteMask =
+			vk::ColorComponentFlagBits::eR |
+			vk::ColorComponentFlagBits::eG |
+			vk::ColorComponentFlagBits::eB |
+			vk::ColorComponentFlagBits::eA;
+		a.blendEnable = vk::False;
+	}
+
+	vk::PipelineColorBlendStateCreateInfo colorBlending{
+		.logicOpEnable = vk::False,
+		.logicOp = vk::LogicOp::eCopy,
+		.attachmentCount = colorBlendAttachments.size(),
+		.pAttachments = colorBlendAttachments.data()
+	};
+
+	std::vector dynamicStates = {
+		vk::DynamicState::eViewport,
+		vk::DynamicState::eScissor
+	};
+	vk::PipelineDynamicStateCreateInfo dynamicState{ .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()), .pDynamicStates = dynamicStates.data() };
+
+	vk::Format depthFormat = vku::FindDepthFormat(context.physical_device_);
+
+	// Cloth
+	{
+		// Shader
+		auto vertCode = vku::ReadFile("shaders/spv/cloth.vert.spv");
+		auto fragCode = vku::ReadFile("shaders/spv/cloth.frag.spv");
+
+		vk::raii::ShaderModule vertModule = vku::CreateShaderModule(context.device_, vertCode);
+		vk::raii::ShaderModule fragModule = vku::CreateShaderModule(context.device_, fragCode);
+
+		vk::PipelineShaderStageCreateInfo vertStage{
+			.stage = vk::ShaderStageFlagBits::eVertex,
+			.module = *vertModule,
+			.pName = "main"
+		};
+		vk::PipelineShaderStageCreateInfo fragStage{
+			.stage = vk::ShaderStageFlagBits::eFragment,
+			.module = *fragModule,
+			.pName = "main"
+		};
+		std::array<vk::PipelineShaderStageCreateInfo, 2> stages{ vertStage, fragStage };
+
+		// SSBO Vertex Pulling
+		vk::PipelineVertexInputStateCreateInfo vertexInputInfo{
+			.vertexBindingDescriptionCount = 0,
+			.pVertexBindingDescriptions = nullptr,
+			.vertexAttributeDescriptionCount = 0,
+			.pVertexAttributeDescriptions = nullptr
+		};
+
+		vk::PushConstantRange pcRange{
+			.stageFlags = vk::ShaderStageFlagBits::eVertex,
+			.offset = 0,
+			.size = static_cast<uint32_t>(sizeof(PushConstant::ClothRender))
+		};
+		push_constants_.cloth_render.nx1 = datas_.nx_ + 1;
+		push_constants_.cloth_render.ny1 = datas_.ny_ + 1;
+
+		// Pipeline Layout
+		std::array<vk::DescriptorSetLayout, 4> setLayouts(
+			*globalSetLayout,
+			*set_layouts_.cloth_graphics,
+			*set_layouts_.render,
+			*tex2DSetLayout);
+
+		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
+			.setLayoutCount = setLayouts.size(),
+			.pSetLayouts = setLayouts.data(),
+			.pushConstantRangeCount = 1,
+			.pPushConstantRanges = &pcRange
+		};
+		pipeline_layouts_.cloth_graphics = vk::raii::PipelineLayout(context.device_, pipelineLayoutInfo);
+
+		// Pipeline
+		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
+		  {
+			.stageCount = 2,
+			.pStages = stages.data(),
+			.pVertexInputState = &vertexInputInfo,
+			.pInputAssemblyState = &inputAssembly,
+			.pViewportState = &viewportState,
+			.pRasterizationState = &rasterizer,
+			.pMultisampleState = &multisampling,
+			.pDepthStencilState = &depthStencil,
+			.pColorBlendState = &colorBlending,
+			.pDynamicState = &dynamicState,
+			.layout = pipeline_layouts_.cloth_graphics,
+			.renderPass = nullptr },
+		  {.colorAttachmentCount = static_cast<uint32_t>(formats.size()), .pColorAttachmentFormats = formats.data(), .depthAttachmentFormat = depthFormat}
+		};
+		pipelines_.cloth_solid = vk::raii::Pipeline(context.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+
+		rasterizer.polygonMode = vk::PolygonMode::eLine;
+
+		pipelines_.cloth_wireframe = vk::raii::Pipeline(context.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+
+		rasterizer.polygonMode = vk::PolygonMode::ePoint;
+		pipelines_.cloth_point = vk::raii::Pipeline(context.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+	}
 }

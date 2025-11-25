@@ -34,6 +34,7 @@ GraphicsContext::GraphicsContext(GLFWwindow* glfwWindow, Context& context, Swapc
 	CreateGraphicsPipelines();
 	CreateSyncObjects();
 
+	cpu_sim_ = std::make_unique<CpuSim>(context_, swapchain_, texture_manager_, model_manager_, set_layouts_.global, geometry_buffers_.formats, set_layouts_.tex2D);
 	gpu_sim_ = std::make_unique<GpuSim>(context_, swapchain_, texture_manager_, model_manager_, set_layouts_.global, geometry_buffers_.formats, set_layouts_.tex2D);
 }
 
@@ -42,9 +43,10 @@ void GraphicsContext::Update(Camera& camera, MouseInteractor& mouseInteractor)
 
 	if (cpu_or_gpu_ == CpuOrGpu::CPU)
 	{
-		cpu_sim_->SimulateClothXPBD_CPU(
+		cpu_sim_->ComputeSolve(
 			model_manager_.models_[0]->position_, model_manager_.models_[0]->radius_
 		);
+		cpu_sim_->UpdateGraphicsUBO(current_frame_);
 	}
 	else if (cpu_or_gpu_ == CpuOrGpu::GPU)
 	{
@@ -212,11 +214,11 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 
 	if (cpu_or_gpu_ == CpuOrGpu::CPU)
 	{
-		cpu_sim_->Record(current_frame_, cmd, sets_.global, globalOffset);
+		cpu_sim_->RecordGraphics(current_frame_, cmd, sets_.global, globalOffset, polygon_mode_, sets_.tex2D);
 	}
 	else if (cpu_or_gpu_ == CpuOrGpu::GPU)
 	{
-		gpu_sim_->GraphicsRecord(current_frame_, cmd, sets_.global, globalOffset, polygon_mode_, sets_.tex2D);
+		gpu_sim_->RecordGraphics(current_frame_, cmd, sets_.global, globalOffset, polygon_mode_, sets_.tex2D);
 	}
 
 	// Model
@@ -452,7 +454,7 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 		graphicsWaitValue = computeSignalValue;
 		graphicsSignalValue = ++timeline_value_;
 
-		gpu_sim_->ComputeRecord(current_frame_, cmds_.compute[current_frame_], timestamp_pool_, timestamp_steps_, test_scene_);
+		gpu_sim_->RecordCompute(current_frame_, cmds_.compute[current_frame_], timestamp_pool_, timestamp_steps_, test_scene_);
 
 		{
 			// Submit compute work
@@ -520,13 +522,13 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 
 			uint32_t tsCnt = gpu_sim_->iteration_timestamp_count_;
 			uint32_t base = 0;
-			for (uint32_t sub = 0; sub < gpu_sim_->substeps_; sub++)
+			for (uint32_t sub = 0; sub < gpu_sim_->datas_.substeps_; sub++)
 			{
 				tIntegrate += delta_ms(base + 0, base + 1);
 				tClearLambdas += delta_ms(base + 2, base + 3);
 
 				uint32_t iterBase = base + 4;
-				for (uint32_t it = 0; it < gpu_sim_->iterations_; it++)
+				for (uint32_t it = 0; it < gpu_sim_->datas_.iterations_; it++)
 				{
 					tSolveStretch += delta_ms(iterBase + it * tsCnt + 0, iterBase + it * tsCnt + 1);
 					tSolveShear += delta_ms(iterBase + it * tsCnt + 2, iterBase + it * tsCnt + 3);
@@ -535,7 +537,7 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 					tCollideSdf += delta_ms(iterBase + it * tsCnt + 8, iterBase + it * tsCnt + 9);
 					tApplyDeltas += delta_ms(iterBase + it * tsCnt + 10, iterBase + it * tsCnt + 11);
 				}
-				uint32_t updateStart = base + 4 + gpu_sim_->iterations_ * tsCnt;
+				uint32_t updateStart = base + 4 + gpu_sim_->datas_.iterations_ * tsCnt;
 				tUpdate += delta_ms(updateStart, updateStart + 1);
 			}
 

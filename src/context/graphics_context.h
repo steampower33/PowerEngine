@@ -58,7 +58,7 @@ public:
 		GPU
 	};
 
-	CpuOrGpu cpu_or_gpu_ = CpuOrGpu::GPU;
+	CpuOrGpu cpu_or_gpu_ = CpuOrGpu::CPU;
 	vku::TestScene test_scene_;
 
 	std::unique_ptr<CpuSim> cpu_sim_;
@@ -235,7 +235,6 @@ public:
 
 private:
 	void RecreateSwapchain();
-	void UpdatePushContants();
 	void UpdateGraphicsUBO(Camera& camera);
 
 	void RecordGraphicsCommandBuffer(uint32_t imageIndex);

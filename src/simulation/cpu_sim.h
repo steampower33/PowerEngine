@@ -6,6 +6,9 @@ class ModelManager;
 class Texture;
 class TextureManager;
 
+#include "sim_data.h"
+#include "sim_ubo.h"
+
 class CpuSim {
 
 public:
@@ -13,93 +16,77 @@ public:
 		Context& context,
 		Swapchain& swapchain,
 		TextureManager& textureManager,
+		ModelManager& modelManager,
 		vk::raii::DescriptorSetLayout& globalSetLayout,
-		uint32_t Nx, uint32_t Ny, float spacing);
+		std::vector<vk::Format>& formats,
+		vk::raii::DescriptorSetLayout& tex2DSetLayout);
 	CpuSim(const CpuSim& rhs) = delete;
 	CpuSim(CpuSim&& rhs) = delete;
 	CpuSim& operator=(const CpuSim& rhs) = delete;
 	CpuSim& operator=(CpuSim&& rhs) = delete;
 	~CpuSim() = default;
 
-	float dt_ = 1.0f / 60.0f;
-	glm::vec3 gravity_ = glm::vec3(0, -9.8f, 0);
-	int iterations_ = 8;
-	float compliance_ = 1e-6f;
-	float damping_ = 0.01f;
+	void ComputeSolve(const glm::vec3& sphereCenter, float sphereRadius);
+	void CopyPositions(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd);
+	void UpdateGraphicsUBO(uint32_t currentFrame);
+	void RecordGraphics(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset, vku::PolygonMode mode,
+		vk::raii::DescriptorSet& tex2DSet);
 
 private:
+	SimData datas_;
+	SimUBO ubo_;
+
+	struct PushConstant {
+		struct ClothRender {
+			uint32_t nx1;
+			uint32_t ny1;
+		} cloth_render;
+		static_assert(sizeof(ClothRender) % 4 == 0, "push constant must be multiple of 4 bytes");
+
+	} push_constants_;
+
 	vku::Counts counts_;
 	vk::raii::DescriptorPool descriptor_pool_{ nullptr };
 
-	struct Edge {
-		uint32_t i, j;
-		float rest;
-		float lambda;
-	};
+	vk::raii::Buffer pos_ssbo_{ nullptr };
+	vk::raii::DeviceMemory pos_ssbo_mem_{ nullptr };
+	vk::raii::Buffer pos_staging_{ nullptr };
+	vk::raii::DeviceMemory pos_staging_mem_{ nullptr };
+	void* pos_staging_map_{ nullptr };
+	vk::DeviceSize pos_ssbo_size_ = 0;
 
-	uint32_t Nx_, Ny_;
-	float spacing_;
-	uint32_t particles_size_ = 0;
-	uint32_t indices_size_ = 0;
+	vk::raii::Buffer index_buffer_{ nullptr };
+	vk::raii::DeviceMemory index_buffer_memory_{ nullptr };
 
-	std::vector<glm::vec4> positions_, velocities_;
-	std::vector<float> inv_mass_;
-	std::vector<Edge> edges_;
+	struct SetLayout {
+		vk::raii::DescriptorSetLayout render{ nullptr };
+		vk::raii::DescriptorSetLayout cloth_graphics{ nullptr };
+	} set_layouts_;
 
-	std::vector<vk::raii::Buffer>      pos_ssbo_;            // per-frame
-	std::vector<vk::raii::DeviceMemory> pos_ssbo_mem_;
-	std::vector<vk::raii::Buffer>      pos_staging_;         // per-frame
-	std::vector<vk::raii::DeviceMemory> pos_staging_mem_;
-	std::vector<void*>                  pos_staging_map_;     // per-frame
+	struct Set {
+		vk::raii::DescriptorSet render{ nullptr };
+		vk::raii::DescriptorSet cloth_graphics{ nullptr };
+	} sets_;
 
-	vk::raii::DescriptorSetLayout sim_cpu_descriptor_set_layout_{ nullptr };
-	std::vector<vk::raii::DescriptorSet> sim_cpu_descriptor_set_;
+	struct PipelineLayout {
+		vk::raii::PipelineLayout cloth_graphics{ nullptr };
+	} pipeline_layouts_;
 
-	vk::raii::PipelineLayout sim_cpu_pipeline_layout_{ nullptr };
-	vk::raii::Pipeline sim_cpu_pipeline_{ nullptr };
-
-	std::vector<uint32_t> indices_cpu;
-	vk::raii::Buffer ib{ nullptr };
-	vk::raii::DeviceMemory ibm{ nullptr };
-
-	// |===== Push Constant =====|
-	struct ClothPC {
-		uint32_t Nx;
-		uint32_t Ny;
-	} cloth_pc_;
-	static_assert(sizeof(ClothPC) % 4 == 0, "push constant must be multiple of 4 bytes");
-
-public:
-	void CreateClothData_CPU(
-		vk::raii::PhysicalDevice& physicalDevice,
-		vk::raii::Device& device,
-		vk::raii::Queue& queue,
-		vk::raii::CommandPool& commandPool);
-	void SimulateClothXPBD_CPU(
-		const glm::vec3& sphereCenter,
-		float sphereRadius
-	);
-	void UpdatePushContants();
-	void CopyPositions(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd);
-	void Record(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset);
+	struct Pipeline {
+		vk::raii::Pipeline cloth_solid{ nullptr };
+		vk::raii::Pipeline cloth_wireframe{ nullptr };
+		vk::raii::Pipeline cloth_point{ nullptr };
+	} pipelines_;
 
 private:
-
-	uint32_t stretch_edge_size_ = 0;
-	uint32_t bend_edge_size_ = 0;
-
-	struct EdgeKey { uint32_t a, b; };               // a < b
-	static inline EdgeKey makeKey(uint32_t i, uint32_t j) {
-		return (i < j) ? EdgeKey{ i,j } : EdgeKey{ j,i };
-	}
-	struct KeyHash {
-		size_t operator()(EdgeKey k) const {
-			return (size_t(k.a) << 32) ^ size_t(k.b);
-		}
-	};
-	struct KeyEq {
-		bool operator()(EdgeKey x, EdgeKey y) const {
-			return x.a == y.a && x.b == y.b;
-		}
-	};
+	void CreateDescriptorSetLayout(Context& context);
+	void CreateDescriptorPools(Context& context);
+	void CreateUniformBuffers(Context& context,
+		ModelManager& modelManager);
+	void CreateDatas(Context& context);
+	void CreateDescriptorSets(Context& context, TextureManager& textureManager);
+	void CreateComputePipelines(Context& context);
+	void CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLayout& globalSetLayout,
+		std::vector<vk::Format>& formats,
+		vk::raii::DescriptorSetLayout& tex2DSetLayout);
 };

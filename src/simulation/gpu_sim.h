@@ -8,6 +8,9 @@ class Model;
 class ModelManager;
 class MouseInteractor;
 
+#include "sim_data.h"
+#include "sim_ubo.h"
+
 #include "vulkan_utils.h"
 
 class GpuSim
@@ -31,178 +34,23 @@ public:
 	void UpdateGraphicsUBO(uint32_t currentFrame);
 	void UpdateMousePushConstant(Camera& camera, MouseInteractor& mouseInteractor, glm::vec2 viewportSize);
 
-	void ComputeRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& timestampSteps, vku::TestScene& testScene);
-	void GraphicsRecord(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset, vku::PolygonMode mode,
+	void RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& timestampSteps, vku::TestScene& testScene);
+	void RecordGraphics(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset, vku::PolygonMode mode,
 		vk::raii::DescriptorSet& tex2DSet);
 
 	void CopyDatas(const vk::raii::CommandBuffer& cmd);
 	void UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene);
 
+	SimData datas_;
+	SimUBO ubo_;
+
 	uint32_t iteration_timestamp_count_ = 12;
-
-	const uint32_t nx_ = 64;
-	const uint32_t ny_ = 64;
-
-	glm::vec2 cloth_size_{ 1.0f, 1.0f };
-	float spacing_x_ = cloth_size_.x / nx_;
-	float spacing_y_ = cloth_size_.y / ny_;
-	float cloth_height_ = 2.0f;
-	float mass_ = 0.2f;
-
-	struct Compliance {
-		float stretch = 1e-9f;
-		float shear = 1e-9f;
-		float bend = 0.8f;
-		float area = 0.8f;
-	} compliance_;
-
-	struct Beta {
-		float stretch = 300.0f;
-		float shear = 300.0f;
-		float bend = 300.0f;
-		float area = 300.0f;
-	} beta_;
-
-	uint32_t particles_size_ = nx_ * ny_;
-	uint32_t indices_size_ = 0;
-	uint32_t edge_size_ = 0;
-	uint32_t shear_size_ = 0;
-	uint32_t bend_size_ = 0;
-	uint32_t area_size_ = 0;
-
-	float frame_dt_ = 60.0f;
-	int substeps_ = 10;
-	int iterations_ = 4;
 
 	vku::Counts counts_;
 	vk::raii::DescriptorPool descriptor_pool_{ nullptr };
 
 	vk::raii::Buffer index_buffer_{ nullptr };
 	vk::raii::DeviceMemory index_buffer_memory_{ nullptr };
-
-	struct Data {
-		std::vector<glm::vec4> positions;
-		std::vector<glm::vec4> pred_positions;
-		std::vector<glm::vec4> velocities;
-		std::vector<float> inverse_masses;
-		std::vector<float> masses;
-		std::vector<uint32_t> indices;
-
-		struct Edge {
-			uint32_t i;
-			uint32_t j;
-			float    rest;
-			float    lambda;
-		};
-		static_assert(sizeof(Edge) == 16, "Edge must be 32 bytes");
-		std::vector<Edge> edges;
-		std::array<uint32_t, 5> pass_offsets;
-		std::vector<std::pair<uint32_t, uint32_t>> passes[5];
-
-		struct Shear {
-			uint32_t i0, i1, i2;
-			float rest_dot;
-
-			float lambda;
-			float p0;
-			float p1;
-			float p2;
-		};
-		static_assert(sizeof(Shear) == 32, "Shear must be 32 bytes");
-		std::vector<Data::Shear> shears;
-
-		struct Bend {
-			uint32_t i0, i1, i2, i3;
-			float rest_angle;
-			float lambda;
-			float p0;
-			float p1;
-		};
-		static_assert(sizeof(Bend) == 32, "Bend must be 32 bytes");
-		std::vector<Data::Bend> bends;
-
-		struct Area {
-			uint32_t i0, i1, i2;
-			float rest_area;
-			glm::vec3 rest_normal;
-			float lambda;
-		};
-		static_assert(sizeof(Area) == 32, "Area must be 32 bytes");
-		std::vector<Data::Area> areas;
-	} datas_;
-
-	struct EdgeKey
-	{
-		uint32_t a, b; // always a < b
-
-		bool operator==(const EdgeKey& o) const noexcept {
-			return a == o.a && b == o.b;
-		}
-	};
-
-	struct EdgeKeyHash
-	{
-		size_t operator()(const EdgeKey& k) const noexcept {
-			return (size_t(k.a) << 32) ^ size_t(k.b);
-		}
-	};
-
-	struct TriRef
-	{
-		uint32_t triIndex;
-		uint32_t oppVertex;
-	};
-
-	struct UBOData {
-		struct SimParams {
-			glm::vec4 gravity = glm::vec4(0.0f, -9.8f, 0.0f, 0.0f);
-			glm::vec4 sphere_center;
-			float sphere_radius;
-			float thickness = 0.02f;
-			float friction = 0.1f;
-			float dt = 0.0f;
-			float global_damping = 1.0f;
-			float relaxation_factor = 2.0f;
-			uint32_t num_particles;
-			uint32_t num_edges;
-			uint32_t num_shears;
-			uint32_t num_bends;
-			uint32_t num_areas;
-			float p0;
-		} sim_params;
-		static_assert(sizeof(UBOData::SimParams) % 16 == 0, "std140 must be 16-byte aligned.");
-
-		struct Render {
-			glm::vec4 albedo_use{ 1.0f, 1.0f, 1.0f, 0.0f };
-
-			int albedo_idx = -1;
-			int metallic_idx = -1;
-			int normal_idx = -1;
-			int roughness_idx = -1;
-
-			int ao_idx = -1;
-			int height_idx = -1;
-			float metallic_factor = 0.0f;
-			float roughness_factor = 1.0f;
-
-			float ao_factor = 1.0f;
-			float height_factor = 0.0f;
-			uint32_t p0 = 0;
-			uint32_t p1 = 0;
-
-			uint32_t albedo_enable = 0;
-			uint32_t metallic_enable = 0;
-			uint32_t normal_enable = 0;
-			uint32_t roughtnessEnable = 0;
-
-			uint32_t ao_enable = 0;
-			uint32_t height_enable = 0;
-			uint32_t p3;
-			uint32_t p4;
-		} render;
-		static_assert(sizeof(UBOData::Render) % 16 == 0, "std140 must be 16-byte aligned.");
-
-	} ubo_datas_;
 
 	struct PushConstant {
 		struct Solve {
@@ -228,26 +76,6 @@ public:
 		static_assert(sizeof(ClothRender) % 4 == 0, "push constant must be multiple of 4 bytes");
 
 	} push_constants_;
-
-	struct UBO {
-		vk::raii::Buffer sim_params{ nullptr };
-		vk::raii::Buffer render{ nullptr };
-	} ubos_;
-
-	struct UBOMemory {
-		vk::raii::DeviceMemory sim_params{ nullptr };
-		vk::raii::DeviceMemory render{ nullptr };
-	} ubo_memories_;
-
-	struct UBOMapped {
-		void* sim_params{ nullptr };
-		void* render{ nullptr };
-	} ubo_mapped_;
-
-	struct UBOSize {
-		vk::DeviceSize sim_params;
-		vk::DeviceSize render;
-	} ubo_size_;
 
 	struct SetLayout {
 		vk::raii::DescriptorSetLayout sim_params{ nullptr };
@@ -318,7 +146,7 @@ public:
 	} ssbo_memories_;
 
 	struct SSBOSize {
-		uint32_t position = 0;
+		vk::DeviceSize position = 0;
 		uint32_t pred_position = 0;
 		uint32_t velocity = 0;
 		uint32_t inverse_mass = 0;
@@ -377,12 +205,4 @@ private:
 	void CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLayout& globalSetLayout,
 		std::vector<vk::Format>& formats,
 		vk::raii::DescriptorSetLayout& tex2DSetLayout);
-	float ComputeRestBendAngle(
-		uint32_t p1, uint32_t p2,
-		uint32_t p3, uint32_t p4,
-		const std::vector<glm::vec4>& pos);
-	void BuildBendConstraints();
-	void ResetConstraints();
-	void BuildAreaConstraints();
-
 };
