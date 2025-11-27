@@ -4,10 +4,10 @@ struct SimData {
 	const uint32_t nx = 64;
 	const uint32_t ny = 64;
 
-	glm::vec2 cloth_size{ 2.0f, 2.0f };
+	glm::vec2 cloth_size{ 4.0f, 4.0f };
 	float spacing_x = cloth_size.x / nx;
 	float spacing_y = cloth_size.y / ny;
-	float cloth_height = 2.0f;
+	float cloth_height = 4.0f;
 	float mass = 0.2f;
 
 	struct Compliance {

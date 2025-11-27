@@ -70,6 +70,12 @@ void main(){
     vec3 xi = x[i].xyz;
     vec3 vi = v[i].xyz;
 
+    if (w[i] == 0.0) {
+        xp[i] = vec4(xi, 1.0);
+        v[i]  = vec4(0.0);
+        return;
+    }
+
     mouse_select_pass(i, xi);
 
     vi += sim.gravity.xyz * sim.dt;
@@ -78,11 +84,7 @@ void main(){
     
     mouse_drag_pass(i, xpi, vi);
 
-    if (w[i] == 0.0) {
-        xp[i] = vec4(xpi, 1.0);
-        v[i]  = vec4(0.0);
-        return;
-    }
+    
 
     xp[i] = vec4(xpi, 0.0);
     v[i] = vec4(vi, 0.0);
