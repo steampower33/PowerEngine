@@ -1,8 +1,8 @@
 #pragma once
 
 struct SimData {
-	const uint32_t nx = 64;
-	const uint32_t ny = 64;
+	const uint32_t nx = 60;
+	const uint32_t ny = 60;
 
 	glm::vec2 cloth_size{ 4.0f, 4.0f };
 	float spacing_x = cloth_size.x / nx;
@@ -15,7 +15,7 @@ struct SimData {
 		float shear = 1e-9f;
 		float bend = 0.8f;
 		float area = 0.8f;
-		float self_collision = 1e-9f;
+		float self_collision = 0.0f;
 	} compliance;
 
 	struct Beta {
@@ -23,7 +23,7 @@ struct SimData {
 		float shear = 300.0f;
 		float bend = 30.0f;
 		float area = 30.0f;
-		float self_collision = 300.0f;
+		float self_collision = 0.0f;
 	} beta;
 
 	uint32_t num_particles = nx * ny;

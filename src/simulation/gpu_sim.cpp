@@ -302,6 +302,18 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				TS(timestampSteps);
 			}
 
+
+			// Collide SDF
+			TS(timestampSteps);
+			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.collide_sdf);
+			cmd.dispatch(groupsP, 1, 1);
+			TS(timestampSteps);
+
+			vku::ssboCompWtoCompRW(cmd, ssbos_.delta_x);
+			vku::ssboCompWtoCompRW(cmd, ssbos_.delta_y);
+			vku::ssboCompWtoCompRW(cmd, ssbos_.delta_z);
+			vku::ssboCompWtoCompRW(cmd, ssbos_.delta_count);
+
 			{
 				// solve_self_collision
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_self_collision);
@@ -318,17 +330,6 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 					vk::PipelineStageFlagBits2::eVertexShader,
 					vk::AccessFlagBits2::eShaderStorageRead);
 			}
-
-			// Collide SDF
-			TS(timestampSteps);
-			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.collide_sdf);
-			cmd.dispatch(groupsP, 1, 1);
-			TS(timestampSteps);
-
-			vku::ssboCompWtoCompRW(cmd, ssbos_.delta_x);
-			vku::ssboCompWtoCompRW(cmd, ssbos_.delta_y);
-			vku::ssboCompWtoCompRW(cmd, ssbos_.delta_z);
-			vku::ssboCompWtoCompRW(cmd, ssbos_.delta_count);
 
 			// Apply Deltas 
 			TS(timestampSteps);
@@ -880,7 +881,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	// Self Collision
 	uint32_t tableSize = datas_.num_particles;
-	uint32_t maxNeighbors = 16;
+	uint32_t maxNeighbors = 8;
 	ubo_.datas.sim_params.num_tables = tableSize;
 	ubo_.datas.sim_params.cell_size = std::min(datas_.spacing_x, datas_.spacing_y);
 	ubo_.datas.sim_params.collision_radius = ubo_.datas.sim_params.cell_size * 1.0f;

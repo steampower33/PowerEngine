@@ -16,7 +16,7 @@ struct SimUBO {
 			uint32_t num_shears;
 			uint32_t num_bends;
 			uint32_t num_areas;
-			float p0;
+			float self_collision_stiffness = 1.5f;
 
 			float cell_size;
 			uint32_t num_tables;

@@ -35,7 +35,7 @@ layout(std140, set = 0, binding = 0) uniform SimParams {
     uint num_shears;
     uint num_bends;
     uint num_areas;
-    float p0;
+    float self_collision_stiffness;
 
     float cell_size;
     uint num_tables;

@@ -82,8 +82,8 @@ void main()
 
         neighbor_lambdas[idx] = lambda_new;
 
-        vec3 corr_i =  wi * dLambda * n;
-        vec3 corr_j = -wj * dLambda * n;
+        vec3 corr_i =  wi * dLambda * n * sim.self_collision_stiffness;
+        vec3 corr_j = -wj * dLambda * n * sim.self_collision_stiffness;
 
         if (wi > 0.0)
             accumulate_delta(i, corr_i);
