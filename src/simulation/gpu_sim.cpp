@@ -8,6 +8,7 @@
 #include "ray.h"
 #include "mouse_interactor.h"
 
+#define VRDX_IMPLEMENTATION
 #include "gpu_sim.h"
 
 GpuSim::GpuSim(
@@ -26,6 +27,35 @@ GpuSim::GpuSim(
 	CreateDescriptorSets(context, textureManager);
 	CreateComputePipelines(context);
 	CreateGraphicsPipelines(context, globalSetLayout, formats, tex2DSetLayout);
+
+	VrdxSorterCreateInfo info{};
+	info.physicalDevice = *context.physical_device_;
+	info.device = *context.device_;
+	info.pipelineCache = VK_NULL_HANDLE;
+
+	vrdxCreateSorter(&info, &radix_.sorter);
+
+	VrdxSorterStorageRequirements req{};
+	vrdxGetSorterKeyValueStorageRequirements(radix_.sorter, datas_.num_particles, &req);
+	radix_.storage_size = req.size;
+
+	auto usage = vk::BufferUsageFlags(req.usage) |
+		vk::BufferUsageFlagBits::eStorageBuffer;
+
+	vku::CreateBuffer(context.physical_device_,
+		context.device_,
+		req.size,
+		usage,
+		vk::MemoryPropertyFlagBits::eDeviceLocal,
+		radix_.storage_buffer,
+		radix_.storage_memory);
+}
+
+GpuSim::~GpuSim()
+{
+	if (radix_.sorter) {
+		vrdxDestroySorter(radix_.sorter);
+	}
 }
 
 void GpuSim::UpdateMousePushConstant(Camera& camera, MouseInteractor& mouseInteractor, glm::vec2 viewportSize)
@@ -55,19 +85,19 @@ void GpuSim::UpdateMousePushConstant(Camera& camera, MouseInteractor& mouseInter
 
 void GpuSim::UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& model)
 {
-	ubo_.datas_.sim_params.dt = 1.0f / datas_.frame_dt_ / datas_.substeps_;
-	ubo_.datas_.sim_params.num_particles = datas_.particles_size_;
-	ubo_.datas_.sim_params.num_edges = datas_.edge_size_;
-	ubo_.datas_.sim_params.num_bends = datas_.bend_size_;
-	ubo_.datas_.sim_params.num_shears = datas_.shear_size_;
-	ubo_.datas_.sim_params.num_areas = datas_.area_size_;
-	ubo_.datas_.sim_params.sphere_center = glm::vec4(model->position_, 0.0f);
-	ubo_.datas_.sim_params.sphere_radius = model->radius_;
+	ubo_.datas.sim_params.dt = 1.0f / datas_.frame_dt / datas_.substeps;
+	ubo_.datas.sim_params.num_particles = datas_.num_particles;
+	ubo_.datas.sim_params.num_edges = datas_.num_edges;
+	ubo_.datas.sim_params.num_bends = datas_.num_bends;
+	ubo_.datas.sim_params.num_shears = datas_.num_shears;
+	ubo_.datas.sim_params.num_areas = datas_.num_areas;
+	ubo_.datas.sim_params.sphere_center = glm::vec4(model->position_, 0.0f);
+	ubo_.datas.sim_params.sphere_radius = model->radius_;
 
-	const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_.size_.sim_params);
-	auto* dst = static_cast<std::byte*>(ubo_.mapped_.sim_params) + baseOffset;
+	const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_.size.sim_params);
+	auto* dst = static_cast<std::byte*>(ubo_.mapped.sim_params) + baseOffset;
 
-	std::memcpy(dst, &ubo_.datas_.sim_params, sizeof(SimUBO::Data::SimParams));
+	std::memcpy(dst, &ubo_.datas.sim_params, sizeof(SimUBO::Data::SimParams));
 }
 
 void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::QueryPool& timestampPool, uint32_t& timestampSteps, vku::TestScene& testScene)
@@ -78,7 +108,7 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 	UpdateTestScene(cmd, testScene);
 
 	timestampSteps = 0;
-	uint32_t kSlotsPerIterPair = datas_.substeps_ * (4 + iteration_timestamp_count_ * datas_.iterations_ + 2);
+	uint32_t kSlotsPerIterPair = datas_.substeps * (4 + iteration_timestamp_count_ * datas_.iterations + 2);
 	const auto stage = vk::PipelineStageFlagBits2::eComputeShader;
 	auto TS = [&](uint32_t& idx) {
 		cmd.writeTimestamp2(stage, *timestampPool, idx++);
@@ -86,7 +116,7 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 	cmd.resetQueryPool(*timestampPool, 0, kSlotsPerIterPair);
 
-	uint32_t simparamOffset = currentFrame * static_cast<uint32_t>(ubo_.size_.sim_params);
+	uint32_t simparamOffset = currentFrame * static_cast<uint32_t>(ubo_.size.sim_params);
 	cmd.bindDescriptorSets(
 		vk::PipelineBindPoint::eCompute, pipeline_layouts_.common,
 		0,
@@ -95,10 +125,10 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 	);
 
 	auto ceil_div = [](uint32_t n, uint32_t d) { return (n + d - 1) / d; };
-	uint32_t groupsP = ceil_div(datas_.particles_size_, 256u);
-	uint32_t groupsEdges = ceil_div(datas_.edge_size_, 256u);
+	uint32_t groupsP = ceil_div(datas_.num_particles, 256u);
+	uint32_t groupsEdges = ceil_div(datas_.num_edges, 256u);
 
-	for (uint32_t step = 0; step < datas_.substeps_; step++)
+	for (uint32_t step = 0; step < datas_.substeps; step++)
 	{
 		// Integrate
 		TS(timestampSteps);
@@ -110,7 +140,81 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 			push_constants_.mouse_interact);
 		cmd.dispatch(groupsP, 1, 1);
 		TS(timestampSteps);
-		vku::ssboCompWtoCompRW(cmd, ssbos_.pred_position);
+		//vku::ssboCompWtoCompRW(cmd, ssbos_.pred_position);
+
+		// Self Collision
+		{
+			vku::Barrier2(cmd,
+				vk::PipelineStageFlagBits2::eComputeShader,
+				vk::AccessFlagBits2::eShaderStorageWrite,
+				vk::PipelineStageFlagBits2::eVertexShader,
+				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+
+			// Hash build
+			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_hash);
+			cmd.dispatch(groupsP, 1, 1);
+
+			vku::Barrier2(cmd,
+				vk::PipelineStageFlagBits2::eComputeShader,
+				vk::AccessFlagBits2::eShaderStorageWrite,
+				vk::PipelineStageFlagBits2::eVertexShader,
+				vk::AccessFlagBits2::eShaderStorageRead);
+
+			vrdxCmdSortKeyValue(
+				*cmd,                  // VkCommandBuffer
+				radix_.sorter,
+				datas_.num_particles,   // N
+				*ssbos_.particle_hash,        // keys
+				0,
+				*ssbos_.particle_indice,       // values
+				0,
+				*radix_.storage_buffer,
+				0,
+				VK_NULL_HANDLE,
+				0
+			);
+
+			uint32_t fillValue = 0xFFFFFFFF;
+			uint32_t offset = 0;
+			uint64_t size = VK_WHOLE_SIZE; // 전체 채우기
+
+			cmd.fillBuffer(ssbos_.start, offset, size, fillValue);
+			cmd.fillBuffer(ssbos_.end, offset, size, fillValue);
+
+			vku::Barrier2(cmd,
+				vk::PipelineStageFlagBits2::eComputeShader,
+				vk::AccessFlagBits2::eShaderStorageWrite,
+				vk::PipelineStageFlagBits2::eVertexShader,
+				vk::AccessFlagBits2::eShaderStorageRead);
+
+			uint32_t simparamOffset = currentFrame * static_cast<uint32_t>(ubo_.size.sim_params);
+			cmd.bindDescriptorSets(
+				vk::PipelineBindPoint::eCompute, pipeline_layouts_.common,
+				0,
+				{ sets_.sim_params, sets_.cloth_compute },
+				{ simparamOffset }
+			);
+
+			// build_cell
+			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_cell);
+			cmd.dispatch(groupsP, 1, 1);
+
+			vku::Barrier2(cmd,
+				vk::PipelineStageFlagBits2::eComputeShader,
+				vk::AccessFlagBits2::eShaderStorageWrite,
+				vk::PipelineStageFlagBits2::eVertexShader,
+				vk::AccessFlagBits2::eShaderStorageRead);
+
+			// build_neighbor
+			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_neighbor);
+			cmd.dispatch(groupsP, 1, 1);
+
+			vku::Barrier2(cmd,
+				vk::PipelineStageFlagBits2::eComputeShader,
+				vk::AccessFlagBits2::eShaderStorageWrite,
+				vk::PipelineStageFlagBits2::eVertexShader,
+				vk::AccessFlagBits2::eShaderStorageRead);
+		}
 
 		// Clear Lambdas
 		TS(timestampSteps);
@@ -118,7 +222,7 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 		cmd.dispatch(groupsEdges, 1, 1);
 		TS(timestampSteps);
 
-		for (uint32_t iter = 0; iter < datas_.iterations_; iter++)
+		for (uint32_t iter = 0; iter < datas_.iterations; iter++)
 		{
 			// Solve Coloring - Stretch
 			TS(timestampSteps);
@@ -131,8 +235,8 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 				push_constants_.solve.base = base;
 				push_constants_.solve.count = count;
-				push_constants_.solve.compliance = datas_.compliance_.stretch;
-				push_constants_.solve.beta = datas_.beta_.stretch;
+				push_constants_.solve.compliance = 0.0f;
+				push_constants_.solve.beta = 0.0f;
 
 				cmd.pushConstants<PushConstant::Solve>(
 					*pipeline_layouts_.common,
@@ -148,14 +252,14 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				// Solve Shear
 				TS(timestampSteps);
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_shear);
-				push_constants_.solve.compliance = datas_.compliance_.shear;
-				push_constants_.solve.beta = datas_.beta_.shear;
+				push_constants_.solve.compliance = datas_.compliance.shear;
+				push_constants_.solve.beta = datas_.beta.shear;
 
 				cmd.pushConstants<PushConstant::Solve>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
 
-				uint32_t group = (datas_.shear_size_ + 256 - 1) / 256;
+				uint32_t group = (datas_.num_shears + 256 - 1) / 256;
 				cmd.dispatch(group, 1, 1);
 				TS(timestampSteps);
 			}
@@ -165,11 +269,11 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				TS(timestampSteps);
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_bend);
 				uint32_t base = 0;
-				uint32_t count = datas_.bend_size_;
+				uint32_t count = datas_.num_bends;
 				push_constants_.solve.base = base;
 				push_constants_.solve.count = count;
-				push_constants_.solve.compliance = datas_.compliance_.bend;
-				push_constants_.solve.beta = datas_.beta_.bend;
+				push_constants_.solve.compliance = datas_.compliance.bend;
+				push_constants_.solve.beta = datas_.beta.bend;
 				cmd.pushConstants<PushConstant::Solve>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
@@ -184,11 +288,11 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				TS(timestampSteps);
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_area);
 				uint32_t base = 0;
-				uint32_t count = datas_.area_size_;
+				uint32_t count = datas_.num_areas;
 				push_constants_.solve.base = base;
 				push_constants_.solve.count = count;
-				push_constants_.solve.compliance = datas_.compliance_.area;
-				push_constants_.solve.beta = datas_.beta_.area;
+				push_constants_.solve.compliance = datas_.compliance.area;
+				push_constants_.solve.beta = datas_.beta.area;
 				cmd.pushConstants<PushConstant::Solve>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
@@ -196,6 +300,23 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				uint32_t group = (count + 256 - 1) / 256;
 				cmd.dispatch(group, 1, 1);
 				TS(timestampSteps);
+			}
+
+			{
+				// solve_self_collision
+				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_self_collision);
+				push_constants_.solve.compliance = datas_.compliance.self_collision;
+				push_constants_.solve.beta = datas_.beta.self_collision;
+				cmd.pushConstants<PushConstant::Solve>(
+					*pipeline_layouts_.common,
+					vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
+				cmd.dispatch(groupsP, 1, 1);
+
+				vku::Barrier2(cmd,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageWrite,
+					vk::PipelineStageFlagBits2::eVertexShader,
+					vk::AccessFlagBits2::eShaderStorageRead);
 			}
 
 			// Collide SDF
@@ -229,10 +350,10 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 void GpuSim::UpdateGraphicsUBO(uint32_t currentFrame)
 {
-	const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_.size_.render);
-	auto* dst = static_cast<std::byte*>(ubo_.mapped_.render) + baseOffset;
+	const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_.size.render);
+	auto* dst = static_cast<std::byte*>(ubo_.mapped.render) + baseOffset;
 
-	std::memcpy(dst, &ubo_.datas_.render, sizeof(SimUBO::Data::Render));
+	std::memcpy(dst, &ubo_.datas.render, sizeof(SimUBO::Data::Render));
 }
 
 void GpuSim::RecordGraphics(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset, vku::PolygonMode mode,
@@ -266,7 +387,7 @@ void GpuSim::RecordGraphics(uint32_t currentFrame, const vk::raii::CommandBuffer
 		);
 
 		// Render
-		const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_.size_.render);
+		const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_.size.render);
 		cmd.bindDescriptorSets(
 			vk::PipelineBindPoint::eGraphics,
 			pipeline_layouts_.cloth_graphics,
@@ -292,7 +413,7 @@ void GpuSim::RecordGraphics(uint32_t currentFrame, const vk::raii::CommandBuffer
 		);
 
 		cmd.bindIndexBuffer(*index_buffer_, 0, vk::IndexType::eUint32);
-		cmd.drawIndexed(datas_.indices_size_, 1, 0, 0, 0);
+		cmd.drawIndexed(datas_.num_indices, 1, 0, 0, 0);
 	}
 }
 
@@ -329,15 +450,15 @@ void GpuSim::CopyDatas(const vk::raii::CommandBuffer& cmd)
 
 void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene)
 {
-	datas_.spacing_x_ = datas_.cloth_size_.x / datas_.nx_;
-	datas_.spacing_y_ = datas_.cloth_size_.y / datas_.ny_;
+	datas_.spacing_x = datas_.cloth_size.x / datas_.nx;
+	datas_.spacing_y = datas_.cloth_size.y / datas_.ny;
 
 	if (testScene.sphereCollision)
 	{
 		testScene.sphereCollision = false;
 
-		const int nxCells = datas_.nx_;
-		const int nyCells = datas_.ny_;
+		const int nxCells = datas_.nx;
+		const int nyCells = datas_.ny;
 		const int nx1 = nxCells + 1;
 		const int ny1 = nyCells + 1;
 
@@ -348,9 +469,9 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 		for (int y = 0; y < ny1; ++y) {
 			for (int x = 0; x < nx1; ++x) {
 				uint32_t id = vid(x, y);
-				float px = (x - 0.5f * datas_.nx_) * datas_.spacing_x_;
-				float py = datas_.cloth_height_;
-				float pz = (y - 0.5f * datas_.ny_) * datas_.spacing_y_;
+				float px = (x - 0.5f * datas_.nx) * datas_.spacing_x;
+				float py = datas_.cloth_height;
+				float pz = (y - 0.5f * datas_.ny) * datas_.spacing_y;
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0.0f);
 				datas_.pred_positions[id] = datas_.positions[id];
@@ -364,8 +485,8 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 	{
 		testScene.pinnedCorner = false;
 
-		const int nxCells = datas_.nx_;
-		const int nyCells = datas_.ny_;
+		const int nxCells = datas_.nx;
+		const int nyCells = datas_.ny;
 		const int nx1 = nxCells + 1;
 		const int ny1 = nyCells + 1;
 
@@ -376,9 +497,9 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 		for (int y = 0; y < ny1; ++y) {
 			for (int x = 0; x < nx1; ++x) {
 				uint32_t id = vid(x, y);
-				float px = (x - 0.5f * datas_.nx_) * datas_.spacing_x_;
-				float py = datas_.cloth_height_;
-				float pz = (y - 0.5f * datas_.ny_) * datas_.spacing_y_;
+				float px = (x - 0.5f * datas_.nx) * datas_.spacing_x;
+				float py = datas_.cloth_height;
+				float pz = (y - 0.5f * datas_.ny) * datas_.spacing_y;
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0.0f);
 				datas_.pred_positions[id] = datas_.positions[id];
@@ -398,8 +519,8 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 	{
 		testScene.topPinnedCorner = false;
 
-		const int nxCells = datas_.nx_;
-		const int nyCells = datas_.ny_;
+		const int nxCells = datas_.nx;
+		const int nyCells = datas_.ny;
 		const int nx1 = nxCells + 1;
 		const int ny1 = nyCells + 1;
 
@@ -410,9 +531,9 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 		for (int y = 0; y < ny1; ++y) {
 			for (int x = 0; x < nx1; ++x) {
 				uint32_t id = vid(x, y);
-				float px = (x - 0.5f * datas_.nx_) * datas_.spacing_x_;
-				float py = datas_.cloth_height_;
-				float pz = (y - 0.5f * datas_.ny_) * datas_.spacing_y_;
+				float px = (x - 0.5f * datas_.nx) * datas_.spacing_x;
+				float py = datas_.cloth_height;
+				float pz = (y - 0.5f * datas_.ny) * datas_.spacing_y;
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0.0f);
 				datas_.pred_positions[id] = datas_.positions[id];
@@ -470,8 +591,14 @@ void GpuSim::CreateDescriptorSetLayout(Context& context)
 			vk::DescriptorSetLayoutBinding{ 10, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
 			vk::DescriptorSetLayoutBinding{ 11, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
 			vk::DescriptorSetLayoutBinding{ 12, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
+			vk::DescriptorSetLayoutBinding{ 13, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
+			vk::DescriptorSetLayoutBinding{ 14, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
+			vk::DescriptorSetLayoutBinding{ 15, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
+			vk::DescriptorSetLayoutBinding{ 16, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
+			vk::DescriptorSetLayoutBinding{ 17, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
+			vk::DescriptorSetLayoutBinding{ 18, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
 		};
-		counts_.sb += 13;
+		counts_.sb += 19;
 		counts_.layout += 1;
 
 		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
@@ -523,60 +650,60 @@ void GpuSim::CreateUniformBuffers(Context& context,
 {
 	// Sim params UBO
 	{
-		ubo_.ubos_.sim_params.clear();
-		ubo_.memories_.sim_params.clear();
-		ubo_.mapped_.sim_params = nullptr;
+		ubo_.ubos.sim_params.clear();
+		ubo_.memories.sim_params.clear();
+		ubo_.mapped.sim_params = nullptr;
 
 		auto limits = context.physical_device_.getProperties().limits;
-		ubo_.size_.sim_params = (sizeof(SimUBO::Data::SimParams) + limits.minUniformBufferOffsetAlignment - 1)
+		ubo_.size.sim_params = (sizeof(SimUBO::Data::SimParams) + limits.minUniformBufferOffsetAlignment - 1)
 			& ~(limits.minUniformBufferOffsetAlignment - 1);
-		vk::DeviceSize totalSize = ubo_.size_.sim_params * MAX_FRAMES_IN_FLIGHT;
+		vk::DeviceSize totalSize = ubo_.size.sim_params * MAX_FRAMES_IN_FLIGHT;
 
 		vk::raii::Buffer buffer({});
 		vk::raii::DeviceMemory bufferMem({});
 		vku::CreateBuffer(context.physical_device_, context.device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
-		ubo_.ubos_.sim_params = std::move(buffer);
-		ubo_.memories_.sim_params = std::move(bufferMem);
-		ubo_.mapped_.sim_params = ubo_.memories_.sim_params.mapMemory(0, totalSize);
+		ubo_.ubos.sim_params = std::move(buffer);
+		ubo_.memories.sim_params = std::move(bufferMem);
+		ubo_.mapped.sim_params = ubo_.memories.sim_params.mapMemory(0, totalSize);
 	}
 
 	// Render UBO
 	{
-		ubo_.ubos_.render.clear();
-		ubo_.memories_.render.clear();
-		ubo_.mapped_.render = nullptr;
+		ubo_.ubos.render.clear();
+		ubo_.memories.render.clear();
+		ubo_.mapped.render = nullptr;
 
 		auto limits = context.physical_device_.getProperties().limits;
-		ubo_.size_.render = (sizeof(SimUBO::Data::Render) + limits.minUniformBufferOffsetAlignment - 1)
+		ubo_.size.render = (sizeof(SimUBO::Data::Render) + limits.minUniformBufferOffsetAlignment - 1)
 			& ~(limits.minUniformBufferOffsetAlignment - 1);
-		vk::DeviceSize totalSize = ubo_.size_.render * MAX_FRAMES_IN_FLIGHT;
+		vk::DeviceSize totalSize = ubo_.size.render * MAX_FRAMES_IN_FLIGHT;
 
 		vk::raii::Buffer buffer({});
 		vk::raii::DeviceMemory bufferMem({});
 		vku::CreateBuffer(context.physical_device_, context.device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
-		ubo_.ubos_.render = std::move(buffer);
-		ubo_.memories_.render = std::move(bufferMem);
-		ubo_.mapped_.render = ubo_.memories_.render.mapMemory(0, totalSize);
+		ubo_.ubos.render = std::move(buffer);
+		ubo_.memories.render = std::move(bufferMem);
+		ubo_.mapped.render = ubo_.memories.render.mapMemory(0, totalSize);
 
-		ubo_.datas_.render.albedo_enable = 1;
-		ubo_.datas_.render.albedo_idx = 0;
+		ubo_.datas.render.albedo_enable = 1;
+		ubo_.datas.render.albedo_idx = 0;
 	}
 }
 
 void GpuSim::CreateSSBOBuffers(Context& context)
 {
-	const int nxCells = datas_.nx_;
-	const int nyCells = datas_.ny_;
+	const int nxCells = datas_.nx;
+	const int nyCells = datas_.ny;
 	const int nx1 = nxCells + 1;
 	const int ny1 = nyCells + 1;
 
 	auto vid = [&](int x, int y) { return uint32_t(y * nx1 + x); };
 
 	const uint32_t N = nx1 * ny1;
-	datas_.particles_size_ = N;
+	datas_.num_particles = N;
 
-	datas_.spacing_x_ = datas_.cloth_size_.x / datas_.nx_;
-	datas_.spacing_y_ = datas_.cloth_size_.y / datas_.ny_;
+	datas_.spacing_x = datas_.cloth_size.x / datas_.nx;
+	datas_.spacing_y = datas_.cloth_size.y / datas_.ny;
 
 	datas_.positions.resize(N);
 	datas_.velocities.resize(N);
@@ -589,9 +716,9 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	for (int y = 0; y < ny1; ++y) {
 		for (int x = 0; x < nx1; ++x) {
 			uint32_t id = vid(x, y);
-			float px = (-0.5f * datas_.nx_ + x) * datas_.spacing_x_;
-			float py = datas_.cloth_height_;
-			float pz = (-0.5f * datas_.ny_ + y) * datas_.spacing_y_;
+			float px = (-0.5f * datas_.nx + x) * datas_.spacing_x;
+			float py = datas_.cloth_height;
+			float pz = (-0.5f * datas_.ny + y) * datas_.spacing_y;
 
 			datas_.positions[id] = { px, py, pz, 0.0f };
 			datas_.velocities[id] = glm::vec4(0);
@@ -600,9 +727,9 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	}
 
 	// Set indices
-	datas_.indices.reserve(datas_.nx_ * datas_.ny_ * 6);
-	for (int y = 0; y < datas_.ny_; ++y) {
-		for (int x = 0; x < datas_.nx_; ++x) {
+	datas_.indices.reserve(datas_.nx * datas_.ny * 6);
+	for (int y = 0; y < datas_.ny; ++y) {
+		for (int x = 0; x < datas_.nx; ++x) {
 			uint32_t i0 = vid(x, y);
 			uint32_t i1 = vid(x + 1, y);
 			uint32_t i2 = vid(x, y + 1);
@@ -611,14 +738,14 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 			datas_.indices.push_back(i1); datas_.indices.push_back(i2); datas_.indices.push_back(i3);
 		}
 	}
-	datas_.indices_size_ = static_cast<uint32_t>(datas_.indices.size());
+	datas_.num_indices = static_cast<uint32_t>(datas_.indices.size());
 	vku::CreateIndexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, datas_.indices, index_buffer_, index_buffer_memory_);
 
 	datas_.masses.resize(N, 0.0f);
 
 	// Total area
 	float totalArea = 0.0f;
-	for (size_t t = 0; t < datas_.indices_size_; t += 3) {
+	for (size_t t = 0; t < datas_.num_indices; t += 3) {
 		uint32_t i0 = datas_.indices[t + 0];
 		uint32_t i1 = datas_.indices[t + 1];
 		uint32_t i2 = datas_.indices[t + 2];
@@ -634,7 +761,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		totalArea += area;
 	}
 
-	float totalMassTarget = datas_.mass_;
+	float totalMassTarget = datas_.mass;
 
 	// Area zero defence
 	float density = 0.0f;
@@ -643,7 +770,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	}
 
 	// Distribute mass to each triangle in proportion to area
-	for (size_t t = 0; t < datas_.indices_size_; t += 3) {
+	for (size_t t = 0; t < datas_.num_indices; t += 3) {
 		uint32_t i0 = datas_.indices[t + 0];
 		uint32_t i1 = datas_.indices[t + 1];
 		uint32_t i2 = datas_.indices[t + 2];
@@ -708,10 +835,10 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		datas_.pass_offsets[p + 1] = static_cast<uint32_t>(datas_.edges.size());
 	}
 
-	datas_.edge_size_ = static_cast<uint32_t>(datas_.edges.size());
-	if (datas_.edge_size_ != ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)))
+	datas_.num_edges = static_cast<uint32_t>(datas_.edges.size());
+	if (datas_.num_edges != ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)))
 	{
-		std::cout << datas_.edge_size_ << " " << ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)) << std::endl;
+		std::cout << datas_.num_edges << " " << ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)) << std::endl;
 		throw std::runtime_error("edge size is not right");
 	}
 
@@ -743,13 +870,31 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 		datas_.shears.push_back(c);
 	}
-	datas_.shear_size_ = static_cast<uint32_t>(datas_.shears.size());
+	datas_.num_shears = static_cast<uint32_t>(datas_.shears.size());
 
 	datas_.BuildBendConstraints();
-	datas_.bend_size_ = static_cast<uint32_t>(datas_.bends.size());
+	datas_.num_bends = static_cast<uint32_t>(datas_.bends.size());
 
 	datas_.BuildAreaConstraints();
-	datas_.area_size_ = static_cast<uint32_t>(datas_.areas.size());
+	datas_.num_areas = static_cast<uint32_t>(datas_.areas.size());
+
+	// Self Collision
+	uint32_t tableSize = datas_.num_particles;
+	uint32_t maxNeighbors = 16;
+	ubo_.datas.sim_params.num_tables = tableSize;
+	ubo_.datas.sim_params.cell_size = std::min(datas_.spacing_x, datas_.spacing_y);
+	ubo_.datas.sim_params.collision_radius = ubo_.datas.sim_params.cell_size * 1.0f;
+	ubo_.datas.sim_params.max_neighbors = maxNeighbors;
+
+	datas_.particle_hashes.resize(N, 0);
+	datas_.particle_indices.resize(N, 0);
+
+	datas_.starts.resize(tableSize, 0);
+	datas_.ends.resize(tableSize, 0);
+
+	datas_.num_neighbors = datas_.num_particles * maxNeighbors;
+	datas_.neighbors.resize(datas_.num_neighbors, 0);
+	datas_.neighbor_lambdas.resize(datas_.num_neighbors, 0);
 
 	// position
 	ssbo_size_.position = sizeof(glm::vec4) * N;
@@ -835,7 +980,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		ssbos_.delta_count, ssbo_memories_.delta_count);
 
 	// edges
-	ssbo_size_.edge = sizeof(SimData::Edge) * datas_.edge_size_;
+	ssbo_size_.edge = sizeof(SimData::Edge) * datas_.num_edges;
 	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
 		ssbo_size_.edge,
 		vk::BufferUsageFlagBits::eTransferSrc,
@@ -861,7 +1006,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	staging_mapped_.pred_position = staging_memories_.pred_position.mapMemory(0, ssbo_size_.pred_position);
 
 	// Bend
-	ssbo_size_.bend = sizeof(SimData::Bend) * datas_.bend_size_;
+	ssbo_size_.bend = sizeof(SimData::Bend) * datas_.num_bends;
 	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
 		ssbo_size_.bend,
 		vk::BufferUsageFlagBits::eTransferSrc,
@@ -874,7 +1019,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	staging_mapped_.bend = staging_memories_.bend.mapMemory(0, ssbo_size_.bend);
 
 	// Shear
-	ssbo_size_.shear = sizeof(SimData::Shear) * datas_.shear_size_;
+	ssbo_size_.shear = sizeof(SimData::Shear) * datas_.num_shears;
 	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
 		ssbo_size_.shear,
 		vk::BufferUsageFlagBits::eTransferSrc,
@@ -904,7 +1049,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		ssbos_.grab_state, ssbo_memories_.grab_state);
 
 	// Area
-	ssbo_size_.area = sizeof(SimData::Area) * datas_.area_size_;
+	ssbo_size_.area = sizeof(SimData::Area) * datas_.num_areas;
 	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
 		ssbo_size_.area,
 		vk::BufferUsageFlagBits::eTransferSrc,
@@ -915,6 +1060,72 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		ssbos_.area, ssbo_memories_.area,
 		&staging_.area, &staging_memories_.area);
 	staging_mapped_.area = staging_memories_.area.mapMemory(0, ssbo_size_.area);
+
+	// particle_hash
+	ssbo_size_.particle_hash = sizeof(uint32_t) * datas_.num_particles;
+	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+		ssbo_size_.particle_hash,
+		vk::BufferUsageFlagBits::eTransferSrc,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+		datas_.particle_hashes,
+		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+		vk::MemoryPropertyFlagBits::eDeviceLocal,
+		ssbos_.particle_hash, ssbo_memories_.particle_hash);
+
+	// particle_indice
+	ssbo_size_.particle_indice = sizeof(uint32_t) * datas_.num_particles;
+	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+		ssbo_size_.particle_indice,
+		vk::BufferUsageFlagBits::eTransferSrc,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+		datas_.particle_indices,
+		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+		vk::MemoryPropertyFlagBits::eDeviceLocal,
+		ssbos_.particle_indice, ssbo_memories_.particle_indice);
+
+	// start
+	ssbo_size_.start = sizeof(uint32_t) * tableSize;
+	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+		ssbo_size_.start,
+		vk::BufferUsageFlagBits::eTransferSrc,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+		datas_.starts,
+		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+		vk::MemoryPropertyFlagBits::eDeviceLocal,
+		ssbos_.start, ssbo_memories_.start);
+
+	// end
+	ssbo_size_.end = sizeof(uint32_t) * tableSize;
+	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+		ssbo_size_.end,
+		vk::BufferUsageFlagBits::eTransferSrc,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+		datas_.ends,
+		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+		vk::MemoryPropertyFlagBits::eDeviceLocal,
+		ssbos_.end, ssbo_memories_.end);
+
+	// neighbor
+	ssbo_size_.neighbor = sizeof(uint32_t) * datas_.num_neighbors;
+	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+		ssbo_size_.neighbor,
+		vk::BufferUsageFlagBits::eTransferSrc,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+		datas_.neighbors,
+		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+		vk::MemoryPropertyFlagBits::eDeviceLocal,
+		ssbos_.neighbor, ssbo_memories_.neighbor);
+
+	// neighbor_lambda
+	ssbo_size_.neighbor_lambda = sizeof(float) * datas_.num_neighbors;
+	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+		ssbo_size_.neighbor_lambda,
+		vk::BufferUsageFlagBits::eTransferSrc,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+		datas_.neighbor_lambdas,
+		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+		vk::MemoryPropertyFlagBits::eDeviceLocal,
+		ssbos_.neighbor_lambda, ssbo_memories_.neighbor_lambda);
 }
 
 void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManager)
@@ -930,7 +1141,7 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 		auto sets = vk::raii::DescriptorSets{ context.device_, allocInfo };
 		sets_.sim_params = std::move(sets.front());
 
-		vk::DescriptorBufferInfo simParamsUboInfo{ *ubo_.ubos_.sim_params, 0, sizeof(SimUBO::Data::SimParams) };
+		vk::DescriptorBufferInfo simParamsUboInfo{ *ubo_.ubos.sim_params, 0, sizeof(SimUBO::Data::SimParams) };
 		std::array descriptorWrites{
 			vk::WriteDescriptorSet{
 				.dstSet = *sets_.sim_params,
@@ -955,7 +1166,7 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 		auto sets = vk::raii::DescriptorSets{ context.device_, allocInfo };
 		sets_.render = std::move(sets.front());
 
-		vk::DescriptorBufferInfo renderUboInfo{ *ubo_.ubos_.render, 0, sizeof(SimUBO::Data::Render) };
+		vk::DescriptorBufferInfo renderUboInfo{ *ubo_.ubos.render, 0, sizeof(SimUBO::Data::Render) };
 		std::array descriptorWrites{
 			vk::WriteDescriptorSet{
 				.dstSet = *sets_.render,
@@ -993,6 +1204,12 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 		vk::DescriptorBufferInfo bend(*ssbos_.bend, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo grabState(*ssbos_.grab_state, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo area(*ssbos_.area, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo hash(*ssbos_.particle_hash, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo indice(*ssbos_.particle_indice, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo start(*ssbos_.start, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo end(*ssbos_.end, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo neighbor(*ssbos_.neighbor, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo neighborLambda(*ssbos_.neighbor_lambda, 0, VK_WHOLE_SIZE);
 		std::array descriptorWrites{
 			vk::WriteDescriptorSet{
 				.dstSet = *sets_.cloth_compute,
@@ -1097,6 +1314,54 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 				.descriptorCount = 1,
 				.descriptorType = vk::DescriptorType::eStorageBuffer,
 				.pBufferInfo = &area
+			},
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.cloth_compute,
+				.dstBinding = 13,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &hash
+			},
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.cloth_compute,
+				.dstBinding = 14,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &indice
+			},
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.cloth_compute,
+				.dstBinding = 15,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &start
+			},
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.cloth_compute,
+				.dstBinding = 16,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &end
+			},
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.cloth_compute,
+				.dstBinding = 17,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &neighbor
+			},
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.cloth_compute,
+				.dstBinding = 18,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &neighborLambda
 			},
 		};
 		context.device_.updateDescriptorSets(descriptorWrites, {});
@@ -1246,6 +1511,48 @@ void GpuSim::CreateComputePipelines(Context& context)
 		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
 		pipelines_.update_velocity = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
 	}
+
+	// build_hash
+	{
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/build_hash.comp.spv"));
+
+		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
+
+		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
+		pipelines_.build_hash = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
+
+	}
+
+	// build_cell
+	{
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/build_cell.comp.spv"));
+
+		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
+
+		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
+		pipelines_.build_cell = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
+
+	}
+
+	// build_neighbor
+	{
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/build_neighbor.comp.spv"));
+
+		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
+
+		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
+		pipelines_.build_neighbor = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
+	}
+
+	// solve_self_collision
+	{
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/solve_self_collision.comp.spv"));
+
+		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
+
+		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
+		pipelines_.solve_self_collision = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
+	}
 }
 
 void GpuSim::CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLayout& globalSetLayout, std::vector<vk::Format>& formats, vk::raii::DescriptorSetLayout& tex2DSetLayout)
@@ -1338,8 +1645,8 @@ void GpuSim::CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLa
 			.offset = 0,
 			.size = static_cast<uint32_t>(sizeof(PushConstant::ClothRender))
 		};
-		push_constants_.cloth_render.nx1 = datas_.nx_ + 1;
-		push_constants_.cloth_render.ny1 = datas_.ny_ + 1;
+		push_constants_.cloth_render.nx1 = datas_.nx + 1;
+		push_constants_.cloth_render.ny1 = datas_.ny + 1;
 
 		// Pipeline Layout
 		std::array<vk::DescriptorSetLayout, 4> setLayouts(

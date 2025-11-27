@@ -13,6 +13,8 @@ class MouseInteractor;
 
 #include "vulkan_utils.h"
 
+#include <vk_radix_sort.h>
+
 class GpuSim
 {
 public:
@@ -28,7 +30,7 @@ public:
 	GpuSim(GpuSim&& rhs) = delete;
 	GpuSim& operator=(const GpuSim& rhs) = delete;
 	GpuSim& operator=(GpuSim&& rhs) = delete;
-	~GpuSim() = default;
+	~GpuSim();
 
 	void UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& model);
 	void UpdateGraphicsUBO(uint32_t currentFrame);
@@ -51,6 +53,14 @@ public:
 
 	vk::raii::Buffer index_buffer_{ nullptr };
 	vk::raii::DeviceMemory index_buffer_memory_{ nullptr };
+
+	struct RadixSortContext
+	{
+		VrdxSorter sorter = VK_NULL_HANDLE;
+		vk::raii::Buffer       storage_buffer{ nullptr };
+		vk::raii::DeviceMemory storage_memory{ nullptr };
+		vk::DeviceSize         storage_size = 0;
+	} radix_;
 
 	struct PushConstant {
 		struct Solve {
@@ -111,6 +121,11 @@ public:
 		vk::raii::Pipeline cloth_wireframe{ nullptr };
 		vk::raii::Pipeline cloth_point{ nullptr };
 
+		vk::raii::Pipeline build_hash{ nullptr };
+		vk::raii::Pipeline build_cell{ nullptr };
+		vk::raii::Pipeline build_neighbor{ nullptr };
+		vk::raii::Pipeline solve_self_collision{ nullptr };
+
 	} pipelines_;
 
 	struct SSBO {
@@ -127,6 +142,13 @@ public:
 		vk::raii::Buffer bend{ nullptr };
 		vk::raii::Buffer grab_state{ nullptr };
 		vk::raii::Buffer area{ nullptr };
+
+		vk::raii::Buffer particle_hash{ nullptr };
+		vk::raii::Buffer particle_indice{ nullptr };
+		vk::raii::Buffer start{ nullptr };
+		vk::raii::Buffer end{ nullptr };
+		vk::raii::Buffer neighbor{ nullptr };
+		vk::raii::Buffer neighbor_lambda{ nullptr };
 	} ssbos_;
 
 	struct SSBOMemory {
@@ -143,6 +165,13 @@ public:
 		vk::raii::DeviceMemory bend{ nullptr };
 		vk::raii::DeviceMemory grab_state{ nullptr };
 		vk::raii::DeviceMemory area{ nullptr };
+
+		vk::raii::DeviceMemory particle_hash{ nullptr };
+		vk::raii::DeviceMemory particle_indice{ nullptr };
+		vk::raii::DeviceMemory start{ nullptr };
+		vk::raii::DeviceMemory end{ nullptr };
+		vk::raii::DeviceMemory neighbor{ nullptr };
+		vk::raii::DeviceMemory neighbor_lambda{ nullptr };
 	} ssbo_memories_;
 
 	struct SSBOSize {
@@ -159,6 +188,13 @@ public:
 		uint32_t bend = 0;
 		uint32_t grab_state = 0;
 		uint32_t area = 0;
+
+		uint32_t particle_hash = 0;
+		uint32_t particle_indice = 0;
+		uint32_t start = 0;
+		uint32_t end = 0;
+		uint32_t neighbor = 0;
+		uint32_t neighbor_lambda = 0;
 	} ssbo_size_;
 
 	struct Staging {

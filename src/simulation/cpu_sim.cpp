@@ -55,14 +55,14 @@ void CpuSim::ComputeSolve(const glm::vec3& sphereCenter, float sphereRadius)
 {
 	auto& d = datas_;
 
-	const uint32_t N = d.particles_size_;
+	const uint32_t N = d.num_particles;
 	if (N == 0) return;
 
-	const float frame_dt = 1.0f / d.frame_dt_;
-	const int   substeps = std::max(1, d.substeps_);
+	const float frame_dt = 1.0f / d.frame_dt;
+	const int   substeps = std::max(1, d.substeps);
 	const float dt = frame_dt / static_cast<float>(substeps);
 
-	const int iterations = std::max(1, d.iterations_);
+	const int iterations = std::max(1, d.iterations);
 
 	const glm::vec3 gravity(0.0f, -9.81f, 0.0f);
 	const float velocity_damping = 0.01f;
@@ -126,7 +126,7 @@ void CpuSim::ComputeSolve(const glm::vec3& sphereCenter, float sphereRadius)
 	CellMap cells;
 	std::vector<CollisionPair> collisionPairs;
 
-	const float baseSpacing = std::max(d.spacing_x_, d.spacing_y_);
+	const float baseSpacing = std::max(d.spacing_x, d.spacing_x);
 	const float cellSize = baseSpacing * 1.0f;   // broadphase cell size
 	const float thickness = baseSpacing * 0.8f;   // Real minimum distance
 
@@ -164,7 +164,7 @@ void CpuSim::ComputeSolve(const glm::vec3& sphereCenter, float sphereRadius)
 
 		for (int iter = 0; iter < iterations; ++iter)
 		{
-			const float alpha_stretch = d.compliance_.stretch / (dt * dt);
+			const float alpha_stretch = d.compliance.stretch / (dt * dt);
 
 			for (auto& e : d.edges)
 			{
@@ -255,10 +255,10 @@ void CpuSim::CopyPositions(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 void CpuSim::UpdateGraphicsUBO(uint32_t currentFrame)
 {
-	const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_.size_.render);
-	auto* dst = static_cast<std::byte*>(ubo_.mapped_.render) + baseOffset;
+	const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_.size.render);
+	auto* dst = static_cast<std::byte*>(ubo_.mapped.render) + baseOffset;
 
-	std::memcpy(dst, &ubo_.datas_.render, sizeof(SimUBO::Data::Render));
+	std::memcpy(dst, &ubo_.datas.render, sizeof(SimUBO::Data::Render));
 }
 
 void CpuSim::RecordGraphics(uint32_t currentFrame, const vk::raii::CommandBuffer& cmd, vk::raii::DescriptorSet& globalSet, uint32_t globalOffset, vku::PolygonMode mode,
@@ -292,7 +292,7 @@ void CpuSim::RecordGraphics(uint32_t currentFrame, const vk::raii::CommandBuffer
 		);
 
 		// Render
-		const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_.size_.render);
+		const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_.size.render);
 		cmd.bindDescriptorSets(
 			vk::PipelineBindPoint::eGraphics,
 			pipeline_layouts_.cloth_graphics,
@@ -318,7 +318,7 @@ void CpuSim::RecordGraphics(uint32_t currentFrame, const vk::raii::CommandBuffer
 		);
 
 		cmd.bindIndexBuffer(*index_buffer_, 0, vk::IndexType::eUint32);
-		cmd.drawIndexed(datas_.indices_size_, 1, 0, 0, 0);
+		cmd.drawIndexed(datas_.num_indices, 1, 0, 0, 0);
 	}
 }
 
@@ -382,41 +382,41 @@ void CpuSim::CreateUniformBuffers(Context& context,
 {
 	// Render UBO
 	{
-		ubo_.ubos_.render.clear();
-		ubo_.memories_.render.clear();
-		ubo_.mapped_.render = nullptr;
+		ubo_.ubos.render.clear();
+		ubo_.memories.render.clear();
+		ubo_.mapped.render = nullptr;
 
 		auto limits = context.physical_device_.getProperties().limits;
-		ubo_.size_.render = (sizeof(SimUBO::Data::Render) + limits.minUniformBufferOffsetAlignment - 1)
+		ubo_.size.render = (sizeof(SimUBO::Data::Render) + limits.minUniformBufferOffsetAlignment - 1)
 			& ~(limits.minUniformBufferOffsetAlignment - 1);
-		vk::DeviceSize totalSize = ubo_.size_.render * MAX_FRAMES_IN_FLIGHT;
+		vk::DeviceSize totalSize = ubo_.size.render * MAX_FRAMES_IN_FLIGHT;
 
 		vk::raii::Buffer buffer({});
 		vk::raii::DeviceMemory bufferMem({});
 		vku::CreateBuffer(context.physical_device_, context.device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
-		ubo_.ubos_.render = std::move(buffer);
-		ubo_.memories_.render = std::move(bufferMem);
-		ubo_.mapped_.render = ubo_.memories_.render.mapMemory(0, totalSize);
+		ubo_.ubos.render = std::move(buffer);
+		ubo_.memories.render = std::move(bufferMem);
+		ubo_.mapped.render = ubo_.memories.render.mapMemory(0, totalSize);
 
-		ubo_.datas_.render.albedo_enable = 1;
-		ubo_.datas_.render.albedo_idx = 0;
+		ubo_.datas.render.albedo_enable = 1;
+		ubo_.datas.render.albedo_idx = 0;
 	}
 }
 
 void CpuSim::CreateDatas(Context& context)
 {
-	const int nxCells = datas_.nx_;
-	const int nyCells = datas_.ny_;
+	const int nxCells = datas_.nx;
+	const int nyCells = datas_.ny;
 	const int nx1 = nxCells + 1;
 	const int ny1 = nyCells + 1;
 
 	auto vid = [&](int x, int y) { return uint32_t(y * nx1 + x); };
 
 	const uint32_t N = nx1 * ny1;
-	datas_.particles_size_ = N;
+	datas_.num_particles = N;
 
-	datas_.spacing_x_ = datas_.cloth_size_.x / datas_.nx_;
-	datas_.spacing_y_ = datas_.cloth_size_.y / datas_.ny_;
+	datas_.spacing_x = datas_.cloth_size.x / datas_.nx;
+	datas_.spacing_x = datas_.cloth_size.y / datas_.ny;
 
 	datas_.positions.resize(N);
 	datas_.velocities.resize(N);
@@ -429,8 +429,8 @@ void CpuSim::CreateDatas(Context& context)
 	for (int y = 0; y < ny1; ++y) {
 		for (int x = 0; x < nx1; ++x) {
 			uint32_t id = vid(x, y);
-			float px = (-0.5f * datas_.nx_ + x) * datas_.spacing_x_;
-			float py = datas_.cloth_height_ + (-0.5f * datas_.ny_ + y) * datas_.spacing_y_;
+			float px = (-0.5f * datas_.nx + x) * datas_.spacing_x;
+			float py = datas_.cloth_height + (-0.5f * datas_.ny + y) * datas_.spacing_x;
 			float pz = 0.0f;
 
 			datas_.positions[id] = { px, py, pz, 0.0f };
@@ -440,9 +440,9 @@ void CpuSim::CreateDatas(Context& context)
 	}
 
 	// Set indices
-	datas_.indices.reserve(datas_.nx_ * datas_.ny_ * 6);
-	for (int y = 0; y < datas_.ny_; ++y) {
-		for (int x = 0; x < datas_.nx_; ++x) {
+	datas_.indices.reserve(datas_.nx * datas_.ny * 6);
+	for (int y = 0; y < datas_.ny; ++y) {
+		for (int x = 0; x < datas_.nx; ++x) {
 			uint32_t i0 = vid(x, y);
 			uint32_t i1 = vid(x + 1, y);
 			uint32_t i2 = vid(x, y + 1);
@@ -451,14 +451,14 @@ void CpuSim::CreateDatas(Context& context)
 			datas_.indices.push_back(i1); datas_.indices.push_back(i2); datas_.indices.push_back(i3);
 		}
 	}
-	datas_.indices_size_ = static_cast<uint32_t>(datas_.indices.size());
+	datas_.num_indices = static_cast<uint32_t>(datas_.indices.size());
 	vku::CreateIndexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, datas_.indices, index_buffer_, index_buffer_memory_);
 
 	datas_.masses.resize(N, 0.0f);
 
 	// Total area
 	float totalArea = 0.0f;
-	for (size_t t = 0; t < datas_.indices_size_; t += 3) {
+	for (size_t t = 0; t < datas_.num_indices; t += 3) {
 		uint32_t i0 = datas_.indices[t + 0];
 		uint32_t i1 = datas_.indices[t + 1];
 		uint32_t i2 = datas_.indices[t + 2];
@@ -474,7 +474,7 @@ void CpuSim::CreateDatas(Context& context)
 		totalArea += area;
 	}
 
-	float totalMassTarget = datas_.mass_;
+	float totalMassTarget = datas_.mass;
 
 	// Area zero defence
 	float density = 0.0f;
@@ -483,7 +483,7 @@ void CpuSim::CreateDatas(Context& context)
 	}
 
 	// Distribute mass to each triangle in proportion to area
-	for (size_t t = 0; t < datas_.indices_size_; t += 3) {
+	for (size_t t = 0; t < datas_.num_indices; t += 3) {
 		uint32_t i0 = datas_.indices[t + 0];
 		uint32_t i1 = datas_.indices[t + 1];
 		uint32_t i2 = datas_.indices[t + 2];
@@ -548,10 +548,10 @@ void CpuSim::CreateDatas(Context& context)
 		datas_.pass_offsets[p + 1] = static_cast<uint32_t>(datas_.edges.size());
 	}
 
-	datas_.edge_size_ = static_cast<uint32_t>(datas_.edges.size());
-	if (datas_.edge_size_ != ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)))
+	datas_.num_edges = static_cast<uint32_t>(datas_.edges.size());
+	if (datas_.num_edges != ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)))
 	{
-		std::cout << datas_.edge_size_ << " " << ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)) << std::endl;
+		std::cout << datas_.num_edges << " " << ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)) << std::endl;
 		throw std::runtime_error("edge size is not right");
 	}
 
@@ -583,13 +583,13 @@ void CpuSim::CreateDatas(Context& context)
 
 		datas_.shears.push_back(c);
 	}
-	datas_.shear_size_ = static_cast<uint32_t>(datas_.shears.size());
+	datas_.num_shears = static_cast<uint32_t>(datas_.shears.size());
 
 	datas_.BuildBendConstraints();
-	datas_.bend_size_ = static_cast<uint32_t>(datas_.bends.size());
+	datas_.num_bends = static_cast<uint32_t>(datas_.bends.size());
 
 	datas_.BuildAreaConstraints();
-	datas_.area_size_ = static_cast<uint32_t>(datas_.areas.size());
+	datas_.num_areas = static_cast<uint32_t>(datas_.areas.size());
 
 	// position
 	pos_ssbo_size_ = sizeof(glm::vec4) * N;
@@ -618,7 +618,7 @@ void CpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 		auto sets = vk::raii::DescriptorSets{ context.device_, allocInfo };
 		sets_.render = std::move(sets.front());
 
-		vk::DescriptorBufferInfo renderUboInfo{ *ubo_.ubos_.render, 0, sizeof(SimUBO::Data::Render) };
+		vk::DescriptorBufferInfo renderUboInfo{ *ubo_.ubos.render, 0, sizeof(SimUBO::Data::Render) };
 		std::array descriptorWrites{
 			vk::WriteDescriptorSet{
 				.dstSet = *sets_.render,
@@ -751,8 +751,8 @@ void CpuSim::CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLa
 			.offset = 0,
 			.size = static_cast<uint32_t>(sizeof(PushConstant::ClothRender))
 		};
-		push_constants_.cloth_render.nx1 = datas_.nx_ + 1;
-		push_constants_.cloth_render.ny1 = datas_.ny_ + 1;
+		push_constants_.cloth_render.nx1 = datas_.nx + 1;
+		push_constants_.cloth_render.ny1 = datas_.ny + 1;
 
 		// Pipeline Layout
 		std::array<vk::DescriptorSetLayout, 4> setLayouts(
@@ -802,7 +802,7 @@ void CpuSim::BuildSpatialHash(float cellSize, CellMap& outCells)
 	outCells.clear();
 
 	auto& d = datas_;
-	const uint32_t N = d.particles_size_;
+	const uint32_t N = d.num_particles;
 	if (N == 0) return;
 
 	const float invCell = 1.0f / cellSize;
@@ -825,7 +825,7 @@ void CpuSim::BuildCollisionPairs(const CellMap& cells, float cellSize, std::vect
 	outPairs.clear();
 
 	auto& d = datas_;
-	const uint32_t N = d.particles_size_;
+	const uint32_t N = d.num_particles;
 	if (N == 0) return;
 
 	const float invCell = 1.0f / cellSize;

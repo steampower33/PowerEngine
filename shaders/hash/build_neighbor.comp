@@ -1,0 +1,74 @@
+#version 460
+#extension GL_EXT_shader_atomic_float : require
+
+#include "../common/params.glsl"
+
+layout(local_size_x = 256) in;
+
+uint hash_coords(int xi, int yi, int zi)
+{
+    uint h = uint(xi) * 92837111u ^
+             uint(yi) * 689287499u ^
+             uint(zi) * 283923481u;
+    return h % sim.num_tables;
+}
+
+ivec3 int_coord(vec3 p) {
+    return ivec3(floor(p / sim.cell_size));
+}
+void main()
+{
+    uint gid = gl_GlobalInvocationID.x;
+    uint N = sim.num_particles;
+    if (gid >= N) return;
+    
+    const uint maxN = sim.max_neighbors;
+    const float r   = sim.collision_radius;
+    const float r2  = r * r;
+
+    vec3 p = xp[gid].xyz;
+
+    ivec3 c = int_coord(p);
+
+    uint base = gid * maxN;
+    uint count = 0;
+
+    for (uint k = 0; k < maxN; ++k) {
+        neighbors[base + k]       = 0xFFFFFFFFu;
+        neighbor_lambdas[base + k] = 0.0;
+    }
+
+    for (int dz = -1; dz <= 1; ++dz) {
+        for (int dy = -1; dy <= 1; ++dy) {
+            for (int dx = -1; dx <= 1; ++dx) {
+
+                ivec3 nc = c + ivec3(dx, dy, dz);
+                uint h = hash_coords(nc.x, nc.y, nc.z);
+
+                uint start = starts[h];
+                if (start == 0xFFFFFFFFu) continue;
+
+                uint end   = ends[h];
+
+                for (uint idx = start; idx < end; ++idx) {
+                    uint j = indices[idx];
+                    if (j == gid) continue;
+
+                    vec3 pj = xp[j].xyz;
+                    vec3 d  = p - pj;
+                    float d2 = dot(d, d);
+
+                    if (d2 <= r2) {
+                        neighbors[base + count] = j;
+                        neighbor_lambdas[base + count] = 0.0;
+                        ++count;
+
+                        if (count >= maxN) {
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

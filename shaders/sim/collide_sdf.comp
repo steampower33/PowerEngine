@@ -5,24 +5,17 @@
 
 layout(local_size_x = 256) in;
 
-//-----------------------------------------
-// SDF: sphere
-//-----------------------------------------
 float sdf_sphere(vec3 p, vec3 center, float radius)
 {
     return length(p - center) - radius;
 }
 
-// Normal for sphere
 vec3 normal_sphere(vec3 p, vec3 center)
 {
     return normalize(p - center);
 }
 
 
-//-----------------------------------------
-// SDF: plane (y = ground_y)
-//-----------------------------------------
 float sdf_ground(vec3 p, float gy)
 {
     return p.y - gy;
@@ -33,10 +26,6 @@ vec3 normal_ground(vec3 p)
     return vec3(0, 1, 0);
 }
 
-
-//-----------------------------------------
-// XPBD collision solve for ONE constraint
-//-----------------------------------------
 void solveXPBD_Collision(
     uint id,
     vec3 p,
@@ -44,17 +33,15 @@ void solveXPBD_Collision(
     float C,
     vec3 grad)
 {
-    if (C >= 0.0) return; // not penetrating
+    if (C >= 0.0) return;
 
     float wsum = invMass * dot(grad, grad);
     if (wsum < 1e-8) return;
 
     float deltaLambda = -(C) / wsum;
 
-    // Correction
     vec3 corr = invMass * deltaLambda * grad;
 
-    // Tangential friction (PBD style, stable)
     if (sim.friction > 0.0)
     {
         vec3 t = corr - dot(corr, grad) * grad;
@@ -67,44 +54,89 @@ void solveXPBD_Collision(
     atomicAdd(delta_count[id], 1u);
 }
 
-
-//-----------------------------------------
-// MAIN
-//-----------------------------------------
 void main()
 {
     uint id = gl_GlobalInvocationID.x;
     if (id >= sim.num_particles) return;
 
-    vec3 xi = x[id].xyz;     // corrected position
-    vec3 xpi = xp[id].xyz;   // predicted position
-    float w = w[id];       // invMass
+    float w_i = w[id];
+    if (w_i == 0.0) return;
 
-    if (w == 0.0) return; // fixed particle
+    vec3 x_prev = x[id].xyz;
+    vec3 x_pred = xp[id].xyz; 
 
-    //------------------------------------------------------------
-    // Sphere collision
-    //------------------------------------------------------------
     {
-        float C = sdf_sphere(xpi, sim.sphere_center.xyz, sim.sphere_radius + sim.thickness);
-
+        float C = sdf_sphere(x_pred, sim.sphere_center.xyz, sim.sphere_radius + sim.thickness);
         if (C < 0.0)
         {
-            vec3 grad = normal_sphere(xpi, sim.sphere_center.xyz);
-            solveXPBD_Collision(id, xpi, w, C, grad);
+            vec3 n = normal_sphere(x_pred, sim.sphere_center.xyz);
+            float wsum = w_i * dot(n, n);
+            if (wsum > 1e-8)
+            {
+                float dl = -C / wsum;
+                vec3 corr = w_i * dl * n;
+
+                atomicAdd(delta_x[id], corr.x);
+                atomicAdd(delta_y[id], corr.y);
+                atomicAdd(delta_z[id], corr.z);
+                atomicAdd(delta_count[id], 1u);
+
+                x_pred += corr;
+            }
         }
     }
 
-    //------------------------------------------------------------
-    // Ground plane collision
-    //------------------------------------------------------------
     {
-        float Cg = sdf_ground(xpi, 0.0f + sim.thickness);
-
+        float Cg = sdf_ground(x_pred, 0.0f + sim.thickness);
         if (Cg < 0.0)
         {
-            vec3 grad = normal_ground(xpi);
-            solveXPBD_Collision(id, xpi, w, Cg, grad);
+            vec3 n = normal_ground(x_pred);
+
+            float wsum = w_i * dot(n, n);
+            if (wsum > 1e-8)
+            {
+                float dl = -Cg / wsum;
+                vec3 corr_n = w_i * dl * n;
+
+                atomicAdd(delta_x[id], corr_n.x);
+                atomicAdd(delta_y[id], corr_n.y);
+                atomicAdd(delta_z[id], corr_n.z);
+                atomicAdd(delta_count[id], 1u);
+
+                x_pred += corr_n;
+            }
+
+            vec3 d = x_pred - x_prev;
+            vec3 d_n = dot(d, n) * n;
+            vec3 d_t = d - d_n;
+
+            float len_t = length(d_t);
+            if (len_t > 1e-6)
+            {
+                float dyn_mu = sim.friction;
+                float static_eps = sim.thickness;
+
+                vec3 d_t_new;
+                if (len_t < static_eps)
+                {
+                    d_t_new = vec3(0.0);
+                }
+                else
+                {
+                    float k = max(0.0, 1.0 - dyn_mu);
+                    d_t_new = d_t * k;
+                }
+
+                vec3 d_new = d_n + d_t_new;
+                vec3 x_target = x_prev + d_new;
+
+                vec3 corr_f = x_target - x_pred;
+
+                atomicAdd(delta_x[id], corr_f.x);
+                atomicAdd(delta_y[id], corr_f.y);
+                atomicAdd(delta_z[id], corr_f.z);
+                atomicAdd(delta_count[id], 1u);
+            }
         }
     }
 }

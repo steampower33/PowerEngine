@@ -17,6 +17,11 @@ struct SimUBO {
 			uint32_t num_bends;
 			uint32_t num_areas;
 			float p0;
+
+			float cell_size;
+			uint32_t num_tables;
+			uint32_t max_neighbors;
+			float collision_radius;
 		} sim_params;
 		static_assert(sizeof(SimParams) % 16 == 0, "std140 must be 16-byte aligned.");
 
@@ -50,26 +55,26 @@ struct SimUBO {
 		} render;
 		static_assert(sizeof(Render) % 16 == 0, "std140 must be 16-byte aligned.");
 
-	} datas_;
+	} datas;
 
 	struct UBO {
 		vk::raii::Buffer sim_params{ nullptr };
 		vk::raii::Buffer render{ nullptr };
-	} ubos_;
+	} ubos;
 
 	struct Memory {
 		vk::raii::DeviceMemory sim_params{ nullptr };
 		vk::raii::DeviceMemory render{ nullptr };
-	} memories_;
+	} memories;
 
 	struct Mapped {
 		void* sim_params{ nullptr };
 		void* render{ nullptr };
-	} mapped_;
+	} mapped;
 
 	struct UBOSize {
 		vk::DeviceSize sim_params;
 		vk::DeviceSize render;
-	} size_;
+	} size;
 
 };

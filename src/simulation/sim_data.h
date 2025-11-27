@@ -1,39 +1,41 @@
 #pragma once
 
 struct SimData {
-	const uint32_t nx_ = 32;
-	const uint32_t ny_ = 32;
+	const uint32_t nx = 64;
+	const uint32_t ny = 64;
 
-	glm::vec2 cloth_size_{ 1.0f, 1.0f };
-	float spacing_x_ = cloth_size_.x / nx_;
-	float spacing_y_ = cloth_size_.y / ny_;
-	float cloth_height_ = 2.0f;
-	float mass_ = 0.2f;
+	glm::vec2 cloth_size{ 2.0f, 2.0f };
+	float spacing_x = cloth_size.x / nx;
+	float spacing_y = cloth_size.y / ny;
+	float cloth_height = 2.0f;
+	float mass = 0.2f;
 
 	struct Compliance {
 		float stretch = 1e-9f;
 		float shear = 1e-9f;
 		float bend = 0.8f;
 		float area = 0.8f;
-	} compliance_;
+		float self_collision = 1e-9f;
+	} compliance;
 
 	struct Beta {
 		float stretch = 300.0f;
 		float shear = 300.0f;
-		float bend = 300.0f;
-		float area = 300.0f;
-	} beta_;
+		float bend = 30.0f;
+		float area = 30.0f;
+		float self_collision = 300.0f;
+	} beta;
 
-	uint32_t particles_size_ = nx_ * ny_;
-	uint32_t indices_size_ = 0;
-	uint32_t edge_size_ = 0;
-	uint32_t shear_size_ = 0;
-	uint32_t bend_size_ = 0;
-	uint32_t area_size_ = 0;
+	uint32_t num_particles = nx * ny;
+	uint32_t num_indices = 0;
+	uint32_t num_edges = 0;
+	uint32_t num_shears = 0;
+	uint32_t num_bends = 0;
+	uint32_t num_areas = 0;
 
-	float frame_dt_ = 60.0f;
-	int substeps_ = 10;
-	int iterations_ = 4;
+	float frame_dt = 60.0f;
+	int substeps = 10;
+	int iterations = 4;
 
 	std::vector<glm::vec4> positions;
 	std::vector<glm::vec4> pred_positions;
@@ -41,6 +43,15 @@ struct SimData {
 	std::vector<float> inverse_masses;
 	std::vector<float> masses;
 	std::vector<uint32_t> indices;
+
+	std::vector<uint32_t> particle_hashes;
+	std::vector<uint32_t> particle_indices;
+	std::vector<uint32_t> starts;
+	std::vector<uint32_t> ends;
+
+	uint32_t num_neighbors;
+	std::vector<uint32_t> neighbors;
+	std::vector<uint32_t> neighbor_lambdas;
 
 	struct Edge {
 		uint32_t i;
@@ -83,7 +94,6 @@ struct SimData {
 	};
 	static_assert(sizeof(Area) == 32, "Area must be 32 bytes");
 	std::vector<Area> areas;
-
 
 	struct EdgeKey
 	{
@@ -213,14 +223,14 @@ struct SimData {
 			bends.push_back(bc);
 		}
 
-		bend_size_ = static_cast<uint32_t>(bends.size());
+		num_bends = static_cast<uint32_t>(bends.size());
 	}
 
 
 	void BuildAreaConstraints()
 	{
-		areas.reserve(indices_size_ / 3);
-		for (size_t t = 0; t < indices_size_; t += 3)
+		areas.reserve(num_indices / 3);
+		for (size_t t = 0; t < num_indices; t += 3)
 		{
 			uint32_t i0 = indices[t];
 			uint32_t i1 = indices[t + 1];
@@ -269,7 +279,7 @@ struct SimData {
 
 		// Shear
 		{
-			for (int i = 0; i < shear_size_; i++)
+			for (int i = 0; i < num_shears; i++)
 			{
 				shears[i].lambda = 0.0f;
 			}
@@ -278,7 +288,7 @@ struct SimData {
 
 		// Bend
 		{
-			for (int i = 0; i < bend_size_; i++)
+			for (int i = 0; i < num_bends; i++)
 			{
 				bends[i].lambda = 0.0f;
 			}
@@ -288,7 +298,7 @@ struct SimData {
 		{
 			// Total area
 			float totalArea = 0.0f;
-			for (size_t t = 0; t < indices_size_; t += 3) {
+			for (size_t t = 0; t < num_indices; t += 3) {
 				uint32_t i0 = indices[t + 0];
 				uint32_t i1 = indices[t + 1];
 				uint32_t i2 = indices[t + 2];
@@ -304,7 +314,7 @@ struct SimData {
 				totalArea += area;
 			}
 
-			float totalMassTarget = mass_;
+			float totalMassTarget = mass;
 
 			// Area zero defence
 			float density = 0.0f;
@@ -313,7 +323,7 @@ struct SimData {
 			}
 
 			// Distribute mass to each triangle in proportion to area
-			for (size_t t = 0; t < indices_size_; t += 3) {
+			for (size_t t = 0; t < num_indices; t += 3) {
 				uint32_t i0 = indices[t + 0];
 				uint32_t i1 = indices[t + 1];
 				uint32_t i2 = indices[t + 2];
@@ -336,7 +346,7 @@ struct SimData {
 			}
 
 			// Set inverse masses using mass
-			for (uint32_t i = 0; i < particles_size_; ++i) {
+			for (uint32_t i = 0; i < num_particles; ++i) {
 				float m = masses[i];
 				if (m > 0.0f)
 					inverse_masses[i] = 1.0f / m;

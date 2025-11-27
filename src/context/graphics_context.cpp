@@ -525,13 +525,13 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 
 			uint32_t tsCnt = gpu_sim_->iteration_timestamp_count_;
 			uint32_t base = 0;
-			for (uint32_t sub = 0; sub < gpu_sim_->datas_.substeps_; sub++)
+			for (uint32_t sub = 0; sub < gpu_sim_->datas_.substeps; sub++)
 			{
 				tIntegrate += delta_ms(base + 0, base + 1);
 				tClearLambdas += delta_ms(base + 2, base + 3);
 
 				uint32_t iterBase = base + 4;
-				for (uint32_t it = 0; it < gpu_sim_->datas_.iterations_; it++)
+				for (uint32_t it = 0; it < gpu_sim_->datas_.iterations; it++)
 				{
 					tSolveStretch += delta_ms(iterBase + it * tsCnt + 0, iterBase + it * tsCnt + 1);
 					tSolveShear += delta_ms(iterBase + it * tsCnt + 2, iterBase + it * tsCnt + 3);
@@ -540,7 +540,7 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 					tCollideSdf += delta_ms(iterBase + it * tsCnt + 8, iterBase + it * tsCnt + 9);
 					tApplyDeltas += delta_ms(iterBase + it * tsCnt + 10, iterBase + it * tsCnt + 11);
 				}
-				uint32_t updateStart = base + 4 + gpu_sim_->datas_.iterations_ * tsCnt;
+				uint32_t updateStart = base + 4 + gpu_sim_->datas_.iterations * tsCnt;
 				tUpdate += delta_ms(updateStart, updateStart + 1);
 			}
 

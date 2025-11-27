@@ -28,6 +28,8 @@ target_link_libraries(imgui PUBLIC glfw Vulkan::Vulkan)
 
 set_source_files_properties(${IMGUI_SOURCES} PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 
+add_subdirectory(external/vulkan_radix_sort)
+
 find_package(Vulkan REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(KTX CONFIG REQUIRED)
@@ -87,6 +89,7 @@ target_link_libraries(PowerEngine
     glfw
     imgui
     KTX::ktx
+    vk_radix_sort
 )
 target_include_directories(PowerEngine
   PRIVATE
@@ -174,6 +177,10 @@ set(GLSL_SHADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/apply_deltas.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/collide_sdf.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/update_velocity.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/hash/build_hash.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/hash/build_cell.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/hash/build_neighbor.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/hash/solve_self_collision.comp
 )
 
 compile_glsl_shaders(glsl_shaders_target SOURCES ${GLSL_SHADERS})

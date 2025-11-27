@@ -36,6 +36,11 @@ layout(std140, set = 0, binding = 0) uniform SimParams {
     uint num_bends;
     uint num_areas;
     float p0;
+
+    float cell_size;
+    uint num_tables;
+    uint max_neighbors;
+    float collision_radius;
 } sim;
 
 layout(std430, set = 1, binding = 0) buffer X { vec4 x[]; };
@@ -88,5 +93,12 @@ struct Area {
     float lambda;
 };
 layout(std430, set = 1, binding = 12) buffer Areas { Area areas[]; };
+
+layout(std430, set = 1, binding = 13) buffer Hashes { uint hashes[]; };
+layout(std430, set = 1, binding = 14) buffer Indices { uint indices[]; };
+layout(std430, set = 1, binding = 15) buffer Starts { uint starts[]; };
+layout(std430, set = 1, binding = 16) buffer Ends { uint ends[]; };
+layout(std430, set = 1, binding = 17) buffer Neighbors { uint neighbors[]; };
+layout(std430, set = 1, binding = 18) buffer NeighborLambdas { float neighbor_lambdas[]; };
 
 #endif
