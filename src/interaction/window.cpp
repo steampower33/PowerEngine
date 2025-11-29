@@ -51,15 +51,21 @@ void Window::mainloop()
 		glfwPollEvents();
 
 		double current = glfwGetTime();
-		float dt = static_cast<float>(current - lastTime);
+		float frameDt = static_cast<float>(current - lastTime);
 		lastTime = current;
 
-		ProcessKeyboard(dt);
+		simAccum += frameDt;
 
-		key_timeout_ -= dt;
+		ProcessKeyboard(frameDt);
 
-		renderer_->Update(*camera_, *mouse_interactor_, dt);
-		renderer_->Draw();
+		key_timeout_ -= frameDt;
+
+		if (simAccum >= simDt) {
+			simAccum -= simDt;
+
+			renderer_->Update(*camera_, *mouse_interactor_, frameDt, targetSimFPS, simDt);
+			renderer_->Draw();
+		}
 	}
 
 	renderer_->WaitIdle();

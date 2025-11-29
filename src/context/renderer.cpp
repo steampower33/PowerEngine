@@ -29,9 +29,9 @@ void Renderer::WaitIdle()
 	context_->WaitIdle();
 }
 
-void Renderer::Update(Camera& camera, MouseInteractor& mouse_interactor, float dt)
+void Renderer::Update(Camera& camera, MouseInteractor& mouse_interactor, float dt, float& targetSimFPS, double& simDt)
 {
-	gui_->Update(*context_, *graphics_context_, *swapchain_);
+	gui_->Update(*context_, *graphics_context_, *swapchain_, targetSimFPS, simDt);
 	graphics_context_->Update(camera, mouse_interactor);
 
 	mouse_interactor.Update(camera, glm::vec2(swapchain_->swapchain_extent_.width, swapchain_->swapchain_extent_.height), model_manager_->models_);

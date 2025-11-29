@@ -27,7 +27,7 @@ public:
 	bool is_print_timestamps = false;
 
 	void SetStyle();
-	void Update(Context& context, GraphicsContext& graphicsContext, Swapchain& swapchain);
+	void Update(Context& context, GraphicsContext& graphicsContext, Swapchain& swapchain, float& targetSimFPS, double& simDt);
 	void DisplayKernelTiming(const std::string name, std::unordered_map<std::string, double>& labelToTime, std::unordered_map<std::string, double>& labelToAvgTime, bool autoColor = true);
 
 	template<typename RowFn>
@@ -37,7 +37,7 @@ public:
 	template<typename RowFn>
 	void SetTimeingGUI(RowFn&& row, GraphicsContext& graphicsContext);
 	template<typename RowFn, typename Sim>
-	void SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& sim);
+	void SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& sim, float& targetSimFPS, double& simDt);
 	template<typename RowFn, typename Scene>
 	void SetTestSceneGUI(RowFn&& row, Scene& scene);
 	template<typename RowFn, typename Sim>

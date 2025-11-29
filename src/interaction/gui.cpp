@@ -107,7 +107,7 @@ void GUI::SetStyle()
 
 }
 
-void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& swapchain)
+void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& swapchain, float& targetSimFPS, double& simDt)
 {
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
@@ -146,16 +146,15 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 		ImGui::End();
 	}
 
-
 	ImGui::SetNextWindowSize(ImVec2(500.0f, 0));
 	ImGui::SetNextWindowPos(ImVec2(10.0f, 10.0f), ImGuiCond_Once);
 	if (ImGui::Begin("Option", nullptr, wf))
 	{
 		SetRenderingGUI(row, graphicsContext);
 		if (graphicsContext.cpu_or_gpu_ == vku::CpuOrGpu::CPU)
-			SetSimulationGUI(row, graphicsContext, graphicsContext.cpu_sim_);
+			SetSimulationGUI(row, graphicsContext, graphicsContext.cpu_sim_, targetSimFPS, simDt);
 		else if (graphicsContext.cpu_or_gpu_ == vku::CpuOrGpu::GPU)
-			SetSimulationGUI(row, graphicsContext, graphicsContext.gpu_sim_);
+			SetSimulationGUI(row, graphicsContext, graphicsContext.gpu_sim_, targetSimFPS, simDt);
 		SetTestSceneGUI(row, graphicsContext.test_scene_);
 		//SetObjectGUI(row, graphicsContext.gpu_sim_->ubo_datas_.render);
 
@@ -298,7 +297,7 @@ void GUI::SetTimeingGUI(RowFn&& row, GraphicsContext& graphicsContext)
 }
 
 template<typename RowFn, typename Sim>
-void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& sim)
+void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& sim, float& targetSimFPS, double& simDt)
 {
 	if (ImGui::CollapsingHeader("Simulation", ImGuiTreeNodeFlags_DefaultOpen))
 	{
@@ -312,6 +311,7 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& s
 		if (ImGui::BeginTable("Parameter", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
+			row("TargetSimFPS", [&] { ImGui::DragFloat("##TargetSimFPS", &targetSimFPS, 1.0f, 30.0f, 1000.0f); simDt = 1.0 / static_cast<double>(targetSimFPS); });
 			row("1 / FrameDt", [&] { ImGui::DragFloat("##FrameDt", &sim->datas_.frame_dt, 1.0f, 60.0f, 240.0f); });
 			row("Substeps", [&] { ImGui::DragInt("##Substeps", &sim->datas_.substeps, 1, 1, 40); });
 			row("Iterations", [&] { ImGui::DragInt("##Iterations", &sim->datas_.iterations, 1, 1, 40); });

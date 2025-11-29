@@ -49,4 +49,9 @@ private:
 
     bool print_timestamp_ = false;
     float key_timeout_ = 0.2f;
+
+    float targetSimFPS = 60.0f;
+    double simDt = 1.0 / targetSimFPS;
+
+    double simAccum = 0.0;
 };
