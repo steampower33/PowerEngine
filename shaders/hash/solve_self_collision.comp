@@ -20,8 +20,8 @@ void main()
     if (i >= N) return;
 
     float wi = w[i];
-    vec3  xi      = xp[i].xyz;
-    vec3  xi_prev = x[i].xyz;
+    vec3  xi = xp[i].xyz;
+    vec3  pxi = x[i].xyz;
 
     uint maxN = sim.max_neighbors;
     float r   = sim.collision_radius;
@@ -31,9 +31,6 @@ void main()
 
     float dt = sim.dt;
     float alpha_tilde = pc.solve.compliance / (dt * dt);
-    float beta        = pc.solve.beta;
-    float beta_tilde  = dt * dt * beta;
-    float gamma       = (alpha_tilde * beta_tilde) / dt;
 
     for (uint k = 0; k < maxN; ++k)
     {
@@ -47,8 +44,8 @@ void main()
         if (wi + wj == 0.0)
             continue;
 
-        vec3 xj      = xp[j].xyz;
-        vec3 xj_prev = x[j].xyz;
+        vec3 xj = xp[j].xyz;
+        vec3 pxj = x[j].xyz;
 
         vec3 d  = xi - xj;
         float d2 = dot(d, d);
@@ -64,19 +61,15 @@ void main()
 
         vec3 n = d / dist;
 
-        float wsum_grad = wi + wj;
-
-        vec3 dpi = xi - xi_prev;
-        vec3 dpj = xj - xj_prev;
-        float rel = dot(n, dpi) - dot(n, dpj);
+        float wsum = wi + wj;
 
         float lambda_old = neighbor_lambdas[idx];
 
-        float denom = (1.0 + gamma) * wsum_grad + alpha_tilde;
+        float denom = wsum + alpha_tilde;
         if (denom < 1e-8)
             continue;
 
-        float rhs = C + alpha_tilde * lambda_old + gamma * rel;
+        float rhs = C + alpha_tilde * lambda_old;
         float dLambda = -rhs / denom;
         float lambda_new = lambda_old + dLambda;
 

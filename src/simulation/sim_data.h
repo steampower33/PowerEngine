@@ -7,23 +7,19 @@ struct SimData {
 	glm::vec2 cloth_size{ 4.0f, 4.0f };
 	float spacing_x = cloth_size.x / nx;
 	float spacing_y = cloth_size.y / ny;
-	float cloth_height = 4.0f;
-	float mass = 0.2f;
+	float cloth_height = 6.0f;
+	float mass = cloth_size.x * cloth_size.y * 0.5;
 
 	struct Compliance {
 		float stretch = 1e-9f;
 		float shear = 1e-9f;
 		float bend = 0.8f;
 		float area = 0.8f;
-		float self_collision = 0.0f;
+		float self_collision = 1e-9f;
 	} compliance;
 
 	struct Beta {
 		float stretch = 300.0f;
-		float shear = 300.0f;
-		float bend = 30.0f;
-		float area = 30.0f;
-		float self_collision = 0.0f;
 	} beta;
 
 	uint32_t num_particles = nx * ny;

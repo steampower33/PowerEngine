@@ -137,38 +137,14 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 	ImGui::SetNextWindowPos(ImVec2(5, 5), ImGuiCond_Once);
 	if (ImGui::Begin("Option", nullptr, wf))
 	{
-		if (ImGui::CollapsingHeader("Rendering", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			ImGui::SeparatorText("SpotLight");
-			if (ImGui::BeginTable("SpotLight", 2,
-				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
-			{
-				row("Enable", [&] { bool enable = graphicsContext.ubo_datas_.light.light_enable; ImGui::Checkbox("##Enable", &enable); graphicsContext.ubo_datas_.light.light_enable = enable; });
-				row("Pos", [&] { ImGui::DragFloat3("##Pos", &graphicsContext.ubo_datas_.light.position[0], 0.1f); });
-				row("Dir", [&] { ImGui::DragFloat3("##Dir", &graphicsContext.ubo_datas_.light.direction[0], 0.1f); });
-				row("Inner", [&] { ImGui::DragFloat("##Inner", &graphicsContext.ubo_datas_.light.inner, 0.1f); });
-				row("Outer", [&] { ImGui::DragFloat("##Outer", &graphicsContext.ubo_datas_.light.outer, 0.1f); });
-				row("Intensity", [&] { ImGui::DragFloat("##Intensity", &graphicsContext.ubo_datas_.light.intensity, 0.1f, 0.0f, 100.0f); });
-				ImGui::EndTable();
-			}
-
-			ImGui::SeparatorText("PBR");
-			if (ImGui::BeginTable("PBR", 2,
-				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
-			{
-				row("Enable", [&] { bool enable = graphicsContext.ubo_datas_.light.pbr_enable; ImGui::Checkbox("##Enable", &enable); graphicsContext.ubo_datas_.light.pbr_enable = enable; });
-				row("Exposure", [&] { ImGui::DragFloat("##Exposure", &graphicsContext.ubo_datas_.light.exposure, 0.1f, 0.0f, 2.0f); });
-				ImGui::EndTable();
-			}
-		}
-
-		//SetObjectGUI(row, graphicsContext.gpu_sim_->ubo_datas_.render);
+		SetRenderingGUI(row, graphicsContext);
 		SetSolverTimeingGUI(row, graphicsContext);
 		if (graphicsContext.cpu_or_gpu_ == vku::CpuOrGpu::CPU)
 			SetSimulationGUI(row, graphicsContext, graphicsContext.cpu_sim_);
 		else if (graphicsContext.cpu_or_gpu_ == vku::CpuOrGpu::GPU)
 			SetSimulationGUI(row, graphicsContext, graphicsContext.gpu_sim_);
 		SetTestSceneGUI(row, graphicsContext.test_scene_);
+		//SetObjectGUI(row, graphicsContext.gpu_sim_->ubo_datas_.render);
 
 		ImGui::End();
 	}
@@ -331,11 +307,11 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& s
 			row("Substeps", [&] { ImGui::DragInt("##Substeps", &sim->datas_.substeps, 1, 1, 40); });
 			row("Iterations", [&] { ImGui::DragInt("##Iterations", &sim->datas_.iterations, 1, 1, 40); });
 			row("Mass", [&] { ImGui::DragFloat("##Mass", &sim->datas_.mass, 0.001f, 0.0f, 10.0f); });
-			row("GlobalDamping", [&] { ImGui::DragFloat("##GlobalDamping", &sim->ubo_.datas.sim_params.global_damping, 0.1f, 0.0f, 10.0f); });
-			row("RelaxationFactor", [&] { ImGui::DragFloat("##RelaxationFactor", &sim->ubo_.datas.sim_params.relaxation_factor, 0.1f, 1.0f, 2.0f); });
+			row("GlobalDamping", [&] { ImGui::DragFloat("##GlobalDamping", &sim->ubo_.datas.sim_params.global_damping, 0.1f, 1.0f, 2.0f); });
+			row("RelaxationFactor", [&] { ImGui::DragFloat("##RelaxationFactor", &sim->ubo_.datas.sim_params.relaxation_factor, 0.1f, 0.0f, 1.0f); });
 			row("ClothSize", [&] { ImGui::DragFloat2("##ClothSize", &sim->datas_.cloth_size[0], 0.1f, 0.0f, 10.0f); });
 			row("ClothHeight", [&] { ImGui::DragFloat("##ClothHeight", &sim->datas_.cloth_height, 0.1f, 0.0f, 100.0f); });
-			row("SelfCollisionStiffness", [&] { ImGui::DragFloat("##SelfCollisionStiffness", &sim->ubo_.datas.sim_params.self_collision_stiffness, 0.1f, 0.0f, 3.0f, "%.3f"); });
+			row("SelfCollisionStiffness", [&] { ImGui::DragFloat("##SelfCollisionStiffness", &sim->ubo_.datas.sim_params.self_collision_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
 			row("Thickness", [&] { ImGui::DragFloat("##Thickness", &sim->ubo_.datas.sim_params.thickness, 0.001f, 0.0f, 1.0f, "%.3f"); });
 			row("Friction", [&] { ImGui::DragFloat("##Friction", &sim->ubo_.datas.sim_params.friction, 0.001f, 0.0f, 1.0f, "%.3f"); });
 			ImGui::EndTable();
@@ -362,14 +338,6 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& s
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
 			row("Stretch", [&] { ImGui::DragFloat("##Stretch", &sim->datas_.beta.stretch, 1.0f, 0.0f, 1000.0f, "%.1f"); });
-			row("Shear", [&] { ImGui::DragFloat("##Shear", &sim->datas_.beta.shear
-				, 1.0f, 0.0f, 1000.0f, "%.1f"); });
-			row("Bend", [&] { ImGui::DragFloat("##Bend", &sim->datas_.beta.bend
-				, 1.0f, 0.0f, 1000.0f, "%.1f"); });
-			row("Area", [&] { ImGui::DragFloat("##Area", &sim->datas_.beta.area
-				, 1.0f, 0.0f, 1000.0f, "%.1f"); });
-			row("SelfCollision", [&] { ImGui::DragFloat("##SelfCollision", &sim->datas_.beta.self_collision
-				, 1.0f, 0.0f, 1000.0f, "%.1f"); });
 
 			ImGui::EndTable();
 		}
@@ -392,6 +360,35 @@ void GUI::SetTestSceneGUI(RowFn&& row, Scene& scene)
 			row("TopPinnedCorner", [&] {
 				ImGui::Checkbox("##TopPinnedCorner", &scene.topPinnedCorner); });
 
+			ImGui::EndTable();
+		}
+	}
+}
+
+template<typename RowFn>
+void GUI::SetRenderingGUI(RowFn&& row, GraphicsContext& graphicsContext)
+{
+	if (ImGui::CollapsingHeader("Rendering"))//, ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		ImGui::SeparatorText("SpotLight");
+		if (ImGui::BeginTable("SpotLight", 2,
+			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+		{
+			row("Enable", [&] { bool enable = graphicsContext.ubo_datas_.light.light_enable; ImGui::Checkbox("##Enable", &enable); graphicsContext.ubo_datas_.light.light_enable = enable; });
+			row("Pos", [&] { ImGui::DragFloat3("##Pos", &graphicsContext.ubo_datas_.light.position[0], 0.1f); });
+			row("Dir", [&] { ImGui::DragFloat3("##Dir", &graphicsContext.ubo_datas_.light.direction[0], 0.1f); });
+			row("Inner", [&] { ImGui::DragFloat("##Inner", &graphicsContext.ubo_datas_.light.inner, 0.1f); });
+			row("Outer", [&] { ImGui::DragFloat("##Outer", &graphicsContext.ubo_datas_.light.outer, 0.1f); });
+			row("Intensity", [&] { ImGui::DragFloat("##Intensity", &graphicsContext.ubo_datas_.light.intensity, 0.1f, 0.0f, 100.0f); });
+			ImGui::EndTable();
+		}
+
+		ImGui::SeparatorText("PBR");
+		if (ImGui::BeginTable("PBR", 2,
+			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+		{
+			row("Enable", [&] { bool enable = graphicsContext.ubo_datas_.light.pbr_enable; ImGui::Checkbox("##Enable", &enable); graphicsContext.ubo_datas_.light.pbr_enable = enable; });
+			row("Exposure", [&] { ImGui::DragFloat("##Exposure", &graphicsContext.ubo_datas_.light.exposure, 0.1f, 0.0f, 2.0f); });
 			ImGui::EndTable();
 		}
 	}

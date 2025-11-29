@@ -6,17 +6,17 @@ struct SimUBO {
 			glm::vec4 gravity = glm::vec4(0.0f, -9.8f, 0.0f, 0.0f);
 			glm::vec4 sphere_center;
 			float sphere_radius;
-			float thickness = 0.02f;
+			float thickness = 0.05f;
 			float friction = 0.1f;
 			float dt = 0.0f;
 			float global_damping = 1.0f;
-			float relaxation_factor = 2.0f;
+			float relaxation_factor = 0.2f;
 			uint32_t num_particles;
 			uint32_t num_edges;
 			uint32_t num_shears;
 			uint32_t num_bends;
 			uint32_t num_areas;
-			float self_collision_stiffness = 1.5f;
+			float self_collision_stiffness = 20.0f;
 
 			float cell_size;
 			uint32_t num_tables;

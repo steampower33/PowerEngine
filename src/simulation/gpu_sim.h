@@ -230,15 +230,22 @@ public:
 		void* area{ nullptr };
 	} staging_mapped_;
 
+
 private:
-	void CreateDescriptorSetLayout(Context& context);
-	void CreateDescriptorPools(Context& context);
-	void CreateUniformBuffers(Context& context,
-		ModelManager& modelManager);
-	void CreateSSBOBuffers(Context& context);
-	void CreateDescriptorSets(Context& context, TextureManager& textureManager);
-	void CreateComputePipelines(Context& context);
-	void CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLayout& globalSetLayout,
+	Context& context_;
+	Swapchain& swapchain_;
+	TextureManager& texture_manager_;
+	ModelManager& model_manager_;
+
+private:
+	void CreateDescriptorSetLayout();
+	void CreateDescriptorPools();
+	void CreateUniformBuffers();
+	void CreateSSBOBuffers();
+	void CreateDescriptorSets();
+	void CreateComputePipelines();
+	void CreateGraphicsPipelines(vk::raii::DescriptorSetLayout& globalSetLayout,
 		std::vector<vk::Format>& formats,
 		vk::raii::DescriptorSetLayout& tex2DSetLayout);
+	void CreateVrdxSorter();
 };

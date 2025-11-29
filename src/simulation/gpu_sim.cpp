@@ -19,36 +19,16 @@ GpuSim::GpuSim(
 	vk::raii::DescriptorSetLayout& globalSetLayout,
 	std::vector<vk::Format>& formats,
 	vk::raii::DescriptorSetLayout& tex2DSetLayout)
+	: context_(context), swapchain_(swapchain), texture_manager_(textureManager), model_manager_(modelManager)
 {
-	CreateDescriptorSetLayout(context);
-	CreateDescriptorPools(context);
-	CreateUniformBuffers(context, modelManager);
-	CreateSSBOBuffers(context);
-	CreateDescriptorSets(context, textureManager);
-	CreateComputePipelines(context);
-	CreateGraphicsPipelines(context, globalSetLayout, formats, tex2DSetLayout);
-
-	VrdxSorterCreateInfo info{};
-	info.physicalDevice = *context.physical_device_;
-	info.device = *context.device_;
-	info.pipelineCache = VK_NULL_HANDLE;
-
-	vrdxCreateSorter(&info, &radix_.sorter);
-
-	VrdxSorterStorageRequirements req{};
-	vrdxGetSorterKeyValueStorageRequirements(radix_.sorter, datas_.num_particles, &req);
-	radix_.storage_size = req.size;
-
-	auto usage = vk::BufferUsageFlags(req.usage) |
-		vk::BufferUsageFlagBits::eStorageBuffer;
-
-	vku::CreateBuffer(context.physical_device_,
-		context.device_,
-		req.size,
-		usage,
-		vk::MemoryPropertyFlagBits::eDeviceLocal,
-		radix_.storage_buffer,
-		radix_.storage_memory);
+	CreateDescriptorSetLayout();
+	CreateDescriptorPools();
+	CreateUniformBuffers();
+	CreateSSBOBuffers();
+	CreateDescriptorSets();
+	CreateComputePipelines();
+	CreateGraphicsPipelines(globalSetLayout, formats, tex2DSetLayout);
+	CreateVrdxSorter();
 }
 
 GpuSim::~GpuSim()
@@ -108,7 +88,8 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 	UpdateTestScene(cmd, testScene);
 
 	timestampSteps = 0;
-	uint32_t kSlotsPerIterPair = datas_.substeps * (4 + iteration_timestamp_count_ * datas_.iterations + 2);
+	uint32_t kSlotsPerSelfCollision = 8;
+	uint32_t kSlotsPerIterPair = datas_.substeps * (4 + kSlotsPerSelfCollision + iteration_timestamp_count_ * datas_.iterations + 2);
 	const auto stage = vk::PipelineStageFlagBits2::eComputeShader;
 	auto TS = [&](uint32_t& idx) {
 		cmd.writeTimestamp2(stage, *timestampPool, idx++);
@@ -142,6 +123,12 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 		TS(timestampSteps);
 		//vku::ssboCompWtoCompRW(cmd, ssbos_.pred_position);
 
+		// Clear Lambdas
+		TS(timestampSteps);
+		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.clear_lambdas);
+		cmd.dispatch(groupsEdges, 1, 1);
+		TS(timestampSteps);
+
 		// Self Collision
 		{
 			vku::Barrier2(cmd,
@@ -151,8 +138,10 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
 			// Hash build
+			TS(timestampSteps);
 			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_hash);
 			cmd.dispatch(groupsP, 1, 1);
+			TS(timestampSteps);
 
 			vku::Barrier2(cmd,
 				vk::PipelineStageFlagBits2::eComputeShader,
@@ -160,6 +149,7 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				vk::PipelineStageFlagBits2::eVertexShader,
 				vk::AccessFlagBits2::eShaderStorageRead);
 
+			TS(timestampSteps);
 			vrdxCmdSortKeyValue(
 				*cmd,                  // VkCommandBuffer
 				radix_.sorter,
@@ -170,9 +160,10 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				0,
 				*radix_.storage_buffer,
 				0,
-				VK_NULL_HANDLE,
+				nullptr,
 				0
 			);
+			TS(timestampSteps);
 
 			uint32_t fillValue = 0xFFFFFFFF;
 			uint32_t offset = 0;
@@ -196,8 +187,10 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 			);
 
 			// build_cell
+			TS(timestampSteps);
 			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_cell);
 			cmd.dispatch(groupsP, 1, 1);
+			TS(timestampSteps);
 
 			vku::Barrier2(cmd,
 				vk::PipelineStageFlagBits2::eComputeShader,
@@ -206,8 +199,10 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				vk::AccessFlagBits2::eShaderStorageRead);
 
 			// build_neighbor
+			TS(timestampSteps);
 			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_neighbor);
 			cmd.dispatch(groupsP, 1, 1);
+			TS(timestampSteps);
 
 			vku::Barrier2(cmd,
 				vk::PipelineStageFlagBits2::eComputeShader,
@@ -215,12 +210,6 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				vk::PipelineStageFlagBits2::eVertexShader,
 				vk::AccessFlagBits2::eShaderStorageRead);
 		}
-
-		// Clear Lambdas
-		TS(timestampSteps);
-		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.clear_lambdas);
-		cmd.dispatch(groupsEdges, 1, 1);
-		TS(timestampSteps);
 
 		for (uint32_t iter = 0; iter < datas_.iterations; iter++)
 		{
@@ -235,8 +224,8 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 				push_constants_.solve.base = base;
 				push_constants_.solve.count = count;
-				push_constants_.solve.compliance = 0.0f;
-				push_constants_.solve.beta = 0.0f;
+				push_constants_.solve.compliance = datas_.compliance.stretch;
+				push_constants_.solve.beta = datas_.beta.stretch;
 
 				cmd.pushConstants<PushConstant::Solve>(
 					*pipeline_layouts_.common,
@@ -253,7 +242,6 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				TS(timestampSteps);
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_shear);
 				push_constants_.solve.compliance = datas_.compliance.shear;
-				push_constants_.solve.beta = datas_.beta.shear;
 
 				cmd.pushConstants<PushConstant::Solve>(
 					*pipeline_layouts_.common,
@@ -273,7 +261,6 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				push_constants_.solve.base = base;
 				push_constants_.solve.count = count;
 				push_constants_.solve.compliance = datas_.compliance.bend;
-				push_constants_.solve.beta = datas_.beta.bend;
 				cmd.pushConstants<PushConstant::Solve>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
@@ -292,7 +279,6 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				push_constants_.solve.base = base;
 				push_constants_.solve.count = count;
 				push_constants_.solve.compliance = datas_.compliance.area;
-				push_constants_.solve.beta = datas_.beta.area;
 				cmd.pushConstants<PushConstant::Solve>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
@@ -302,34 +288,32 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				TS(timestampSteps);
 			}
 
-
-			// Collide SDF
-			TS(timestampSteps);
-			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.collide_sdf);
-			cmd.dispatch(groupsP, 1, 1);
-			TS(timestampSteps);
-
-			vku::ssboCompWtoCompRW(cmd, ssbos_.delta_x);
-			vku::ssboCompWtoCompRW(cmd, ssbos_.delta_y);
-			vku::ssboCompWtoCompRW(cmd, ssbos_.delta_z);
-			vku::ssboCompWtoCompRW(cmd, ssbos_.delta_count);
-
 			{
-				// solve_self_collision
-				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_self_collision);
-				push_constants_.solve.compliance = datas_.compliance.self_collision;
-				push_constants_.solve.beta = datas_.beta.self_collision;
-				cmd.pushConstants<PushConstant::Solve>(
-					*pipeline_layouts_.common,
-					vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
+				// Collide SDF
+				TS(timestampSteps);
+				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.collide_sdf);
 				cmd.dispatch(groupsP, 1, 1);
+				TS(timestampSteps);
 
-				vku::Barrier2(cmd,
-					vk::PipelineStageFlagBits2::eComputeShader,
-					vk::AccessFlagBits2::eShaderStorageWrite,
-					vk::PipelineStageFlagBits2::eVertexShader,
-					vk::AccessFlagBits2::eShaderStorageRead);
+				vku::ssboCompWtoCompRW(cmd, ssbos_.delta_x);
+				vku::ssboCompWtoCompRW(cmd, ssbos_.delta_y);
+				vku::ssboCompWtoCompRW(cmd, ssbos_.delta_z);
+				vku::ssboCompWtoCompRW(cmd, ssbos_.delta_count);
 			}
+
+			// solve_self_collision
+			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_self_collision);
+			push_constants_.solve.compliance = datas_.compliance.self_collision;
+			cmd.pushConstants<PushConstant::Solve>(
+				*pipeline_layouts_.common,
+				vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
+			cmd.dispatch(groupsP, 1, 1);
+
+			vku::Barrier2(cmd,
+				vk::PipelineStageFlagBits2::eComputeShader,
+				vk::AccessFlagBits2::eShaderStorageWrite,
+				vk::PipelineStageFlagBits2::eVertexShader,
+				vk::AccessFlagBits2::eShaderStorageRead);
 
 			// Apply Deltas 
 			TS(timestampSteps);
@@ -470,9 +454,9 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 		for (int y = 0; y < ny1; ++y) {
 			for (int x = 0; x < nx1; ++x) {
 				uint32_t id = vid(x, y);
-				float px = (x - 0.5f * datas_.nx) * datas_.spacing_x;
+				float px = (-0.5f * datas_.cloth_size.x) + x * datas_.spacing_x;
 				float py = datas_.cloth_height;
-				float pz = (y - 0.5f * datas_.ny) * datas_.spacing_y;
+				float pz = (-0.5f * datas_.cloth_size.y) + y * datas_.spacing_y;
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0.0f);
 				datas_.pred_positions[id] = datas_.positions[id];
@@ -498,9 +482,9 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 		for (int y = 0; y < ny1; ++y) {
 			for (int x = 0; x < nx1; ++x) {
 				uint32_t id = vid(x, y);
-				float px = (x - 0.5f * datas_.nx) * datas_.spacing_x;
+				float px = (-0.5f * datas_.cloth_size.x) + x * datas_.spacing_x;
 				float py = datas_.cloth_height;
-				float pz = (y - 0.5f * datas_.ny) * datas_.spacing_y;
+				float pz = (-0.5f * datas_.cloth_size.y) + y * datas_.spacing_y;
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0.0f);
 				datas_.pred_positions[id] = datas_.positions[id];
@@ -532,9 +516,9 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 		for (int y = 0; y < ny1; ++y) {
 			for (int x = 0; x < nx1; ++x) {
 				uint32_t id = vid(x, y);
-				float px = (x - 0.5f * datas_.nx) * datas_.spacing_x;
+				float px = (-0.5f * datas_.cloth_size.x) + x * datas_.spacing_x;
 				float py = datas_.cloth_height;
-				float pz = (y - 0.5f * datas_.ny) * datas_.spacing_y;
+				float pz = (-0.5f * datas_.cloth_size.y) + y * datas_.spacing_y;
 				datas_.positions[id] = { px, py, pz, 0.0f };
 				datas_.velocities[id] = glm::vec4(0.0f);
 				datas_.pred_positions[id] = datas_.positions[id];
@@ -550,7 +534,7 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 	}
 }
 
-void GpuSim::CreateDescriptorSetLayout(Context& context)
+void GpuSim::CreateDescriptorSetLayout()
 {
 	// Sim params UBO
 	{
@@ -561,7 +545,7 @@ void GpuSim::CreateDescriptorSetLayout(Context& context)
 		counts_.layout += 1;
 
 		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
-		set_layouts_.sim_params = vk::raii::DescriptorSetLayout(context.device_, layoutInfo);
+		set_layouts_.sim_params = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
 	}
 
 	// Render
@@ -573,7 +557,7 @@ void GpuSim::CreateDescriptorSetLayout(Context& context)
 		counts_.layout += 1;
 
 		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
-		set_layouts_.render = vk::raii::DescriptorSetLayout(context.device_, layoutInfo);
+		set_layouts_.render = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
 	}
 
 	// Cloth compute
@@ -603,7 +587,7 @@ void GpuSim::CreateDescriptorSetLayout(Context& context)
 		counts_.layout += 1;
 
 		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
-		set_layouts_.cloth_compute = vk::raii::DescriptorSetLayout(context.device_, layoutInfo);
+		set_layouts_.cloth_compute = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
 	}
 
 	// Cloth graphics
@@ -615,11 +599,11 @@ void GpuSim::CreateDescriptorSetLayout(Context& context)
 		counts_.layout += 1;
 
 		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
-		set_layouts_.cloth_graphics = vk::raii::DescriptorSetLayout(context.device_, layoutInfo);
+		set_layouts_.cloth_graphics = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
 	}
 }
 
-void GpuSim::CreateDescriptorPools(Context& context)
+void GpuSim::CreateDescriptorPools()
 {
 	std::vector<vk::DescriptorPoolSize> poolSizes;
 
@@ -643,11 +627,10 @@ void GpuSim::CreateDescriptorPools(Context& context)
 		.pPoolSizes = poolSizes.data()
 	};
 
-	descriptor_pool_ = vk::raii::DescriptorPool(context.device_, poolInfo);
+	descriptor_pool_ = vk::raii::DescriptorPool(context_.device_, poolInfo);
 }
 
-void GpuSim::CreateUniformBuffers(Context& context,
-	ModelManager& modelManager)
+void GpuSim::CreateUniformBuffers()
 {
 	// Sim params UBO
 	{
@@ -655,14 +638,14 @@ void GpuSim::CreateUniformBuffers(Context& context,
 		ubo_.memories.sim_params.clear();
 		ubo_.mapped.sim_params = nullptr;
 
-		auto limits = context.physical_device_.getProperties().limits;
+		auto limits = context_.physical_device_.getProperties().limits;
 		ubo_.size.sim_params = (sizeof(SimUBO::Data::SimParams) + limits.minUniformBufferOffsetAlignment - 1)
 			& ~(limits.minUniformBufferOffsetAlignment - 1);
 		vk::DeviceSize totalSize = ubo_.size.sim_params * MAX_FRAMES_IN_FLIGHT;
 
 		vk::raii::Buffer buffer({});
 		vk::raii::DeviceMemory bufferMem({});
-		vku::CreateBuffer(context.physical_device_, context.device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
+		vku::CreateBuffer(context_.physical_device_, context_.device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
 		ubo_.ubos.sim_params = std::move(buffer);
 		ubo_.memories.sim_params = std::move(bufferMem);
 		ubo_.mapped.sim_params = ubo_.memories.sim_params.mapMemory(0, totalSize);
@@ -674,14 +657,14 @@ void GpuSim::CreateUniformBuffers(Context& context,
 		ubo_.memories.render.clear();
 		ubo_.mapped.render = nullptr;
 
-		auto limits = context.physical_device_.getProperties().limits;
+		auto limits = context_.physical_device_.getProperties().limits;
 		ubo_.size.render = (sizeof(SimUBO::Data::Render) + limits.minUniformBufferOffsetAlignment - 1)
 			& ~(limits.minUniformBufferOffsetAlignment - 1);
 		vk::DeviceSize totalSize = ubo_.size.render * MAX_FRAMES_IN_FLIGHT;
 
 		vk::raii::Buffer buffer({});
 		vk::raii::DeviceMemory bufferMem({});
-		vku::CreateBuffer(context.physical_device_, context.device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
+		vku::CreateBuffer(context_.physical_device_, context_.device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
 		ubo_.ubos.render = std::move(buffer);
 		ubo_.memories.render = std::move(bufferMem);
 		ubo_.mapped.render = ubo_.memories.render.mapMemory(0, totalSize);
@@ -691,7 +674,7 @@ void GpuSim::CreateUniformBuffers(Context& context,
 	}
 }
 
-void GpuSim::CreateSSBOBuffers(Context& context)
+void GpuSim::CreateSSBOBuffers()
 {
 	const int nxCells = datas_.nx;
 	const int nyCells = datas_.ny;
@@ -717,9 +700,9 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	for (int y = 0; y < ny1; ++y) {
 		for (int x = 0; x < nx1; ++x) {
 			uint32_t id = vid(x, y);
-			float px = (-0.5f * datas_.nx + x) * datas_.spacing_x;
+			float px = (-0.5f * datas_.cloth_size.x) + x * datas_.spacing_x;
 			float py = datas_.cloth_height;
-			float pz = (-0.5f * datas_.ny + y) * datas_.spacing_y;
+			float pz = (-0.5f * datas_.cloth_size.y) + y * datas_.spacing_y;
 
 			datas_.positions[id] = { px, py, pz, 0.0f };
 			datas_.velocities[id] = glm::vec4(0);
@@ -740,7 +723,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		}
 	}
 	datas_.num_indices = static_cast<uint32_t>(datas_.indices.size());
-	vku::CreateIndexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, datas_.indices, index_buffer_, index_buffer_memory_);
+	vku::CreateIndexBuffer(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_, datas_.indices, index_buffer_, index_buffer_memory_);
 
 	datas_.masses.resize(N, 0.0f);
 
@@ -880,11 +863,11 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	datas_.num_areas = static_cast<uint32_t>(datas_.areas.size());
 
 	// Self Collision
-	uint32_t tableSize = datas_.num_particles;
-	uint32_t maxNeighbors = 8;
+	uint32_t tableSize = datas_.num_particles / 4;
+	uint32_t maxNeighbors = 4;
 	ubo_.datas.sim_params.num_tables = tableSize;
 	ubo_.datas.sim_params.cell_size = std::min(datas_.spacing_x, datas_.spacing_y);
-	ubo_.datas.sim_params.collision_radius = ubo_.datas.sim_params.cell_size * 1.0f;
+	ubo_.datas.sim_params.collision_radius = ubo_.datas.sim_params.cell_size;
 	ubo_.datas.sim_params.max_neighbors = maxNeighbors;
 
 	datas_.particle_hashes.resize(N, 0);
@@ -899,7 +882,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	// position
 	ssbo_size_.position = sizeof(glm::vec4) * N;
-	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.position,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -912,7 +895,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	// velocity
 	ssbo_size_.velocity = sizeof(glm::vec4) * N;
-	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.velocity,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -925,7 +908,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	// inverse mass
 	ssbo_size_.inverse_mass = sizeof(float) * N;
-	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.inverse_mass,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -938,7 +921,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	// delta X
 	ssbo_size_.delta_x = sizeof(float) * N;
-	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.delta_x,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -949,7 +932,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	// delta Y
 	ssbo_size_.delta_y = sizeof(float) * N;
-	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.delta_y,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -960,7 +943,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	// delta Z
 	ssbo_size_.delta_z = sizeof(float) * N;
-	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.delta_z,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -971,7 +954,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	// delta count
 	ssbo_size_.delta_count = sizeof(uint32_t) * N;
-	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.delta_count,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -982,7 +965,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	// edges
 	ssbo_size_.edge = sizeof(SimData::Edge) * datas_.num_edges;
-	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.edge,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -995,7 +978,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	// Pred Position
 	ssbo_size_.pred_position = sizeof(glm::vec4) * N;
-	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.pred_position,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -1008,7 +991,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	// Bend
 	ssbo_size_.bend = sizeof(SimData::Bend) * datas_.num_bends;
-	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.bend,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -1021,7 +1004,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	// Shear
 	ssbo_size_.shear = sizeof(SimData::Shear) * datas_.num_shears;
-	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.shear,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -1040,7 +1023,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 	};
 	std::vector<GrabState> grabState(1);
 	ssbo_size_.grab_state = sizeof(GrabState) * grabState.size();
-	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.grab_state,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -1051,7 +1034,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	// Area
 	ssbo_size_.area = sizeof(SimData::Area) * datas_.num_areas;
-	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.area,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -1064,7 +1047,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	// particle_hash
 	ssbo_size_.particle_hash = sizeof(uint32_t) * datas_.num_particles;
-	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.particle_hash,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -1075,7 +1058,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	// particle_indice
 	ssbo_size_.particle_indice = sizeof(uint32_t) * datas_.num_particles;
-	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.particle_indice,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -1086,7 +1069,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	// start
 	ssbo_size_.start = sizeof(uint32_t) * tableSize;
-	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.start,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -1097,7 +1080,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	// end
 	ssbo_size_.end = sizeof(uint32_t) * tableSize;
-	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.end,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -1108,7 +1091,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	// neighbor
 	ssbo_size_.neighbor = sizeof(uint32_t) * datas_.num_neighbors;
-	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.neighbor,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -1119,7 +1102,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 
 	// neighbor_lambda
 	ssbo_size_.neighbor_lambda = sizeof(float) * datas_.num_neighbors;
-	vku::CreateSSBO(context.physical_device_, context.device_, context.queue_, context.command_pool_,
+	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.neighbor_lambda,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -1129,7 +1112,7 @@ void GpuSim::CreateSSBOBuffers(Context& context)
 		ssbos_.neighbor_lambda, ssbo_memories_.neighbor_lambda);
 }
 
-void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManager)
+void GpuSim::CreateDescriptorSets()
 {
 	// Sim Params
 	{
@@ -1139,7 +1122,7 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 			.pSetLayouts = &*set_layouts_.sim_params
 		};
 
-		auto sets = vk::raii::DescriptorSets{ context.device_, allocInfo };
+		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
 		sets_.sim_params = std::move(sets.front());
 
 		vk::DescriptorBufferInfo simParamsUboInfo{ *ubo_.ubos.sim_params, 0, sizeof(SimUBO::Data::SimParams) };
@@ -1153,7 +1136,7 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 				.pBufferInfo = &simParamsUboInfo
 			}
 		};
-		context.device_.updateDescriptorSets(descriptorWrites, {});
+		context_.device_.updateDescriptorSets(descriptorWrites, {});
 	}
 
 	// Render
@@ -1164,7 +1147,7 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 			.pSetLayouts = &*set_layouts_.render
 		};
 
-		auto sets = vk::raii::DescriptorSets{ context.device_, allocInfo };
+		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
 		sets_.render = std::move(sets.front());
 
 		vk::DescriptorBufferInfo renderUboInfo{ *ubo_.ubos.render, 0, sizeof(SimUBO::Data::Render) };
@@ -1178,7 +1161,7 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 				.pBufferInfo = &renderUboInfo
 			}
 		};
-		context.device_.updateDescriptorSets(descriptorWrites, {});
+		context_.device_.updateDescriptorSets(descriptorWrites, {});
 	}
 
 	// Cloth Compute
@@ -1189,7 +1172,7 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 			.pSetLayouts = &*set_layouts_.cloth_compute
 		};
 
-		auto sets = vk::raii::DescriptorSets{ context.device_, allocInfo };
+		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
 		sets_.cloth_compute = std::move(sets.front());
 
 		vk::DescriptorBufferInfo positions(*ssbos_.position, 0, VK_WHOLE_SIZE);
@@ -1365,7 +1348,7 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 				.pBufferInfo = &neighborLambda
 			},
 		};
-		context.device_.updateDescriptorSets(descriptorWrites, {});
+		context_.device_.updateDescriptorSets(descriptorWrites, {});
 	}
 
 	// Cloth Graphics
@@ -1376,7 +1359,7 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 			.pSetLayouts = &*set_layouts_.cloth_graphics
 		};
 
-		auto sets = vk::raii::DescriptorSets{ context.device_, allocInfo };
+		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
 		sets_.cloth_graphics = std::move(sets.front());
 
 		vk::DescriptorBufferInfo positions(ssbos_.position, 0, VK_WHOLE_SIZE);
@@ -1392,11 +1375,11 @@ void GpuSim::CreateDescriptorSets(Context& context, TextureManager& textureManag
 			},
 
 		};
-		context.device_.updateDescriptorSets(descriptorWrites, {});
+		context_.device_.updateDescriptorSets(descriptorWrites, {});
 	}
 }
 
-void GpuSim::CreateComputePipelines(Context& context)
+void GpuSim::CreateComputePipelines()
 {
 	// common pipeline layout
 	{
@@ -1417,146 +1400,146 @@ void GpuSim::CreateComputePipelines(Context& context)
 			.pushConstantRangeCount = 1,
 			.pPushConstantRanges = &pcRange,
 		};
-		pipeline_layouts_.common = vk::raii::PipelineLayout(context.device_, pipelineLayoutInfo);
+		pipeline_layouts_.common = vk::raii::PipelineLayout(context_.device_, pipelineLayoutInfo);
 	}
 
 	// clear_lambdas
 	{
-		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/clear_lambdas.comp.spv"));
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context_.device_, vku::ReadFile("shaders/spv/clear_lambdas.comp.spv"));
 
 		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
-		pipelines_.clear_lambdas = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
+		pipelines_.clear_lambdas = vk::raii::Pipeline(context_.device_, nullptr, pipelineInfo);
 	}
 
 	// integrate
 	{
-		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/integrate.comp.spv"));
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context_.device_, vku::ReadFile("shaders/spv/integrate.comp.spv"));
 
 		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
-		pipelines_.integrate = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
+		pipelines_.integrate = vk::raii::Pipeline(context_.device_, nullptr, pipelineInfo);
 	}
 
 	// solve_stretch
 	{
-		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/solve_stretch.comp.spv"));
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context_.device_, vku::ReadFile("shaders/spv/solve_stretch.comp.spv"));
 
 		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common,
 		};
-		pipelines_.solve_stretch = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
+		pipelines_.solve_stretch = vk::raii::Pipeline(context_.device_, nullptr, pipelineInfo);
 	}
 
 	// solve_shear
 	{
-		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/solve_shear.comp.spv"));
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context_.device_, vku::ReadFile("shaders/spv/solve_shear.comp.spv"));
 
 		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
-		pipelines_.solve_shear = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
+		pipelines_.solve_shear = vk::raii::Pipeline(context_.device_, nullptr, pipelineInfo);
 	}
 
 	// solve_bend
 	{
-		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/solve_bend.comp.spv"));
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context_.device_, vku::ReadFile("shaders/spv/solve_bend.comp.spv"));
 
 		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common,
 		};
-		pipelines_.solve_bend = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
+		pipelines_.solve_bend = vk::raii::Pipeline(context_.device_, nullptr, pipelineInfo);
 	}
 
 	// solve_area
 	{
-		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/solve_area.comp.spv"));
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context_.device_, vku::ReadFile("shaders/spv/solve_area.comp.spv"));
 
 		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common,
 		};
-		pipelines_.solve_area = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
+		pipelines_.solve_area = vk::raii::Pipeline(context_.device_, nullptr, pipelineInfo);
 	}
 
 	// apply deltas
 	{
-		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/apply_deltas.comp.spv"));
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context_.device_, vku::ReadFile("shaders/spv/apply_deltas.comp.spv"));
 
 		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
-		pipelines_.apply_deltas = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
+		pipelines_.apply_deltas = vk::raii::Pipeline(context_.device_, nullptr, pipelineInfo);
 	}
 
 	// collide_sdf
 	{
-		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/collide_sdf.comp.spv"));
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context_.device_, vku::ReadFile("shaders/spv/collide_sdf.comp.spv"));
 
 		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
-		pipelines_.collide_sdf = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
+		pipelines_.collide_sdf = vk::raii::Pipeline(context_.device_, nullptr, pipelineInfo);
 	}
 
 	// update velocity
 	{
-		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/update_velocity.comp.spv"));
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context_.device_, vku::ReadFile("shaders/spv/update_velocity.comp.spv"));
 
 		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
-		pipelines_.update_velocity = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
+		pipelines_.update_velocity = vk::raii::Pipeline(context_.device_, nullptr, pipelineInfo);
 	}
 
 	// build_hash
 	{
-		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/build_hash.comp.spv"));
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context_.device_, vku::ReadFile("shaders/spv/build_hash.comp.spv"));
 
 		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
-		pipelines_.build_hash = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
+		pipelines_.build_hash = vk::raii::Pipeline(context_.device_, nullptr, pipelineInfo);
 
 	}
 
 	// build_cell
 	{
-		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/build_cell.comp.spv"));
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context_.device_, vku::ReadFile("shaders/spv/build_cell.comp.spv"));
 
 		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
-		pipelines_.build_cell = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
+		pipelines_.build_cell = vk::raii::Pipeline(context_.device_, nullptr, pipelineInfo);
 
 	}
 
 	// build_neighbor
 	{
-		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/build_neighbor.comp.spv"));
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context_.device_, vku::ReadFile("shaders/spv/build_neighbor.comp.spv"));
 
 		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
-		pipelines_.build_neighbor = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
+		pipelines_.build_neighbor = vk::raii::Pipeline(context_.device_, nullptr, pipelineInfo);
 	}
 
 	// solve_self_collision
 	{
-		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context.device_, vku::ReadFile("shaders/spv/solve_self_collision.comp.spv"));
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context_.device_, vku::ReadFile("shaders/spv/solve_self_collision.comp.spv"));
 
 		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
 
 		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
-		pipelines_.solve_self_collision = vk::raii::Pipeline(context.device_, nullptr, pipelineInfo);
+		pipelines_.solve_self_collision = vk::raii::Pipeline(context_.device_, nullptr, pipelineInfo);
 	}
 }
 
-void GpuSim::CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLayout& globalSetLayout, std::vector<vk::Format>& formats, vk::raii::DescriptorSetLayout& tex2DSetLayout)
+void GpuSim::CreateGraphicsPipelines(vk::raii::DescriptorSetLayout& globalSetLayout, std::vector<vk::Format>& formats, vk::raii::DescriptorSetLayout& tex2DSetLayout)
 {
 	vk::PipelineInputAssemblyStateCreateInfo inputAssembly{
 		.topology = vk::PrimitiveTopology::eTriangleList,
@@ -1610,7 +1593,7 @@ void GpuSim::CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLa
 	};
 	vk::PipelineDynamicStateCreateInfo dynamicState{ .dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()), .pDynamicStates = dynamicStates.data() };
 
-	vk::Format depthFormat = vku::FindDepthFormat(context.physical_device_);
+	vk::Format depthFormat = vku::FindDepthFormat(context_.physical_device_);
 
 	// Cloth
 	{
@@ -1618,8 +1601,8 @@ void GpuSim::CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLa
 		auto vertCode = vku::ReadFile("shaders/spv/cloth.vert.spv");
 		auto fragCode = vku::ReadFile("shaders/spv/cloth.frag.spv");
 
-		vk::raii::ShaderModule vertModule = vku::CreateShaderModule(context.device_, vertCode);
-		vk::raii::ShaderModule fragModule = vku::CreateShaderModule(context.device_, fragCode);
+		vk::raii::ShaderModule vertModule = vku::CreateShaderModule(context_.device_, vertCode);
+		vk::raii::ShaderModule fragModule = vku::CreateShaderModule(context_.device_, fragCode);
 
 		vk::PipelineShaderStageCreateInfo vertStage{
 			.stage = vk::ShaderStageFlagBits::eVertex,
@@ -1662,7 +1645,7 @@ void GpuSim::CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLa
 			.pushConstantRangeCount = 1,
 			.pPushConstantRanges = &pcRange
 		};
-		pipeline_layouts_.cloth_graphics = vk::raii::PipelineLayout(context.device_, pipelineLayoutInfo);
+		pipeline_layouts_.cloth_graphics = vk::raii::PipelineLayout(context_.device_, pipelineLayoutInfo);
 
 		// Pipeline
 		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
@@ -1681,13 +1664,38 @@ void GpuSim::CreateGraphicsPipelines(Context& context, vk::raii::DescriptorSetLa
 			.renderPass = nullptr },
 		  {.colorAttachmentCount = static_cast<uint32_t>(formats.size()), .pColorAttachmentFormats = formats.data(), .depthAttachmentFormat = depthFormat}
 		};
-		pipelines_.cloth_solid = vk::raii::Pipeline(context.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+		pipelines_.cloth_solid = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 
 		rasterizer.polygonMode = vk::PolygonMode::eLine;
 
-		pipelines_.cloth_wireframe = vk::raii::Pipeline(context.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+		pipelines_.cloth_wireframe = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 
 		rasterizer.polygonMode = vk::PolygonMode::ePoint;
-		pipelines_.cloth_point = vk::raii::Pipeline(context.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+		pipelines_.cloth_point = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 	}
+}
+
+void GpuSim::CreateVrdxSorter()
+{
+	VrdxSorterCreateInfo info{};
+	info.physicalDevice = *context_.physical_device_;
+	info.device = *context_.device_;
+	info.pipelineCache = VK_NULL_HANDLE;
+
+	vrdxCreateSorter(&info, &radix_.sorter);
+
+	VrdxSorterStorageRequirements req{};
+	vrdxGetSorterKeyValueStorageRequirements(radix_.sorter, datas_.num_particles, &req);
+	radix_.storage_size = req.size;
+
+	auto usage = vk::BufferUsageFlags(req.usage) |
+		vk::BufferUsageFlagBits::eStorageBuffer;
+
+	vku::CreateBuffer(context_.physical_device_,
+		context_.device_,
+		req.size,
+		usage,
+		vk::MemoryPropertyFlagBits::eDeviceLocal,
+		radix_.storage_buffer,
+		radix_.storage_memory);
 }

@@ -30,6 +30,8 @@ public:
 	void Update(Context& context, GraphicsContext& graphicsContext, Swapchain& swapchain);
 	void DisplayKernelTiming(const std::string name, std::unordered_map<std::string, double>& labelToTime, std::unordered_map<std::string, double>& labelToAvgTime, bool autoColor = true);
 
+	template<typename RowFn>
+	void SetRenderingGUI(RowFn&& row, GraphicsContext& graphicsContext);
 	template<typename RowFn, typename UBOData>
 	void SetObjectGUI(RowFn&& row, UBOData& data);
 	template<typename RowFn>

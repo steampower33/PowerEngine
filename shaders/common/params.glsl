@@ -71,7 +71,7 @@ struct Shear {
 layout(std430, set = 1, binding = 9) buffer Shears { Shear  shears[]; };
 
 struct Bend {
-    uint i1, i2, i3, i4;
+    uint i0, i1, i2, i3;
     float rest_angle;
     float lambda;
     float p0;

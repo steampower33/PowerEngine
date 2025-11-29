@@ -48,7 +48,7 @@ public:
 	uint32_t current_frame_{ 0 };
 	uint32_t read_set_{ 0 };
 
-	std::array<std::string, 10> labels_ = { "Intergrate", "Clear Lambdas", "SolveStretch", "SolveShear", "SolveBend", "SolveArea", "ApplyDeltas", "CollideSdf", "Update", "Total" };
+	std::array<std::string, 14> labels_ = { "Intergrate", "ClearLambdas", "HashBuild", "RadixSort", "BuildCell", "BuildNeighbor", "SolveStretch", "SolveShear", "SolveBend", "SolveArea", "ApplyDeltas", "CollideSdf", "Update", "Total"};
 	std::unordered_map<std::string, double> label_time_;
 	std::unordered_map<std::string, double> label_avg_time_;
 	uint32_t time_count_ = 0;

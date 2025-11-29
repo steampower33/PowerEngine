@@ -515,6 +515,10 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 
 			float tIntegrate = 0.0f;
 			float tClearLambdas = 0.0f;
+			float tHashBuild = 0.0f;
+			float tRadixSort = 0.0f;
+			float tBuildCell = 0.0f;
+			float tBuildNeighbor = 0.0f;
 			float tSolveStretch = 0.0f;
 			float tSolveShear = 0.0f;
 			float tSolveBend = 0.0f;
@@ -529,8 +533,12 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 			{
 				tIntegrate += delta_ms(base + 0, base + 1);
 				tClearLambdas += delta_ms(base + 2, base + 3);
+				tHashBuild += delta_ms(base + 4, base + 5);
+				tRadixSort += delta_ms(base + 6, base + 7);
+				tBuildCell += delta_ms(base + 8, base + 9);
+				tBuildNeighbor += delta_ms(base + 10, base + 11);
 
-				uint32_t iterBase = base + 4;
+				uint32_t iterBase = base + 12;
 				for (uint32_t it = 0; it < gpu_sim_->datas_.iterations; it++)
 				{
 					tSolveStretch += delta_ms(iterBase + it * tsCnt + 0, iterBase + it * tsCnt + 1);
@@ -540,16 +548,24 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 					tCollideSdf += delta_ms(iterBase + it * tsCnt + 8, iterBase + it * tsCnt + 9);
 					tApplyDeltas += delta_ms(iterBase + it * tsCnt + 10, iterBase + it * tsCnt + 11);
 				}
-				uint32_t updateStart = base + 4 + gpu_sim_->datas_.iterations * tsCnt;
+				uint32_t updateStart = iterBase + gpu_sim_->datas_.iterations * tsCnt;
 				tUpdate += delta_ms(updateStart, updateStart + 1);
 			}
 
-			float total = tIntegrate + tClearLambdas + tSolveStretch + tSolveBend + tSolveArea + tApplyDeltas + tCollideSdf + tUpdate;
+			float total = 
+				tIntegrate + tClearLambdas + 
+				tHashBuild + tRadixSort + tBuildCell + tBuildNeighbor +
+				tSolveStretch + tSolveBend + tSolveArea + tApplyDeltas + tCollideSdf + 
+				tUpdate;
 			uint32_t c = 0;
 			{
 				c = 0;
 				label_time_[labels_[c++]] = tIntegrate;
 				label_time_[labels_[c++]] = tClearLambdas;
+				label_time_[labels_[c++]] = tHashBuild;
+				label_time_[labels_[c++]] = tRadixSort;
+				label_time_[labels_[c++]] = tBuildCell;
+				label_time_[labels_[c++]] = tBuildNeighbor;
 				label_time_[labels_[c++]] = tSolveStretch;
 				label_time_[labels_[c++]] = tSolveShear;
 				label_time_[labels_[c++]] = tSolveBend;
@@ -564,6 +580,10 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 				c = 0;
 				label_avg_time_[labels_[c++]] += tIntegrate;
 				label_avg_time_[labels_[c++]] += tClearLambdas;
+				label_avg_time_[labels_[c++]] += tHashBuild;
+				label_avg_time_[labels_[c++]] += tRadixSort;
+				label_avg_time_[labels_[c++]] += tBuildCell;
+				label_avg_time_[labels_[c++]] += tBuildNeighbor;
 				label_avg_time_[labels_[c++]] += tSolveStretch;
 				label_avg_time_[labels_[c++]] += tSolveShear;
 				label_avg_time_[labels_[c++]] += tSolveBend;
