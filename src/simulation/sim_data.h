@@ -8,7 +8,7 @@ struct SimData {
 	float spacing_x = cloth_size.x / nx;
 	float spacing_y = cloth_size.y / ny;
 	float cloth_height = 6.0f;
-	float mass = cloth_size.x * cloth_size.y * 0.2f;
+	float gsm = 0.2f; // Grams per Square Meter
 
 	struct Compliance {
 		float stretch = 1e-9f;
@@ -310,7 +310,7 @@ struct SimData {
 				totalArea += area;
 			}
 
-			float totalMassTarget = mass;
+			float totalMassTarget = cloth_size.x * cloth_size.y * gsm;
 
 			// Area zero defence
 			float density = 0.0f;

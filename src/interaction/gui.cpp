@@ -306,7 +306,7 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& s
 			row("1 / FrameDt", [&] { ImGui::DragFloat("##FrameDt", &sim->datas_.frame_dt, 1.0f, 60.0f, 240.0f); });
 			row("Substeps", [&] { ImGui::DragInt("##Substeps", &sim->datas_.substeps, 1, 1, 40); });
 			row("Iterations", [&] { ImGui::DragInt("##Iterations", &sim->datas_.iterations, 1, 1, 40); });
-			row("Mass", [&] { ImGui::DragFloat("##Mass", &sim->datas_.mass, 0.001f, 0.0f, 10.0f); });
+			row("GSM", [&] { ImGui::DragFloat("##GSM", &sim->datas_.gsm, 0.001f, 0.0f, 10.0f); });
 			row("GlobalDamping", [&] { ImGui::DragFloat("##GlobalDamping", &sim->ubo_.datas.sim_params.global_damping, 0.1f, 1.0f, 2.0f); });
 			row("RelaxationFactor", [&] { ImGui::DragFloat("##RelaxationFactor", &sim->ubo_.datas.sim_params.relaxation_factor, 0.1f, 0.0f, 1.0f); });
 			row("ClothSize", [&] { ImGui::DragFloat2("##ClothSize", &sim->datas_.cloth_size[0], 0.1f, 0.0f, 10.0f); });

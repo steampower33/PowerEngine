@@ -474,7 +474,7 @@ void CpuSim::CreateDatas(Context& context)
 		totalArea += area;
 	}
 
-	float totalMassTarget = datas_.mass;
+	float totalMassTarget = datas_.cloth_size.x * datas_.cloth_size.y * datas_.gsm;
 
 	// Area zero defence
 	float density = 0.0f;
