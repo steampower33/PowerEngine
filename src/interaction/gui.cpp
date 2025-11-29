@@ -311,9 +311,19 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& s
 			row("RelaxationFactor", [&] { ImGui::DragFloat("##RelaxationFactor", &sim->ubo_.datas.sim_params.relaxation_factor, 0.1f, 0.0f, 1.0f); });
 			row("ClothSize", [&] { ImGui::DragFloat2("##ClothSize", &sim->datas_.cloth_size[0], 0.1f, 0.0f, 10.0f); });
 			row("ClothHeight", [&] { ImGui::DragFloat("##ClothHeight", &sim->datas_.cloth_height, 0.1f, 0.0f, 100.0f); });
-			row("SelfCollisionStiffness", [&] { ImGui::DragFloat("##SelfCollisionStiffness", &sim->ubo_.datas.sim_params.self_collision_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
 			row("Thickness", [&] { ImGui::DragFloat("##Thickness", &sim->ubo_.datas.sim_params.thickness, 0.001f, 0.0f, 1.0f, "%.3f"); });
 			row("Friction", [&] { ImGui::DragFloat("##Friction", &sim->ubo_.datas.sim_params.friction, 0.001f, 0.0f, 1.0f, "%.3f"); });
+			ImGui::EndTable();
+		}
+
+		ImGui::SeparatorText("Stiffness");
+		if (ImGui::BeginTable("Stiffness", 2,
+			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+		{
+			row("ShearStiffness", [&] { ImGui::DragFloat("##ShearStiffness", &sim->ubo_.datas.sim_params.shear_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
+			row("BendStiffness", [&] { ImGui::DragFloat("##BendStiffness", &sim->ubo_.datas.sim_params.bend_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
+			row("AreaStiffness", [&] { ImGui::DragFloat("##AreaStiffness", &sim->ubo_.datas.sim_params.area_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
+			row("SelfCollisionStiffness", [&] { ImGui::DragFloat("##SelfCollisionStiffness", &sim->ubo_.datas.sim_params.self_collision_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
 			ImGui::EndTable();
 		}
 

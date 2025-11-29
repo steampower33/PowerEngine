@@ -8,18 +8,18 @@ struct SimData {
 	float spacing_x = cloth_size.x / nx;
 	float spacing_y = cloth_size.y / ny;
 	float cloth_height = 6.0f;
-	float mass = cloth_size.x * cloth_size.y * 0.5;
+	float mass = cloth_size.x * cloth_size.y * 0.2f;
 
 	struct Compliance {
-		float stretch = 1e-9f;
-		float shear = 1e-9f;
-		float bend = 0.8f;
-		float area = 0.8f;
-		float self_collision = 1e-9f;
+		float stretch = 1e-8f;
+		float shear = 1e-8f;
+		float bend = 5e-1f;
+		float area = 5e-1f;
+		float self_collision = 1e-8f;
 	} compliance;
 
 	struct Beta {
-		float stretch = 300.0f;
+		float stretch = 50.0f;
 	} beta;
 
 	uint32_t num_particles = nx * ny;

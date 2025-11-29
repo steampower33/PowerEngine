@@ -35,12 +35,17 @@ layout(std140, set = 0, binding = 0) uniform SimParams {
     uint num_shears;
     uint num_bends;
     uint num_areas;
-    float self_collision_stiffness;
+    uint p0;
 
     float cell_size;
     uint num_tables;
     uint max_neighbors;
     float collision_radius;
+
+    float shear_stiffness;
+    float bend_stiffness;
+    float area_stiffness;
+    float self_collision_stiffness;
 } sim;
 
 layout(std430, set = 1, binding = 0) buffer X { vec4 x[]; };
