@@ -94,17 +94,19 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 	cmd.reset();
 	cmd.begin({});
 
-	UpdateTestScene(cmd, testScene);
-
 	timestampSteps = 0;
 	uint32_t kSlotsPerSelfCollision = 8;
-	uint32_t kSlotsPerIterPair = datas_.substeps * (4 + kSlotsPerSelfCollision + iteration_timestamp_count_ * datas_.iterations + 2);
+	uint32_t kSlotsPerIterPair = 1 + datas_.substeps * (4 + kSlotsPerSelfCollision + iteration_timestamp_count_ * datas_.iterations + 2) + 1;
 	const auto stage = vk::PipelineStageFlagBits2::eComputeShader;
 	auto TS = [&](uint32_t& idx) {
 		cmd.writeTimestamp2(stage, *timestampPool, idx++);
 		};
 
 	cmd.resetQueryPool(*timestampPool, 0, kSlotsPerIterPair);
+
+	TS(timestampSteps); // Start
+
+	UpdateTestScene(cmd, testScene);
 
 	uint32_t simparamOffset = currentFrame * static_cast<uint32_t>(ubo_.size.sim_params);
 	cmd.bindDescriptorSets(
@@ -339,6 +341,9 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 		TS(timestampSteps);
 		vku::ssboCompWtoVertR(cmd, ssbos_.position);
 	}
+
+
+	TS(timestampSteps); // End
 	cmd.end();
 }
 

@@ -116,12 +116,23 @@ void GraphicsContext::UpdateGraphicsUBO(Camera& camera)
 	}
 }
 
-void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
+void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex, vk::raii::QueryPool& timestampPool, uint32_t& timestampSteps)
 {
 	const auto& cmd = cmds_.graphics[current_frame_];
 
 	cmd.reset();
 	cmd.begin({});
+
+	timestampSteps = 0;
+	uint32_t slots = 2;
+	const auto stage = vk::PipelineStageFlagBits2::eComputeShader;
+	auto TS = [&](uint32_t& idx) {
+		cmd.writeTimestamp2(stage, *timestampPool, idx++);
+		};
+
+	cmd.resetQueryPool(*timestampPool, 0, slots);
+
+	TS(timestampSteps); // Start
 
 	if (cpu_or_gpu_ == vku::CpuOrGpu::CPU)
 	{
@@ -433,6 +444,10 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 		vk::PipelineStageFlagBits2::eColorAttachmentOutput,
 		vk::PipelineStageFlagBits2::eBottomOfPipe
 	);
+
+
+	TS(timestampSteps); // End
+
 	cmd.end();
 
 	frame_counter_++;
@@ -440,70 +455,33 @@ void GraphicsContext::RecordGraphicsCommandBuffer(uint32_t imageIndex)
 
 void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 {
-	auto [result, imageIndex] = swapchain_.swapchain_.acquireNextImage(UINT64_MAX, nullptr, in_flight_fences_[current_frame_]);
+	auto& device = context_.device_;
+	auto& queue = context_.queue_;
 
-	while (vk::Result::eTimeout == context_.device_.waitForFences(*in_flight_fences_[current_frame_], vk::True, UINT64_MAX));
-	context_.device_.resetFences(*in_flight_fences_[current_frame_]);
+	const uint32_t frame = current_frame_;
 
-	uint64_t computeWaitValue;
-	uint64_t computeSignalValue;
-	uint64_t graphicsWaitValue;
-	uint64_t graphicsSignalValue;
-
-	if (cpu_or_gpu_ == vku::CpuOrGpu::GPU)
 	{
-		computeWaitValue = timeline_value_;
-		computeSignalValue = ++timeline_value_;
-		graphicsWaitValue = computeSignalValue;
-		graphicsSignalValue = ++timeline_value_;
-
-		gpu_sim_->RecordCompute(current_frame_, cmds_.compute[current_frame_], timestamp_pool_, timestamp_steps_, test_scene_);
-
-		{
-			// Submit compute work
-			vk::TimelineSemaphoreSubmitInfo computeTimelineInfo{
-				.waitSemaphoreValueCount = 1,
-				.pWaitSemaphoreValues = &computeWaitValue,
-				.signalSemaphoreValueCount = 1,
-				.pSignalSemaphoreValues = &computeSignalValue
-			};
-
-			vk::PipelineStageFlags waitStages[] = { vk::PipelineStageFlagBits::eComputeShader };
-
-			vk::SubmitInfo computeSubmitInfo{
-				.pNext = &computeTimelineInfo,
-				.waitSemaphoreCount = 1,
-				.pWaitSemaphores = &*semaphore_,
-				.pWaitDstStageMask = waitStages,
-				.commandBufferCount = 1,
-				.pCommandBuffers = &*cmds_.compute[current_frame_],
-				.signalSemaphoreCount = 1,
-				.pSignalSemaphores = &*semaphore_
-			};
-
-			context_.queue_.submit(computeSubmitInfo, nullptr);
-		}
+		device.waitForFences(*in_flight_fences_[frame], vk::True, UINT64_MAX);
+		device.resetFences(*in_flight_fences_[frame]);
 
 		if (gui->is_print_timestamps)
 		{
-			uint32_t prev = (current_frame_ + MAX_FRAMES_IN_FLIGHT - 1) % MAX_FRAMES_IN_FLIGHT;
-
 			vk::SemaphoreWaitInfo waitInfo{
 				.semaphoreCount = 1,
-				.pSemaphores = &*semaphore_,
-				.pValues = &computeSignalValue
+				.pSemaphores = &*timeline_semaphore_,
+				.pValues = &last_compute_timeline_
 			};
-			while (vk::Result::eTimeout == context_.device_.waitSemaphores(waitInfo, UINT64_MAX));
+			device.waitSemaphores(waitInfo, UINT64_MAX);
 
 			float nsPerTick = context_.physical_device_.getProperties().limits.timestampPeriod;
 			float toMs = nsPerTick / 1e6f;
 
-			uint32_t numTimestamp = timestamp_steps_;
+			uint32_t numTimestamp = compute_ts_steps_;
 			std::vector<uint64_t> ts(numTimestamp);
 
 			VkResult res = vkGetQueryPoolResults(
 				static_cast<VkDevice>(*context_.device_),
-				static_cast<VkQueryPool>(*timestamp_pool_),
+				static_cast<VkQueryPool>(*compute_ts_pool_),
 				0, numTimestamp,
 				ts.size() * sizeof(uint64_t), ts.data(), sizeof(uint64_t),
 				VK_QUERY_RESULT_64_BIT
@@ -528,7 +506,7 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 			float tUpdate = 0.0f;
 
 			uint32_t tsCnt = gpu_sim_->iteration_timestamp_count_;
-			uint32_t base = 0;
+			uint32_t base = 1;
 			for (uint32_t sub = 0; sub < gpu_sim_->datas_.substeps; sub++)
 			{
 				tIntegrate += delta_ms(base + 0, base + 1);
@@ -552,12 +530,18 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 				tUpdate += delta_ms(updateStart, updateStart + 1);
 			}
 
-			float total = 
-				tIntegrate + tClearLambdas + 
+			compute_all_time_ = delta_ms(0, numTimestamp - 1);
+
+			//std::cout << compute_all_time_ << std::endl;
+
+			float total =
+				tIntegrate + tClearLambdas +
 				tHashBuild + tRadixSort + tBuildCell + tBuildNeighbor +
-				tSolveStretch + tSolveBend + tSolveArea + tApplyDeltas + tCollideSdf + 
+				tSolveStretch + tSolveBend + tSolveArea + tApplyDeltas + tCollideSdf +
 				tUpdate;
+
 			uint32_t c = 0;
+
 			{
 				c = 0;
 				label_time_[labels_[c++]] = tIntegrate;
@@ -598,71 +582,144 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 
 		}
 	}
-	else if (cpu_or_gpu_ == vku::CpuOrGpu::CPU)
+
+	uint32_t imageIndex = 0;
 	{
-		graphicsWaitValue = timeline_value_;
-		graphicsSignalValue = ++timeline_value_;
+		auto [result, idx] =
+			swapchain_.swapchain_.acquireNextImage(
+				UINT64_MAX,
+				*image_available_[frame],
+				nullptr
+			);
+
+		if (result == vk::Result::eErrorOutOfDateKHR) {
+			RecreateSwapchain();
+			return;
+		}
+		else if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR) {
+			throw std::runtime_error("failed to acquire swap chain image!");
+		}
+
+		imageIndex = idx;
 	}
 
-	RecordGraphicsCommandBuffer(imageIndex);
+	// Record
 	{
-		vk::PipelineStageFlags graphicsWaitStage = vk::PipelineStageFlagBits::eVertexInput;
+		gpu_sim_->RecordCompute(
+			frame,
+			cmds_.compute[frame],
+			compute_ts_pool_,
+			compute_ts_steps_,
+			test_scene_);
+
+		RecordGraphicsCommandBuffer(
+			imageIndex,
+			graphics_ts_pool_,
+			graphics_ts_steps_);
+	}
+
+	// compute submit
+	uint64_t computeSignalValue = 0;
+	{
+		computeSignalValue = ++timeline_value_;
+		last_compute_timeline_ = computeSignalValue;
+
 		vk::TimelineSemaphoreSubmitInfo timelineInfo{
-			.waitSemaphoreValueCount = 1,
-			.pWaitSemaphoreValues = &graphicsWaitValue,
+			.waitSemaphoreValueCount = 0,
+			.pWaitSemaphoreValues = nullptr,
 			.signalSemaphoreValueCount = 1,
-			.pSignalSemaphoreValues = &graphicsSignalValue
+			.pSignalSemaphoreValues = &computeSignalValue
 		};
 
 		vk::SubmitInfo submitInfo{
 			.pNext = &timelineInfo,
-			.waitSemaphoreCount = 1,
-			.pWaitSemaphores = &*semaphore_,
-			.pWaitDstStageMask = &graphicsWaitStage,
+			.waitSemaphoreCount = 0,
+			.pWaitSemaphores = nullptr,
+			.pWaitDstStageMask = nullptr,
 			.commandBufferCount = 1,
-			.pCommandBuffers = &*cmds_.graphics[current_frame_],
+			.pCommandBuffers = &*cmds_.compute[frame],
 			.signalSemaphoreCount = 1,
-			.pSignalSemaphores = &*semaphore_
+			.pSignalSemaphores = &*timeline_semaphore_
 		};
-		context_.queue_.submit(submitInfo, nullptr);
+
+		queue.submit(submitInfo, nullptr);
+	}
+
+	// graphics submit
+	{
+		vk::Semaphore waitSems[] = {
+			*image_available_[frame]
+		};
+		vk::PipelineStageFlags waitStages[] = {
+			vk::PipelineStageFlagBits::eColorAttachmentOutput
+		};
+		vk::Semaphore signalSems[] = {
+			*image_render_finished_[imageIndex]
+		};
+
+		vk::SubmitInfo submitInfo{
+			.pNext = nullptr,
+			.waitSemaphoreCount = 1,
+			.pWaitSemaphores = waitSems,
+			.pWaitDstStageMask = waitStages,
+			.commandBufferCount = 1,
+			.pCommandBuffers = &*cmds_.graphics[frame],
+			.signalSemaphoreCount = 1,
+			.pSignalSemaphores = signalSems
+		};
+
+		queue.submit(submitInfo, *in_flight_fences_[frame]);
 	}
 
 	{
-		vk::SemaphoreWaitInfo waitInfo{
-			.semaphoreCount = 1,
-			.pSemaphores = &*semaphore_,
-			.pValues = &graphicsSignalValue
-		};
-		while (vk::Result::eTimeout == context_.device_.waitSemaphores(waitInfo, UINT64_MAX));
+		vk::Semaphore waitSem = *image_render_finished_[imageIndex];
+
 		vk::PresentInfoKHR presentInfo{
-				.waitSemaphoreCount = 0, // No binary semaphores needed
-				.pWaitSemaphores = nullptr,
-				.swapchainCount = 1,
-				.pSwapchains = &*swapchain_.swapchain_,
-				.pImageIndices = &imageIndex
+			.waitSemaphoreCount = 1,
+			.pWaitSemaphores = &waitSem,
+			.swapchainCount = 1,
+			.pSwapchains = &*swapchain_.swapchain_,
+			.pImageIndices = &imageIndex
 		};
-		try {
-			result = context_.queue_.presentKHR(presentInfo);
-			if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR || context_.framebuffer_resized_) {
-				context_.framebuffer_resized_ = false;
-			}
-			else if (result != vk::Result::eSuccess) {
-				throw std::runtime_error("failed to present swap chain image!");
-			}
+
+		auto result = queue.presentKHR(presentInfo);
+		if (result == vk::Result::eErrorOutOfDateKHR ||
+			result == vk::Result::eSuboptimalKHR ||
+			context_.framebuffer_resized_) {
+			context_.framebuffer_resized_ = false;
+			RecreateSwapchain();
 		}
-		catch (const vk::SystemError& e) {
-			if (e.code().value() == static_cast<int>(vk::Result::eErrorOutOfDateKHR)) {
-				RecreateSwapchain();
-				return;
-			}
-			else {
-				throw std::runtime_error("failed to present swap chain image!");
-			}
+		else if (result != vk::Result::eSuccess) {
+			throw std::runtime_error("failed to present swap chain image!");
 		}
+	}
+
+	if (gui->is_print_timestamps)
+	{
+		float nsPerTick = context_.physical_device_.getProperties().limits.timestampPeriod;
+		float toMs = nsPerTick / 1e6f;
+
+		uint32_t numTimestamp = graphics_ts_steps_;
+		std::vector<uint64_t> ts(numTimestamp);
+
+		VkResult res = vkGetQueryPoolResults(
+			static_cast<VkDevice>(*context_.device_),
+			static_cast<VkQueryPool>(*graphics_ts_pool_),
+			0, numTimestamp,
+			ts.size() * sizeof(uint64_t), ts.data(), sizeof(uint64_t),
+			VK_QUERY_RESULT_64_BIT
+		);
+
+		auto delta_ms = [&](uint32_t i0, uint32_t i1) {
+			return (ts[i1] - ts[i0]) * toMs;
+			};
+
+		graphics_all_time_ = delta_ms(0, 1);
 	}
 
 	current_frame_ = (current_frame_ + 1) % MAX_FRAMES_IN_FLIGHT;
 }
+
 
 void GraphicsContext::CreateCommandBuffers()
 {
@@ -690,9 +747,13 @@ void GraphicsContext::CreateCommandBuffers()
 void GraphicsContext::CreateQueryPool() {
 	vk::QueryPoolCreateInfo queryInfo = {};
 	queryInfo.queryType = vk::QueryType::eTimestamp;
-	queryInfo.queryCount = 1024;
+	queryInfo.queryCount = 2048;
 
-	timestamp_pool_ = context_.device_.createQueryPool(queryInfo);
+	compute_ts_pool_ = context_.device_.createQueryPool(queryInfo);
+
+	queryInfo.queryCount = 2;
+
+	graphics_ts_pool_ = context_.device_.createQueryPool(queryInfo);
 }
 
 void GraphicsContext::CreateDescriptorSetLayout()
@@ -1607,15 +1668,39 @@ void GraphicsContext::CreateSyncObjects()
 {
 	in_flight_fences_.clear();
 
-	vk::SemaphoreTypeCreateInfo semaphoreType{ .semaphoreType = vk::SemaphoreType::eTimeline, .initialValue = 0 };
-	semaphore_ = vk::raii::Semaphore(context_.device_, { .pNext = &semaphoreType });
+	vk::SemaphoreTypeCreateInfo semaphoreType{ 
+		.semaphoreType = vk::SemaphoreType::eTimeline, 
+		.initialValue = 0 
+	};
+	timeline_semaphore_ = vk::raii::Semaphore(context_.device_, { .pNext = &semaphoreType });
 	timeline_value_ = 0;
 
-	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		vk::FenceCreateInfo fenceInfo{};
+	image_available_.clear();
+	in_flight_fences_.clear();
+
+	image_available_.reserve(MAX_FRAMES_IN_FLIGHT);
+	in_flight_fences_.reserve(MAX_FRAMES_IN_FLIGHT);
+
+	vk::SemaphoreCreateInfo binarySemaphoreInfo{}; // 기본은 binary
+	vk::FenceCreateInfo fenceInfo{
+		.flags = vk::FenceCreateFlagBits::eSignaled // 첫 프레임용
+	};
+
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+	{
+		image_available_.emplace_back(context_.device_, binarySemaphoreInfo);
 		in_flight_fences_.emplace_back(context_.device_, fenceInfo);
+
+		frame_timeline_done_[i] = 0;  // 해당 프레임이 마지막으로 기다린 타임라인 값
 	}
 
+	image_render_finished_.clear();
+	image_render_finished_.reserve(swapchain_.image_count_);
+	for (size_t i = 0; i < swapchain_.image_count_; i++)
+	{
+
+		image_render_finished_.emplace_back(context_.device_, binarySemaphoreInfo);
+	}
 }
 
 void GraphicsContext::CreateGeometryBuffers()

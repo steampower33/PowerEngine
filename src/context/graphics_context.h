@@ -35,23 +35,33 @@ public:
 	uint32_t frame_counter_ = 0;
 	bool first_frame_ = (frame_counter_ == 0);
 
-	vk::SampleCountFlagBits			 msaa_samples_ = vk::SampleCountFlagBits::e1;
+	vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
 
-	vk::raii::DescriptorPool		 descriptor_pool_{ nullptr };
+	vk::raii::DescriptorPool descriptor_pool_{ nullptr };
 
-	vk::raii::QueryPool				 timestamp_pool_{ nullptr };
-	uint32_t timestamp_steps_ = 0;
+	vk::raii::QueryPool compute_ts_pool_{ nullptr };
+	uint32_t compute_ts_steps_ = 0;
+	vk::raii::QueryPool graphics_ts_pool_{ nullptr };
+	uint32_t graphics_ts_steps_ = 0;
 
-	vk::raii::Semaphore semaphore_{ nullptr };
+	vk::raii::Semaphore timeline_semaphore_{ nullptr };
 	uint64_t timeline_value_{ 0 };
+	uint64_t last_compute_timeline_{ 0 };
+
 	std::vector<vk::raii::Fence> in_flight_fences_;
+	std::vector<vk::raii::Semaphore> image_available_;
+	std::vector<vk::raii::Semaphore> image_render_finished_;
+
+	std::array<uint64_t, MAX_FRAMES_IN_FLIGHT> frame_timeline_done_{};
+
 	uint32_t current_frame_{ 0 };
-	uint32_t read_set_{ 0 };
 
 	std::array<std::string, 14> labels_ = { "Intergrate", "ClearLambdas", "HashBuild", "RadixSort", "BuildCell", "BuildNeighbor", "SolveStretch", "SolveShear", "SolveBend", "SolveArea", "ApplyDeltas", "CollideSdf", "Update", "Total"};
 	std::unordered_map<std::string, double> label_time_;
 	std::unordered_map<std::string, double> label_avg_time_;
 	uint32_t time_count_ = 0;
+	float compute_all_time_ = 0.0f;
+	float graphics_all_time_ = 0.0f;
 
 	vku::CpuOrGpu cpu_or_gpu_ = vku::CpuOrGpu::GPU;
 	vku::TestScene test_scene_;
@@ -232,7 +242,7 @@ private:
 	void RecreateSwapchain();
 	void UpdateGraphicsUBO(Camera& camera);
 
-	void RecordGraphicsCommandBuffer(uint32_t imageIndex);
+	void RecordGraphicsCommandBuffer(uint32_t imageIndex, vk::raii::QueryPool& timestampPool, uint32_t& timestampSteps);
 
 private:
 	void CreateCommandBuffers();

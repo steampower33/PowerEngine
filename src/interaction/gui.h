@@ -35,9 +35,11 @@ public:
 	template<typename RowFn, typename UBOData>
 	void SetObjectGUI(RowFn&& row, UBOData& data);
 	template<typename RowFn>
-	void SetSolverTimeingGUI(RowFn&& row, GraphicsContext& graphicsContext);
+	void SetTimeingGUI(RowFn&& row, GraphicsContext& graphicsContext);
 	template<typename RowFn, typename Sim>
 	void SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& sim);
 	template<typename RowFn, typename Scene>
 	void SetTestSceneGUI(RowFn&& row, Scene& scene);
+	template<typename RowFn, typename Sim>
+	void SetStatGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& sim);
 };

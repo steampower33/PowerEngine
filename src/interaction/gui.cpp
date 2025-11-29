@@ -133,12 +133,25 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 		ImGuiWindowFlags_NoResize |
 		ImGuiWindowFlags_NoCollapse;
 
-	ImGui::SetNextWindowSize(ImVec2(500, 0));
-	ImGui::SetNextWindowPos(ImVec2(5, 5), ImGuiCond_Once);
+	ImGui::SetNextWindowSize(ImVec2(500.0f, 0));
+	ImGui::SetNextWindowPos(ImVec2(swapchain.swapchain_extent_.width - 510.0f, 10.0f), ImGuiCond_Once);
+	if (ImGui::Begin("Cloth Performance Monitor", nullptr, wf))
+	{
+		if (graphicsContext.cpu_or_gpu_ == vku::CpuOrGpu::CPU)
+			SetStatGUI(row, graphicsContext, graphicsContext.cpu_sim_);
+		else if (graphicsContext.cpu_or_gpu_ == vku::CpuOrGpu::GPU)
+			SetStatGUI(row, graphicsContext, graphicsContext.gpu_sim_);
+
+		SetTimeingGUI(row, graphicsContext);
+		ImGui::End();
+	}
+
+
+	ImGui::SetNextWindowSize(ImVec2(500.0f, 0));
+	ImGui::SetNextWindowPos(ImVec2(10.0f, 10.0f), ImGuiCond_Once);
 	if (ImGui::Begin("Option", nullptr, wf))
 	{
 		SetRenderingGUI(row, graphicsContext);
-		SetSolverTimeingGUI(row, graphicsContext);
 		if (graphicsContext.cpu_or_gpu_ == vku::CpuOrGpu::CPU)
 			SetSimulationGUI(row, graphicsContext, graphicsContext.cpu_sim_);
 		else if (graphicsContext.cpu_or_gpu_ == vku::CpuOrGpu::GPU)
@@ -250,16 +263,16 @@ void GUI::SetObjectGUI(RowFn&& row, UBOData& data) {
 }
 
 template<typename RowFn>
-void GUI::SetSolverTimeingGUI(RowFn&& row, GraphicsContext& graphicsContext)
+void GUI::SetTimeingGUI(RowFn&& row, GraphicsContext& graphicsContext)
 {
 	auto& labels = graphicsContext.labels_;
 	auto& labelToTime = graphicsContext.label_time_;
 	auto& labelToAvgTime = graphicsContext.label_avg_time_;
 
-	is_print_timestamps = ImGui::CollapsingHeader("Solver timing"); //, ImGuiTreeNodeFlags_DefaultOpen
+	is_print_timestamps = ImGui::CollapsingHeader("Timing"); //, ImGuiTreeNodeFlags_DefaultOpen
 	if (is_print_timestamps)
 	{
-		if (ImGui::BeginTable("timing", 4))//,  ImGuiTableFlags_BordersOuter))
+		if (ImGui::BeginTable("Timing", 4))//,  ImGuiTableFlags_BordersOuter))
 		{
 			ImGui::TableSetupColumn("Kernel", ImGuiTableColumnFlags_WidthStretch, 0.5f);
 			ImGui::TableSetupColumn("Time (ms)", ImGuiTableColumnFlags_WidthFixed, 100.0f);
@@ -276,6 +289,10 @@ void GUI::SetSolverTimeingGUI(RowFn&& row, GraphicsContext& graphicsContext)
 
 			ImGui::EndTable();
 		}
+		ImGui::SeparatorText("Overall");
+		ImGui::Text("Compute : %.3f", graphicsContext.compute_all_time_);
+		ImGui::Text("Graphics : %.3f", graphicsContext.graphics_all_time_);
+
 		count_ = graphicsContext.time_count_;
 	}
 }
@@ -285,9 +302,6 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& s
 {
 	if (ImGui::CollapsingHeader("Simulation", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		ImGuiIO& io = ImGui::GetIO(); (void)io;
-		ImGui::Text("Avr %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-
 		ImGui::SeparatorText("PolygonMode");
 		const char* items[] = { "Solid", "Wireframe", "Point" };
 		int item_current = graphicsContext.polygon_mode_;
@@ -298,11 +312,6 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& s
 		if (ImGui::BeginTable("Parameter", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
-			row("Nx x Ny", [&] { ImGui::Text("%u x %u", sim->datas_.nx, sim->datas_.ny); });
-			row("NumParticles", [&] { ImGui::Text("%u", sim->datas_.num_particles); });
-			row("NumEdges", [&] { ImGui::Text("%u", sim->datas_.num_edges); });
-			row("NumShears", [&] { ImGui::Text("%u", sim->datas_.num_shears); });
-			row("NumBends", [&] { ImGui::Text("%u", sim->datas_.num_bends); });
 			row("1 / FrameDt", [&] { ImGui::DragFloat("##FrameDt", &sim->datas_.frame_dt, 1.0f, 60.0f, 240.0f); });
 			row("Substeps", [&] { ImGui::DragInt("##Substeps", &sim->datas_.substeps, 1, 1, 40); });
 			row("Iterations", [&] { ImGui::DragInt("##Iterations", &sim->datas_.iterations, 1, 1, 40); });
@@ -402,4 +411,23 @@ void GUI::SetRenderingGUI(RowFn&& row, GraphicsContext& graphicsContext)
 			ImGui::EndTable();
 		}
 	}
+}
+
+template<typename RowFn, typename Sim>
+void GUI::SetStatGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& sim)
+{
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
+	ImGui::Text("Avr %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+
+	if (ImGui::BeginTable("Stat", 2, ImGuiTableFlags_BordersInnerV))
+	{
+		row("Nx x Ny", [&] { ImGui::Text("%u x %u", sim->datas_.nx, sim->datas_.ny); });
+		row("NumParticles", [&] { ImGui::Text("%u", sim->datas_.num_particles); });
+		row("NumEdges", [&] { ImGui::Text("%u", sim->datas_.num_edges); });
+		row("NumShears", [&] { ImGui::Text("%u", sim->datas_.num_shears); });
+		row("NumBends", [&] { ImGui::Text("%u", sim->datas_.num_bends); });
+
+		ImGui::EndTable();
+	}
+
 }
