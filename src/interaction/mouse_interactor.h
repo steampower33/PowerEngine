@@ -25,7 +25,6 @@ public:
 	bool is_right_button_up_event = false;
 
 	vku::DepthState depth_state;
-	float depth_delta = 0.0f;
 
 	glm::vec2 mouse_pos_{0.0f, 0.0f};
 

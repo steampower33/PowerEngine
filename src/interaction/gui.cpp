@@ -321,7 +321,7 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& s
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
 			row("ShearStiffness", [&] { ImGui::DragFloat("##ShearStiffness", &sim->ubo_.datas.sim_params.shear_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
-			row("BendStiffness", [&] { ImGui::DragFloat("##BendStiffness", &sim->ubo_.datas.sim_params.bend_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
+			row("BendStiffness", [&] { ImGui::DragFloat("##BendStiffness", &sim->ubo_.datas.sim_params.bend_stiffness, 0.001f, 0.0f, 2.0f, "%.3f"); });
 			row("AreaStiffness", [&] { ImGui::DragFloat("##AreaStiffness", &sim->ubo_.datas.sim_params.area_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
 			row("SelfCollisionStiffness", [&] { ImGui::DragFloat("##SelfCollisionStiffness", &sim->ubo_.datas.sim_params.self_collision_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
 			ImGui::EndTable();

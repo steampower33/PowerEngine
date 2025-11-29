@@ -13,6 +13,7 @@ struct MouseInteract {
     uint select_mode; // 0: none, 1: select, 2: drag
     vec3 ray_dir;
     float radius;
+    uint depth_mode; // 0: none, 1: depth in, 2: depth out
 };
 
 layout(push_constant) uniform PushConstant {

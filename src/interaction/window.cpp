@@ -163,19 +163,15 @@ void Window::OnMouseClick(int button, int action, int mods)
 
 void Window::OnMouseWheel(double xoffset, double yoffset)
 {
-	float sensitivity = 0.2f;
-
 	if (yoffset > 0) {
-		//std::cout << "DEPTH IN" << std::endl;
-		//std::cout << yoffset << std::endl;
-		mouse_interactor_->depth_state = vku::DepthState::MOUSE_DEPTH_IN;
-		mouse_interactor_->depth_delta = sensitivity;
-	}
-	else if (yoffset < 0) {
 		//std::cout << "DEPTH OUT" << std::endl;
 		//std::cout << yoffset << std::endl;
 		mouse_interactor_->depth_state = vku::DepthState::MOUSE_DEPTH_OUT;
-		mouse_interactor_->depth_delta = sensitivity;
+	}
+	else if (yoffset < 0) {
+		//std::cout << "DEPTH IN" << std::endl;
+		//std::cout << yoffset << std::endl;
+		mouse_interactor_->depth_state = vku::DepthState::MOUSE_DEPTH_IN;
 	}
 }
 

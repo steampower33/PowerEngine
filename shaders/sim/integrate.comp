@@ -57,6 +57,17 @@ void mouse_drag_pass(uint i, inout vec3 xpi, inout vec3 vi)
 
     vec3 v_to_ray = xpi - o;
     float t = grab_state[0].t;
+    if (pc.mouse.depth_mode == 1u)
+    {
+        t *= 0.9995;
+        grab_state[0].t = t;
+    }
+    else if (pc.mouse.depth_mode == 2u)
+    {
+        t *= 1.0005;
+        grab_state[0].t = t;
+    }
+
     vec3 c  = o + t * dir;
 
     xpi = c;
@@ -83,8 +94,6 @@ void main(){
     vec3 xpi = xi + vi * sim.dt;
     
     mouse_drag_pass(i, xpi, vi);
-
-    
 
     xp[i] = vec4(xpi, 0.0);
     v[i] = vec4(vi, 0.0);

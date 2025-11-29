@@ -61,6 +61,15 @@ void GpuSim::UpdateMousePushConstant(Camera& camera, MouseInteractor& mouseInter
 	}
 	else
 		push_constants_.mouse_interact.select_mode = 0;
+
+	if (mouseInteractor.depth_state == vku::DepthState::MOUSE_DEPTH_IN)
+		push_constants_.mouse_interact.depth_mode = vku::DepthState::MOUSE_DEPTH_IN;
+	else if (mouseInteractor.depth_state == vku::DepthState::MOUSE_DEPTH_OUT)
+		push_constants_.mouse_interact.depth_mode = vku::DepthState::MOUSE_DEPTH_OUT;
+	else
+		push_constants_.mouse_interact.depth_mode = vku::DepthState::MOUSE_DEPTH_NONE;
+	mouseInteractor.depth_state = vku::DepthState::MOUSE_DEPTH_NONE;
+
 }
 
 void GpuSim::UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& model)

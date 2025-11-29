@@ -11,15 +11,15 @@ struct SimData {
 	float mass = cloth_size.x * cloth_size.y * 0.2f;
 
 	struct Compliance {
-		float stretch = 1e-8f;
-		float shear = 1e-8f;
-		float bend = 5e-1f;
-		float area = 5e-1f;
-		float self_collision = 1e-8f;
+		float stretch = 1e-9f;
+		float shear = 1e-9f;
+		float bend = 1e-1f;
+		float area = 1e-1f;
+		float self_collision = 1e-9f;
 	} compliance;
 
 	struct Beta {
-		float stretch = 50.0f;
+		float stretch = 10.0f;
 	} beta;
 
 	uint32_t num_particles = nx * ny;

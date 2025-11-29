@@ -9,7 +9,7 @@ struct SimUBO {
 			float thickness = 0.05f;
 			float friction = 0.1f;
 			float dt = 0.0f;
-			float global_damping = 0.25f;
+			float global_damping = 0.2f;
 			float relaxation_factor = 0.2f;
 			uint32_t num_particles;
 			uint32_t num_edges;
@@ -23,8 +23,8 @@ struct SimUBO {
 			uint32_t max_neighbors;
 			float collision_radius;
 
-			float shear_stiffness = 1.0f;
-			float bend_stiffness = 1.0f;
+			float shear_stiffness = 10.0f;
+			float bend_stiffness = 0.1f;
 			float area_stiffness = 1.0f;
 			float self_collision_stiffness = 20.0f;
 		} sim_params;
