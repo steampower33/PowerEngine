@@ -40,7 +40,6 @@ GraphicsContext::GraphicsContext(GLFWwindow* glfwWindow, Context& context, Swapc
 
 void GraphicsContext::Update(Camera& camera, MouseInteractor& mouseInteractor)
 {
-
 	if (cpu_or_gpu_ == vku::CpuOrGpu::CPU)
 	{
 		cpu_sim_->UpdateGraphicsUBO(current_frame_);
@@ -480,7 +479,7 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 			float nsPerTick = context_.physical_device_.getProperties().limits.timestampPeriod;
 			float toMs = nsPerTick / 1e6f;
 
-			uint32_t numTimestamp = compute_ts_steps_;
+			uint32_t numTimestamp = gpu_sim_->slots_per_compute_;
 			std::vector<uint64_t> ts(numTimestamp);
 
 			VkResult res = vkGetQueryPoolResults(

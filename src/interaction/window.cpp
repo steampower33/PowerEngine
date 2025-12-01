@@ -63,8 +63,11 @@ void Window::mainloop()
 		if (sim_accum_ >= sim_dt_) {
 			sim_accum_ -= sim_dt_;
 
-			renderer_->Update(*camera_, *mouse_interactor_, frameDt, target_sim_fps_, sim_dt_);
-			renderer_->Draw();
+			if (!paused_)
+			{
+				renderer_->Update(*camera_, *mouse_interactor_, frameDt, target_sim_fps_, sim_dt_);
+				renderer_->Draw();
+			}
 		}
 	}
 
@@ -206,8 +209,8 @@ void Window::ProcessKeyboard(float dt) {
 	{
 		if (key_timeout_ < 0.0f)
 		{
-			print_timestamp_ = true;
-			key_timeout_ = 0.1f;
+			paused_ = !paused_;
+			key_timeout_ = 0.2f;
 		}
 	}
 

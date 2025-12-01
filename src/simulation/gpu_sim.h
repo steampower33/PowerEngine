@@ -55,6 +55,8 @@ public:
 	} solver_config_;
 
 	uint32_t iteration_timestamp_count_ = 12;
+	uint32_t slots_per_spatial_hashing_ = 8;
+	uint32_t slots_per_compute_ = 1 + datas_.substeps * (4 + slots_per_spatial_hashing_ + iteration_timestamp_count_ * datas_.iterations + 4) + 1;
 
 	vku::Counts counts_;
 	vk::raii::DescriptorPool descriptor_pool_{ nullptr };
