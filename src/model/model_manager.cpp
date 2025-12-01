@@ -14,10 +14,10 @@ ModelManager::ModelManager(Context& context, GraphicsContext& graphicsContext, T
 	{
 		//MeshData sphere = GeometryGenerator::MakeBox(1.0f);
 		//MeshData sphere = GeometryGenerator::MakeCylinder(1.0f, 1.0f, 5.0f, 4);
-		float radius = 0.5f;
+		float radius = 0.25f;
 		MeshData sphere = GeometryGenerator::MakeSphere(radius, 20, 20);
 		glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
-		glm::vec3 initPos = glm::vec3(0.0f, 2.0f, 0.0f);
+		glm::vec3 initPos = glm::vec3(0.0f, 1.0f, 0.0f);
 		glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
 		std::unique_ptr<Model> model = std::make_unique<Model>(sphere, vku::VertexIncludeInfo{ true, true }, context, graphicsContext, initPos, angleQuat, initColor, true);
 		model->radius_ = radius;

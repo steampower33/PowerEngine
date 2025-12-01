@@ -56,7 +56,7 @@ public:
 
 	uint32_t current_frame_{ 0 };
 
-	std::array<std::string, 15> labels_ = { "Intergrate", "ClearLambdas", "HashBuild", "RadixSort", "BuildCell", "BuildNeighbor", "SolveStretch", "SolveShear", "SolveBend", "SolveArea", "SolveSelfCollision", "CollideSdf", "ApplyDeltas", "Update", "Total"};
+	std::array<std::string, 15> labels_ = { "Intergrate", "ClearLambdas", "HashBuild", "RadixSort", "BuildCell", "BuildNeighbor", "SolveStretch", "SolveShear", "SolveBend", "SolveArea", "SolveSelfCollision", "ApplyDeltas", "CollideSdf", "Update", "Total"};
 	std::unordered_map<std::string, double> label_time_;
 	std::unordered_map<std::string, double> label_avg_time_;
 	uint32_t time_count_ = 0;

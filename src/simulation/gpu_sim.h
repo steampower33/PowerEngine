@@ -54,7 +54,7 @@ public:
 		bool self_collision = true;
 	} solver_config_;
 
-	uint32_t iteration_timestamp_count_ = 14;
+	uint32_t iteration_timestamp_count_ = 12;
 
 	vku::Counts counts_;
 	vk::raii::DescriptorPool descriptor_pool_{ nullptr };

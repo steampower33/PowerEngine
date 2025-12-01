@@ -96,7 +96,7 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 	timestampSteps = 0;
 	uint32_t kSlotsPerSelfCollision = 8;
-	uint32_t kSlotsPerIterPair = 1 + datas_.substeps * (4 + kSlotsPerSelfCollision + iteration_timestamp_count_ * datas_.iterations + 2) + 1;
+	uint32_t kSlotsPerIterPair = 1 + datas_.substeps * (4 + kSlotsPerSelfCollision + iteration_timestamp_count_ * datas_.iterations + 4) + 1;
 	const auto stage = vk::PipelineStageFlagBits2::eComputeShader;
 	auto TS = [&](uint32_t& idx) {
 		cmd.writeTimestamp2(stage, *timestampPool, idx++);
@@ -148,7 +148,7 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				vk::PipelineStageFlagBits2::eVertexShader,
 				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
-			// Hash build
+			// build_hash
 			TS(timestampSteps);
 			if (solver_config_.self_collision)
 			{
@@ -164,7 +164,6 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				vk::AccessFlagBits2::eShaderStorageRead);
 
 			TS(timestampSteps);
-
 			if (solver_config_.self_collision)
 			{
 				vrdxCmdSortKeyValue(
@@ -182,6 +181,11 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				);
 			}
 			TS(timestampSteps);
+			vku::Barrier2(cmd,
+				vk::PipelineStageFlagBits2::eComputeShader,
+				vk::AccessFlagBits2::eShaderStorageWrite,
+				vk::PipelineStageFlagBits2::eVertexShader,
+				vk::AccessFlagBits2::eShaderStorageWrite);
 
 			if (solver_config_.self_collision)
 			{
@@ -334,12 +338,6 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 			}
 			TS(timestampSteps);
 
-			// Collide SDF
-			TS(timestampSteps);
-			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.collide_sdf);
-			cmd.dispatch(groupsP, 1, 1);
-			TS(timestampSteps);
-
 			vku::ssboCompWtoCompRW(cmd, ssbos_.delta_x);
 			vku::ssboCompWtoCompRW(cmd, ssbos_.delta_y);
 			vku::ssboCompWtoCompRW(cmd, ssbos_.delta_z);
@@ -352,6 +350,12 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 			TS(timestampSteps);
 			vku::ssboCompWtoCompRW(cmd, ssbos_.pred_position);
 		}
+
+		// Collide SDF
+		TS(timestampSteps);
+		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.collide_sdf);
+		cmd.dispatch(groupsP, 1, 1);
+		TS(timestampSteps);
 
 		// Update Velocity
 		TS(timestampSteps);
@@ -467,9 +471,6 @@ void GpuSim::CopyDatas(const vk::raii::CommandBuffer& cmd)
 
 void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene)
 {
-	datas_.spacing_x = datas_.cloth_size.x / datas_.nx;
-	datas_.spacing_y = datas_.cloth_size.y / datas_.ny;
-
 	if (testScene.sphereCollision)
 	{
 		testScene.sphereCollision = false;
@@ -562,6 +563,34 @@ void GpuSim::UpdateTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene&
 		datas_.inverse_masses[0] = 0.0f;
 		datas_.inverse_masses[nx1 - 1] = 0.0f;
 
+		CopyDatas(cmd);
+	}
+	else if (testScene.selfCollision)
+	{
+		testScene.selfCollision = false;
+
+		const int nxCells = datas_.nx;
+		const int nyCells = datas_.ny;
+		const int nx1 = nxCells + 1;
+		const int ny1 = nyCells + 1;
+
+		auto vid = [&](int x, int y) { return uint32_t(y * nx1 + x); };
+
+		const uint32_t N = nx1 * ny1;
+
+		for (int y = 0; y < ny1; ++y) {
+			for (int x = 0; x < nx1; ++x) {
+				uint32_t id = vid(x, y);
+				float px = (-0.5f * datas_.cloth_size.x) + x * datas_.spacing_x;
+				float py = datas_.cloth_height + (-0.5f * datas_.cloth_size.y) - y * datas_.spacing_y;
+				float pz = 0.0f;
+				datas_.positions[id] = { px, py, pz, 0.0f };
+				datas_.velocities[id] = glm::vec4(0.0f);
+				datas_.pred_positions[id] = datas_.positions[id];
+			}
+		}
+
+		datas_.ResetConstraints();
 		CopyDatas(cmd);
 	}
 }
@@ -717,9 +746,6 @@ void GpuSim::CreateSSBOBuffers()
 
 	const uint32_t N = nx1 * ny1;
 	datas_.num_particles = N;
-
-	datas_.spacing_x = datas_.cloth_size.x / datas_.nx;
-	datas_.spacing_y = datas_.cloth_size.y / datas_.ny;
 
 	datas_.positions.resize(N);
 	datas_.velocities.resize(N);
@@ -895,7 +921,7 @@ void GpuSim::CreateSSBOBuffers()
 	datas_.num_areas = static_cast<uint32_t>(datas_.areas.size());
 
 	// Self Collision
-	uint32_t tableSize = datas_.num_particles / 4;
+	uint32_t tableSize = datas_.num_particles ;
 	uint32_t maxNeighbors = 4;
 	ubo_.datas.sim_params.num_tables = tableSize;
 	ubo_.datas.sim_params.cell_size = std::min(datas_.spacing_x, datas_.spacing_y);

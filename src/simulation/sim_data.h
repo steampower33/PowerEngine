@@ -1,25 +1,29 @@
 #pragma once
 
 struct SimData {
-	const uint32_t nx = 60;
-	const uint32_t ny = 60;
+	float spacing = 0.015f; // 1.5cm resolution
 
-	glm::vec2 cloth_size{ 4.0f, 4.0f };
-	float spacing_x = cloth_size.x / nx;
-	float spacing_y = cloth_size.y / ny;
-	float cloth_height = 6.0f;
+	glm::vec2 cloth_size{ 1.0f, 1.0f };
+
+	uint32_t nx = (uint32_t)std::round(cloth_size.x / spacing) + 1;
+	uint32_t ny = (uint32_t)std::round(cloth_size.y / spacing) + 1;
+
+	float spacing_x = spacing;
+	float spacing_y = spacing;
+	
+	float cloth_height = 2.0f;
 	float gsm = 0.2f; // Grams per Square Meter
 
 	struct Compliance {
 		float stretch = 1e-9f;
 		float shear = 1e-9f;
-		float bend = 1e-1f;
-		float area = 1e-1f;
+		float bend = 5e-1f;
+		float area = 5e-1f;
 		float self_collision = 1e-9f;
 	} compliance;
 
 	struct Beta {
-		float stretch = 10.0f;
+		float stretch = 100.0f;
 	} beta;
 
 	uint32_t num_particles = nx * ny;

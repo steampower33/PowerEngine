@@ -502,8 +502,8 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 			float tSolveBend = 0.0f;
 			float tSolveArea = 0.0f;
 			float tSolveSelfCollision = 0.0f;
-			float tCollideSdf = 0.0f;
 			float tApplyDeltas = 0.0f;
+			float tCollideSdf = 0.0f;
 			float tUpdate = 0.0f;
 
 			uint32_t tsCnt = gpu_sim_->iteration_timestamp_count_;
@@ -525,11 +525,12 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 					tSolveBend += delta_ms(iterBase + it * tsCnt + 4, iterBase + it * tsCnt + 5);
 					tSolveArea += delta_ms(iterBase + it * tsCnt + 6, iterBase + it * tsCnt + 7);
 					tSolveSelfCollision += delta_ms(iterBase + it * tsCnt + 8, iterBase + it * tsCnt + 9);
-					tCollideSdf += delta_ms(iterBase + it * tsCnt + 10, iterBase + it * tsCnt + 11);
-					tApplyDeltas += delta_ms(iterBase + it * tsCnt + 12, iterBase + it * tsCnt + 13);
+					tApplyDeltas += delta_ms(iterBase + it * tsCnt + 10, iterBase + it * tsCnt + 11);
 				}
-				uint32_t updateStart = iterBase + gpu_sim_->datas_.iterations * tsCnt;
-				tUpdate += delta_ms(updateStart, updateStart + 1);
+				uint32_t afterIteration = iterBase + gpu_sim_->datas_.iterations * tsCnt;
+
+				tCollideSdf += delta_ms(afterIteration, afterIteration + 1);
+				tUpdate += delta_ms(afterIteration + 2, afterIteration + 3);
 			}
 
 			compute_all_time_ = delta_ms(0, numTimestamp - 1);
@@ -539,8 +540,8 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 			float total =
 				tIntegrate + tClearLambdas +
 				tHashBuild + tRadixSort + tBuildCell + tBuildNeighbor +
-				tSolveStretch + tSolveBend + tSolveArea + tSolveSelfCollision + tCollideSdf + tApplyDeltas +
-				tUpdate;
+				tSolveStretch + tSolveBend + tSolveArea + tSolveSelfCollision + tApplyDeltas +
+				tCollideSdf + tUpdate;
 
 			uint32_t c = 0;
 

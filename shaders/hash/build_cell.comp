@@ -16,7 +16,6 @@ void main()
     s_hash[lid + 1] = h;
 
     if (gid == 0 && lid == 0) {
-        // 첫 원소 전에 들어갈 값
         s_hash[0] = uint(0xffffffff);
     }
     else if (lid == 0) {

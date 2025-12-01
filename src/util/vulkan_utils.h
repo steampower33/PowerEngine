@@ -25,6 +25,7 @@ namespace vku
 		bool sphereCollision = false;
 		bool pinnedCorner = false;
 		bool topPinnedCorner = false;
+		bool selfCollision = false;
 	};
 
 	struct VertexIncludeInfo {

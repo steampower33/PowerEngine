@@ -194,8 +194,7 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 
 	ImGuiWindowFlags wf =
 		ImGuiWindowFlags_NoResize |
-		ImGuiWindowFlags_NoMove |
-		ImGuiWindowFlags_NoCollapse;
+		ImGuiWindowFlags_NoMove;
 
 	float spacing = 10.0f;
 
@@ -209,8 +208,8 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 			SetStatGUI(row, graphicsContext, graphicsContext.gpu_sim_);
 
 		SetTimeingGUI(row, graphicsContext);
-		ImGui::End();
 	}
+	ImGui::End();
 
 	ImVec2 scenePos{ spacing, spacing };
 	ImVec2 sceneSize{ 500.0f, 200.0f };
@@ -220,8 +219,8 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 	if (ImGui::Begin("Scene", nullptr, wf))
 	{
 		SetTestSceneGUI(row, graphicsContext.test_scene_);
-		ImGui::End();
 	}
+	ImGui::End();
 
 	ImVec2 optionPos{ scenePos.x, scenePos.y + sceneSize.y + spacing };
 	ImVec2 optionSize{ sceneSize.x, swapchain.swapchain_extent_.height - optionPos.y - spacing };
@@ -234,11 +233,10 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 			SetSimulationGUI(row, graphicsContext, graphicsContext.cpu_sim_, targetSimFPS, simDt);
 		else if (graphicsContext.cpu_or_gpu_ == vku::CpuOrGpu::GPU)
 			SetSimulationGUI(row, graphicsContext, graphicsContext.gpu_sim_, targetSimFPS, simDt);
-
-		ImGui::End();
 	}
+	ImGui::End();
 
-	ImGui::ShowDemoWindow();
+	//ImGui::ShowDemoWindow();
 
 	ImGui::Render();
 }
@@ -399,6 +397,7 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& s
 			row("ClothHeight", [&] { ImGui::DragFloat("##ClothHeight", &sim->datas_.cloth_height, 0.1f, 0.0f, 100.0f); });
 			row("Thickness", [&] { ImGui::DragFloat("##Thickness", &sim->ubo_.datas.sim_params.thickness, 0.001f, 0.0f, 1.0f, "%.3f"); });
 			row("Friction", [&] { ImGui::DragFloat("##Friction", &sim->ubo_.datas.sim_params.friction, 0.001f, 0.0f, 1.0f, "%.3f"); });
+			row("NeighborFriction", [&] { ImGui::DragFloat("##NeighborFriction", &sim->ubo_.datas.sim_params.neighbor_friction, 0.1f, 0.0f, 10.0f, "%.1f"); });
 			ImGui::EndTable();
 		}
 
@@ -419,8 +418,9 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& s
 		if (ImGui::BeginTable("Stiffness", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
+			row("StretchStiffness", [&] { ImGui::DragFloat("##StretchStiffness", &sim->ubo_.datas.sim_params.stretch_stiffness, 1e-3f, 0.0f, 1.0f, "%.3f"); });
 			row("ShearStiffness", [&] { ImGui::DragFloat("##ShearStiffness", &sim->ubo_.datas.sim_params.shear_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
-			row("BendStiffness", [&] { ImGui::DragFloat("##BendStiffness", &sim->ubo_.datas.sim_params.bend_stiffness, 0.001f, 0.0f, 2.0f, "%.3f"); });
+			row("BendStiffness", [&] { ImGui::DragFloat("##BendStiffness", &sim->ubo_.datas.sim_params.bend_stiffness, 1e-3f, 0.0f, 2.0f, "%.3f"); });
 			row("AreaStiffness", [&] { ImGui::DragFloat("##AreaStiffness", &sim->ubo_.datas.sim_params.area_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
 			row("SelfCollisionStiffness", [&] { ImGui::DragFloat("##SelfCollisionStiffness", &sim->ubo_.datas.sim_params.self_collision_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
 			ImGui::EndTable();
@@ -430,7 +430,8 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& s
 		if (ImGui::BeginTable("Compliance", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
-			row("Stretch", [&] { ImGui::DragFloat("##Stretch", &sim->datas_.compliance.stretch, 1e-10f, 0.0f, 1.0f, "%.10f"); });
+			row("Stretch", [&] { ImGui::DragFloat("##Stretch", &sim->datas_.compliance.stretch, 
+				1e-10f, 0.0f, 1.0f, "%.10f"); });
 			row("Shear", [&] { ImGui::DragFloat("##Shear", &sim->datas_.compliance.shear
 				, 1e-10f, 0.0f, 1.0f, "%.10f"); });
 			row("Bend", [&] { ImGui::DragFloat("##Bend", &sim->datas_.compliance.bend
@@ -471,6 +472,12 @@ void GUI::SetTestSceneGUI(RowFn&& row, Scene& scene)
 	{
 		scene.topPinnedCorner = true;
 	}
+
+	if (ImGui::Button("SelfCollision", buttonSize))
+	{
+		scene.selfCollision = true;
+	}
+
 
 }
 
