@@ -7,9 +7,9 @@ struct SimUBO {
 			glm::vec4 sphere_center;
 			float sphere_radius;
 			float thickness = 0.004f;
-			float friction = 0.5f;
+			float friction = 1.0f;
 			float dt = 0.0f;
-			float global_damping = 1.0f;
+			float global_damping = 2.0f;
 			float relaxation_factor = 0.2f;
 			float neighbor_friction = 1.0f;
 			uint32_t num_particles;
@@ -28,7 +28,7 @@ struct SimUBO {
 			float bend_stiffness = 0.01f;
 			float area_stiffness = 1.0f;
 
-			float self_collision_stiffness = 50.0f;
+			float self_collision_stiffness = 25.0f;
 			float max_speed;
 			float p2;
 			float p3;
@@ -56,7 +56,7 @@ struct SimUBO {
 			uint32_t albedo_enable = 0;
 			uint32_t metallic_enable = 0;
 			uint32_t normal_enable = 0;
-			uint32_t roughtnessEnable = 0;
+			uint32_t roughtness_enable = 0;
 
 			uint32_t ao_enable = 0;
 			uint32_t height_enable = 0;

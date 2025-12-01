@@ -10,11 +10,15 @@ TextureManager::TextureManager(Context& context)
 {
     //ConvertFileToKtx("assets/Metal");
     ConvertFileToKtx("assets/lut");
-    //ConvertFileToKtx("assets/Fabric");
+    ConvertFileToKtx("assets/Fabric");
     //ConvertFileToKtx("assets/curtain");
 
     vulkan_thumbnail_index_ = CreateTexture("assets", "vulkan_cloth_rgba");
     brdf_lut_index_ = CreateTexture("assets/lut", "lut_sheen_e");
+
+    //albedo_idx_ = CreateTexture("assets/Fabric", "color");
+    //normal_idx_ = CreateTexture("assets/Fabric", "normalgl");
+    //roughness_idx_ = CreateTexture("assets/Fabric", "roughness");
 }
 
 TextureManager::~TextureManager()

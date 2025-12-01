@@ -15,10 +15,10 @@ struct SimData {
 	float gsm = 0.2f; // Grams per Square Meter
 
 	struct Compliance {
-		float stretch = 1e-9f;
-		float shear = 1e-9f;
-		float bend = 5e-1f;
-		float area = 5e-1f;
+		float stretch = 1e-6f;
+		float shear = 1e-6f;
+		float bend = 1.0f;
+		float area = 1.0f;
 		float self_collision = 1e-9f;
 	} compliance;
 

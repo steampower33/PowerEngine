@@ -29,6 +29,13 @@ GpuSim::GpuSim(
 	CreateComputePipelines();
 	CreateGraphicsPipelines(globalSetLayout, formats, tex2DSetLayout);
 	CreateVrdxSorter();
+
+	//ubo_.datas.render.albedo_enable = 1;
+	//ubo_.datas.render.normal_enable = 1;
+	//ubo_.datas.render.roughtness_enable = 1;
+	//ubo_.datas.render.albedo_idx = texture_manager_.albedo_idx_;
+	//ubo_.datas.render.normal_idx = texture_manager_.normal_idx_;
+	//ubo_.datas.render.roughness_idx = texture_manager_.roughness_idx_;
 }
 
 GpuSim::~GpuSim()

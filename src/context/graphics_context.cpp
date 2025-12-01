@@ -101,6 +101,10 @@ void GraphicsContext::UpdateGraphicsUBO(Camera& camera)
 
 			ubo_datas_.object.checker_board_enable = model_manager_.models_[i]->checker_board_enable_;
 
+			ubo_datas_.object.metallic_factor = model_manager_.models_[i]->factors_.metallic;
+			ubo_datas_.object.roughness_factor = model_manager_.models_[i]->factors_.roughness;
+			ubo_datas_.object.ao_factor = model_manager_.models_[i]->factors_.ao;
+
 			std::memcpy(dst, &ubo_datas_.object, sizeof(UBOData::Object));
 		}
 	}

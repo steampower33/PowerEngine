@@ -36,6 +36,10 @@ public:
 		"lut",
 	};
 
+	uint32_t albedo_idx_;
+	uint32_t normal_idx_;
+	uint32_t roughness_idx_;
+
 	void ConvertFileToKtx(const std::string& folderPath);
 	bool IsRightTextureName(const std::string& name);
 	void CreateKtxFromFile(const std::filesystem::path& pngPath, const std::filesystem::path& ktxPath);

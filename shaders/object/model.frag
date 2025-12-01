@@ -41,14 +41,10 @@ void main() {
         int c = (cell.x + cell.y) & 1;
         albedo.xyz = (c == 0) ? vec3(0.9) : vec3(0.7);
     }
-    // RT0: albedo.rgb + metallic
     out_albedo_metal = vec4(albedo.xyz, metallic);
 
-    // RT1: world-normal + roughness (여기선 예시로 그냥 tangent-space normal)
     vec3 n = normalize(normalTS);
-    // [-1,1] → [0,1]
     out_normal_rough = vec4(n * 0.5 + 0.5, rough);
 
-    // RT2: height + AO
     out_height_ao = vec4(height, ao, 0.0, 0.0);
 }
