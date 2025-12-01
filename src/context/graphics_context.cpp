@@ -501,6 +501,7 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 			float tSolveShear = 0.0f;
 			float tSolveBend = 0.0f;
 			float tSolveArea = 0.0f;
+			float tSolveSelfCollision = 0.0f;
 			float tCollideSdf = 0.0f;
 			float tApplyDeltas = 0.0f;
 			float tUpdate = 0.0f;
@@ -523,8 +524,9 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 					tSolveShear += delta_ms(iterBase + it * tsCnt + 2, iterBase + it * tsCnt + 3);
 					tSolveBend += delta_ms(iterBase + it * tsCnt + 4, iterBase + it * tsCnt + 5);
 					tSolveArea += delta_ms(iterBase + it * tsCnt + 6, iterBase + it * tsCnt + 7);
-					tCollideSdf += delta_ms(iterBase + it * tsCnt + 8, iterBase + it * tsCnt + 9);
-					tApplyDeltas += delta_ms(iterBase + it * tsCnt + 10, iterBase + it * tsCnt + 11);
+					tSolveSelfCollision += delta_ms(iterBase + it * tsCnt + 8, iterBase + it * tsCnt + 9);
+					tCollideSdf += delta_ms(iterBase + it * tsCnt + 10, iterBase + it * tsCnt + 11);
+					tApplyDeltas += delta_ms(iterBase + it * tsCnt + 12, iterBase + it * tsCnt + 13);
 				}
 				uint32_t updateStart = iterBase + gpu_sim_->datas_.iterations * tsCnt;
 				tUpdate += delta_ms(updateStart, updateStart + 1);
@@ -537,7 +539,7 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 			float total =
 				tIntegrate + tClearLambdas +
 				tHashBuild + tRadixSort + tBuildCell + tBuildNeighbor +
-				tSolveStretch + tSolveBend + tSolveArea + tApplyDeltas + tCollideSdf +
+				tSolveStretch + tSolveBend + tSolveArea + tSolveSelfCollision + tCollideSdf + tApplyDeltas +
 				tUpdate;
 
 			uint32_t c = 0;
@@ -554,8 +556,9 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 				label_time_[labels_[c++]] = tSolveShear;
 				label_time_[labels_[c++]] = tSolveBend;
 				label_time_[labels_[c++]] = tSolveArea;
-				label_time_[labels_[c++]] = tApplyDeltas;
+				label_time_[labels_[c++]] = tSolveSelfCollision;
 				label_time_[labels_[c++]] = tCollideSdf;
+				label_time_[labels_[c++]] = tApplyDeltas;
 				label_time_[labels_[c++]] = tUpdate;
 				label_time_[labels_[c++]] = total;
 			}
@@ -572,8 +575,9 @@ void GraphicsContext::Draw(std::unique_ptr<GUI>& gui)
 				label_avg_time_[labels_[c++]] += tSolveShear;
 				label_avg_time_[labels_[c++]] += tSolveBend;
 				label_avg_time_[labels_[c++]] += tSolveArea;
-				label_avg_time_[labels_[c++]] += tApplyDeltas;
+				label_avg_time_[labels_[c++]] += tSolveSelfCollision;
 				label_avg_time_[labels_[c++]] += tCollideSdf;
+				label_avg_time_[labels_[c++]] += tApplyDeltas;
 				label_avg_time_[labels_[c++]] += tUpdate;
 				label_avg_time_[labels_[c++]] += total;
 			}

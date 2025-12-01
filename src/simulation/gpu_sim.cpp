@@ -150,8 +150,11 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 			// Hash build
 			TS(timestampSteps);
-			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_hash);
-			cmd.dispatch(groupsP, 1, 1);
+			if (solver_config_.self_collision)
+			{
+				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_hash);
+				cmd.dispatch(groupsP, 1, 1);
+			}
 			TS(timestampSteps);
 
 			vku::Barrier2(cmd,
@@ -161,33 +164,40 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				vk::AccessFlagBits2::eShaderStorageRead);
 
 			TS(timestampSteps);
-			vrdxCmdSortKeyValue(
-				*cmd,                  // VkCommandBuffer
-				radix_.sorter,
-				datas_.num_particles,   // N
-				*ssbos_.particle_hash,        // keys
-				0,
-				*ssbos_.particle_indice,       // values
-				0,
-				*radix_.storage_buffer,
-				0,
-				nullptr,
-				0
-			);
+
+			if (solver_config_.self_collision)
+			{
+				vrdxCmdSortKeyValue(
+					*cmd,                  // VkCommandBuffer
+					radix_.sorter,
+					datas_.num_particles,   // N
+					*ssbos_.particle_hash,        // keys
+					0,
+					*ssbos_.particle_indice,       // values
+					0,
+					*radix_.storage_buffer,
+					0,
+					nullptr,
+					0
+				);
+			}
 			TS(timestampSteps);
 
-			uint32_t fillValue = 0xFFFFFFFF;
-			uint32_t offset = 0;
-			uint64_t size = VK_WHOLE_SIZE; // 전체 채우기
+			if (solver_config_.self_collision)
+			{
+				uint32_t fillValue = 0xFFFFFFFF;
+				uint32_t offset = 0;
+				uint64_t size = VK_WHOLE_SIZE; // 전체 채우기
 
-			cmd.fillBuffer(ssbos_.start, offset, size, fillValue);
-			cmd.fillBuffer(ssbos_.end, offset, size, fillValue);
+				cmd.fillBuffer(ssbos_.start, offset, size, fillValue);
+				cmd.fillBuffer(ssbos_.end, offset, size, fillValue);
 
-			vku::Barrier2(cmd,
-				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageWrite,
-				vk::PipelineStageFlagBits2::eVertexShader,
-				vk::AccessFlagBits2::eShaderStorageRead);
+				vku::Barrier2(cmd,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageWrite,
+					vk::PipelineStageFlagBits2::eVertexShader,
+					vk::AccessFlagBits2::eShaderStorageRead);
+			}
 
 			uint32_t simparamOffset = currentFrame * static_cast<uint32_t>(ubo_.size.sim_params);
 			cmd.bindDescriptorSets(
@@ -199,8 +209,11 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 			// build_cell
 			TS(timestampSteps);
-			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_cell);
-			cmd.dispatch(groupsP, 1, 1);
+			if (solver_config_.self_collision)
+			{
+				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_cell);
+				cmd.dispatch(groupsP, 1, 1);
+			}
 			TS(timestampSteps);
 
 			vku::Barrier2(cmd,
@@ -211,8 +224,11 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 			// build_neighbor
 			TS(timestampSteps);
-			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_neighbor);
-			cmd.dispatch(groupsP, 1, 1);
+			if (solver_config_.self_collision)
+			{
+				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_neighbor);
+				cmd.dispatch(groupsP, 1, 1);
+			}
 			TS(timestampSteps);
 
 			vku::Barrier2(cmd,
@@ -226,31 +242,35 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 		{
 			// Solve Coloring - Stretch
 			TS(timestampSteps);
-			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_stretch);
+			if (solver_config_.stretch)
+			{
+				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_stretch);
 
-			for (uint32_t c = 0; c < 4; ++c) {
-				uint32_t base = datas_.pass_offsets[c];
-				uint32_t count = datas_.pass_offsets[c + 1] - datas_.pass_offsets[c];
-				if (!count) continue;
+				for (uint32_t c = 0; c < 4; ++c) {
+					uint32_t base = datas_.pass_offsets[c];
+					uint32_t count = datas_.pass_offsets[c + 1] - datas_.pass_offsets[c];
+					if (!count) continue;
 
-				push_constants_.solve.base = base;
-				push_constants_.solve.count = count;
-				push_constants_.solve.compliance = datas_.compliance.stretch;
-				push_constants_.solve.beta = datas_.beta.stretch;
+					push_constants_.solve.base = base;
+					push_constants_.solve.count = count;
+					push_constants_.solve.compliance = datas_.compliance.stretch;
+					push_constants_.solve.beta = datas_.beta.stretch;
 
-				cmd.pushConstants<PushConstant::Solve>(
-					*pipeline_layouts_.common,
-					vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
+					cmd.pushConstants<PushConstant::Solve>(
+						*pipeline_layouts_.common,
+						vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
 
-				uint32_t groups = (count + 256 - 1) / 256;
-				cmd.dispatch(groups, 1, 1);
-				vku::ssboCompWtoCompRW(cmd, ssbos_.pred_position);
+					uint32_t groups = (count + 256 - 1) / 256;
+					cmd.dispatch(groups, 1, 1);
+					vku::ssboCompWtoCompRW(cmd, ssbos_.pred_position);
+				}
 			}
 			TS(timestampSteps);
 
+			// Solve Shear
+			TS(timestampSteps);
+			if (solver_config_.shear)
 			{
-				// Solve Shear
-				TS(timestampSteps);
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_shear);
 				push_constants_.solve.compliance = datas_.compliance.shear;
 
@@ -260,12 +280,13 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 				uint32_t group = (datas_.num_shears + 256 - 1) / 256;
 				cmd.dispatch(group, 1, 1);
-				TS(timestampSteps);
 			}
+			TS(timestampSteps);
 
+			// Solve Bend
+			TS(timestampSteps);
+			if (solver_config_.bend)
 			{
-				// Solve Bend
-				TS(timestampSteps);
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_bend);
 				uint32_t base = 0;
 				uint32_t count = datas_.num_bends;
@@ -278,12 +299,13 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 				uint32_t group = (count + 256 - 1) / 256;
 				cmd.dispatch(group, 1, 1);
-				TS(timestampSteps);
 			}
+			TS(timestampSteps);
 
+			// Solve Area
+			TS(timestampSteps);
+			if (solver_config_.area)
 			{
-				// Solve Area
-				TS(timestampSteps);
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_area);
 				uint32_t base = 0;
 				uint32_t count = datas_.num_areas;
@@ -296,35 +318,32 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 
 				uint32_t group = (count + 256 - 1) / 256;
 				cmd.dispatch(group, 1, 1);
-				TS(timestampSteps);
 			}
+			TS(timestampSteps);
 
+			// Solve Self Collision
+			TS(timestampSteps);
+			if (solver_config_.self_collision)
 			{
-				// Collide SDF
-				TS(timestampSteps);
-				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.collide_sdf);
+				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_self_collision);
+				push_constants_.solve.compliance = datas_.compliance.self_collision;
+				cmd.pushConstants<PushConstant::Solve>(
+					*pipeline_layouts_.common,
+					vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
 				cmd.dispatch(groupsP, 1, 1);
-				TS(timestampSteps);
-
-				vku::ssboCompWtoCompRW(cmd, ssbos_.delta_x);
-				vku::ssboCompWtoCompRW(cmd, ssbos_.delta_y);
-				vku::ssboCompWtoCompRW(cmd, ssbos_.delta_z);
-				vku::ssboCompWtoCompRW(cmd, ssbos_.delta_count);
 			}
+			TS(timestampSteps);
 
-			// solve_self_collision
-			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_self_collision);
-			push_constants_.solve.compliance = datas_.compliance.self_collision;
-			cmd.pushConstants<PushConstant::Solve>(
-				*pipeline_layouts_.common,
-				vk::ShaderStageFlagBits::eCompute, 0u, push_constants_.solve);
+			// Collide SDF
+			TS(timestampSteps);
+			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.collide_sdf);
 			cmd.dispatch(groupsP, 1, 1);
+			TS(timestampSteps);
 
-			vku::Barrier2(cmd,
-				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageWrite,
-				vk::PipelineStageFlagBits2::eVertexShader,
-				vk::AccessFlagBits2::eShaderStorageRead);
+			vku::ssboCompWtoCompRW(cmd, ssbos_.delta_x);
+			vku::ssboCompWtoCompRW(cmd, ssbos_.delta_y);
+			vku::ssboCompWtoCompRW(cmd, ssbos_.delta_z);
+			vku::ssboCompWtoCompRW(cmd, ssbos_.delta_count);
 
 			// Apply Deltas 
 			TS(timestampSteps);
@@ -341,7 +360,6 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 		TS(timestampSteps);
 		vku::ssboCompWtoVertR(cmd, ssbos_.position);
 	}
-
 
 	TS(timestampSteps); // End
 	cmd.end();

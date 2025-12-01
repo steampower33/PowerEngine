@@ -50,8 +50,8 @@ private:
     bool print_timestamp_ = false;
     float key_timeout_ = 0.2f;
 
-    float targetSimFPS = 60.0f;
-    double simDt = 1.0 / targetSimFPS;
+    float target_sim_fps_ = 144.0f;
+    double sim_dt_ = 1.0 / target_sim_fps_;
 
-    double simAccum = 0.0;
+    double sim_accum_ = 0.0;
 };

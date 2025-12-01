@@ -44,12 +44,6 @@ GUI::GUI(GLFWwindow* glfwWindow, Context& context, Swapchain& swapchain)
 	io.DisplaySize.x = swapchain.swapchain_extent_.width;
 	io.DisplaySize.y = swapchain.swapchain_extent_.height;
 
-	ImGui::GetStyle().FontScaleMain = 1.5f;
-
-	// Setup Dear ImGui style
-	ImGui::StyleColorsDark();
-	//ImGui::StyleColorsLight();
-
 	// Setup Platform/Renderer backends
 	VkFormat depthFmt = static_cast<VkFormat>(vku::FindDepthFormat(context.physical_device_));
 	VkFormat colorFmt = static_cast<VkFormat>(swapchain.swapchain_surface_format_.format);
@@ -96,15 +90,85 @@ GUI::~GUI()
 
 void GUI::SetStyle()
 {
-	ImGuiStyle& st = ImGui::GetStyle();
-	st.WindowRounding = 12.f;
-	st.FrameRounding = 10.f;
-	st.GrabRounding = 10.f;
-	st.ScrollbarRounding = 10.f;
+	//ImGui::StyleColorsClassic();
+	//ImGui::StyleColorsLight();
+	//ImGui::StyleColorsDark();
 
-	ImVec4* col = st.Colors;
-	col[ImGuiCol_WindowBg].w = 0.1f;
+	ImGuiStyle& style = ImGui::GetStyle();
+	style.WindowRounding = 8.0f;
+	style.FrameRounding = 4.0f;
+	style.GrabRounding = 4.0f;
+	style.ScrollbarRounding = 4.0f;
+	style.FontScaleMain = 2.0f;
 
+	ImVec4* colors = style.Colors;
+
+	colors[ImGuiCol_Text] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
+	colors[ImGuiCol_TextDisabled] = ImVec4(0.33f, 0.33f, 0.33f, 1.00f);
+	colors[ImGuiCol_WindowBg] = ImVec4(0.02f, 0.02f, 0.02f, 1.00f);
+	colors[ImGuiCol_ChildBg] = ImVec4(0.02f, 0.02f, 0.02f, 0.00f);
+	colors[ImGuiCol_PopupBg] = ImVec4(0.05f, 0.05f, 0.05f, 0.94f);
+	colors[ImGuiCol_Border] = ImVec4(0.04f, 0.04f, 0.04f, 0.99f);
+	colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+	colors[ImGuiCol_FrameBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.54f);
+	colors[ImGuiCol_FrameBgHovered] = ImVec4(0.38f, 0.51f, 0.51f, 0.80f);
+	colors[ImGuiCol_FrameBgActive] = ImVec4(0.03f, 0.03f, 0.04f, 0.67f);
+	colors[ImGuiCol_TitleBg] = ImVec4(0.01f, 0.01f, 0.01f, 1.00f);
+	colors[ImGuiCol_TitleBgActive] = ImVec4(0.04f, 0.04f, 0.04f, 1.00f);
+	colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.00f, 0.00f, 0.00f, 0.51f);
+	colors[ImGuiCol_MenuBarBg] = ImVec4(0.02f, 0.02f, 0.02f, 1.00f);
+	colors[ImGuiCol_ScrollbarBg] = ImVec4(0.02f, 0.02f, 0.02f, 0.53f);
+	colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.07f, 0.07f, 0.07f, 1.00f);
+	colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.18f, 0.17f, 0.17f, 1.00f);
+	colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.18f, 0.18f, 0.18f, 1.00f);
+	colors[ImGuiCol_CheckMark] = ImVec4(0.30f, 0.60f, 0.10f, 1.00f);
+	colors[ImGuiCol_SliderGrab] = ImVec4(0.30f, 0.60f, 0.10f, 1.00f);
+	colors[ImGuiCol_SliderGrabActive] = ImVec4(0.43f, 0.90f, 0.11f, 1.00f);
+	colors[ImGuiCol_Button] = ImVec4(0.21f, 0.22f, 0.23f, 0.40f);
+	colors[ImGuiCol_ButtonHovered] = ImVec4(0.38f, 0.51f, 0.51f, 0.80f);
+	colors[ImGuiCol_ButtonActive] = ImVec4(0.54f, 0.55f, 0.55f, 1.00f);
+	colors[ImGuiCol_Header] = ImVec4(0.04f, 0.04f, 0.04f, 1.00f);
+	colors[ImGuiCol_HeaderHovered] = ImVec4(0.38f, 0.51f, 0.51f, 0.80f);
+	colors[ImGuiCol_HeaderActive] = ImVec4(0.03f, 0.03f, 0.03f, 1.00f);
+	colors[ImGuiCol_Separator] = ImVec4(0.16f, 0.16f, 0.16f, 0.50f);
+	colors[ImGuiCol_SeparatorHovered] = ImVec4(0.10f, 0.40f, 0.75f, 0.78f);
+	colors[ImGuiCol_SeparatorActive] = ImVec4(0.10f, 0.40f, 0.75f, 1.00f);
+	colors[ImGuiCol_ResizeGrip] = ImVec4(0.26f, 0.59f, 0.98f, 0.20f);
+	colors[ImGuiCol_ResizeGripHovered] = ImVec4(0.26f, 0.59f, 0.98f, 0.67f);
+	colors[ImGuiCol_ResizeGripActive] = ImVec4(0.26f, 0.59f, 0.98f, 0.95f);
+	colors[ImGuiCol_TabHovered] = ImVec4(0.23f, 0.23f, 0.24f, 0.80f);
+	colors[ImGuiCol_Tab] = ImVec4(0.02f, 0.02f, 0.02f, 1.00f);
+	colors[ImGuiCol_TabSelected] = ImVec4(0.02f, 0.02f, 0.02f, 1.00f);
+	colors[ImGuiCol_TabSelectedOverline] = ImVec4(0.13f, 0.78f, 0.07f, 1.00f);
+	colors[ImGuiCol_TabDimmed] = ImVec4(0.02f, 0.02f, 0.02f, 1.00f);
+	colors[ImGuiCol_TabDimmedSelected] = ImVec4(0.02f, 0.02f, 0.02f, 1.00f);
+	colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.10f, 0.60f, 0.12f, 1.00f);
+	colors[ImGuiCol_PlotLines] = ImVec4(0.61f, 0.61f, 0.61f, 1.00f);
+	colors[ImGuiCol_PlotLinesHovered] = ImVec4(0.14f, 0.87f, 0.05f, 1.00f);
+	colors[ImGuiCol_PlotHistogram] = ImVec4(0.30f, 0.60f, 0.10f, 1.00f);
+	colors[ImGuiCol_PlotHistogramHovered] = ImVec4(0.23f, 0.78f, 0.02f, 1.00f);
+	colors[ImGuiCol_TableHeaderBg] = ImVec4(0.27f, 0.27f, 0.27f, 1.00f);
+	colors[ImGuiCol_TableBorderStrong] = ImVec4(0.31f, 0.31f, 0.35f, 1.00f);
+	colors[ImGuiCol_TableBorderLight] = ImVec4(0.23f, 0.23f, 0.25f, 1.00f);
+	colors[ImGuiCol_TableRowBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+	colors[ImGuiCol_TableRowBgAlt] = ImVec4(0.46f, 0.47f, 0.46f, 0.06f);
+	colors[ImGuiCol_TextLink] = ImVec4(0.26f, 0.59f, 0.98f, 1.00f);
+	colors[ImGuiCol_TextSelectedBg] = ImVec4(0.26f, 0.59f, 0.98f, 0.35f);
+	colors[ImGuiCol_DragDropTarget] = ImVec4(1.00f, 1.00f, 0.00f, 0.90f);
+	colors[ImGuiCol_NavCursor] = ImVec4(0.26f, 0.59f, 0.98f, 1.00f);
+	colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
+	colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.78f, 0.69f, 0.69f, 0.20f);
+	colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
+
+	style.WindowRounding = 4.0f;
+	style.FrameRounding = 4.0f;
+	style.GrabRounding = 3.0f;
+	style.PopupRounding = 4.0f;
+	style.TabRounding = 4.0f;
+	style.WindowMenuButtonPosition = ImGuiDir_Right;
+	style.ScrollbarSize = 10.0f;
+	style.GrabMinSize = 10.0f;
+	style.SeparatorTextBorderSize = 2.0f;
 }
 
 void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& swapchain, float& targetSimFPS, double& simDt)
@@ -128,13 +192,15 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 			drawControl();
 		};
 
-	ImGui::SetNextWindowBgAlpha(1.0f);
 	ImGuiWindowFlags wf =
 		ImGuiWindowFlags_NoResize |
+		ImGuiWindowFlags_NoMove |
 		ImGuiWindowFlags_NoCollapse;
 
+	float spacing = 10.0f;
+
+	ImGui::SetNextWindowPos(ImVec2(swapchain.swapchain_extent_.width - 510.0f, spacing));
 	ImGui::SetNextWindowSize(ImVec2(500.0f, 0));
-	ImGui::SetNextWindowPos(ImVec2(swapchain.swapchain_extent_.width - 510.0f, 10.0f), ImGuiCond_Once);
 	if (ImGui::Begin("Cloth Performance Monitor", nullptr, wf))
 	{
 		if (graphicsContext.cpu_or_gpu_ == vku::CpuOrGpu::CPU)
@@ -146,8 +212,21 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 		ImGui::End();
 	}
 
-	ImGui::SetNextWindowSize(ImVec2(500.0f, 0));
-	ImGui::SetNextWindowPos(ImVec2(10.0f, 10.0f), ImGuiCond_Once);
+	ImVec2 scenePos{ spacing, spacing };
+	ImVec2 sceneSize{ 500.0f, 200.0f };
+
+	ImGui::SetNextWindowPos(scenePos);
+	ImGui::SetNextWindowSize(sceneSize);
+	if (ImGui::Begin("Scene", nullptr, wf))
+	{
+		SetTestSceneGUI(row, graphicsContext.test_scene_);
+		ImGui::End();
+	}
+
+	ImVec2 optionPos{ scenePos.x, scenePos.y + sceneSize.y + spacing };
+	ImVec2 optionSize{ sceneSize.x, swapchain.swapchain_extent_.height - optionPos.y - spacing };
+	ImGui::SetNextWindowPos(optionPos);
+	ImGui::SetNextWindowSize(optionSize);
 	if (ImGui::Begin("Option", nullptr, wf))
 	{
 		SetRenderingGUI(row, graphicsContext);
@@ -155,13 +234,11 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 			SetSimulationGUI(row, graphicsContext, graphicsContext.cpu_sim_, targetSimFPS, simDt);
 		else if (graphicsContext.cpu_or_gpu_ == vku::CpuOrGpu::GPU)
 			SetSimulationGUI(row, graphicsContext, graphicsContext.gpu_sim_, targetSimFPS, simDt);
-		SetTestSceneGUI(row, graphicsContext.test_scene_);
-		//SetObjectGUI(row, graphicsContext.gpu_sim_->ubo_datas_.render);
 
 		ImGui::End();
 	}
 
-	//ImGui::ShowDemoWindow();
+	ImGui::ShowDemoWindow();
 
 	ImGui::Render();
 }
@@ -325,6 +402,19 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& s
 			ImGui::EndTable();
 		}
 
+		ImGui::SeparatorText("SolverConfig");
+		if (ImGui::BeginTable("SolverConfig", 2,
+			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+		{
+			row("Stretch", [&] { ImGui::Checkbox("##Stretch", &graphicsContext.gpu_sim_->solver_config_.stretch); });
+			row("Shear", [&] { ImGui::Checkbox("##Shear", &graphicsContext.gpu_sim_->solver_config_.shear); });
+			row("Bend", [&] { ImGui::Checkbox("##Bend", &graphicsContext.gpu_sim_->solver_config_.bend); });
+			row("Area", [&] { ImGui::Checkbox("##Area", &graphicsContext.gpu_sim_->solver_config_.area); });
+			row("SelfCollision", [&] { ImGui::Checkbox("##SelfCollision", &graphicsContext.gpu_sim_->solver_config_.self_collision); });
+			ImGui::EndTable();
+		}
+
+
 		ImGui::SeparatorText("Stiffness");
 		if (ImGui::BeginTable("Stiffness", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
@@ -363,25 +453,25 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& s
 	}
 }
 
-
 template<typename RowFn, typename Scene>
 void GUI::SetTestSceneGUI(RowFn&& row, Scene& scene)
 {
-	if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen))
+	ImVec2 buttonSize = ImVec2(ImGui::GetContentRegionAvail().x, 0);
+	if (ImGui::Button("SphereCollision", buttonSize))
 	{
-		if (ImGui::BeginTable("SceneTable", 2,
-			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
-		{
-			row("SphereCollision", [&] {
-				ImGui::Checkbox("##SphereCollision", &scene.sphereCollision); });
-			row("PinnedCorner", [&] {
-				ImGui::Checkbox("##PinnedCorner", &scene.pinnedCorner); });
-			row("TopPinnedCorner", [&] {
-				ImGui::Checkbox("##TopPinnedCorner", &scene.topPinnedCorner); });
-
-			ImGui::EndTable();
-		}
+		scene.sphereCollision = true;
 	}
+
+	if (ImGui::Button("PinnedCorner", buttonSize))
+	{
+		scene.pinnedCorner = true;
+	}
+
+	if (ImGui::Button("TopPinnedCorner", buttonSize))
+	{
+		scene.topPinnedCorner = true;
+	}
+
 }
 
 template<typename RowFn>

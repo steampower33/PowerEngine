@@ -14,7 +14,7 @@ TextureManager::TextureManager(Context& context)
     //ConvertFileToKtx("assets/curtain");
 
     vulkan_thumbnail_index_ = CreateTexture("assets", "vulkan_cloth_rgba");
-    brdf_lut_index_ = CreateTexture("assets/lut", "lut_ggx");
+    brdf_lut_index_ = CreateTexture("assets/lut", "lut_sheen_e");
 }
 
 TextureManager::~TextureManager()

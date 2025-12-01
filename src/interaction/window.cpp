@@ -54,16 +54,16 @@ void Window::mainloop()
 		float frameDt = static_cast<float>(current - lastTime);
 		lastTime = current;
 
-		simAccum += frameDt;
+		sim_accum_ += frameDt;
 
 		ProcessKeyboard(frameDt);
 
 		key_timeout_ -= frameDt;
 
-		if (simAccum >= simDt) {
-			simAccum -= simDt;
+		if (sim_accum_ >= sim_dt_) {
+			sim_accum_ -= sim_dt_;
 
-			renderer_->Update(*camera_, *mouse_interactor_, frameDt, targetSimFPS, simDt);
+			renderer_->Update(*camera_, *mouse_interactor_, frameDt, target_sim_fps_, sim_dt_);
 			renderer_->Draw();
 		}
 	}
