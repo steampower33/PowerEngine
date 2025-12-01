@@ -145,7 +145,7 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 			vku::Barrier2(cmd,
 				vk::PipelineStageFlagBits2::eComputeShader,
 				vk::AccessFlagBits2::eShaderStorageWrite,
-				vk::PipelineStageFlagBits2::eVertexShader,
+				vk::PipelineStageFlagBits2::eComputeShader,
 				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
 			// build_hash
@@ -160,32 +160,26 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 			vku::Barrier2(cmd,
 				vk::PipelineStageFlagBits2::eComputeShader,
 				vk::AccessFlagBits2::eShaderStorageWrite,
-				vk::PipelineStageFlagBits2::eVertexShader,
-				vk::AccessFlagBits2::eShaderStorageRead);
+				vk::PipelineStageFlagBits2::eComputeShader,
+				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
 			TS(timestampSteps);
 			if (solver_config_.self_collision)
 			{
 				vrdxCmdSortKeyValue(
-					*cmd,                  // VkCommandBuffer
-					radix_.sorter,
-					datas_.num_particles,   // N
-					*ssbos_.particle_hash,        // keys
-					0,
-					*ssbos_.particle_indice,       // values
-					0,
-					*radix_.storage_buffer,
-					0,
-					nullptr,
-					0
+					*cmd, radix_.sorter, datas_.num_particles,
+					*ssbos_.particle_hash, 0,
+					*ssbos_.particle_indice, 0,
+					*radix_.storage_buffer, 0,
+					nullptr, 0
 				);
 			}
 			TS(timestampSteps);
 			vku::Barrier2(cmd,
 				vk::PipelineStageFlagBits2::eComputeShader,
 				vk::AccessFlagBits2::eShaderStorageWrite,
-				vk::PipelineStageFlagBits2::eVertexShader,
-				vk::AccessFlagBits2::eShaderStorageWrite);
+				vk::PipelineStageFlagBits2::eComputeShader,
+				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
 			if (solver_config_.self_collision)
 			{
@@ -199,8 +193,8 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 				vku::Barrier2(cmd,
 					vk::PipelineStageFlagBits2::eComputeShader,
 					vk::AccessFlagBits2::eShaderStorageWrite,
-					vk::PipelineStageFlagBits2::eVertexShader,
-					vk::AccessFlagBits2::eShaderStorageRead);
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 			}
 
 			uint32_t simparamOffset = currentFrame * static_cast<uint32_t>(ubo_.size.sim_params);
@@ -223,8 +217,8 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 			vku::Barrier2(cmd,
 				vk::PipelineStageFlagBits2::eComputeShader,
 				vk::AccessFlagBits2::eShaderStorageWrite,
-				vk::PipelineStageFlagBits2::eVertexShader,
-				vk::AccessFlagBits2::eShaderStorageRead);
+				vk::PipelineStageFlagBits2::eComputeShader,
+				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
 			// build_neighbor
 			TS(timestampSteps);
@@ -238,8 +232,8 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 			vku::Barrier2(cmd,
 				vk::PipelineStageFlagBits2::eComputeShader,
 				vk::AccessFlagBits2::eShaderStorageWrite,
-				vk::PipelineStageFlagBits2::eVertexShader,
-				vk::AccessFlagBits2::eShaderStorageRead);
+				vk::PipelineStageFlagBits2::eComputeShader,
+				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 		}
 
 		for (uint32_t iter = 0; iter < datas_.iterations; iter++)
@@ -1746,13 +1740,10 @@ void GpuSim::CreateVrdxSorter()
 	vrdxGetSorterKeyValueStorageRequirements(radix_.sorter, datas_.num_particles, &req);
 	radix_.storage_size = req.size;
 
-	auto usage = vk::BufferUsageFlags(req.usage) |
-		vk::BufferUsageFlagBits::eStorageBuffer;
-
 	vku::CreateBuffer(context_.physical_device_,
 		context_.device_,
 		req.size,
-		usage,
+		vk::BufferUsageFlags(req.usage),
 		vk::MemoryPropertyFlagBits::eDeviceLocal,
 		radix_.storage_buffer,
 		radix_.storage_memory);

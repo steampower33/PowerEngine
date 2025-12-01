@@ -339,6 +339,7 @@ namespace vku
 		if (optStagingBuf && optStagingMem) {
 			stagingBuffer = std::move(*optStagingBuf);
 			stagingBufferMemory = std::move(*optStagingMem);
+			vku::CreateBuffer(physicalDevice, device, bufferSize, stagingUsage, stagingProperties, stagingBuffer, stagingBufferMemory);
 		}
 		else {
 			vku::CreateBuffer(physicalDevice, device, bufferSize,
@@ -346,7 +347,6 @@ namespace vku
 				stagingBuffer, stagingBufferMemory);
 		}
 
-		vku::CreateBuffer(physicalDevice, device, bufferSize, stagingUsage, stagingProperties, stagingBuffer, stagingBufferMemory);
 		void* dataStaging = stagingBufferMemory.mapMemory(0, bufferSize);
 		memcpy(dataStaging, data.data(), (size_t)bufferSize);
 		stagingBufferMemory.unmapMemory();

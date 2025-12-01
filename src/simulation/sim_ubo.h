@@ -7,7 +7,7 @@ struct SimUBO {
 			glm::vec4 sphere_center;
 			float sphere_radius;
 			float thickness = 0.004f;
-			float friction = 1.0f;
+			float friction = 0.5f;
 			float dt = 0.0f;
 			float global_damping = 1.0f;
 			float relaxation_factor = 0.2f;
