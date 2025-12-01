@@ -11,7 +11,7 @@ struct SimData {
 	float spacing_x = spacing;
 	float spacing_y = spacing;
 	
-	float cloth_height = 2.0f;
+	float cloth_height = cloth_size.y * 2.0f;
 	float gsm = 0.2f; // Grams per Square Meter
 
 	struct Compliance {

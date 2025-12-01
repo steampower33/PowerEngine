@@ -398,6 +398,8 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& s
 			row("Thickness", [&] { ImGui::DragFloat("##Thickness", &sim->ubo_.datas.sim_params.thickness, 0.001f, 0.0f, 1.0f, "%.3f"); });
 			row("Friction", [&] { ImGui::DragFloat("##Friction", &sim->ubo_.datas.sim_params.friction, 0.001f, 0.0f, 1.0f, "%.3f"); });
 			row("NeighborFriction", [&] { ImGui::DragFloat("##NeighborFriction", &sim->ubo_.datas.sim_params.neighbor_friction, 0.1f, 0.0f, 10.0f, "%.1f"); });
+			row("MaxNeighbors", [&] { int maxNeighbors = sim->ubo_.datas.sim_params.max_neighbors;  ImGui::DragInt("##MaxNeighbors", &maxNeighbors, 1, 0, 20); sim->ubo_.datas.sim_params.max_neighbors = maxNeighbors; });
+			row("MaxSpeed", [&] { ImGui::DragFloat("##MaxSpeed", &sim->ubo_.datas.sim_params.max_speed, 0.1f, sim->ubo_.datas.sim_params.max_speed, sim->ubo_.datas.sim_params.max_speed, "%.1f"); });
 			ImGui::EndTable();
 		}
 

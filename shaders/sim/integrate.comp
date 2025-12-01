@@ -59,12 +59,12 @@ void mouse_drag_pass(uint i, inout vec3 xpi, inout vec3 vi)
     float t = grab_state[0].t;
     if (pc.mouse.depth_mode == 1u)
     {
-        t *= 0.9995;
+        t *= 0.998;
         grab_state[0].t = t;
     }
     else if (pc.mouse.depth_mode == 2u)
     {
-        t *= 1.0005;
+        t *= 1.002;
         grab_state[0].t = t;
     }
 

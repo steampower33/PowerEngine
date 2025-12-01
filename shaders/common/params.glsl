@@ -49,7 +49,7 @@ layout(std140, set = 0, binding = 0) uniform SimParams {
     float area_stiffness;
 
     float self_collision_stiffness;
-    float p1;
+    float max_speed;
     float p2;
     float p3;
 } sim;

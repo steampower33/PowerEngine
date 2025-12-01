@@ -6,11 +6,24 @@ void main() {
     uint i = gl_GlobalInvocationID.x;
     if (i >= sim.num_particles) return;
 
-    if (w[i]==0.0) { v[i]=vec4(0.0); x[i]=xp[i]; return; }
+     if (w[i] == 0.0) { 
+        v[i] = vec4(0.0); 
+        x[i] = xp[i]; 
+        return; 
+    }
 
+    vec3 old_pos = x[i].xyz;
     vec3 new_pos = xp[i].xyz;
-    vec3 new_vel = (new_pos - x[i].xyz) / sim.dt;
 
-    v[i].xyz = new_vel * (1.0f - sim.global_damping * sim.dt);
+    vec3 raw_vel = (new_pos - old_pos) / sim.dt;
+
+    float speed = length(raw_vel);
+    if (speed > sim.max_speed) {
+        raw_vel = raw_vel * (sim.max_speed / speed);
+        new_pos = old_pos + raw_vel * sim.dt;
+    }
+    vec3 damped_vel = raw_vel * (1.0 - sim.global_damping * sim.dt);
+
+    v[i].xyz = damped_vel;
     x[i].xyz = new_pos;
 }

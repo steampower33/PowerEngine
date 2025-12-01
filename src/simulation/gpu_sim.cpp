@@ -82,7 +82,10 @@ void GpuSim::UpdateComputeUBO(uint32_t currentFrame, std::unique_ptr<Model>& mod
 	ubo_.datas.sim_params.num_areas = datas_.num_areas;
 	ubo_.datas.sim_params.sphere_center = glm::vec4(model->position_, 0.0f);
 	ubo_.datas.sim_params.sphere_radius = model->radius_;
-
+	float dt = ubo_.datas.sim_params.dt;
+	float r = ubo_.datas.sim_params.collision_radius;
+	float k = 4.0f;
+	ubo_.datas.sim_params.max_speed = k * r / dt;
 	const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_.size.sim_params);
 	auto* dst = static_cast<std::byte*>(ubo_.mapped.sim_params) + baseOffset;
 
@@ -140,7 +143,7 @@ void GpuSim::RecordCompute(uint32_t currentFrame, const vk::raii::CommandBuffer&
 		cmd.dispatch(groupsEdges, 1, 1);
 		TS(timestampSteps);
 
-		// Self Collision
+		// Broad Phase
 		{
 			vku::Barrier2(cmd,
 				vk::PipelineStageFlagBits2::eComputeShader,
@@ -916,7 +919,7 @@ void GpuSim::CreateSSBOBuffers()
 
 	// Self Collision
 	uint32_t tableSize = datas_.num_particles ;
-	uint32_t maxNeighbors = 4;
+	uint32_t maxNeighbors = 20;
 	ubo_.datas.sim_params.num_tables = tableSize;
 	ubo_.datas.sim_params.cell_size = std::min(datas_.spacing_x, datas_.spacing_y);
 	ubo_.datas.sim_params.collision_radius = ubo_.datas.sim_params.cell_size;

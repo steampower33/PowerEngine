@@ -29,7 +29,7 @@ struct SimUBO {
 			float area_stiffness = 1.0f;
 
 			float self_collision_stiffness = 50.0f;
-			float p1;
+			float max_speed;
 			float p2;
 			float p3;
 		} sim_params;

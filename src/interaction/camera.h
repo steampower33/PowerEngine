@@ -13,8 +13,8 @@ struct Camera {
     float yaw = -46.1999;
     float pitch = -41;
     float fov = 60.0f;    // ¡‹
-    float move_speed = 6.0f; // m/s
-    float sensitivity = 0.2f;
+    float move_speed = 2.0f; // m/s
+    float sensitivity = 0.1f;
     float width = 0.0f;
     float height = 0.0f;
 
