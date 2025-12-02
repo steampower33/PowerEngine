@@ -19,9 +19,9 @@ public:
 	MeshData mesh_data_;
 
 	struct TextureIdx {
-		int env = 0;
-		int radiance = 0;
-		int irradiance = 0;
+		int env = -1;
+		int radiance = -1;
+		int irradiance = -1;
 	} texture_idx_;
 
 	glm::mat4 world_{ 1.0f };

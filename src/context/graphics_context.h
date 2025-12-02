@@ -123,13 +123,13 @@ public:
 
 			int ao_idx = -1;
 			int height_idx = -1;
-			float metallic_factor = 0.5f;
-			float roughness_factor = 0.5f;
+			float metallic_factor = 0.0f;
+			float roughness_factor = 0.0f;
 
 			float ao_factor = 0.0f;
 			float height_factor = 0.0f;
-			uint32_t p0 = 0;
-			uint32_t p1 = 0;
+			float sheen_weight_factor = 0.0f;
+			float sheen_roughness_factor = 0.0f;
 
 			uint32_t albedo_enable = 0;
 			uint32_t metallic_enable = 0;
@@ -151,9 +151,9 @@ public:
 			glm::vec3 direction{ 0.0f, -1.0f, -1.0f };
 			float inner = 0.0f;
 			float outer = 90.0f;
-			uint32_t light_enable = 1;
-			uint32_t pbr_enable = 0;
-			float exposure = 0.5f;
+			uint32_t light_enable = 0;
+			uint32_t pbr_enable = 1;
+			float exposure = 0.8f;
 		} light;
 		static_assert(sizeof(UBOData::Light) % 16 == 0, "std140 must be 16-byte aligned.");
 

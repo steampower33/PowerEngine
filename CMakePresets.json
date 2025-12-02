@@ -21,7 +21,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug"
       }
-    },
+    }
     //{
     //  "name": "windows-release",
     //  "inherits": "windows-base",
@@ -34,7 +34,7 @@
     {
       "name": "Debug",
       "configurePreset": "windows-debug"
-    },
+    }
     //{
     //  "name": "Release",
     //  "configurePreset": "windows-release"

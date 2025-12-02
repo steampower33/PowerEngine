@@ -23,15 +23,15 @@ layout(set = 0, binding = 4) uniform sampler2D out_depth;
 layout(set = 1, binding = 0) uniform SkyboxUBO {
     mat4x4 model;
 
-    uint env_idx;
-    uint radiance_idx;
-    uint irradiance_idx;
-    uint specular_mip_levels;
+    int env_idx;
+    int radiance_idx;
+    int irradiance_idx;
+    int specular_mip_levels;
 
-    uint brdf_lut_index;
-    uint p0;
-    uint p1;
-    uint p2;
+    int brdf_lut_index;
+    int p0;
+    int p1;
+    int p2;
 } skybox;
 
 layout(set = 2, binding = 0) uniform sampler2D tex[];
@@ -69,6 +69,27 @@ vec3 tonemap_aces(vec3 x)
                  0.0, 1.0);
 }
 
+vec3 eval_sheen(
+    vec3 N,
+    vec3 V,
+    vec3 albedo,
+    float sheen_weight,
+    float sheen_rough
+) {
+    if (sheen_weight <= 0.0) {
+        return vec3(0.0);
+    }
+
+    float nv = max(dot(N, V), 0.0);
+
+    float m = mix(8.0, 1.5, clamp(sheen_rough, 0.0, 1.0));
+    float sheen_term = pow(1.0 - nv, m);
+
+    vec3 sheen_color = mix(vec3(1.0), albedo, 0.5);
+
+    return sheen_color * sheen_weight * sheen_term;
+}
+
 void main()
 {
     float depth = texture(out_depth, in_uv).r;
@@ -86,6 +107,8 @@ void main()
     float roughness = nr.a;
     float height = ha.r;
     float ao = ha.g;
+    float sheen_weight = ha.b;
+    float sheen_rough  = ha.a;
 
     vec3 camera_pos = light.camera_pos.xyz;
 
@@ -126,16 +149,22 @@ void main()
 
         vec3 ambient_diffuse = kD * diffuse_ibl * ao;
         vec3 ambient_spec    = specular_ibl;
-
+        vec3 base_ibl        = ambient_diffuse + ambient_spec;
+        
+        vec3 sheen_ibl = eval_sheen(N, V, albedo, sheen_weight, sheen_rough);
+        
+        float sheen_mag = clamp(max(max(sheen_ibl.r, sheen_ibl.g), sheen_ibl.b), 0.0, 1.0);
+        float base_scale = 1.0 - 0.5 * sheen_mag;
+     
         color = ambient_diffuse + ambient_spec;
 
+        color = base_ibl * base_scale + sheen_ibl;
+        
         color = max(color, vec3(0.0));
     
         float exposure = light.exposure;
         color *= exposure;
         color  = tonemap_aces(color);
-
-        color = pow(color, vec3(1.0 / 2.2));
     }
     
     if (light.light_enable == 1u)
@@ -144,6 +173,7 @@ void main()
             out_color = vec4(0.0f);
             return;
         }
+
         vec3 light_pos = light.position;
         vec3 V = normalize(light.camera_pos.xyz - world_pos);
         vec3 L = normalize(light_pos - world_pos);
@@ -153,13 +183,28 @@ void main()
         float spot = smoothstep(cos(radians(light.outer)), cos(radians(light.inner)), cos_theta);
         float dist = length(light_pos - world_pos);
         float attenuation = 1.0 / (dist * dist);
+
         float diff = max(dot(N, L), 0.0);
         float spec = pow(max(dot(N, H), 0.0), 1000.0f);
         vec3 specular_color = vec3(1.0);
-        color = (color * diff + specular_color * spec) 
-              * light.intensity
-              * attenuation 
-              * spot;
+
+        vec3 direct = (color * diff + specular_color * spec);
+
+        float sheen_weight = ha.b;
+        float sheen_rough  = ha.a;
+
+        float nv = max(dot(N, V), 0.0);
+        float m = mix(8.0, 1.5, clamp(sheen_rough, 0.0, 1.0));
+        float sheen_term = pow(1.0 - nv, m);
+
+        vec3 sheen_color = mix(vec3(1.0), albedo, 0.5);
+
+        float nl = max(dot(N, L), 0.0);
+        vec3 sheen_direct = sheen_color * sheen_weight * sheen_term * nl;
+
+        direct += sheen_direct;
+
+        color = direct * light.intensity * attenuation * spot;
     }
     out_color = vec4(color, 1.0);
 }

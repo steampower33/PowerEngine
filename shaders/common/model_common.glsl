@@ -28,8 +28,8 @@ layout(set = 1, binding = 0) uniform ObjectUBO {
 
     float ao_factor;
     float height_factor;
-    uint p0;
-    uint p1;
+    float sheen_weight_factor;
+    float sheen_roughness_factor;
 
     uint albedo_enable;
     uint metallic_enable;

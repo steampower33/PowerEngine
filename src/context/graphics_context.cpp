@@ -95,6 +95,8 @@ void GraphicsContext::UpdateGraphicsUBO(Camera& camera)
 			ubo_datas_.object.metallic_factor = model_manager_.models_[i]->factors_.metallic;
 			ubo_datas_.object.roughness_factor = model_manager_.models_[i]->factors_.roughness;
 			ubo_datas_.object.ao_factor = model_manager_.models_[i]->factors_.ao;
+			ubo_datas_.object.sheen_weight_factor = model_manager_.models_[i]->factors_.sheen_weight;
+			ubo_datas_.object.sheen_roughness_factor = model_manager_.models_[i]->factors_.sheen_roughness;
 
 			ubo_datas_.object.albedo_enable = model_manager_.models_[i]->texture_enable_.albedo;
 			ubo_datas_.object.metallic_enable = model_manager_.models_[i]->texture_enable_.metallic;
@@ -1731,7 +1733,7 @@ void GraphicsContext::CreateGeometryBuffers()
 		imageView = vku::CreateImageView(context_.device_, image, format, vk::ImageAspectFlagBits::eColor, 1);
 	}
 
-	//RT1 : normal + roughness ¡æ VK_FORMAT_A2B10G10R10_UNORM_PACK32 or VK_FORMAT_R16G16B16A16_SFLOAT
+	//RT1 : normal + roughness ¡æ VK_FORMAT_R8G8B8A8_UNORM
 	{
 		vk::Format format = vk::Format::eR16G16B16A16Sfloat;
 		geometry_buffers_.formats.push_back(format);
@@ -1748,9 +1750,9 @@ void GraphicsContext::CreateGeometryBuffers()
 		imageView = vku::CreateImageView(context_.device_, image, format, vk::ImageAspectFlagBits::eColor, 1);
 	}
 
-	//RT2 : height + ao ¡æ VK_FORMAT_R16G16_SFLOAT or VK_FORMAT_R8G8_UNORM
+	//RT2 : height + ao + sheen weight + sheen roughness ¡æ VK_FORMAT_R8G8B8A8_UNORM
 	{
-		vk::Format format = vk::Format::eR8G8Unorm;
+		vk::Format format = vk::Format::eR8G8B8A8Unorm;
 		geometry_buffers_.formats.push_back(format);
 		auto& image = geometry_buffers_.height_ao_image;
 		auto& imageView = geometry_buffers_.height_ao_image_view;

@@ -39,12 +39,12 @@ void main() {
         vec2 uv = in_pos_world.xz * 0.5;
         ivec2 cell = ivec2(floor(uv));
         int c = (cell.x + cell.y) & 1;
-        albedo.xyz = (c == 0) ? vec3(0.9) : vec3(0.7);
+        albedo.xyz = (c == 0) ? vec3(0.85, 0.85, 0.85) : vec3(0.35, 0.35, 0.35);
     }
     out_albedo_metal = vec4(albedo.xyz, metallic);
 
     vec3 n = normalize(normalTS);
     out_normal_rough = vec4(n * 0.5 + 0.5, rough);
-
-    out_height_ao = vec4(height, ao, 0.0, 0.0);
+    
+    out_height_ao = vec4(height, ao, object.sheen_weight_factor, object.sheen_roughness_factor);
 }

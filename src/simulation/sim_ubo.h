@@ -36,7 +36,7 @@ struct SimUBO {
 		static_assert(sizeof(SimParams) % 16 == 0, "std140 must be 16-byte aligned.");
 
 		struct Render {
-			glm::vec4 albedo_use{ 1.0f, 1.0f, 1.0f, 0.0f };
+			glm::vec4 albedo{ 1.0f, 1.0f, 1.0f, 0.0f };
 
 			int albedo_idx = -1;
 			int metallic_idx = -1;
@@ -50,13 +50,13 @@ struct SimUBO {
 
 			float ao_factor = 1.0f;
 			float height_factor = 0.0f;
-			uint32_t p0 = 0;
-			uint32_t p1 = 0;
+			float sheen_weight_factor = 0.7f;
+			float sheen_roughness_factor = 1.0f;
 
 			uint32_t albedo_enable = 0;
 			uint32_t metallic_enable = 0;
 			uint32_t normal_enable = 0;
-			uint32_t roughtness_enable = 0;
+			uint32_t roughness_enable = 0;
 
 			uint32_t ao_enable = 0;
 			uint32_t height_enable = 0;

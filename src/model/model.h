@@ -56,9 +56,11 @@ public:
 
 	struct Factor {
 		float metallic = 0.0f;
-		float roughness = 0.7f;
+		float roughness = 1.0f;
 		float ao = 1.0f;
 		float height = 0.0f;
+		float sheen_weight = 0.7f;
+		float sheen_roughness = 1.0f;
 	} factors_;
 
 	void ApplyTransform(const glm::quat& rotationDelta, const glm::vec3& translationDelta);

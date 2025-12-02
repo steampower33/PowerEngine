@@ -18,8 +18,8 @@ layout(set = 2, binding = 0) uniform Render {
 
     float ao_factor;
     float height_factor;
-    uint p0;
-    uint p1;
+    float sheen_weight_factor;
+    float sheen_roughness_factor;
 
     uint albedo_enable;
     uint metallic_enable;
@@ -51,5 +51,5 @@ void main() {
 
     out_albedo_metal = vec4(albedo.xyz, metallic);
     out_normal_rough = vec4(normal * 0.5 + 0.5, roughness); // [-1,1] -> [0,1]
-    out_height_ao = vec4(0.0, ao, 0.0, 0.0);
+    out_height_ao = vec4(height, ao, render.sheen_weight_factor, render.sheen_roughness_factor);
 }
