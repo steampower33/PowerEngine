@@ -61,8 +61,10 @@ void GraphicsContext::Update(Camera& camera, MouseInteractor& mouseInteractor)
 	UpdateGraphicsUBO(camera);
 }
 
+// Very Naive Method
 void GraphicsContext::UpdateGraphicsUBO(Camera& camera)
 {
+	
 	// Global UBO
 	{
 		const uint32_t globalOffset = static_cast<uint32_t>(current_frame_ * ubo_size_.global);
@@ -119,6 +121,46 @@ void GraphicsContext::UpdateGraphicsUBO(Camera& camera)
 		const uint32_t lightOffset = static_cast<uint32_t>(current_frame_ * ubo_size_.light);
 		auto* dst = static_cast<std::byte*>(ubo_mapped_.light) + lightOffset;
 		std::memcpy(dst, &ubo_datas_.light, sizeof(UBOData::Light));
+	}
+
+	// Skybox
+	{
+		const uint32_t skyboxOffset = static_cast<uint32_t>(current_frame_ * ubo_size_.skybox);
+		auto* dst = static_cast<std::byte*>(ubo_mapped_.skybox) + skyboxOffset;
+
+		auto& tm = texture_manager_;
+
+		if (tm.skybox_enable_.morning)
+		{
+			tm.skybox_enable_.morning = false;
+			ubo_datas_.skybox.brdfIndex = tm.skybox_index_.morning_brdf;
+			ubo_datas_.skybox.env_idx = tm.skybox_index_.morning_env;
+			ubo_datas_.skybox.specular_idx = tm.skybox_index_.morning_specular;
+			ubo_datas_.skybox.diffuse_idx = tm.skybox_index_.morning_diffuse;
+			ubo_datas_.skybox.specular_mip_levels = tm.env_textures_[tm.skybox_index_.morning_specular]->mip_levels_;
+		}
+
+		if (texture_manager_.skybox_enable_.evening)
+		{
+			tm.skybox_enable_.evening = false;
+			ubo_datas_.skybox.brdfIndex = tm.skybox_index_.evening_brdf;
+			ubo_datas_.skybox.env_idx = tm.skybox_index_.evening_env;
+			ubo_datas_.skybox.specular_idx = tm.skybox_index_.evening_specular;
+			ubo_datas_.skybox.diffuse_idx = tm.skybox_index_.evening_diffuse;
+			ubo_datas_.skybox.specular_mip_levels = tm.env_textures_[tm.skybox_index_.evening_specular]->mip_levels_;
+		}
+
+		if (texture_manager_.skybox_enable_.night)
+		{
+			tm.skybox_enable_.night = false;
+			ubo_datas_.skybox.brdfIndex = tm.skybox_index_.night_brdf;
+			ubo_datas_.skybox.env_idx = tm.skybox_index_.night_env;
+			ubo_datas_.skybox.specular_idx = tm.skybox_index_.night_specular;
+			ubo_datas_.skybox.diffuse_idx = tm.skybox_index_.night_diffuse;
+			ubo_datas_.skybox.specular_mip_levels = tm.env_textures_[tm.skybox_index_.night_specular]->mip_levels_;
+		}
+
+		std::memcpy(dst, &ubo_datas_.skybox, sizeof(UBOData::SkyBox));
 	}
 }
 
@@ -1052,12 +1094,11 @@ void GraphicsContext::CreateUniformBuffers()
 		ubo_memories_.skybox = std::move(bufferMem);
 		ubo_mapped_.skybox = ubo_memories_.skybox.mapMemory(0, totalSize);
 
-		ubo_datas_.skybox.model = model_manager_.skybox_->world_;
-		ubo_datas_.skybox.envIdx = model_manager_.skybox_->texture_idx_.env;
-		ubo_datas_.skybox.radianceIdx = model_manager_.skybox_->texture_idx_.radiance;
-		ubo_datas_.skybox.irradianceIdx = model_manager_.skybox_->texture_idx_.irradiance;
-		ubo_datas_.skybox.brdfLUTIndex = texture_manager_.brdf_lut_index_;
-		ubo_datas_.skybox.specularMipLevels = texture_manager_.textures_[model_manager_.skybox_->texture_idx_.radiance]->mip_levels_;
+		ubo_datas_.skybox.brdfIndex = texture_manager_.skybox_index_.morning_brdf;
+		ubo_datas_.skybox.env_idx = texture_manager_.skybox_index_.morning_env;
+		ubo_datas_.skybox.specular_idx = texture_manager_.skybox_index_.morning_specular;
+		ubo_datas_.skybox.diffuse_idx = texture_manager_.skybox_index_.morning_diffuse;
+		ubo_datas_.skybox.specular_mip_levels = texture_manager_.textures_[texture_manager_.skybox_index_.morning_specular]->mip_levels_;
 
 		auto* dst = static_cast<std::byte*>(ubo_mapped_.skybox);
 		std::memcpy(dst, &ubo_datas_.skybox, ubo_size_.skybox);

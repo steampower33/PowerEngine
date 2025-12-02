@@ -17,11 +17,10 @@ public:
 	const uint32_t max_texture_size = 32;
 	std::vector<std::unique_ptr<Texture>> textures_;
 
-	const uint32_t env_texture_size = 3;
+	const uint32_t env_texture_size = 9;
 	std::vector<std::unique_ptr<Texture>> env_textures_;
 	
 	int vulkan_thumbnail_index_ = 0;
-	int brdf_lut_index_ = 0;
 
 	const char* keywords_[10] = {
 		"color",
@@ -36,9 +35,26 @@ public:
 		"lut",
 	};
 
-	int albedo_idx_;
-	int normal_idx_;
-	int roughness_idx_;
+	struct SkyboxIndex {
+		int morning_brdf = -1;
+		int morning_env = -1;
+		int morning_specular = -1;
+		int morning_diffuse = -1;
+		int evening_brdf = -1;
+		int evening_env = -1;
+		int evening_specular = -1;
+		int evening_diffuse = -1;
+		int night_brdf = -1;
+		int night_env = -1;
+		int night_specular = -1;
+		int night_diffuse = -1;
+	} skybox_index_;
+
+	struct SkyboxEnable {
+		bool morning = true;
+		bool evening = false;
+		bool night = false;
+	} skybox_enable_;
 
 	void ConvertFileToKtx(const std::string& folderPath);
 	bool IsRightTextureName(const std::string& name);

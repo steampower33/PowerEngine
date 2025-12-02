@@ -158,14 +158,12 @@ public:
 		static_assert(sizeof(UBOData::Light) % 16 == 0, "std140 must be 16-byte aligned.");
 
 		struct SkyBox {
-			glm::mat4 model;
+			int env_idx = 0;
+			int specular_idx = 0;
+			int diffuse_idx = 0;
+			uint32_t specular_mip_levels = 0;
 
-			int envIdx = 0;
-			int radianceIdx = 0;
-			int irradianceIdx = 0;
-			uint32_t specularMipLevels = 0;
-
-			int brdfLUTIndex = 0;
+			int brdfIndex = 0;
 			uint32_t p0 = 0;
 			uint32_t p1 = 0;
 			uint32_t p2 = 0;

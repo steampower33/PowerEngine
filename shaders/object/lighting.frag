@@ -21,8 +21,6 @@ layout(set = 0, binding = 3) uniform sampler2D out_height_ao;
 layout(set = 0, binding = 4) uniform sampler2D out_depth;
 
 layout(set = 1, binding = 0) uniform SkyboxUBO {
-    mat4x4 model;
-
     int env_idx;
     int radiance_idx;
     int irradiance_idx;

@@ -531,6 +531,8 @@ void GUI::SetRenderingGUI(RowFn&& row, GraphicsContext& graphicsContext)
 			row("Inner", [&] { ImGui::DragFloat("##Inner", &graphicsContext.ubo_datas_.light.inner, 0.1f); });
 			row("Outer", [&] { ImGui::DragFloat("##Outer", &graphicsContext.ubo_datas_.light.outer, 0.1f); });
 			row("Intensity", [&] { ImGui::DragFloat("##Intensity", &graphicsContext.ubo_datas_.light.intensity, 0.1f, 0.0f, 100.0f); });
+
+
 			ImGui::EndTable();
 		}
 
@@ -543,6 +545,20 @@ void GUI::SetRenderingGUI(RowFn&& row, GraphicsContext& graphicsContext)
 			ImGui::EndTable();
 		}
 
+		ImGui::SeparatorText("Skybox");
+		ImVec2 buttonSize = ImVec2(ImGui::GetContentRegionAvail().x, 0);
+		if (ImGui::Button("Morning", buttonSize))
+		{
+			graphicsContext.texture_manager_.skybox_enable_.morning = true;
+		}
+		if (ImGui::Button("Evening", buttonSize))
+		{
+			graphicsContext.texture_manager_.skybox_enable_.evening = true;
+		}
+		if (ImGui::Button("Night", buttonSize))
+		{
+			graphicsContext.texture_manager_.skybox_enable_.night = true;
+		}
 	}
 }
 
