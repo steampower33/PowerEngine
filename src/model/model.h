@@ -12,15 +12,13 @@ class TextureManager;
 class Model
 {
 public:
-	Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, GraphicsContext& graphicsContext, TextureManager& textureManager, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble);
-	Model(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, GraphicsContext& graphicsContext, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble);
+	Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, GraphicsContext& graphicsContext, TextureManager& textureManager, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble, std::string name);
+	Model(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, GraphicsContext& graphicsContext, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble, std::string name);
 	Model(const Model& rhs) = delete;
 	Model(Model&& rhs) = delete;
 	Model& operator=(const Model& rhs) = delete;
 	Model& operator=(Model&& rhs) = delete;
 	~Model() = default;
-
-	glm::vec4 albedo_use_{ 0.0f };
 
 	void LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo& vertexIncludeInfo, TextureManager& textureManager);
 
@@ -34,29 +32,33 @@ public:
 
 	MeshData mesh_data_;
 
+	std::string name_;
+	glm::vec4 albedo_{ 0.0f };
+
 	struct TextureIdx {
-		uint32_t albedo = 0;
-		uint32_t metallic = 0;
-		uint32_t normal = 0;
-		uint32_t roughness = 0;
-		uint32_t ao = 0;
-		uint32_t height = 0;
-		uint32_t emissive = 0;
+		int albedo = -1;
+		int metallic = -1;
+		int normal = -1;
+		int roughness = -1;
+		int ao = -1;
+		int height = -1;
+		int emissive = -1;
 	} texture_idx_;
 
-	struct TextureUse {
-		uint32_t albedo = 0;
-		uint32_t metallic = 0;
-		uint32_t normal = 0;
-		uint32_t roughtness = 0;
-		uint32_t ao = 0;
-		uint32_t height = 0;
-	} texture_use_;
+	struct TextureEnable {
+		bool albedo = 0;
+		bool metallic = 0;
+		bool normal = 0;
+		bool roughness = 0;
+		bool ao = 0;
+		bool height = 0;
+	} texture_enable_;
 
 	struct Factor {
 		float metallic = 0.0f;
 		float roughness = 0.7f;
 		float ao = 1.0f;
+		float height = 0.0f;
 	} factors_;
 
 	void ApplyTransform(const glm::quat& rotationDelta, const glm::vec3& translationDelta);

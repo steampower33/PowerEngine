@@ -3,7 +3,7 @@
 struct SimData {
 	float spacing = 0.015f; // 1.5cm resolution
 
-	glm::vec2 cloth_size{ 1.0f, 10.0f };
+	glm::vec2 cloth_size{ 1.0f, 1.0f };
 
 	uint32_t nx = (uint32_t)std::round(cloth_size.x / spacing) + 1;
 	uint32_t ny = (uint32_t)std::round(cloth_size.y / spacing) + 1;

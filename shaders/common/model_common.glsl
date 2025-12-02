@@ -14,7 +14,7 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
 layout(set = 1, binding = 0) uniform ObjectUBO {
     mat4x4 model;
 
-    vec4 albedo_use;
+    vec4 albedo;
 
     int albedo_idx;
     int metallic_idx;

@@ -22,22 +22,22 @@
         "CMAKE_BUILD_TYPE": "Debug"
       }
     },
-    {
-      "name": "windows-release",
-      "inherits": "windows-base",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
-    }
+    //{
+    //  "name": "windows-release",
+    //  "inherits": "windows-base",
+    //  "cacheVariables": {
+    //    "CMAKE_BUILD_TYPE": "Release"
+    //  }
+    //}
   ],
   "buildPresets": [
     {
       "name": "Debug",
       "configurePreset": "windows-debug"
     },
-    {
-      "name": "Release",
-      "configurePreset": "windows-release"
-    }
+    //{
+    //  "name": "Release",
+    //  "configurePreset": "windows-release"
+    //}
   ]
 }

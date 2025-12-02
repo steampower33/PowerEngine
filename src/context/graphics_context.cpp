@@ -83,7 +83,8 @@ void GraphicsContext::UpdateGraphicsUBO(Camera& camera)
 			auto* dst = static_cast<std::byte*>(ubo_mapped_.object) + objOff;
 
 			ubo_datas_.object.model = model_manager_.models_[i]->world_;
-			ubo_datas_.object.albedo_use = model_manager_.models_[i]->albedo_use_;
+			ubo_datas_.object.albedo_use = model_manager_.models_[i]->albedo_;
+
 			ubo_datas_.object.albedo_idx = model_manager_.models_[i]->texture_idx_.albedo;
 			ubo_datas_.object.metallic_idx = model_manager_.models_[i]->texture_idx_.metallic;
 			ubo_datas_.object.normal_idx = model_manager_.models_[i]->texture_idx_.normal;
@@ -91,18 +92,18 @@ void GraphicsContext::UpdateGraphicsUBO(Camera& camera)
 			ubo_datas_.object.ao_idx = model_manager_.models_[i]->texture_idx_.ao;
 			ubo_datas_.object.height_idx = model_manager_.models_[i]->texture_idx_.height;
 
-			ubo_datas_.object.albedo_enable = model_manager_.models_[i]->texture_use_.albedo;
-			ubo_datas_.object.metallic_enable = model_manager_.models_[i]->texture_use_.metallic;
-			ubo_datas_.object.normal_enable = model_manager_.models_[i]->texture_use_.normal;
-			ubo_datas_.object.roughness_enable = model_manager_.models_[i]->texture_use_.roughtness;
-			ubo_datas_.object.ao_enable = model_manager_.models_[i]->texture_use_.ao;
-			ubo_datas_.object.height_enable = model_manager_.models_[i]->texture_use_.height;
-
-			ubo_datas_.object.checker_board_enable = model_manager_.models_[i]->checker_board_enable_;
-
 			ubo_datas_.object.metallic_factor = model_manager_.models_[i]->factors_.metallic;
 			ubo_datas_.object.roughness_factor = model_manager_.models_[i]->factors_.roughness;
 			ubo_datas_.object.ao_factor = model_manager_.models_[i]->factors_.ao;
+
+			ubo_datas_.object.albedo_enable = model_manager_.models_[i]->texture_enable_.albedo;
+			ubo_datas_.object.metallic_enable = model_manager_.models_[i]->texture_enable_.metallic;
+			ubo_datas_.object.normal_enable = model_manager_.models_[i]->texture_enable_.normal;
+			ubo_datas_.object.roughness_enable = model_manager_.models_[i]->texture_enable_.roughness;
+			ubo_datas_.object.ao_enable = model_manager_.models_[i]->texture_enable_.ao;
+			ubo_datas_.object.height_enable = model_manager_.models_[i]->texture_enable_.height;
+
+			ubo_datas_.object.checker_board_enable = model_manager_.models_[i]->checker_board_enable_;
 
 			std::memcpy(dst, &ubo_datas_.object, sizeof(UBOData::Object));
 		}

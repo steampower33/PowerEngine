@@ -7,6 +7,8 @@
 #include "texture_manager.h"
 #include "gpu_sim.h"
 #include "cpu_sim.h"
+#include "model.h"
+#include "model_manager.h"
 
 #include "gui.h"
 
@@ -171,7 +173,7 @@ void GUI::SetStyle()
 	style.SeparatorTextBorderSize = 2.0f;
 }
 
-void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& swapchain, float& targetSimFPS, double& simDt)
+void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& swapchain, float& targetSimFPS, double& simDt, ModelManager& modelManager)
 {
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
@@ -198,19 +200,7 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 
 	float spacing = 10.0f;
 
-	ImGui::SetNextWindowPos(ImVec2(swapchain.swapchain_extent_.width - 510.0f, spacing));
-	ImGui::SetNextWindowSize(ImVec2(500.0f, 0));
-	if (ImGui::Begin("Cloth Performance Monitor", nullptr, wf))
-	{
-		if (graphicsContext.cpu_or_gpu_ == vku::CpuOrGpu::CPU)
-			SetStatGUI(row, graphicsContext, graphicsContext.cpu_sim_);
-		else if (graphicsContext.cpu_or_gpu_ == vku::CpuOrGpu::GPU)
-			SetStatGUI(row, graphicsContext, graphicsContext.gpu_sim_);
-
-		SetTimeingGUI(row, graphicsContext);
-	}
-	ImGui::End();
-
+	// Left Side
 	ImVec2 scenePos{ spacing, spacing };
 	ImVec2 sceneSize{ 500.0f, 200.0f };
 
@@ -229,10 +219,27 @@ void GUI::Update(Context& context, GraphicsContext& graphicsContext, Swapchain& 
 	if (ImGui::Begin("Option", nullptr, wf))
 	{
 		SetRenderingGUI(row, graphicsContext);
+
+		SetObjectsGUI(row, modelManager.models_);
+
 		if (graphicsContext.cpu_or_gpu_ == vku::CpuOrGpu::CPU)
 			SetSimulationGUI(row, graphicsContext, graphicsContext.cpu_sim_, targetSimFPS, simDt);
 		else if (graphicsContext.cpu_or_gpu_ == vku::CpuOrGpu::GPU)
 			SetSimulationGUI(row, graphicsContext, graphicsContext.gpu_sim_, targetSimFPS, simDt);
+	}
+	ImGui::End();
+
+	// Right Side
+	ImGui::SetNextWindowPos(ImVec2(swapchain.swapchain_extent_.width - 510.0f, spacing));
+	ImGui::SetNextWindowSize(ImVec2(500.0f, 0));
+	if (ImGui::Begin("Cloth Performance Monitor", nullptr, wf))
+	{
+		if (graphicsContext.cpu_or_gpu_ == vku::CpuOrGpu::CPU)
+			SetStatGUI(row, graphicsContext, graphicsContext.cpu_sim_);
+		else if (graphicsContext.cpu_or_gpu_ == vku::CpuOrGpu::GPU)
+			SetStatGUI(row, graphicsContext, graphicsContext.gpu_sim_);
+
+		SetTimeingGUI(row, graphicsContext);
 	}
 	ImGui::End();
 
@@ -287,52 +294,46 @@ void GUI::DisplayKernelTiming(const std::string name, std::unordered_map<std::st
 	}
 }
 
-template<typename RowFn, typename UBOData>
-void GUI::SetObjectGUI(RowFn&& row, UBOData& data) {
+template<typename RowFn, typename Objects>
+void GUI::SetObjectsGUI(RowFn&& row, Objects& objects) {
 
-	if (ImGui::CollapsingHeader("Object", ImGuiTreeNodeFlags_DefaultOpen))
+
+	if (ImGui::CollapsingHeader("Objects", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		if (ImGui::BeginTable("ObjectTable", 2,
-			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+		for (auto& object : objects)
 		{
-			row("Meltallic", [&] { ImGui::DragFloat("##ClothMeltallic", &data.metallic_factor, 0.1f, 0.0f, 1.0f); });
-			row("Roughness", [&] { ImGui::DragFloat("##ClothRoughness", &data.roughness_factor, 0.1f, 0.0f, 1.0f); });
-			row("AO", [&] { ImGui::DragFloat("##ClothAO", &data.ao_factor, 0.1f, 0.0f, 1.0f); });
-			row("Height", [&] { ImGui::DragFloat("##ClothHeight", &data.height_factor, 0.001f, 0.0f, 1.0f); });
+			if (ImGui::TreeNode(object->name_.c_str()))
+			{
+				ImGui::SeparatorText("Factor");
+				if (ImGui::BeginTable("Factor", 2,
+					ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+				{
+					row("Albedo", [&] { ImGui::DragFloat3("##Albedo", &object->albedo_[0], 0.1f, 0.0f, 1.0f); });
+					row("Meltallic", [&] { ImGui::DragFloat("##ClothMeltallic", &object->factors_.metallic, 0.1f, 0.0f, 1.0f); });
+					row("Roughness", [&] { ImGui::DragFloat("##ClothRoughness", &object->factors_.roughness, 0.1f, 0.0f, 1.0f); });
+					row("AO", [&] { ImGui::DragFloat("##ClothAO", &object->factors_.ao, 0.1f, 0.0f, 1.0f); });
+					row("Height", [&] { ImGui::DragFloat("##ClothHeight", &object->factors_.height, 0.001f, 0.0f, 1.0f); });
+					ImGui::EndTable();
+				}
 
-			row("AlbedoEnable", [&] {
-				bool enable = (data.albedo_enable == 1) ? true : false;
-				ImGui::Checkbox("##ClothAlbedoEnable", &enable);
-				data.albedo_enable = (enable) ? true : false;
-				});
-			row("MetalnessEnable", [&] {
-				bool enable = (data.metallic_enable == 1) ? true : false;
-				ImGui::Checkbox("##ClothMetalnessEnable", &enable);
-				data.metallic_enable = (enable) ? true : false;
-				});
-			row("NormalEnable", [&] {
-				bool enable = (data.normal_enable == 1) ? true : false;
-				ImGui::Checkbox("##ClothNormalEnable", &enable);
-				data.normal_enable = (enable) ? true : false;
-				});
-			row("RoughtnessEnable", [&] {
-				bool enable = (data.roughtnessEnable == 1) ? true : false;
-				ImGui::Checkbox("##ClothRoughtnessEnable", &enable);
-				data.roughtnessEnable = (enable) ? true : false;
-				});
-			row("AOEnable", [&] {
-				bool enable = (data.ao_enable == 1) ? true : false;
-				ImGui::Checkbox("##ClothAOEnable", &enable);
-				data.ao_enable = (enable) ? true : false;
-				});
-			row("HeightEnable", [&] {
-				bool enable = (data.height_enable == 1) ? true : false;
-				ImGui::Checkbox("##ClothHeightEnable", &enable);
-				data.height_enable = (enable) ? true : false;
-				});
-
-			ImGui::EndTable();
+				ImGui::SeparatorText("Enable");
+				if (ImGui::BeginTable("Enable", 2,
+					ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+				{
+					row("Albedo", [&] { ImGui::Checkbox("##Albedo", &object->texture_enable_.albedo); });
+					row("Metalness", [&] { ImGui::Checkbox("##Metalness", &object->texture_enable_.metallic); });
+					row("Normal", [&] { ImGui::Checkbox("##Normal", &object->texture_enable_.normal); });
+					row("Roughtness", [&] { ImGui::Checkbox("##Roughtness", &object->texture_enable_.roughness); });
+					row("AO", [&] { ImGui::Checkbox("##AO", &object->texture_enable_.ao); });
+					row("Height", [&] { ImGui::Checkbox("##Height", &object->texture_enable_.height); });
+					row("CheckerBoard", [&] { ImGui::Checkbox("##CheckerBoard", &object->checker_board_enable_); });
+					row("Movable", [&] { ImGui::Checkbox("##Movable", &object->movable_); });
+					ImGui::EndTable();
+				}
+				ImGui::TreePop();
+			}
 		}
+
 	}
 }
 
@@ -432,7 +433,7 @@ void GUI::SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& s
 		if (ImGui::BeginTable("Compliance", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
-			row("Stretch", [&] { ImGui::DragFloat("##Stretch", &sim->datas_.compliance.stretch, 
+			row("Stretch", [&] { ImGui::DragFloat("##Stretch", &sim->datas_.compliance.stretch,
 				1e-10f, 0.0f, 1.0f, "%.10f"); });
 			row("Shear", [&] { ImGui::DragFloat("##Shear", &sim->datas_.compliance.shear
 				, 1e-10f, 0.0f, 1.0f, "%.10f"); });
@@ -509,6 +510,7 @@ void GUI::SetRenderingGUI(RowFn&& row, GraphicsContext& graphicsContext)
 			row("Exposure", [&] { ImGui::DragFloat("##Exposure", &graphicsContext.ubo_datas_.light.exposure, 0.1f, 0.0f, 2.0f); });
 			ImGui::EndTable();
 		}
+
 	}
 }
 

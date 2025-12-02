@@ -19,7 +19,7 @@ ModelManager::ModelManager(Context& context, GraphicsContext& graphicsContext, T
 		glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
 		glm::vec3 initPos = glm::vec3(0.0f, 1.0f, 0.0f);
 		glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
-		std::unique_ptr<Model> model = std::make_unique<Model>(sphere, vku::VertexIncludeInfo{ true, true }, context, graphicsContext, initPos, angleQuat, initColor, true);
+		std::unique_ptr<Model> model = std::make_unique<Model>(sphere, vku::VertexIncludeInfo{ true, true }, context, graphicsContext, initPos, angleQuat, initColor, true, "Sphere");
 		model->radius_ = radius;
 		models_.emplace_back(std::move(model));
 	}
@@ -29,7 +29,7 @@ ModelManager::ModelManager(Context& context, GraphicsContext& graphicsContext, T
 	//	glm::vec3 initPos = glm::vec3(3.0f, 1.0f, 0.0f);
 	//	glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
 	//	std::string modelPath = "assets/ybot/ybot.gltf";
-	//	std::unique_ptr<Model> model = std::make_unique<Model>(modelPath, vku::VertexIncludeInfo{true, true}, context, graphicsContext, textureManager, initPos, angleQuat, initColor, true);
+	//	std::unique_ptr<Model> model = std::make_unique<Model>(modelPath, vku::VertexIncludeInfo{true, true}, context, graphicsContext, textureManager, initPos, angleQuat, initColor, true, "ybot");
 	//	models.emplace_back(std::move(model));
 	//}
 
@@ -38,7 +38,7 @@ ModelManager::ModelManager(Context& context, GraphicsContext& graphicsContext, T
 		glm::quat angleQuat = glm::angleAxis(glm::radians(90.0f), glm::vec3(1, 0, 0));
 		glm::vec3 initPos = glm::vec3(0.0f, 0.0f, 0.0f);
 		glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
-		std::unique_ptr<Model> model = std::make_unique<Model>(mesh, vku::VertexIncludeInfo{ true, true }, context, graphicsContext, initPos, angleQuat, initColor, false);
+		std::unique_ptr<Model> model = std::make_unique<Model>(mesh, vku::VertexIncludeInfo{ true, true }, context, graphicsContext, initPos, angleQuat, initColor, false, "BottomPlane");
 		model->factors_.roughness = 1.0f;
 		model->factors_.metallic = 0.0f;
 		model->checker_board_enable_ = true;

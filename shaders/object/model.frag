@@ -15,14 +15,14 @@ layout(location = 1) out vec4 out_normal_rough;
 layout(location = 2) out vec4 out_height_ao;
 
 void main() {
-    vec4 albedo    = (object.albedo_enable == 0u) ? vec4(object.albedo_use.xyz, 0.0): texture(tex[nonuniformEXT(object.albedo_idx)], in_uv);
+    vec4 albedo    = (object.albedo_enable == 0u || object.albedo_idx == -1) ? vec4(object.albedo.xyz, 0.0): texture(tex[nonuniformEXT(object.albedo_idx)], in_uv);
     vec3 normalTS  = in_normal_world;
-    float metallic = (object.metallic_enable == 0u) ? object.metallic_factor : texture(tex[nonuniformEXT(object.metallic_idx)], in_uv).r;
-    float rough    = (object.roughness_enable == 0u) ? object.roughness_factor : texture(tex[nonuniformEXT(object.roughness_idx)], in_uv).r;
-    float ao       = (object.ao_enable == 0u) ? object.ao_factor : texture(tex[nonuniformEXT(object.ao_idx)], in_uv).r;
-    float height   = (object.height_enable == 0u) ? object.height_factor : texture(tex[nonuniformEXT(object.height_idx)], in_uv).r;
+    float metallic = (object.metallic_enable == 0u || object.metallic_idx == -1) ? object.metallic_factor : texture(tex[nonuniformEXT(object.metallic_idx)], in_uv).r;
+    float rough    = (object.roughness_enable == 0u || object.roughness_idx == -1) ? object.roughness_factor : texture(tex[nonuniformEXT(object.roughness_idx)], in_uv).r;
+    float ao       = (object.ao_enable == 0u || object.ao_idx == -1) ? object.ao_factor : texture(tex[nonuniformEXT(object.ao_idx)], in_uv).r;
+    float height   = (object.height_enable == 0u || object.height_idx == -1) ? object.height_factor : texture(tex[nonuniformEXT(object.height_idx)], in_uv).r;
 
-    if (object.normal_enable != 0u)
+    if (object.normal_enable == 1u && object.normal_idx != -1)
     {
         vec3 normal = texture(tex[nonuniformEXT(object.normal_idx)], in_uv).xyz * 2.0 - 1.0;
 
