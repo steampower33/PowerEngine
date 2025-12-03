@@ -116,7 +116,7 @@ void Window::OnCursorPos(double xpos, double ypos)
 	static double lastX = xpos;
 	static double lastY = ypos;
 
-	if (mouse_enabled_) {
+	if (camera_->mouse_move_enabled) {
 		if (first_mouse_) {
 			lastX = xpos;
 			lastY = ypos;
@@ -126,8 +126,8 @@ void Window::OnCursorPos(double xpos, double ypos)
 		double xoffset = xpos - lastX;
 		double yoffset = lastY - ypos;
 
-		camera_->yaw += static_cast<float>(xoffset) * camera_->sensitivity;
-		camera_->pitch += static_cast<float>(yoffset) * camera_->sensitivity;
+		camera_->yaw += static_cast<float>(xoffset) * camera_->mouse_move_speed;
+		camera_->pitch += static_cast<float>(yoffset) * camera_->mouse_move_speed;
 		camera_->pitch = glm::clamp(camera_->pitch, -89.0f, 89.0f);
 	}
 
@@ -139,9 +139,21 @@ void Window::OnCursorPos(double xpos, double ypos)
 
 void Window::OnKey(int key, int scancode, int action, int mods) {
 	if (key == GLFW_KEY_F && action == GLFW_PRESS) {
-		mouse_enabled_ = !mouse_enabled_;
+		camera_->focus_enabled = !camera_->focus_enabled;
 
-		if (mouse_enabled_) {
+		if (camera_->focus_enabled) {
+			float radius = glm::length(camera_->position);
+			if (radius < 0.001f) radius = 10.0f;
+
+			glm::vec3 dir = camera_->Front();
+			camera_->position = -dir * radius;
+		}
+	}
+
+	if (key == GLFW_KEY_R && action == GLFW_PRESS) {
+		camera_->mouse_move_enabled = !camera_->mouse_move_enabled;
+
+		if (camera_->mouse_move_enabled) {
 			//glfwSetInputMode(glfw_window_, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 			glfwSetInputMode(glfw_window_, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 			first_mouse_ = true;
@@ -192,17 +204,61 @@ Window::~Window()
 }
 
 void Window::ProcessKeyboard(float dt) {
-	float v = camera_->move_speed * dt;
+	float v = camera_->camera_move_speed * dt;
 
-	// ASDW
-	if (glfwGetKey(glfw_window_, GLFW_KEY_W) == GLFW_PRESS)
-		camera_->position += camera_->Front() * v;
-	if (glfwGetKey(glfw_window_, GLFW_KEY_S) == GLFW_PRESS)
-		camera_->position -= camera_->Front() * v;
-	if (glfwGetKey(glfw_window_, GLFW_KEY_A) == GLFW_PRESS)
-		camera_->position -= camera_->Right() * v;
-	if (glfwGetKey(glfw_window_, GLFW_KEY_D) == GLFW_PRESS)
-		camera_->position += camera_->Right() * v;
+	if (camera_->focus_enabled)
+	{
+		const float orbitYawSpeed = camera_->orbit_yaw_speed;
+		const float orbitPitchSpeed = camera_->orbit_pitch_speed;
+
+		// ASDW
+		if (glfwGetKey(glfw_window_, GLFW_KEY_W) == GLFW_PRESS)
+			camera_->SetCircularPos(0.0f, -orbitPitchSpeed * dt);
+		if (glfwGetKey(glfw_window_, GLFW_KEY_S) == GLFW_PRESS)
+			camera_->SetCircularPos(0.0f, +orbitPitchSpeed * dt);
+		if (glfwGetKey(glfw_window_, GLFW_KEY_A) == GLFW_PRESS)
+			camera_->SetCircularPos(+orbitYawSpeed * dt, 0.0f);
+		if (glfwGetKey(glfw_window_, GLFW_KEY_D) == GLFW_PRESS)
+			camera_->SetCircularPos(-orbitYawSpeed * dt, 0.0f);
+
+		// QE
+		if (glfwGetKey(glfw_window_, GLFW_KEY_Q) == GLFW_PRESS)
+		{
+			glm::vec3 dirToOrigin = glm::normalize(-camera_->position);
+			camera_->position += dirToOrigin * dt * camera_->zoom_speed;
+		}
+		if (glfwGetKey(glfw_window_, GLFW_KEY_E) == GLFW_PRESS)
+		{
+			glm::vec3 dirToOrigin = glm::normalize(+camera_->position);
+			camera_->position += dirToOrigin * dt * camera_->zoom_speed;
+		}
+	}
+	else
+	{
+		// ASDW
+		if (glfwGetKey(glfw_window_, GLFW_KEY_W) == GLFW_PRESS)
+			camera_->position += camera_->Front() * v;
+		if (glfwGetKey(glfw_window_, GLFW_KEY_S) == GLFW_PRESS)
+			camera_->position -= camera_->Front() * v;
+		if (glfwGetKey(glfw_window_, GLFW_KEY_A) == GLFW_PRESS)
+			camera_->position -= camera_->Right() * v;
+		if (glfwGetKey(glfw_window_, GLFW_KEY_D) == GLFW_PRESS)
+			camera_->position += camera_->Right() * v;
+
+		// QE
+		if (glfwGetKey(glfw_window_, GLFW_KEY_Q) == GLFW_PRESS)
+			camera_->position -= glm::vec3(0, 1, 0) * v;
+		if (glfwGetKey(glfw_window_, GLFW_KEY_E) == GLFW_PRESS)
+			camera_->position += glm::vec3(0, 1, 0) * v;
+
+		const float yawSpeed = 120.0f;
+		if (glfwGetKey(glfw_window_, GLFW_KEY_LEFT) == GLFW_PRESS) camera_->yaw -= yawSpeed * dt;
+		if (glfwGetKey(glfw_window_, GLFW_KEY_RIGHT) == GLFW_PRESS) camera_->yaw += yawSpeed * dt;
+
+		const float pitchSpeed = 90.0f;
+		if (glfwGetKey(glfw_window_, GLFW_KEY_UP) == GLFW_PRESS) camera_->pitch = glm::clamp(camera_->pitch + pitchSpeed * dt, -89.0f, 89.0f);
+		if (glfwGetKey(glfw_window_, GLFW_KEY_DOWN) == GLFW_PRESS) camera_->pitch = glm::clamp(camera_->pitch - pitchSpeed * dt, -89.0f, 89.0f);
+	}
 
 	// Space
 	if (glfwGetKey(glfw_window_, GLFW_KEY_SPACE) == GLFW_PRESS)
@@ -213,20 +269,6 @@ void Window::ProcessKeyboard(float dt) {
 			key_timeout_ = 0.2f;
 		}
 	}
-
-	// QE
-	if (glfwGetKey(glfw_window_, GLFW_KEY_Q) == GLFW_PRESS)
-		camera_->position -= glm::vec3(0, 1, 0) * v;
-	if (glfwGetKey(glfw_window_, GLFW_KEY_E) == GLFW_PRESS)
-		camera_->position += glm::vec3(0, 1, 0) * v;
-
-	const float yawSpeed = 120.0f;
-	if (glfwGetKey(glfw_window_, GLFW_KEY_LEFT) == GLFW_PRESS) camera_->yaw -= yawSpeed * dt;
-	if (glfwGetKey(glfw_window_, GLFW_KEY_RIGHT) == GLFW_PRESS) camera_->yaw += yawSpeed * dt;
-
-	const float pitchSpeed = 90.0f;
-	if (glfwGetKey(glfw_window_, GLFW_KEY_UP) == GLFW_PRESS) camera_->pitch = glm::clamp(camera_->pitch + pitchSpeed * dt, -89.0f, 89.0f);
-	if (glfwGetKey(glfw_window_, GLFW_KEY_DOWN) == GLFW_PRESS) camera_->pitch = glm::clamp(camera_->pitch - pitchSpeed * dt, -89.0f, 89.0f);
 
 	if (glfwGetKey(glfw_window_, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 		glfwSetWindowShouldClose(glfw_window_, GLFW_TRUE);

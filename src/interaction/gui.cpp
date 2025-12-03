@@ -11,6 +11,7 @@
 #include "texture_manager.h"
 #include "graphics_pass.h"
 #include "particle_manager.h"
+#include "camera.h"
 
 #include "gui.h"
 
@@ -175,7 +176,7 @@ void GUI::SetStyle()
 	style.SeparatorTextBorderSize = 2.0f;
 }
 
-void GUI::Update(Context& context, PassManager& passManager, Swapchain& swapchain, float& targetSimFPS, double& simDt, ModelManager& modelManager, TextureManager& textureManager)
+void GUI::Update(Context& context, PassManager& passManager, Swapchain& swapchain, float& targetSimFPS, double& simDt, ModelManager& modelManager, TextureManager& textureManager, Camera& camera)
 {
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
@@ -220,12 +221,14 @@ void GUI::Update(Context& context, PassManager& passManager, Swapchain& swapchai
 	ImGui::SetNextWindowSize(optionSize);
 	if (ImGui::Begin("Option", nullptr, wf))
 	{
+		SetCameraGUI(row, camera);
 		SetRenderingGUI(row, *passManager.graphics_pass_, textureManager);
 
 		SetObjectsGUI(row, modelManager.models_, passManager.graphics_pass_->ubo_datas_.cloth);
 
 		if (passManager.cpu_or_gpu_ == vku::CpuOrGpu::GPU)
 			SetSimulationGUI(row, passManager, *passManager.sim_pass_gpu_, targetSimFPS, simDt);
+
 	}
 	ImGui::End();
 
@@ -575,4 +578,27 @@ void GUI::SetStatGUI(RowFn&& row, PassManager& passManager)
 		ImGui::EndTable();
 	}
 
+}
+
+template<typename RowFn>
+void GUI::SetCameraGUI(RowFn&& row, Camera& camera)
+{
+
+	if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		if (ImGui::BeginTable("Camera", 2, ImGuiTableFlags_BordersInnerV))
+		{
+			row("MouseMove(R)", [&] { ImGui::Checkbox("##MouseMove", &camera.mouse_move_enabled); });
+			row("CameraMoveSpeed", [&] { ImGui::DragFloat("##CameraMoveSpeed", &camera.camera_move_speed, 0.1f, 0.0f, 10.0f); });
+			row("MouseMoveSpeed", [&] { ImGui::DragFloat("##MouseMoveSpeed", &camera.mouse_move_speed, 0.1f, 0.0f, 10.0f); });
+
+			row("Focus(F)", [&] { ImGui::Checkbox("##Focus", &camera.focus_enabled); });
+			row("OrbitYawSpeed", [&] { ImGui::DragFloat("##OrbitYawSpeed", &camera.orbit_yaw_speed, 0.1f, 0.0f, 360.0f); });
+			row("OrbitPitchSpeed", [&] { ImGui::DragFloat("##OrbitPitchSpeed", &camera.orbit_pitch_speed, 0.1f, 0.0f, 360.0f); });
+			row("ZoomSpeed", [&] { ImGui::DragFloat("##ZoomSpeed", &camera.zoom_speed, 0.1f, 0.0f, 10.0f); });
+
+			ImGui::EndTable();
+		}
+
+	}
 }

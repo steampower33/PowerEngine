@@ -10,6 +10,7 @@ class ModelManager;
 class TextureManager;
 class GraphicsPass;
 class ParticleManager;
+class Camera;
 
 class GUI
 {
@@ -32,7 +33,7 @@ public:
 	bool is_print_timestamps = false;
 
 	void SetStyle();
-	void Update(Context& context, PassManager& passManager, Swapchain& swapchain, float& targetSimFPS, double& simDt, ModelManager& modelManager, TextureManager& textureManager);
+	void Update(Context& context, PassManager& passManager, Swapchain& swapchain, float& targetSimFPS, double& simDt, ModelManager& modelManager, TextureManager& textureManager, Camera& camera);
 	void DisplayKernelTiming(const std::string name, std::unordered_map<std::string, double>& labelToTime, std::unordered_map<std::string, double>& labelToAvgTime, bool autoColor = true);
 
 	template<typename RowFn>
@@ -47,4 +48,6 @@ public:
 	void SetTestSceneGUI(RowFn&& row, Scene& scene);
 	template<typename RowFn>
 	void SetStatGUI(RowFn&& row, PassManager& passManager);
+	template<typename RowFn>
+	void SetCameraGUI(RowFn&& row, Camera& camera);
 };

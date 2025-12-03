@@ -38,8 +38,6 @@ private:
     std::unique_ptr<MouseInteractor> mouse_interactor_;
     std::unique_ptr<Renderer> renderer_;
 
-    bool mouse_enabled_ = false;
-
     uint32_t init_width_ = 1600;
     uint32_t init_height_ = 900;
 
