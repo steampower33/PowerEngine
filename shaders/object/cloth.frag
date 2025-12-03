@@ -41,8 +41,10 @@ layout(location = 0) out vec4 out_albedo_metal;
 layout(location = 1) out vec4 out_normal_rough;
 layout(location = 2) out vec4 out_height_ao;
 
+layout(push_constant) uniform ClothPC { uint nx1; uint ny1; uint offset; float p; vec4 color; } pc;
+
 void main() {
-    vec4 albedo    = (cloth.albedo_enable == 0u || cloth.albedo_idx == -1) ? vec4(cloth.albedo.xyz, 0.0): texture(tex[nonuniformEXT(cloth.albedo_idx)], in_uv);
+    vec4 albedo    = (cloth.albedo_enable == 0u || cloth.albedo_idx == -1) ? pc.color : texture(tex[nonuniformEXT(cloth.albedo_idx)], in_uv);
     vec3 normal  = (!gl_FrontFacing) ? -in_world_normal : in_world_normal;
     float metallic = (cloth.metallic_enable == 0u || cloth.metallic_idx == -1) ? cloth.metallic_factor : texture(tex[nonuniformEXT(cloth.metallic_idx)], in_uv).r;
     float roughness = (cloth.roughness_enable == 0u || cloth.roughness_idx == -1) ? cloth.roughness_factor : texture(tex[nonuniformEXT(cloth.roughness_idx)], in_uv).r;

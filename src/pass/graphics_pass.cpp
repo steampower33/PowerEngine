@@ -349,9 +349,10 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 			push_constants_.cloth_render.nx1 = cloth.nx1;
 			push_constants_.cloth_render.ny1 = cloth.ny1;
 			push_constants_.cloth_render.offset = cloth.offset_particle;
+			push_constants_.cloth_render.color = cloth.color;
 			cmd.pushConstants<PushConstant::ClothRender>(
 				*pipeline_layouts_.cloth,
-				vk::ShaderStageFlagBits::eVertex,
+				vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
 				0,
 				push_constants_.cloth_render
 			);
@@ -850,7 +851,7 @@ void GraphicsPass::CreateUniformBuffers()
 		ubo_memories_.cloth = std::move(bufferMem);
 		ubo_mapped_.cloth = ubo_memories_.cloth.mapMemory(0, totalSize);
 
-		ubo_datas_.cloth.albedo_enable = 1;
+		ubo_datas_.cloth.albedo_enable = 0;
 		ubo_datas_.cloth.albedo_idx = 0;
 	}
 }
@@ -1518,9 +1519,9 @@ void GraphicsPass::CreateGraphicsPipelines()
 			.vertexAttributeDescriptionCount = 0,
 			.pVertexAttributeDescriptions = nullptr
 		};
-
+			
 		vk::PushConstantRange pcRange{
-			.stageFlags = vk::ShaderStageFlagBits::eVertex,
+			.stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
 			.offset = 0,
 			.size = static_cast<uint32_t>(sizeof(PushConstant::ClothRender))
 		};

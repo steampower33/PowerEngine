@@ -14,6 +14,8 @@ struct Cloth
 	uint32_t ny1 = 0.0f;
 	float height;
 
+	glm::vec4 color;
+
 	glm::vec3 origin = glm::vec3(0.0f);
 	float     angle_deg = 0.0f;
 	glm::vec3 axis = glm::vec3(1, 0, 0);

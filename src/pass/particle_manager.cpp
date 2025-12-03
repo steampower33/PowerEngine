@@ -17,6 +17,7 @@ ParticleManager::ParticleManager(Context& context)
 		cloth.ny1 = cloth.ny + 1;
 		cloth.num_particle = cloth.nx1 * cloth.ny1;
 		cloth.height = 2.0f;
+		cloth.color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
 
 		SetCloth(cloth);
 
@@ -32,6 +33,7 @@ ParticleManager::ParticleManager(Context& context)
 		cloth.ny1 = cloth.ny + 1;
 		cloth.num_particle = cloth.nx1 * cloth.ny1;
 		cloth.height = 4.0f;
+		cloth.color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
 
 		SetCloth(cloth);
 
@@ -47,6 +49,7 @@ ParticleManager::ParticleManager(Context& context)
 		cloth.ny1 = cloth.ny + 1;
 		cloth.num_particle = cloth.nx1 * cloth.ny1;
 		cloth.height = 6.0f;
+		cloth.color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
 
 		SetCloth(cloth);
 

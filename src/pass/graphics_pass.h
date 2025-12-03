@@ -158,6 +158,8 @@ private:
 			uint32_t nx1;
 			uint32_t ny1;
 			uint32_t offset;
+			float p;
+			glm::vec4 color;
 		} cloth_render;
 		static_assert(sizeof(ClothRender) % 4 == 0, "push constant must be multiple of 4 bytes");
 	} push_constants_;

@@ -41,7 +41,7 @@ layout(set=1, binding=1, std430) readonly buffer Positions { vec4 pos[]; };
 
 layout(set = 2, binding = 0) uniform sampler2D tex[];
 
-layout(push_constant) uniform ClothPC { uint nx1; uint ny1; uint offset; } pc;
+layout(push_constant) uniform ClothPC { uint nx1; uint ny1; uint offset; float p; vec4 color; } pc;
 
 layout(location = 0) out vec2 out_uv;
 layout(location = 1) out vec3 out_world_normal;
