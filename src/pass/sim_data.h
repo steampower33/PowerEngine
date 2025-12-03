@@ -1,18 +1,6 @@
 #pragma once
 
 struct SimData {
-	float spacing = 0.015f; // 1.5cm resolution
-
-	glm::vec2 cloth_size{ 1.0f, 1.0f };
-
-	uint32_t nx = (uint32_t)std::round(cloth_size.x / spacing) + 1;
-	uint32_t ny = (uint32_t)std::round(cloth_size.y / spacing) + 1;
-
-	float spacing_x = spacing;
-	float spacing_y = spacing;
-	
-	float cloth_height = cloth_size.y * 2.0f;
-	float gsm = 0.2f; // Grams per Square Meter
 
 	struct Compliance {
 		float stretch = 1e-6f;
@@ -26,8 +14,6 @@ struct SimData {
 		float stretch = 100.0f;
 	} beta;
 
-	uint32_t num_particles = nx * ny;
-	uint32_t num_indices = 0;
 	uint32_t num_edges = 0;
 	uint32_t num_shears = 0;
 	uint32_t num_bends = 0;
@@ -36,22 +22,6 @@ struct SimData {
 	float frame_dt = 60.0f;
 	int substeps = 10;
 	int iterations = 4;
-
-	std::vector<glm::vec4> positions;
-	std::vector<glm::vec4> pred_positions;
-	std::vector<glm::vec4> velocities;
-	std::vector<float> inverse_masses;
-	std::vector<float> masses;
-	std::vector<uint32_t> indices;
-
-	std::vector<uint32_t> particle_hashes;
-	std::vector<uint32_t> particle_indices;
-	std::vector<uint32_t> starts;
-	std::vector<uint32_t> ends;
-
-	uint32_t num_neighbors;
-	std::vector<uint32_t> neighbors;
-	std::vector<uint32_t> neighbor_lambdas;
 
 	struct Edge {
 		uint32_t i;
@@ -144,7 +114,7 @@ struct SimData {
 		return phi;
 	}
 
-	void BuildBendConstraints()
+	void BuildBendConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices)
 	{
 		bends.clear();
 
@@ -227,10 +197,11 @@ struct SimData {
 	}
 
 
-	void BuildAreaConstraints()
+	void BuildAreaConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices)
 	{
-		areas.reserve(num_indices / 3);
-		for (size_t t = 0; t < num_indices; t += 3)
+		uint32_t numIndices = indices.size();
+		areas.reserve(numIndices / 3);
+		for (size_t t = 0; t < numIndices; t += 3)
 		{
 			uint32_t i0 = indices[t];
 			uint32_t i1 = indices[t + 1];
@@ -260,7 +231,7 @@ struct SimData {
 		}
 	}
 
-	void ResetConstraints()
+	void ResetConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices)
 	{
 		// Edge - Stretch, Diagonal
 		{
@@ -294,66 +265,62 @@ struct SimData {
 			}
 		}
 
-		// mass
-		{
-			// Total area
-			float totalArea = 0.0f;
-			for (size_t t = 0; t < num_indices; t += 3) {
-				uint32_t i0 = indices[t + 0];
-				uint32_t i1 = indices[t + 1];
-				uint32_t i2 = indices[t + 2];
-
-				glm::vec3 p0 = glm::vec3(positions[i0]);
-				glm::vec3 p1 = glm::vec3(positions[i1]);
-				glm::vec3 p2 = glm::vec3(positions[i2]);
-
-				glm::vec3 e1 = p1 - p0;
-				glm::vec3 e2 = p2 - p0;
-
-				float area = 0.5f * glm::length(glm::cross(e1, e2)); // Triangle area
-				totalArea += area;
-			}
-
-			float totalMassTarget = cloth_size.x * cloth_size.y * gsm;
-
-			// Area zero defence
-			float density = 0.0f;
-			if (totalArea > 0.0f) {
-				density = totalMassTarget / totalArea; // kg/m©÷
-			}
-
-			// Distribute mass to each triangle in proportion to area
-			for (size_t t = 0; t < num_indices; t += 3) {
-				uint32_t i0 = indices[t + 0];
-				uint32_t i1 = indices[t + 1];
-				uint32_t i2 = indices[t + 2];
-
-				glm::vec3 p0 = glm::vec3(positions[i0]);
-				glm::vec3 p1 = glm::vec3(positions[i1]);
-				glm::vec3 p2 = glm::vec3(positions[i2]);
-
-				glm::vec3 e1 = p1 - p0;
-				glm::vec3 e2 = p2 - p0;
-
-				float area = 0.5f * glm::length(glm::cross(e1, e2));
-
-				float triMass = density * area;
-
-				float share = triMass / 3.0f;
-				masses[i0] += share;
-				masses[i1] += share;
-				masses[i2] += share;
-			}
-
-			// Set inverse masses using mass
-			for (uint32_t i = 0; i < num_particles; ++i) {
-				float m = masses[i];
-				if (m > 0.0f)
-					inverse_masses[i] = 1.0f / m;
-				else
-					inverse_masses[i] = 0.0f;
-			}
-		}
 	}
 
+	struct SSBO {
+		vk::raii::Buffer delta_x{ nullptr };
+		vk::raii::Buffer delta_y{ nullptr };
+		vk::raii::Buffer delta_z{ nullptr };
+		vk::raii::Buffer delta_count{ nullptr };
+		vk::raii::Buffer edge{ nullptr };
+		vk::raii::Buffer shear{ nullptr };
+		vk::raii::Buffer bend{ nullptr };
+		vk::raii::Buffer grab_state{ nullptr };
+		vk::raii::Buffer area{ nullptr };
+	} ssbos_;
+
+	struct SSBOMemory {
+		vk::raii::DeviceMemory delta_x{ nullptr };
+		vk::raii::DeviceMemory delta_y{ nullptr };
+		vk::raii::DeviceMemory delta_z{ nullptr };
+		vk::raii::DeviceMemory delta_count{ nullptr };
+		vk::raii::DeviceMemory edge{ nullptr };
+		vk::raii::DeviceMemory shear{ nullptr };
+		vk::raii::DeviceMemory bend{ nullptr };
+		vk::raii::DeviceMemory grab_state{ nullptr };
+		vk::raii::DeviceMemory area{ nullptr };
+	} ssbo_memories_;
+
+	struct SSBOSize {
+		vk::DeviceSize delta_x = 0;
+		vk::DeviceSize delta_y = 0;
+		vk::DeviceSize delta_z = 0;
+		vk::DeviceSize delta_count = 0;
+		vk::DeviceSize edge = 0;
+		vk::DeviceSize shear = 0;
+		vk::DeviceSize bend = 0;
+		vk::DeviceSize grab_state = 0;
+		vk::DeviceSize area = 0;
+	} ssbo_size_;
+
+	struct Staging {
+		vk::raii::Buffer edge{ nullptr };
+		vk::raii::Buffer shear{ nullptr };
+		vk::raii::Buffer bend{ nullptr };
+		vk::raii::Buffer area{ nullptr };
+	} staging_;
+
+	struct StagingMemory {
+		vk::raii::DeviceMemory edge{ nullptr };
+		vk::raii::DeviceMemory shear{ nullptr };
+		vk::raii::DeviceMemory bend{ nullptr };
+		vk::raii::DeviceMemory area{ nullptr };
+	} staging_memories_;
+
+	struct StagingMapped {
+		void* edge{ nullptr };
+		void* shear{ nullptr };
+		void* bend{ nullptr };
+		void* area{ nullptr };
+	} staging_mapped_;
 };

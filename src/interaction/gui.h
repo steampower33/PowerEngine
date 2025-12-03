@@ -2,11 +2,14 @@
 
 class Context;
 class Swapchain;
-class GraphicsContext;
-class GpuSim;
-class CpuSim;
+class PassManager;
+class SimulationPassGPU;
+class SimulationPassCPU;
 class Model;
 class ModelManager;
+class TextureManager;
+class GraphicsPass;
+class ParticleManager;
 
 class GUI
 {
@@ -29,19 +32,19 @@ public:
 	bool is_print_timestamps = false;
 
 	void SetStyle();
-	void Update(Context& context, GraphicsContext& graphicsContext, Swapchain& swapchain, float& targetSimFPS, double& simDt, ModelManager& modelManager);
+	void Update(Context& context, PassManager& passManager, Swapchain& swapchain, float& targetSimFPS, double& simDt, ModelManager& modelManager, TextureManager& textureManager);
 	void DisplayKernelTiming(const std::string name, std::unordered_map<std::string, double>& labelToTime, std::unordered_map<std::string, double>& labelToAvgTime, bool autoColor = true);
 
 	template<typename RowFn>
-	void SetRenderingGUI(RowFn&& row, GraphicsContext& graphicsContext);
+	void SetRenderingGUI(RowFn&& row, GraphicsPass& graphicsPass, TextureManager& textureManager);
 	template<typename RowFn, typename Objects, typename ClothUBO>
 	void SetObjectsGUI(RowFn&& row, Objects& objects, ClothUBO& clothUBO);
 	template<typename RowFn>
-	void SetTimeingGUI(RowFn&& row, GraphicsContext& graphicsContext);
+	void SetTimeingGUI(RowFn&& row, SimulationPassGPU& sim, GraphicsPass& graphicsPass);
 	template<typename RowFn, typename Sim>
-	void SetSimulationGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& sim, float& targetSimFPS, double& simDt);
+	void SetSimulationGUI(RowFn&& row, PassManager& passManager, Sim& sim, float& targetSimFPS, double& simDt);
 	template<typename RowFn, typename Scene>
 	void SetTestSceneGUI(RowFn&& row, Scene& scene);
-	template<typename RowFn, typename Sim>
-	void SetStatGUI(RowFn&& row, GraphicsContext& graphicsContext, Sim& sim);
+	template<typename RowFn>
+	void SetStatGUI(RowFn&& row, PassManager& passManager);
 };

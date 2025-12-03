@@ -3,7 +3,7 @@
 class Context;
 class Swapchain;
 class GUI;
-class GraphicsContext;
+class PassManager;
 class ModelManager;
 class TextureManager;
 class MouseInteractor;
@@ -27,9 +27,7 @@ private:
 	std::unique_ptr<Context> context_;
 	std::unique_ptr<Swapchain> swapchain_;
 	std::unique_ptr<GUI> gui_;
-	std::unique_ptr<GraphicsContext> graphics_context_;
-	std::unique_ptr<ModelManager> model_manager_;
 	std::unique_ptr<TextureManager> texture_manager_;
-
-
+	std::unique_ptr<ModelManager> model_manager_;
+	std::unique_ptr<PassManager> pass_manager_;
 };

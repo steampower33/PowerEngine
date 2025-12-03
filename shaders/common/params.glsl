@@ -14,6 +14,9 @@ struct MouseInteract {
     vec3 ray_dir;
     float radius;
     uint depth_mode; // 0: none, 1: depth in, 2: depth out
+    float p0;
+    float p1;
+    float p2;
 };
 
 layout(push_constant) uniform PushConstant {

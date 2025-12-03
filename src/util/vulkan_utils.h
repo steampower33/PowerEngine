@@ -13,7 +13,7 @@ namespace vku
 		MOUSE_DEPTH_OUT = 2
 	};
 
-	struct Counts {
+	struct Count {
 		uint32_t ubo = 0;
 		uint32_t ubo_dynamic = 0;
 		uint32_t sb = 0;

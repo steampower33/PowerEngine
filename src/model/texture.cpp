@@ -1,5 +1,5 @@
 #include "context.h"
-#include "graphics_context.h"
+#include "pass_manager.h"
 #include "vulkan_utils.h"
 
 #include "texture.h"

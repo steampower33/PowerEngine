@@ -1,6 +1,6 @@
 
 #include "context.h"
-#include "graphics_context.h"
+#include "pass_manager.h"
 #include "vertex.h"
 #include "camera.h"
 #include "geometry_generator.h"
@@ -8,7 +8,7 @@
 
 #include "model.h"
 
-Model::Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, GraphicsContext& graphicsContext, TextureManager& textureManager, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool movable, std::string name)
+Model::Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, PassManager& graphicsContext, TextureManager& textureManager, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool movable, std::string name)
 {
     LoadModel(modelPath, vertexIncludeInfo, textureManager);
 
@@ -22,7 +22,7 @@ Model::Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, C
     ApplyTransform(initRotation, initPos);
 }
 
-Model::Model(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, GraphicsContext& graphicsContext, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble, std::string name)
+Model::Model(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, PassManager& graphicsContext, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble, std::string name)
 {
     mesh_data_ = std::move(meshData);
 

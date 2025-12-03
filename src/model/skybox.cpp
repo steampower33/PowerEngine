@@ -1,9 +1,9 @@
 #include "context.h"
-#include "graphics_context.h"
+#include "pass_manager.h"
 
 #include "skybox.h"
 
-Skybox::Skybox(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, GraphicsContext& graphicsContext)
+Skybox::Skybox(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, PassManager& graphicsContext)
 {
     mesh_data_ = std::move(meshData);
 

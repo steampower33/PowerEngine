@@ -2,7 +2,7 @@
 
 class Model;
 class Context;
-class GraphicsContext;
+class PassManager;
 class GeometryGenerator;
 class TextureManager;
 class Skybox;
@@ -10,7 +10,7 @@ class Skybox;
 class ModelManager
 {
 public:
-	ModelManager(Context& context, GraphicsContext& graphicsContext, TextureManager& textureManager);
+	ModelManager(Context& context, PassManager& graphicsContext, TextureManager& textureManager);
 	ModelManager(const ModelManager& rhs) = delete;
 	ModelManager(ModelManager&& rhs) = delete;
 	ModelManager& operator=(const ModelManager& rhs) = delete;

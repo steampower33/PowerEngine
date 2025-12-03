@@ -1,7 +1,7 @@
 #pragma once
 
 class Context;
-class GraphicsContext;
+class PassManager;
 struct Vertex;
 struct Camera;
 class TextureManager;
@@ -12,8 +12,8 @@ class TextureManager;
 class Model
 {
 public:
-	Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, GraphicsContext& graphicsContext, TextureManager& textureManager, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble, std::string name);
-	Model(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, GraphicsContext& graphicsContext, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble, std::string name);
+	Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, PassManager& graphicsContext, TextureManager& textureManager, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble, std::string name);
+	Model(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, PassManager& graphicsContext, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble, std::string name);
 	Model(const Model& rhs) = delete;
 	Model(Model&& rhs) = delete;
 	Model& operator=(const Model& rhs) = delete;

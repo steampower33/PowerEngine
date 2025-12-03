@@ -1,7 +1,7 @@
 #pragma once
 
 class Context;
-class GraphicsContext;
+class PassManager;
 
 class Texture
 {

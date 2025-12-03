@@ -1,13 +1,13 @@
 #include "model.h"
 #include "context.h"
-#include "graphics_context.h"
+#include "pass_manager.h"
 #include "geometry_generator.h"
 #include "texture_manager.h"
 #include "skybox.h"
 
 #include "model_manager.h"
 
-ModelManager::ModelManager(Context& context, GraphicsContext& graphicsContext, TextureManager& textureManager)
+ModelManager::ModelManager(Context& context, PassManager& graphicsContext, TextureManager& textureManager)
 {
 	models_.reserve(kMaxObjects);
 

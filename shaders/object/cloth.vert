@@ -8,10 +8,8 @@ layout(set = 0, binding = 0) uniform UBO {
     mat4 proj;
 } ubo;
 
-layout(set=1, binding=0, std430) readonly buffer Positions { vec4 pos[]; };
-
-layout(set = 2, binding = 0) uniform Render {
-    vec4 albedo_use;
+layout(set = 1, binding = 0) uniform Cloth {
+    vec4 albedo;
 
     int albedo_idx;
     int metallic_idx;
@@ -25,8 +23,8 @@ layout(set = 2, binding = 0) uniform Render {
 
     float ao_factor;
     float height_factor;
-    uint p0;
-    uint p1;
+    float sheen_weight_factor;
+    float sheen_roughness_factor;
 
     uint albedo_enable;
     uint metallic_enable;
@@ -37,18 +35,22 @@ layout(set = 2, binding = 0) uniform Render {
     uint height_enable;
     uint p3;
     uint p4;
-} render;
+} cloth;
 
-layout(set = 3, binding = 0) uniform sampler2D tex[];
+layout(set=1, binding=1, std430) readonly buffer Positions { vec4 pos[]; };
 
-layout(push_constant) uniform ClothPC { uint nx1; uint ny1; } pc;
+layout(set = 2, binding = 0) uniform sampler2D tex[];
+
+layout(push_constant) uniform ClothPC { uint nx1; uint ny1; uint offset; } pc;
 
 layout(location = 0) out vec2 out_uv;
 layout(location = 1) out vec3 out_world_normal;
 
 void main() {
 
-    uint vid = gl_VertexIndex;
+    uint global_id = gl_VertexIndex;
+    uint vid  = global_id - pc.offset;
+
     uint nx1 = pc.nx1;
     uint ny1 = pc.ny1;
     
@@ -80,12 +82,9 @@ void main() {
     out_world_normal = N;
 
     out_uv = vec2(float(x) / float(nx1 - 1), float(y) / float(ny1 - 1));
-
-    if (render.height_enable == 1u)
-    {
-        float height = (render.height_enable == 0u) ? render.height_factor : texture(tex[nonuniformEXT(render.height_idx)], out_uv).r;
-        p += N * height * render.height_factor;
-    }
+    
+    float height = (cloth.height_enable == 0u) ? cloth.height_factor : texture(tex[nonuniformEXT(cloth.height_idx)], out_uv).r;
+    p += N * height * cloth.height_factor;
 
     gl_Position = ubo.proj * ubo.view * vec4(p, 1.0);
 }

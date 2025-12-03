@@ -36,8 +36,8 @@ find_package(KTX CONFIG REQUIRED)
 
 file(GLOB SRC CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/context/*.cpp"
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/pass/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/src/model/*.cpp"
-     "${CMAKE_CURRENT_SOURCE_DIR}/src/simulation/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/src/interaction/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/src/util/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
@@ -94,8 +94,8 @@ target_link_libraries(PowerEngine
 target_include_directories(PowerEngine
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src/context
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pass
     ${CMAKE_CURRENT_SOURCE_DIR}/src/model
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/simulation
     ${CMAKE_CURRENT_SOURCE_DIR}/src/interaction
     ${CMAKE_CURRENT_SOURCE_DIR}/src/util
     ${CMAKE_CURRENT_SOURCE_DIR}/src

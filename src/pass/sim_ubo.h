@@ -34,57 +34,22 @@ struct SimUBO {
 			float p3;
 		} sim_params;
 		static_assert(sizeof(SimParams) % 16 == 0, "std140 must be 16-byte aligned.");
-
-		struct Render {
-			glm::vec4 albedo{ 1.0f, 1.0f, 1.0f, 0.0f };
-
-			int albedo_idx = -1;
-			int metallic_idx = -1;
-			int normal_idx = -1;
-			int roughness_idx = -1;
-
-			int ao_idx = -1;
-			int height_idx = -1;
-			float metallic_factor = 0.0f;
-			float roughness_factor = 1.0f;
-
-			float ao_factor = 1.0f;
-			float height_factor = 0.0f;
-			float sheen_weight_factor = 0.7f;
-			float sheen_roughness_factor = 1.0f;
-
-			uint32_t albedo_enable = 0;
-			uint32_t metallic_enable = 0;
-			uint32_t normal_enable = 0;
-			uint32_t roughness_enable = 0;
-
-			uint32_t ao_enable = 0;
-			uint32_t height_enable = 0;
-			uint32_t p3;
-			uint32_t p4;
-		} render;
-		static_assert(sizeof(Render) % 16 == 0, "std140 must be 16-byte aligned.");
-
 	} datas;
 
 	struct UBO {
 		vk::raii::Buffer sim_params{ nullptr };
-		vk::raii::Buffer render{ nullptr };
 	} ubos;
 
 	struct Memory {
 		vk::raii::DeviceMemory sim_params{ nullptr };
-		vk::raii::DeviceMemory render{ nullptr };
 	} memories;
 
 	struct Mapped {
 		void* sim_params{ nullptr };
-		void* render{ nullptr };
 	} mapped;
 
 	struct UBOSize {
 		vk::DeviceSize sim_params;
-		vk::DeviceSize render;
 	} size;
 
 };

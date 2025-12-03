@@ -1,103 +1,29 @@
 #pragma once
 
-#include "vulkan_utils.h"
-
 class Context;
-class Swapchain;
-class CpuSim;
-class GpuSim;
 class Camera;
+class Swapchain;
 class Texture;
 class TextureManager;
 class Model;
 class ModelManager;
-class GUI;
-class MouseInteractor;
+class ParticleManager;
 
-class GraphicsContext
+class GraphicsPass
 {
 public:
-	GraphicsContext(GLFWwindow* glfwWindow, Context& context, Swapchain& swapchain, TextureManager& textureManager, ModelManager& modelManager);
-	GraphicsContext(const GraphicsContext& rhs) = delete;
-	GraphicsContext(GraphicsContext&& rhs) = delete;
-	GraphicsContext& operator=(const GraphicsContext& rhs) = delete;
-	GraphicsContext& operator=(GraphicsContext&& rhs) = delete;
-	~GraphicsContext();
+	GraphicsPass(Context& context, Swapchain& swapchain, TextureManager& textureManager, ModelManager& modelManager, ParticleManager& particleManager);
+	GraphicsPass(const GraphicsPass& rhs) = delete;
+	GraphicsPass(GraphicsPass&& rhs) = delete;
+	GraphicsPass& operator=(const GraphicsPass& rhs) = delete;
+	GraphicsPass& operator=(GraphicsPass&& rhs) = delete;
+	~GraphicsPass();
 
-	Context& context_;
-	Swapchain& swapchain_;
-	TextureManager& texture_manager_;
-	ModelManager& model_manager_;
-
-	void Update(Camera& camera, MouseInteractor& mouseInteractor);
-	void Draw(std::unique_ptr<GUI>& gui);
-
-	uint32_t frame_counter_ = 0;
-	bool first_frame_ = (frame_counter_ == 0);
-
-	vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
-
-	vk::raii::DescriptorPool descriptor_pool_{ nullptr };
-
-	vk::raii::QueryPool compute_ts_pool_{ nullptr };
-	uint32_t compute_ts_steps_ = 0;
-	vk::raii::QueryPool graphics_ts_pool_{ nullptr };
-	uint32_t graphics_ts_steps_ = 0;
-
-	vk::raii::Semaphore timeline_semaphore_{ nullptr };
-	uint64_t timeline_value_{ 0 };
-	uint64_t last_compute_timeline_{ 0 };
-
-	std::vector<vk::raii::Fence> in_flight_fences_;
-	std::vector<vk::raii::Semaphore> image_available_;
-	std::vector<vk::raii::Semaphore> image_render_finished_;
-
-	std::array<uint64_t, MAX_FRAMES_IN_FLIGHT> frame_timeline_done_{};
-
-	uint32_t current_frame_{ 0 };
-
-	std::array<std::string, 15> labels_ = { "Intergrate", "ClearLambdas", "HashBuild", "RadixSort", "BuildCell", "BuildNeighbor", "SolveStretch", "SolveShear", "SolveBend", "SolveArea", "SolveSelfCollision", "ApplyDeltas", "CollideSdf", "Update", "Total"};
-	std::unordered_map<std::string, double> label_time_;
-	std::unordered_map<std::string, double> label_avg_time_;
-	uint32_t time_count_ = 0;
-	float compute_all_time_ = 0.0f;
-	float graphics_all_time_ = 0.0f;
-
-	vku::CpuOrGpu cpu_or_gpu_ = vku::CpuOrGpu::GPU;
-	vku::TestScene test_scene_;
-
-	std::unique_ptr<CpuSim> cpu_sim_;
-	std::unique_ptr<GpuSim> gpu_sim_;
-
-	vku::Counts counts_;
-
-	struct UBO {
-		vk::raii::Buffer global{ nullptr };
-		vk::raii::Buffer object{ nullptr };
-		vk::raii::Buffer light{ nullptr };
-		vk::raii::Buffer skybox{ nullptr };
-	} ubos_;
-
-	struct UBOMemory {
-		vk::raii::DeviceMemory global{ nullptr };
-		vk::raii::DeviceMemory object{ nullptr };
-		vk::raii::DeviceMemory light{ nullptr };
-		vk::raii::DeviceMemory skybox{ nullptr };
-	} ubo_memories_;
-
-	struct UBOMapped {
-		void* global{ nullptr };
-		void* object{ nullptr };
-		void* light{ nullptr };
-		void* skybox{ nullptr };
-	} ubo_mapped_;
-
-	struct UBOSize {
-		vk::DeviceSize global;
-		vk::DeviceSize object;
-		vk::DeviceSize light;
-		vk::DeviceSize skybox;
-	} ubo_size_;
+	void UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera);
+	void RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t currentFrame, vku::CpuOrGpu cpuOrGpu);
+	void CreateDepthResources();
+	
+	void CalculateGpuTime();
 
 	struct UBOData {
 		struct Global {
@@ -170,35 +96,125 @@ public:
 		} skybox;
 		static_assert(sizeof(UBOData::SkyBox) % 16 == 0, "std140 must be 16-byte aligned.");
 
+		struct Cloth {
+			glm::vec4 albedo{ 1.0f, 1.0f, 1.0f, 0.0f };
+
+			int albedo_idx = -1;
+			int metallic_idx = -1;
+			int normal_idx = -1;
+			int roughness_idx = -1;
+
+			int ao_idx = -1;
+			int height_idx = -1;
+			float metallic_factor = 0.0f;
+			float roughness_factor = 1.0f;
+
+			float ao_factor = 1.0f;
+			float height_factor = 0.0f;
+			float sheen_weight_factor = 0.7f;
+			float sheen_roughness_factor = 1.0f;
+
+			uint32_t albedo_enable = 0;
+			uint32_t metallic_enable = 0;
+			uint32_t normal_enable = 0;
+			uint32_t roughness_enable = 0;
+
+			uint32_t ao_enable = 0;
+			uint32_t height_enable = 0;
+			uint32_t p3;
+			uint32_t p4;
+		} cloth;
+		static_assert(sizeof(Cloth) % 16 == 0, "std140 must be 16-byte aligned.");
+
 	} ubo_datas_;
 
-	struct CommandBuffer {
-		std::vector<vk::raii::CommandBuffer> compute;
-		std::vector<vk::raii::CommandBuffer> graphics;
-	} cmds_;
+	std::vector<vk::raii::CommandBuffer> cmds_;
+
+	vku::PolygonMode polygon_mode_ = vku::PolygonMode::SOLID;
+
+	float pass_total_time_ = 0.0f;
+
+private:
+	Context& context_;
+	Swapchain& swapchain_;
+	TextureManager& texture_manager_;
+	ModelManager& model_manager_;
+	ParticleManager& particle_manager_;
+
+	vk::raii::QueryPool timestamp_pool_{ nullptr };
+	uint32_t timestamp_steps_ = 0;
+
+	vku::Count counts_;
+
+	uint32_t frame_counter_ = 0;
+	bool first_frame_ = (frame_counter_ == 0);
+
+	vk::SampleCountFlagBits msaa_samples_ = vk::SampleCountFlagBits::e1;
+
+	vk::raii::DescriptorPool descriptor_pool_{ nullptr };
+
+	struct PushConstant {
+		struct ClothRender {
+			uint32_t nx1;
+			uint32_t ny1;
+			uint32_t offset;
+		} cloth_render;
+		static_assert(sizeof(ClothRender) % 4 == 0, "push constant must be multiple of 4 bytes");
+	} push_constants_;
+
+	struct UBO {
+		vk::raii::Buffer global{ nullptr };
+		vk::raii::Buffer object{ nullptr };
+		vk::raii::Buffer light{ nullptr };
+		vk::raii::Buffer skybox{ nullptr };
+		vk::raii::Buffer cloth{ nullptr };
+	} ubos_;
+
+	struct UBOMemory {
+		vk::raii::DeviceMemory global{ nullptr };
+		vk::raii::DeviceMemory object{ nullptr };
+		vk::raii::DeviceMemory light{ nullptr };
+		vk::raii::DeviceMemory skybox{ nullptr };
+		vk::raii::DeviceMemory cloth{ nullptr };
+	} ubo_memories_;
+
+	struct UBOMapped {
+		void* global{ nullptr };
+		void* object{ nullptr };
+		void* light{ nullptr };
+		void* skybox{ nullptr };
+		void* cloth{ nullptr };
+	} ubo_mapped_;
+
+	struct UBOSize {
+		vk::DeviceSize global;
+		vk::DeviceSize object;
+		vk::DeviceSize light;
+		vk::DeviceSize skybox;
+		vk::DeviceSize cloth;
+	} ubo_size_;
 
 	struct SetLayout {
 		vk::raii::DescriptorSetLayout global{ nullptr };
 		vk::raii::DescriptorSetLayout object{ nullptr };
-		vk::raii::DescriptorSetLayout tex2D{ nullptr };
-		vk::raii::DescriptorSetLayout texEnv{ nullptr };
 		vk::raii::DescriptorSetLayout lighting{ nullptr };
 		vk::raii::DescriptorSetLayout skybox{ nullptr };
+		vk::raii::DescriptorSetLayout cloth{ nullptr };
 	} set_layouts_;
 
 	struct Set {
 		vk::raii::DescriptorSet global{ nullptr };
 		vk::raii::DescriptorSet object{ nullptr };
-		vk::raii::DescriptorSet tex2D{ nullptr };
-		vk::raii::DescriptorSet texEnv{ nullptr };
 		vk::raii::DescriptorSet lighting{ nullptr };
 		vk::raii::DescriptorSet skybox{ nullptr };
+		vk::raii::DescriptorSet cloth{ nullptr };
 	} sets_;
 
 	struct PipelineLayout {
 		vk::raii::PipelineLayout model{ nullptr };
 		vk::raii::PipelineLayout lighting{ nullptr };
 		vk::raii::PipelineLayout skybox{ nullptr };
+		vk::raii::PipelineLayout cloth{ nullptr };
 	} pipeline_layouts_;
 
 	struct Pipeline {
@@ -207,9 +223,11 @@ public:
 		vk::raii::Pipeline model_point{ nullptr };
 		vk::raii::Pipeline lighting{ nullptr };
 		vk::raii::Pipeline skybox{ nullptr };
-	} pipelines_;
 
-	vku::PolygonMode polygon_mode_ = vku::PolygonMode::SOLID;
+		vk::raii::Pipeline cloth_solid{ nullptr };
+		vk::raii::Pipeline cloth_wireframe{ nullptr };
+		vk::raii::Pipeline cloth_point{ nullptr };
+	} pipelines_;
 
 	struct GeometryBuffer {
 		std::vector<vk::Format> formats;
@@ -237,25 +255,12 @@ public:
 	vk::raii::ImageView depth_image_view_ = nullptr;
 
 private:
-	void RecreateSwapchain();
-	void UpdateGraphicsUBO(Camera& camera);
-
-	void RecordGraphicsCommandBuffer(uint32_t imageIndex, vk::raii::QueryPool& timestampPool, uint32_t& timestampSteps);
-
-private:
 	void CreateCommandBuffers();
 	void CreateQueryPool();
-
 	void CreateDescriptorSetLayout();
 	void CreateDescriptorPools();
-
 	void CreateUniformBuffers();
-
 	void CreateDescriptorSets();
-	void CreateGraphicsPipelines();
-	void CreateSyncObjects();
-
 	void CreateGeometryBuffers();
-	void CreateDepthResources();
-
+	void CreateGraphicsPipelines();
 };

@@ -1,7 +1,7 @@
 #pragma once
 
 class Context;
-class GraphicsContext;
+class PassManager;
 struct Vertex;
 
 #include "vulkan_utils.h"
@@ -9,7 +9,7 @@ struct Vertex;
 
 struct Skybox {
 public:
-	Skybox(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, GraphicsContext& graphicsContext);
+	Skybox(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, PassManager& graphicsContext);
 	Skybox(const Skybox& rhs) = delete;
 	Skybox(Skybox&& rhs) = delete;
 	Skybox& operator=(const Skybox& rhs) = delete;
