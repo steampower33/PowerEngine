@@ -1,0 +1,26 @@
+#version 460
+#include "../common/params.glsl"
+
+layout(local_size_x = 256) in;
+
+void main() {
+    uint v = gl_GlobalInvocationID.x;
+    if (v >= sim.num_particles) return; // cloth+softbody
+
+    uint start = vertex_tri_offsets[v];
+    uint end   = vertex_tri_offsets[v + 1];
+
+    vec3 n = vec3(0.0);
+
+    for (uint k = start; k < end; ++k) {
+        uint triId = vertex_tri_indices[k];
+        vec3 fn = tri_normals[triId].xyz;
+        n += fn;
+    }
+
+    float len = length(n);
+    if (len > 1e-8)
+        normals[v] = vec4(n / len, 0.0);
+    else
+        normals[v] = vec4(0, 1, 0, 0);
+}

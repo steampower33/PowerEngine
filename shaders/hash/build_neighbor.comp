@@ -51,7 +51,7 @@ void main()
                 uint end   = ends[h];
 
                 for (uint idx = start; idx < end; ++idx) {
-                    uint j = indices[idx];
+                    uint j = sorted_indices[idx];
                     if (j == gid) continue;
 
                     vec3 pj = xp[j].xyz;

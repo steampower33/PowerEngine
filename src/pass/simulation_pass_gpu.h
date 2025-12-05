@@ -30,11 +30,19 @@ public:
 	ParticleManager& particle_manager_;
 
 	uint32_t total_particles_;
+	uint32_t total_indices_;
+	uint32_t total_tri_;
+
+	uint32_t cloth_particles_;
+	uint32_t cloth_indices_;
+	uint32_t softbody_particles_;
+	uint32_t softbody_indices_;
 
 	void UpdateMousePushConstant(Camera& camera, MouseInteractor& mouseInteractor, glm::vec2 viewportSize);
 	void UpdateComputeUBO(uint32_t currentFrame, ModelManager& model);
 
-	void RecordCompute(uint32_t currentFrame, vku::TestScene& testScene);
+	void RecordComputeSoftBody(uint32_t currentFrame);
+	void RecordComputeCloth(uint32_t currentFrame, vku::TestScene& testScene);
 
 	void CalculateGpuTime();
 
@@ -56,12 +64,22 @@ public:
 
 	vk::raii::QueryPool timestamp_pool_{ nullptr };
 	uint32_t timestamp_steps_ = 0;
-	uint32_t iteration_timestamp_count_ = 12;
-	uint32_t slots_per_spatial_hashing_ = 8;
-	uint32_t slots_per_compute_ = 1 + datas_.substeps * (4 + slots_per_spatial_hashing_ + iteration_timestamp_count_ * datas_.iterations + 4) + 1;
+	uint32_t slots_integrate_clear = 4;
+	uint32_t slots_spatial_hashing_ = 8;
+	uint32_t slots_per_iteration_ = 12;
+	uint32_t slots_collide_update_ = 4;
+	uint32_t slots_calculate_normals_ = 4;
+	uint32_t slots_per_compute_ =
+		1 
+		+ datas_.substeps * 
+		(slots_integrate_clear + slots_spatial_hashing_
+			+ datas_.iterations * slots_per_iteration_ 
+			+ slots_collide_update_)
+		+ slots_calculate_normals_
+		+ 1;
 	float pass_total_time_ = 0.0f;
 
-	std::array<std::string, 15> labels_ = { "Intergrate", "ClearLambdas", "HashBuild", "RadixSort", "BuildCell", "BuildNeighbor", "SolveStretch", "SolveShear", "SolveBend", "SolveArea", "SolveSelfCollision", "ApplyDeltas", "CollideSdf", "Update", "Total" };
+	std::array<std::string, 16> labels_ = { "Intergrate", "ClearLambdas", "HashBuild", "RadixSort", "BuildCell", "BuildNeighbor", "SolveStretch", "SolveShear", "SolveBend", "SolveArea", "SolveSelfCollision", "ApplyDeltas", "CollideSdf", "Update", "CalculateNormals", "Total" };
 	std::unordered_map<std::string, double> label_time_;
 	std::unordered_map<std::string, double> label_avg_time_;
 	uint32_t time_count_ = 0;
@@ -129,6 +147,9 @@ public:
 		vk::raii::Pipeline build_neighbor{ nullptr };
 		vk::raii::Pipeline solve_self_collision{ nullptr };
 
+		vk::raii::Pipeline tri_normal{ nullptr };
+		vk::raii::Pipeline vector_normal{ nullptr };
+
 	} pipelines_;
 
 private:
@@ -137,7 +158,8 @@ private:
 	void CreateDescriptorSetLayout();
 	void CreateDescriptorPools();
 	void CreateUniformBuffers();
-	void CreateConstraintDatas();
+	void CreateClothConstraintDatas();
+	void CreateSoftBodyConstraintDatas();
 	void CreateSSBOBuffers();
 	void CreateDescriptorSets();
 	void CreateComputePipelines();

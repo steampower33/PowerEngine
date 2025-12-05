@@ -118,7 +118,7 @@ void MouseInteractor::Update(const Camera& camera,
                     }
                     if (angle > 0.0f) {
                         glm::quat dq = glm::angleAxis(angle, axis);
-                        model.ApplyTransform(dq, glm::vec3(0.0f)); // 회전
+                        model.ApplyTransform(glm::vec3(1.0f), dq, glm::vec3(0.0f)); // 회전
                     }
                 }
                 prevVector_ = curr;
@@ -136,7 +136,7 @@ void MouseInteractor::Update(const Camera& camera,
             glm::vec3 delta = newPos - prevPos_;
 
             if (glm::length(delta) > 1e-8f) {
-                models[selected_]->ApplyTransform(glm::quat(1, 0, 0, 0), delta);
+                models[selected_]->ApplyTransform(glm::vec3(1.0f), glm::quat(1, 0, 0, 0), delta);
                 prevPos_ = newPos;
             }
         }

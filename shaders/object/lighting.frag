@@ -110,7 +110,7 @@ void main()
 
     vec3 camera_pos = light.camera_pos.xyz;
 
-    vec3 N = normalize(normal);
+    vec3 N = normal;
 
     vec3 color = albedo;
     if (light.pbr_enable == 1u)

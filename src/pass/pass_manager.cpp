@@ -17,10 +17,12 @@ PassManager::PassManager(GLFWwindow* glfwWindow, Context& context, Swapchain& sw
 {
 	CreateSyncObjects();
 
-	particle_manager_ = std::make_unique<ParticleManager>(context);
+	particle_manager_ = std::make_unique<ParticleManager>(context, modelManager);
 
-	sim_pass_cpu_ = std::make_unique<SimulationPassCPU>(context, *particle_manager_);
-	sim_pass_gpu_ = std::make_unique<SimulationPassGPU>(context, swapchain, *particle_manager_);
+	if (cpu_or_gpu_ == vku::CpuOrGpu::CPU)
+		sim_pass_cpu_ = std::make_unique<SimulationPassCPU>(context, *particle_manager_);
+	else
+		sim_pass_gpu_ = std::make_unique<SimulationPassGPU>(context, swapchain, *particle_manager_);
 	graphics_pass_ = std::make_unique<GraphicsPass>(context, swapchain, textureManager, modelManager, *particle_manager_);
 }
 
@@ -90,7 +92,8 @@ void PassManager::Draw(std::unique_ptr<GUI>& gui)
 
 	if (cpu_or_gpu_ == vku::CpuOrGpu::GPU)
 	{
-		sim_pass_gpu_->RecordCompute(frame, test_scene_);
+		sim_pass_gpu_->RecordComputeCloth(frame, test_scene_);
+		//sim_pass_gpu_->RecordComputeSoftBody(frame);
 
 		// compute submit
 		uint64_t computeSignalValue = 0;

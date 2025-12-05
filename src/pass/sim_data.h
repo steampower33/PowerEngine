@@ -34,6 +34,9 @@ struct SimData {
 	std::array<uint32_t, 5> pass_offsets;
 	std::vector<std::pair<uint32_t, uint32_t>> passes[5];
 
+	// SoftBody Stretch Edge
+	std::vector<Edge> softbody_stretch_edges;
+
 	struct Shear {
 		uint32_t i0, i1, i2;
 		float rest_dot;
@@ -114,11 +117,9 @@ struct SimData {
 		return phi;
 	}
 
-	void BuildBendConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices)
+	void BuildBendConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices, uint32_t numTris)
 	{
 		bends.clear();
-
-		const size_t numTris = indices.size() / 3;
 
 		std::unordered_map<EdgeKey, std::pair<TriRef, TriRef>, EdgeKeyHash> edgeMap;
 		edgeMap.reserve(numTris * 3);
@@ -197,11 +198,9 @@ struct SimData {
 	}
 
 
-	void BuildAreaConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices)
+	void BuildAreaConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices, uint32_t numTris)
 	{
-		uint32_t numIndices = indices.size();
-		areas.reserve(numIndices / 3);
-		for (size_t t = 0; t < numIndices; t += 3)
+		for (size_t t = 0; t < numTris; t += 3)
 		{
 			uint32_t i0 = indices[t];
 			uint32_t i1 = indices[t + 1];

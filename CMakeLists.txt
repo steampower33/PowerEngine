@@ -159,15 +159,21 @@ function(compile_glsl_shaders TARGET)
 endfunction()
 
 # GLSL 소스 나열
-set(GLSL_SHADERS
+set(OBJECT_RENDER_SHADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/model.vert
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/model.frag
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/cloth.vert
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/cloth.frag
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/lighting.vert
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/lighting.frag
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/softbody.vert
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/softbody.frag
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/skybox.vert
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/skybox.frag
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/lighting.vert
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/lighting.frag
+)
+compile_glsl_shaders(object_render_shaders_target SOURCES ${OBJECT_RENDER_SHADERS})
+
+set(SIMULATION_SHADERS 
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/clear_lambdas.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/integrate.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_stretch.comp
@@ -177,12 +183,13 @@ set(GLSL_SHADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/apply_deltas.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/collide_sdf.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/update_velocity.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/tri_normal.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/vertex_normal.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/hash/build_hash.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/hash/build_cell.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/hash/build_neighbor.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/hash/solve_self_collision.comp
 )
+compile_glsl_shaders(simulation_shaders_target SOURCES ${SIMULATION_SHADERS})
 
-compile_glsl_shaders(glsl_shaders_target SOURCES ${GLSL_SHADERS})
-
-add_dependencies(PowerEngine glsl_shaders_target)
+add_dependencies(PowerEngine object_render_shaders_target simulation_shaders_target)

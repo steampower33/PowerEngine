@@ -53,7 +53,7 @@ layout(std140, set = 0, binding = 0) uniform SimParams {
 
     float self_collision_stiffness;
     float max_speed;
-    float p2;
+    uint num_tries;
     float p3;
 } sim;
 
@@ -109,10 +109,15 @@ struct Area {
 layout(std430, set = 1, binding = 12) buffer Areas { Area areas[]; };
 
 layout(std430, set = 1, binding = 13) buffer Hashes { uint hashes[]; };
-layout(std430, set = 1, binding = 14) buffer Indices { uint indices[]; };
+layout(std430, set = 1, binding = 14) buffer SoretedIndices { uint sorted_indices[]; };
 layout(std430, set = 1, binding = 15) buffer Starts { uint starts[]; };
 layout(std430, set = 1, binding = 16) buffer Ends { uint ends[]; };
 layout(std430, set = 1, binding = 17) buffer Neighbors { uint neighbors[]; };
 layout(std430, set = 1, binding = 18) buffer NeighborLambdas { float neighbor_lambdas[]; };
+layout(std430, set = 1, binding = 19) buffer Index { uint indices[]; };
+layout(std430, set = 1, binding = 20) buffer Normals { vec4 normals[]; };
+layout(std430, set = 1, binding = 21) buffer TriNormals { vec4 tri_normals[]; };
+layout(std430, set = 1, binding = 22) buffer VertexTriOffsets { uint vertex_tri_offsets[]; };
+layout(std430, set = 1, binding = 23) buffer VertexTriIndices { uint vertex_tri_indices[]; };
 
 #endif

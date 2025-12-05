@@ -1,6 +1,8 @@
 #pragma once
 
 class Context;
+class Model;
+class ModelManager;
 
 // Cloth
 struct Cloth
@@ -35,10 +37,28 @@ struct Cloth
 	uint32_t num_area = 0;
 };
 
+struct SoftBody
+{
+	float height;
+	float gsm = 0.2f;
+
+	glm::vec4 color;
+
+	glm::vec3 origin = glm::vec3(0.0f);
+	float     angle_deg = 0.0f;
+	glm::vec3 axis = glm::vec3(1, 0, 0);
+
+	uint32_t offset_particle = 0;
+	uint32_t offset_indices = 0;
+
+	uint32_t num_particle = 0;
+	uint32_t num_indices = 0;
+};
+
 class ParticleManager
 {
 public:
-	ParticleManager(Context& context);
+	ParticleManager(Context& context, ModelManager& modelManager);
 	ParticleManager(const ParticleManager& rhs) = delete;
 	ParticleManager(ParticleManager&& rhs) = delete;
 	ParticleManager& operator=(const ParticleManager& rhs) = delete;
@@ -52,27 +72,41 @@ public:
 
 	uint32_t total_particles_ = 0;
 	uint32_t total_indices_ = 0;
+	uint32_t total_tries_ = 0;
 
+	uint32_t num_cloth_particles_ = 0;
+	uint32_t num_cloth_indices_ = 0;
 	std::vector<Cloth> clothes_;
 
-	std::vector<glm::vec4> positions;
-	std::vector<glm::vec4> pred_positions;
-	std::vector<glm::vec4> velocities;
-	std::vector<float> inverse_masses;
-	std::vector<float> masses;
-	std::vector<uint32_t> indices;
+	uint32_t num_softbody_particles_ = 0;
+	uint32_t num_softbody_indices_ = 0;
+	SoftBody soft_body_;
+
+	float default_cloth_spacing_ = 0.015f;
+
+	std::vector<glm::vec4> positions_;
+	std::vector<glm::vec4> pred_positions_;
+	std::vector<glm::vec4> velocities_;
+	std::vector<float> inverse_masses_;
+	std::vector<float> masses_;
+	std::vector<uint32_t> indices_;
+	std::vector<glm::vec4> normals_;
+
+	std::vector<glm::vec4> tri_normals_;
+	std::vector<uint32_t> vertex_tri_offsets_;  // size = numVertices + 1
+	std::vector<uint32_t> vertex_tri_indices_;  // size = numTris * 3
 
 	vk::raii::Buffer index_buffer_{ nullptr };
 	vk::raii::DeviceMemory index_buffer_memory_{ nullptr };
 
-	std::vector<uint32_t> particle_hashes;
-	std::vector<uint32_t> particle_indices;
-	std::vector<uint32_t> starts;
-	std::vector<uint32_t> ends;
+	std::vector<uint32_t> particle_hashes_;
+	std::vector<uint32_t> particle_indices_;
+	std::vector<uint32_t> starts_;
+	std::vector<uint32_t> ends_;
 
-	uint32_t num_neighbors;
-	std::vector<uint32_t> neighbors;
-	std::vector<uint32_t> neighbor_lambdas;
+	uint32_t num_neighbors_;
+	std::vector<uint32_t> neighbors_;
+	std::vector<uint32_t> neighbor_lambdas_;
 
 	struct SSBO {
 		vk::raii::Buffer position{ nullptr };
@@ -81,11 +115,18 @@ public:
 		vk::raii::Buffer inverse_mass{ nullptr };
 
 		vk::raii::Buffer particle_hash{ nullptr };
-		vk::raii::Buffer particle_indice{ nullptr };
+		vk::raii::Buffer sorted_indice{ nullptr };
 		vk::raii::Buffer start{ nullptr };
 		vk::raii::Buffer end{ nullptr };
 		vk::raii::Buffer neighbor{ nullptr };
 		vk::raii::Buffer neighbor_lambda{ nullptr };
+
+		vk::raii::Buffer index{ nullptr };
+		vk::raii::Buffer normal{ nullptr };
+
+		vk::raii::Buffer tri_normals{ nullptr };
+		vk::raii::Buffer vertex_tri_offsets{ nullptr };
+		vk::raii::Buffer vertex_tri_indices{ nullptr };
 	} ssbos_;
 
 	struct SSBOMemory {
@@ -95,11 +136,18 @@ public:
 		vk::raii::DeviceMemory inverse_mass{ nullptr };
 
 		vk::raii::DeviceMemory particle_hash{ nullptr };
-		vk::raii::DeviceMemory particle_indice{ nullptr };
+		vk::raii::DeviceMemory sorted_indice{ nullptr };
 		vk::raii::DeviceMemory start{ nullptr };
 		vk::raii::DeviceMemory end{ nullptr };
 		vk::raii::DeviceMemory neighbor{ nullptr };
 		vk::raii::DeviceMemory neighbor_lambda{ nullptr };
+
+		vk::raii::DeviceMemory index{ nullptr };
+		vk::raii::DeviceMemory normal{ nullptr };
+
+		vk::raii::DeviceMemory tri_normals{ nullptr };
+		vk::raii::DeviceMemory vertex_tri_offsets{ nullptr };
+		vk::raii::DeviceMemory vertex_tri_indices{ nullptr };
 	} ssbo_memories_;
 
 	struct SSBOSize {
@@ -109,11 +157,17 @@ public:
 		vk::DeviceSize inverse_mass = 0;
 
 		vk::DeviceSize particle_hash = 0;
-		vk::DeviceSize particle_indice = 0;
+		vk::DeviceSize sorted_indice = 0;
 		vk::DeviceSize start = 0;
 		vk::DeviceSize end = 0;
 		vk::DeviceSize neighbor = 0;
 		vk::DeviceSize neighbor_lambda = 0;
+
+		vk::DeviceSize index = 0;
+		vk::DeviceSize normal = 0;
+		vk::DeviceSize tri_normals = 0;
+		vk::DeviceSize vertex_tri_offsets = 0;
+		vk::DeviceSize vertex_tri_indices = 0;
 	} ssbo_size_;
 
 	struct Staging {
@@ -139,4 +193,5 @@ public:
 
 private:
 	void CreateSSBO();
+	void BuildVertexAdjacency();
 };

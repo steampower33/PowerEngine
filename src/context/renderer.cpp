@@ -15,7 +15,7 @@ Renderer::Renderer(GLFWwindow* glfwWindow, float width, float height)
 	swapchain_ = std::make_unique<Swapchain>(glfwWindow, *context_);
 	gui_ = std::make_unique<GUI>(glfwWindow, *context_, *swapchain_);
 	texture_manager_ = std::make_unique<TextureManager>(*context_);
-	model_manager_ = std::make_unique<ModelManager>(*context_, *pass_manager_, *texture_manager_);
+	model_manager_ = std::make_unique<ModelManager>(*context_, *texture_manager_);
 	pass_manager_ = std::make_unique<PassManager>(glfwWindow, *context_, *swapchain_, *texture_manager_, *model_manager_);
 }
 

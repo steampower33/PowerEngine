@@ -155,13 +155,18 @@ private:
 
 	struct PushConstant {
 		struct ClothRender {
+			glm::vec4 color;
 			uint32_t nx1;
 			uint32_t ny1;
-			uint32_t offset;
-			float p;
-			glm::vec4 color;
+			uint32_t p0;
+			float p1;
 		} cloth_render;
 		static_assert(sizeof(ClothRender) % 4 == 0, "push constant must be multiple of 4 bytes");
+
+		struct SoftBody {
+			glm::vec4 color;
+		} softbody;
+		static_assert(sizeof(SoftBody) % 4 == 0, "push constant must be multiple of 4 bytes");
 	} push_constants_;
 
 	struct UBO {
@@ -202,6 +207,7 @@ private:
 		vk::raii::DescriptorSetLayout lighting{ nullptr };
 		vk::raii::DescriptorSetLayout skybox{ nullptr };
 		vk::raii::DescriptorSetLayout cloth{ nullptr };
+		vk::raii::DescriptorSetLayout softbody{ nullptr };
 	} set_layouts_;
 
 	struct Set {
@@ -210,6 +216,7 @@ private:
 		vk::raii::DescriptorSet lighting{ nullptr };
 		vk::raii::DescriptorSet skybox{ nullptr };
 		vk::raii::DescriptorSet cloth{ nullptr };
+		vk::raii::DescriptorSet softbody{ nullptr };
 	} sets_;
 
 	struct PipelineLayout {
@@ -217,6 +224,7 @@ private:
 		vk::raii::PipelineLayout lighting{ nullptr };
 		vk::raii::PipelineLayout skybox{ nullptr };
 		vk::raii::PipelineLayout cloth{ nullptr };
+		vk::raii::PipelineLayout softbody{ nullptr };
 	} pipeline_layouts_;
 
 	struct Pipeline {
@@ -229,6 +237,7 @@ private:
 		vk::raii::Pipeline cloth_solid{ nullptr };
 		vk::raii::Pipeline cloth_wireframe{ nullptr };
 		vk::raii::Pipeline cloth_point{ nullptr };
+		vk::raii::Pipeline softbody{ nullptr };
 	} pipelines_;
 
 	struct GeometryBuffer {

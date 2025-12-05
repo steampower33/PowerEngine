@@ -30,7 +30,7 @@ struct SimUBO {
 
 			float self_collision_stiffness = 25.0f;
 			float max_speed;
-			float p2;
+			uint32_t num_tries;
 			float p3;
 		} sim_params;
 		static_assert(sizeof(SimParams) % 16 == 0, "std140 must be 16-byte aligned.");

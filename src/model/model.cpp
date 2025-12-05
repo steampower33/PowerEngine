@@ -8,9 +8,9 @@
 
 #include "model.h"
 
-Model::Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, PassManager& graphicsContext, TextureManager& textureManager, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool movable, std::string name)
+Model::Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, TextureManager& textureManager, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool movable, std::string name, float scale)
 {
-    LoadModel(modelPath, vertexIncludeInfo, textureManager);
+    LoadModel(modelPath, vertexIncludeInfo, textureManager, scale);
 
     vku::CreateVertexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, mesh_data_.vertices, mesh_data_.vertex_buffer, mesh_data_.vertex_buffer_memory);
     vku::CreateIndexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, mesh_data_.indices, mesh_data_.index_buffer, mesh_data_.index_buffer_memory);
@@ -19,10 +19,10 @@ Model::Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, C
     movable_ = movable;
     name_ = name;
 
-    ApplyTransform(initRotation, initPos);
+    ApplyTransform(glm::vec3(1.0f), initRotation, initPos);
 }
 
-Model::Model(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, PassManager& graphicsContext, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble, std::string name)
+Model::Model(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble, std::string name)
 {
     mesh_data_ = std::move(meshData);
 
@@ -33,10 +33,10 @@ Model::Model(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Conte
     movable_ = moveble;
     name_ = name;
 
-    ApplyTransform(initRotation, initPos);
+    ApplyTransform(glm::vec3(1.0f), initRotation, initPos);
 }
 
-void Model::LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo& vertexIncludeInfo, TextureManager& textureManager)
+void Model::LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo& vertexIncludeInfo, TextureManager& textureManager, float scale)
 {
     tinygltf::Model model;
     tinygltf::TinyGLTF loader;
@@ -97,7 +97,7 @@ void Model::LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo
                 const float* p = reinterpret_cast<const float*>(
                     &posBuffer.data[posBufferView.byteOffset + posAccessor.byteOffset + i * sizeof(glm::vec3)]
                     );
-                v.pos = glm::vec3(p[0], p[1], p[2]);
+                v.pos = glm::vec3(p[0] * scale, p[1] * scale, p[2] * scale);
 
                 // uv
                 if (hasUV)
@@ -194,13 +194,13 @@ void Model::LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo
     }
 }
 
-void Model::ApplyTransform(const glm::quat& rotationDelta, const glm::vec3& translationDelta)
+void Model::ApplyTransform(glm::vec3 scaleDelta, glm::quat rotationDelta, glm::vec3 translationDelta)
 {
     position_ += translationDelta;
     rotation_ = rotationDelta * rotation_;
     rotation_ = glm::normalize(rotation_);
 
-    glm::mat4 scaleMatrix = glm::scale(glm::mat4(1.0f), scale_);
+    glm::mat4 scaleMatrix = glm::scale(glm::mat4(1.0f), scaleDelta);
     glm::mat4 rotationMatrix = glm::mat4_cast(rotation_);
     glm::mat4 translationMatrix = glm::translate(glm::mat4(1.0f), position_);
 

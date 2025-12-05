@@ -233,8 +233,8 @@ void GUI::Update(Context& context, PassManager& passManager, Swapchain& swapchai
 	ImGui::End();
 
 	// Right Side
-	ImGui::SetNextWindowPos(ImVec2(swapchain.swapchain_extent_.width - 510.0f, spacing));
-	ImGui::SetNextWindowSize(ImVec2(500.0f, 0));
+	ImGui::SetNextWindowSize(ImVec2(600.0f, 0));
+	ImGui::SetNextWindowPos(ImVec2(swapchain.swapchain_extent_.width - 610.0f, spacing));
 	if (ImGui::Begin("Cloth Performance Monitor", nullptr, wf))
 	{
 		SetStatGUI(row, passManager);
@@ -569,7 +569,7 @@ void GUI::SetStatGUI(RowFn&& row, PassManager& passManager)
 
 	if (ImGui::BeginTable("Stat", 2, ImGuiTableFlags_BordersInnerV))
 	{
-		row("NumParticles", [&] { ImGui::Text("%u", pm.total_particles_); });
+		row("NumParticles", [&] { ImGui::Text("%u", pm.num_cloth_particles_); });
 		row("NumEdges", [&] { ImGui::Text("%u", d.num_edges); });
 		row("NumShears", [&] { ImGui::Text("%u", d.num_shears); });
 		row("NumBends", [&] { ImGui::Text("%u", d.num_bends); });

@@ -39,9 +39,9 @@ layout(location = 1) in vec3 in_world_normal;
 
 layout(location = 0) out vec4 out_albedo_metal;
 layout(location = 1) out vec4 out_normal_rough;
-layout(location = 2) out vec4 out_height_ao;
+layout(location = 2) out vec4 out_height_ao_sheen;
 
-layout(push_constant) uniform ClothPC { uint nx1; uint ny1; uint offset; float p; vec4 color; } pc;
+layout(push_constant) uniform ClothPC { vec4 color; uint nx1; uint ny1; uint p0; float p1; } pc;
 
 void main() {
     vec4 albedo    = (cloth.albedo_enable == 0u || cloth.albedo_idx == -1) ? pc.color : texture(tex[nonuniformEXT(cloth.albedo_idx)], in_uv);
@@ -53,5 +53,5 @@ void main() {
 
     out_albedo_metal = vec4(albedo.xyz, metallic);
     out_normal_rough = vec4(normal * 0.5 + 0.5, roughness); // [-1,1] -> [0,1]
-    out_height_ao = vec4(height, ao, cloth.sheen_weight_factor, cloth.sheen_roughness_factor);
+    out_height_ao_sheen = vec4(height, ao, cloth.sheen_weight_factor, cloth.sheen_roughness_factor);
 }

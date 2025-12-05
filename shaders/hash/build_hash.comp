@@ -26,5 +26,5 @@ void main() {
     uint h = hash_coords(c.x, c.y, c.z);
 
     hashes[i]  = h;
-    indices[i] = i;
+    sorted_indices[i] = i;
 }

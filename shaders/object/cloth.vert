@@ -38,53 +38,31 @@ layout(set = 1, binding = 0) uniform Cloth {
 } cloth;
 
 layout(set=1, binding=1, std430) readonly buffer Positions { vec4 pos[]; };
+layout(set=1, binding=2, std430) readonly buffer Normals { vec4 normals[]; };
 
 layout(set = 2, binding = 0) uniform sampler2D tex[];
 
-layout(push_constant) uniform ClothPC { uint nx1; uint ny1; uint offset; float p; vec4 color; } pc;
+layout(push_constant) uniform ClothPC { vec4 color; uint nx1; uint ny1; uint p0; float p1; } pc;
 
 layout(location = 0) out vec2 out_uv;
 layout(location = 1) out vec3 out_world_normal;
 
 void main() {
 
-    uint global_id = gl_VertexIndex;
-    uint vid  = global_id - pc.offset;
-
-    uint nx1 = pc.nx1;
-    uint ny1 = pc.ny1;
-    
-    uint x = vid % nx1;
-    uint y = vid / nx1;
+    uint vid = gl_VertexIndex;
     
     vec3 p = pos[vid].xyz;
     
-    uint xL = (x > 0)      ? (x - 1) : x;
-    uint xR = (x + 1 < nx1)? (x + 1) : x;
-    uint yD = (y > 0)      ? (y - 1) : y;
-    uint yU = (y + 1 < ny1)? (y + 1) : y;
-    
-    uint idL = y * nx1 + xL;
-    uint idR = y * nx1 + xR;
-    uint idD = yD * nx1 + x;
-    uint idU = yU * nx1 + x;
-    
-    vec3 pL = pos[idL].xyz;
-    vec3 pR = pos[idR].xyz;
-    vec3 pD = pos[idD].xyz;
-    vec3 pU = pos[idU].xyz;
-    
-    vec3 dx = pR - pL;
-    vec3 dy = pU - pD;
-
-    vec3 N = normalize(cross(dy, dx));
-    
-    out_world_normal = N;
-
+    uint nx1 = pc.nx1;
+    uint ny1 = pc.ny1;
+    uint x = vid % nx1;
+    uint y = vid / ny1;
     out_uv = vec2(float(x) / float(nx1 - 1), float(y) / float(ny1 - 1));
+
+    out_world_normal = normals[vid].xyz;
     
-    float height = (cloth.height_enable == 0u) ? cloth.height_factor : texture(tex[nonuniformEXT(cloth.height_idx)], out_uv).r;
-    p += N * height * cloth.height_factor;
+//    float height = (cloth.height_enable == 0u) ? cloth.height_factor : texture(tex[nonuniformEXT(cloth.height_idx)], out_uv).r;
+//    p += N * height * cloth.height_factor;
 
     gl_Position = ubo.proj * ubo.view * vec4(p, 1.0);
 }

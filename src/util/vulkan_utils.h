@@ -439,7 +439,7 @@ namespace vku
 			cmd, buffer, 0, VK_WHOLE_SIZE,
 			vk::PipelineStageFlagBits2::eComputeShader,
 			vk::AccessFlagBits2::eShaderStorageWrite,
-			vk::PipelineStageFlagBits2::eVertexShader,
+			vk::PipelineStageFlagBits2::eVertexShader | vk::PipelineStageFlagBits2::eFragmentShader,
 			vk::AccessFlagBits2::eShaderStorageRead
 		);
 	}

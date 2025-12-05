@@ -12,15 +12,15 @@ class TextureManager;
 class Model
 {
 public:
-	Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, PassManager& graphicsContext, TextureManager& textureManager, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble, std::string name);
-	Model(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, PassManager& graphicsContext, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble, std::string name);
+	Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, TextureManager& textureManager, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble, std::string name, float scale);
+	Model(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble, std::string name);
 	Model(const Model& rhs) = delete;
 	Model(Model&& rhs) = delete;
 	Model& operator=(const Model& rhs) = delete;
 	Model& operator=(Model&& rhs) = delete;
 	~Model() = default;
 
-	void LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo& vertexIncludeInfo, TextureManager& textureManager);
+	void LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo& vertexIncludeInfo, TextureManager& textureManager, float scale);
 
 	glm::mat4 world_{ 1.0f };
 	glm::vec3 position_{ 0.0f, 0.0f, 0.0f };
@@ -63,6 +63,6 @@ public:
 		float sheen_roughness = 1.0f;
 	} factors_;
 
-	void ApplyTransform(const glm::quat& rotationDelta, const glm::vec3& translationDelta);
+	void ApplyTransform(glm::vec3 scaleDelta, glm::quat rotationDelta, glm::vec3 translationDelta);
 
 };

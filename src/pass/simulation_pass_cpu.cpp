@@ -27,7 +27,7 @@ void SimulationPassCPU::CopyDataToGPU(uint32_t currentFrmae)
 	cmd.reset();
 	cmd.begin({});
 
-	vku::CopyStagingToSSBO(cmd, pm.ssbo_size_.position, pm.staging_mapped_.position, pm.positions, pm.staging_.position, pm.ssbos_.position,
+	vku::CopyStagingToSSBO(cmd, pm.ssbo_size_.position, pm.staging_mapped_.position, pm.positions_, pm.staging_.position, pm.ssbos_.position,
 		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
 		vk::PipelineStageFlagBits2::eVertexShader, vk::AccessFlagBits2::eShaderStorageRead);
 
@@ -144,12 +144,12 @@ void SimulationPassCPU::ComputeSolve(ModelManager& modelManager)
 	{
 		for (uint32_t i = 0; i < N; ++i)
 		{
-			float w = pm.inverse_masses[i];
-			glm::vec3 x = glm::vec3(pm.positions[i]);
-			glm::vec3 v = glm::vec3(pm.velocities[i]);
+			float w = pm.inverse_masses_[i];
+			glm::vec3 x = glm::vec3(pm.positions_[i]);
+			glm::vec3 v = glm::vec3(pm.velocities_[i]);
 
 			if (w == 0.0f) {
-				pm.pred_positions[i] = pm.positions[i];
+				pm.pred_positions_[i] = pm.positions_[i];
 				continue;
 			}
 
@@ -161,8 +161,8 @@ void SimulationPassCPU::ComputeSolve(ModelManager& modelManager)
 
 			mouse_drag(i, xpi, v);
 
-			pm.pred_positions[i] = glm::vec4(xpi, 0.0f);
-			pm.velocities[i] = glm::vec4(v, 0.0f);
+			pm.pred_positions_[i] = glm::vec4(xpi, 0.0f);
+			pm.velocities_[i] = glm::vec4(v, 0.0f);
 		}
 
 		for (auto& e : d.edges) {
@@ -181,13 +181,13 @@ void SimulationPassCPU::ComputeSolve(ModelManager& modelManager)
 				uint32_t i = e.i;
 				uint32_t j = e.j;
 
-				float wi = pm.inverse_masses[i];
-				float wj = pm.inverse_masses[j];
+				float wi = pm.inverse_masses_[i];
+				float wj = pm.inverse_masses_[j];
 				if (wi + wj <= 0.0f)
 					continue;
 
-				glm::vec3 xi = glm::vec3(pm.pred_positions[i]);
-				glm::vec3 xj = glm::vec3(pm.pred_positions[j]);
+				glm::vec3 xi = glm::vec3(pm.pred_positions_[i]);
+				glm::vec3 xj = glm::vec3(pm.pred_positions_[j]);
 
 				glm::vec3 n = xi - xj;
 				float L = glm::length(n);
@@ -205,17 +205,17 @@ void SimulationPassCPU::ComputeSolve(ModelManager& modelManager)
 				glm::vec3 corr = dl * n;
 
 				if (wi > 0.0f)
-					pm.pred_positions[i] += glm::vec4(wi * corr, 0.0f);
+					pm.pred_positions_[i] += glm::vec4(wi * corr, 0.0f);
 				if (wj > 0.0f)
-					pm.pred_positions[j] -= glm::vec4(wj * corr, 0.0f);
+					pm.pred_positions_[j] -= glm::vec4(wj * corr, 0.0f);
 			}
 
 			for (uint32_t i = 0; i < N; ++i)
 			{
-				float w = pm.inverse_masses[i];
+				float w = pm.inverse_masses_[i];
 				if (w == 0.0f) continue;
 
-				glm::vec3 p = glm::vec3(pm.pred_positions[i]);
+				glm::vec3 p = glm::vec3(pm.pred_positions_[i]);
 				glm::vec3 sphereCenter = modelManager.models_[0]->position_;
 				float sphereRadius = modelManager.models_[0]->radius_;
 				glm::vec3 dvec = p - sphereCenter;
@@ -225,12 +225,12 @@ void SimulationPassCPU::ComputeSolve(ModelManager& modelManager)
 				{
 					glm::vec3 n = (dist > 1e-8f) ? (dvec / dist) : glm::vec3(0, 1, 0);
 					p = sphereCenter + n * sphereRadius;
-					pm.pred_positions[i] = glm::vec4(p, 1.0f);
+					pm.pred_positions_[i] = glm::vec4(p, 1.0f);
 				}
 
 				if (p.y < 0.0f)
 				{
-					pm.pred_positions[i].y = 0.0f;
+					pm.pred_positions_[i].y = 0.0f;
 				}
 			}
 
@@ -241,21 +241,21 @@ void SimulationPassCPU::ComputeSolve(ModelManager& modelManager)
 
 		for (uint32_t i = 0; i < N; ++i)
 		{
-			float w = pm.inverse_masses[i];
-			glm::vec3 x_old = glm::vec3(pm.positions[i]);
-			glm::vec3 x_new = glm::vec3(pm.pred_positions[i]);
+			float w = pm.inverse_masses_[i];
+			glm::vec3 x_old = glm::vec3(pm.positions_[i]);
+			glm::vec3 x_new = glm::vec3(pm.pred_positions_[i]);
 
 			if (w == 0.0f) {
-				pm.positions[i] = glm::vec4(x_old, 1.0f);
-				pm.velocities[i] = glm::vec4(0.0f);
+				pm.positions_[i] = glm::vec4(x_old, 1.0f);
+				pm.velocities_[i] = glm::vec4(0.0f);
 				continue;
 			}
 
 			glm::vec3 v = (x_new - x_old) / dt;
 			v *= (1.0f - velocity_damping);
 
-			pm.positions[i] = glm::vec4(x_new, 1.0f);
-			pm.velocities[i] = glm::vec4(v, 0.0f);
+			pm.positions_[i] = glm::vec4(x_new, 1.0f);
+			pm.velocities_[i] = glm::vec4(v, 0.0f);
 		}
 	}
 }
@@ -274,7 +274,7 @@ void SimulationPassCPU::BuildSpatialHash(float cellSize, CellMap& outCells)
 
 	for (uint32_t i = 0; i < N; ++i)
 	{
-		glm::vec3 p = glm::vec3(pm.pred_positions[i]);
+		glm::vec3 p = glm::vec3(pm.pred_positions_[i]);
 
 		int ix = static_cast<int>(std::floor(p.x * invCell));
 		int iy = static_cast<int>(std::floor(p.y * invCell));
@@ -299,7 +299,7 @@ void SimulationPassCPU::BuildCollisionPairs(const CellMap& cells, float cellSize
 
 	for (uint32_t i = 0; i < N; ++i)
 	{
-		glm::vec3 p = glm::vec3(pm.pred_positions[i]);
+		glm::vec3 p = glm::vec3(pm.pred_positions_[i]);
 		int ix = static_cast<int>(std::floor(p.x * invCell));
 		int iy = static_cast<int>(std::floor(p.y * invCell));
 		int iz = static_cast<int>(std::floor(p.z * invCell));
@@ -335,12 +335,12 @@ void SimulationPassCPU::SolveSelfCollision(const std::vector<CollisionPair>& pai
 		uint32_t i = pair.i;
 		uint32_t j = pair.j;
 
-		float wi = pm.inverse_masses[i];
-		float wj = pm.inverse_masses[j];
+		float wi = pm.inverse_masses_[i];
+		float wj = pm.inverse_masses_[j];
 		if (wi + wj <= 0.0f) continue;
 
-		glm::vec3 xi = glm::vec3(pm.pred_positions[i]);
-		glm::vec3 xj = glm::vec3(pm.pred_positions[j]);
+		glm::vec3 xi = glm::vec3(pm.pred_positions_[i]);
+		glm::vec3 xj = glm::vec3(pm.pred_positions_[j]);
 
 		glm::vec3 dvec = xi - xj;
 		float dist2 = glm::dot(dvec, dvec);
@@ -358,9 +358,9 @@ void SimulationPassCPU::SolveSelfCollision(const std::vector<CollisionPair>& pai
 		glm::vec3 corr = (C / wSum) * n;
 
 		if (wi > 0.0f)
-			pm.pred_positions[i] += glm::vec4(wi * corr, 0.0f);
+			pm.pred_positions_[i] += glm::vec4(wi * corr, 0.0f);
 		if (wj > 0.0f)
-			pm.pred_positions[j] -= glm::vec4(wj * corr, 0.0f);
+			pm.pred_positions_[j] -= glm::vec4(wj * corr, 0.0f);
 	}
 }
 
@@ -418,8 +418,8 @@ void SimulationPassCPU::CreateConstraintDatas()
 
 	for (int p = 0; p < datas_.pass_offsets.size() - 1; ++p) {
 		for (auto [i, j] : datas_.passes[p]) {
-			glm::vec3 pi = glm::vec3(pm.positions[i]);
-			glm::vec3 pj = glm::vec3(pm.positions[j]);
+			glm::vec3 pi = glm::vec3(pm.positions_[i]);
+			glm::vec3 pj = glm::vec3(pm.positions_[j]);
 			float rest = glm::length(pj - pi);
 
 			datas_.edges.push_back({ i, j, rest, 0.0f });

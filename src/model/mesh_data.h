@@ -12,4 +12,6 @@ struct MeshData
 	vk::raii::Buffer index_buffer{ nullptr };
 	vk::raii::DeviceMemory index_buffer_memory{ nullptr };
 	uint32_t indices_count;
+
+	std::vector<glm::uvec4> tets;
 };
