@@ -1,0 +1,82 @@
+#version 460
+#extension GL_EXT_shader_atomic_float : require
+
+#include "../common/params.glsl"
+
+layout(local_size_x = 256) in;
+
+void accumulate_delta(uint i, vec3 corr)
+{
+    atomicAdd(delta_x[i], corr.x);
+    atomicAdd(delta_y[i], corr.y);
+    atomicAdd(delta_z[i], corr.z);
+    atomicAdd(delta_count[i], 1u);
+}
+
+bool isFinite_f(float x) { return !isnan(x) && !isinf(x); }
+
+void main() {
+    uint vidx = gl_GlobalInvocationID.x;
+    if (vidx >= sim.num_volumes) return;
+
+    Volume vc = volumes[vidx];
+
+    uint i0 = vc.i0;
+    uint i1 = vc.i1;
+    uint i2 = vc.i2;
+    uint i3 = vc.i3;
+
+    float w0 = w[i0];
+    float w1 = w[i1];
+    float w2 = w[i2];
+    float w3 = w[i3];
+
+    float wsum = w0 + w1 + w2 + w3;
+    if (wsum == 0.0) {
+        volumes[vidx].lambda = 0.0;
+        return;
+    }
+
+    vec3 x0 = xp[i0].xyz;
+    vec3 x1 = xp[i1].xyz;
+    vec3 x2 = xp[i2].xyz;
+    vec3 x3 = xp[i3].xyz;
+
+    float V = dot(cross(x1 - x0, x2 - x0), (x3 - x0)) / 6.0;
+
+    float C = V - vc.rest_volume;
+
+    float dt = sim.dt;
+    float alpha_tilde = pc.solve.compliance / (dt * dt);
+
+    float lambda = vc.lambda;
+
+    vec3 g0 = cross(x3 - x1, x2 - x1);
+    vec3 g1 = cross(x2 - x0, x3 - x0);
+    vec3 g2 = cross(x3 - x0, x1 - x0);
+    vec3 g3 = cross(x1 - x0, x2 - x0);
+
+    float denom =
+          w0 * dot(g0, g0)
+        + w1 * dot(g1, g1)
+        + w2 * dot(g2, g2)
+        + w3 * dot(g3, g3)
+        + alpha_tilde;
+
+    if (denom < 1e-9) return;
+
+    float dlambda = -(C + alpha_tilde * lambda) / denom;
+    float newLambda = lambda + dlambda;
+
+    volumes[vidx].lambda = isFinite_f(newLambda) ? newLambda : 0.0;
+
+    vec3 corr0 = -w0 * dlambda * g0 * sim.volume_stiffness;
+    vec3 corr1 = -w1 * dlambda * g1 * sim.volume_stiffness;
+    vec3 corr2 = -w2 * dlambda * g2 * sim.volume_stiffness;
+    vec3 corr3 = -w3 * dlambda * g3 * sim.volume_stiffness;
+
+    if (w0 > 0.0) accumulate_delta(i0, corr0);
+    if (w1 > 0.0) accumulate_delta(i1, corr1);
+    if (w2 > 0.0) accumulate_delta(i2, corr2);
+    if (w3 > 0.0) accumulate_delta(i3, corr3);
+}

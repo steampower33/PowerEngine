@@ -5,14 +5,17 @@ struct SimUBO {
 		struct SimParams {
 			glm::vec4 gravity = glm::vec4(0.0f, -9.8f, 0.0f, 0.0f);
 			glm::vec4 sphere_center;
+
 			float sphere_radius;
 			float thickness = 0.004f;
-			float friction = 1.0f;
+			float friction = 0.5f;
 			float dt = 0.0f;
+			
 			float global_damping = 2.0f;
 			float relaxation_factor = 0.2f;
 			float neighbor_friction = 1.0f;
 			uint32_t num_particles;
+			
 			uint32_t num_edges;
 			uint32_t num_shears;
 			uint32_t num_bends;
@@ -30,8 +33,13 @@ struct SimUBO {
 
 			float self_collision_stiffness = 25.0f;
 			float max_speed;
+			float volume_stiffness = 1.0f;
 			uint32_t num_tries;
-			float p3;
+
+			uint32_t num_volumes;
+			float softbody_stretch_stiffness = 1.0f;
+			float p1;
+			float p2;
 		} sim_params;
 		static_assert(sizeof(SimParams) % 16 == 0, "std140 must be 16-byte aligned.");
 	} datas;

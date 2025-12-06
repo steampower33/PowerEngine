@@ -493,4 +493,163 @@ namespace vku
 
 	}
 
+	struct TetMesh
+	{
+		std::vector<glm::vec3>  positions;
+		std::vector<glm::uvec4> tets;
+		std::vector<uint32_t>   surfaceIndices;
+	};
+
+	inline void ExpectToken(const std::string& got, const char* expected)
+	{
+		if (got != expected)
+			throw std::runtime_error("Expected token '" + std::string(expected) +
+				"', got '" + got + "'");
+	}
+
+	inline TetMesh LoadGmshMsh2(const std::string& path)
+	{
+		std::ifstream in(path);
+		if (!in)
+			throw std::runtime_error("Failed to open .msh: " + path);
+
+		TetMesh mesh;
+
+		std::string token;
+		while (in >> token)
+		{
+			if (token == "$MeshFormat")
+			{
+				std::string line;
+				std::getline(in, line);
+				std::getline(in, line); // "2.2 0 8"
+
+				std::istringstream ss(line);
+				double version;
+				int fileType, dataSize;
+				ss >> version >> fileType >> dataSize;
+
+				if ((int)version != 2)
+				{
+					std::cerr << "[Warn] MSH version " << version
+						<< " (parser assumes 2.x)\n";
+				}
+				if (fileType != 0)
+				{
+					throw std::runtime_error("Only ASCII MSH supported (fileType != 0)");
+				}
+
+				std::getline(in, line); // $EndMeshFormat
+			}
+			else if (token == "$Nodes")
+			{
+				int numNodes = 0;
+				in >> numNodes;
+				mesh.positions.resize(numNodes);
+
+				for (int i = 0; i < numNodes; ++i)
+				{
+					int tag;
+					double x, y, z;
+					in >> tag >> x >> y >> z;
+
+					// nodeTag = 1 - based
+					int idx = tag - 1;
+					if (idx < 0 || idx >= numNodes)
+						throw std::runtime_error("Node tag out of range in $Nodes");
+
+					mesh.positions[idx] = glm::vec3((float)x, (float)y, (float)z);
+				}
+
+				// $EndNodes consume
+				std::string endToken;
+				in >> endToken;
+				ExpectToken(endToken, "$EndNodes");
+			}
+			else if (token == "$Elements")
+			{
+				int numElems = 0;
+				in >> numElems;
+
+				std::vector<glm::uvec4> tets;
+				std::vector<uint32_t>   tris;
+
+				for (int i = 0; i < numElems; ++i)
+				{
+					int elemTag, elemType, numTags;
+					in >> elemTag >> elemType >> numTags;
+
+					// skip tags - physical group, boundary
+					std::vector<int> tags(numTags);
+					for (int t = 0; t < numTags; ++t)
+						in >> tags[t];
+
+					if (elemType == 4) // 4-node tetrahedron
+					{
+						int n0, n1, n2, n3;
+						in >> n0 >> n1 >> n2 >> n3;
+
+						// 1-based ¡æ 0-based
+						n0--; n1--; n2--; n3--;
+
+						tets.emplace_back(
+							(uint32_t)n0,
+							(uint32_t)n1,
+							(uint32_t)n2,
+							(uint32_t)n3);
+					}
+					else if (elemType == 2) // 3-node triangle
+					{
+						int n0, n1, n2;
+						in >> n0 >> n1 >> n2;
+						n0--; n1--; n2--;
+
+						tris.push_back((uint32_t)n0);
+						tris.push_back((uint32_t)n1);
+						tris.push_back((uint32_t)n2);
+					}
+					else
+					{
+						std::string dummyLine;
+						std::getline(in, dummyLine);
+					}
+				}
+
+				mesh.tets = std::move(tets);
+				mesh.surfaceIndices = std::move(tris);
+
+				// $EndElements consume
+				std::string endToken;
+				in >> endToken;
+				ExpectToken(endToken, "$EndElements");
+			}
+			else if (token.rfind("$End", 0) == 0)
+			{
+				continue;
+			}
+			else
+			{
+				if (token[0] == '$')
+				{
+					std::string endToken;
+					std::string line;
+					do
+					{
+						if (!(in >> endToken))
+							break;
+					} while (endToken.rfind("$End", 0) != 0);
+				}
+			}
+		}
+
+		if (mesh.positions.empty())
+			throw std::runtime_error("No $Nodes section parsed from: " + path);
+		if (mesh.tets.empty())
+			std::cerr << "[Warn] No tetra elements (type=4) parsed from: " << path << "\n";
+		if (mesh.surfaceIndices.empty())
+			std::cerr << "[Warn] No triangle elements (type=2) parsed from: " << path << "\n";
+
+		return mesh;
+	}
 }
+

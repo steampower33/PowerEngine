@@ -13,6 +13,7 @@
 #include <cassert>
 #include <chrono>
 #include <unordered_map>
+#include <unordered_set>
 #include <random>
 #include <string>
 #include <filesystem>

@@ -28,14 +28,17 @@ layout(push_constant) uniform PushConstant {
 layout(std140, set = 0, binding = 0) uniform SimParams {
     vec4 gravity;
     vec4 sphere_center;
+
     float sphere_radius;
     float thickness;
     float friction;
     float dt;
+
     float global_damping;
     float relaxation_factor;
     float neighbor_friction;
     uint num_particles;
+
     uint num_edges;
     uint num_shears;
     uint num_bends;
@@ -53,8 +56,13 @@ layout(std140, set = 0, binding = 0) uniform SimParams {
 
     float self_collision_stiffness;
     float max_speed;
+    float volume_stiffness;
     uint num_tries;
-    float p3;
+
+    uint num_volumes;
+    float softbody_stretch_stiffness;
+    float p1;
+    float p2;
 } sim;
 
 layout(std430, set = 1, binding = 0) buffer X { vec4 x[]; };
@@ -119,5 +127,15 @@ layout(std430, set = 1, binding = 20) buffer Normals { vec4 normals[]; };
 layout(std430, set = 1, binding = 21) buffer TriNormals { vec4 tri_normals[]; };
 layout(std430, set = 1, binding = 22) buffer VertexTriOffsets { uint vertex_tri_offsets[]; };
 layout(std430, set = 1, binding = 23) buffer VertexTriIndices { uint vertex_tri_indices[]; };
+
+struct Volume {
+    uint i0, i1, i2, i3;
+    float rest_volume;
+    float lambda;
+    float p0;
+    float p1;
+};
+
+layout(std430, set = 1, binding = 24) buffer Volumes { Volume volumes[]; };
 
 #endif

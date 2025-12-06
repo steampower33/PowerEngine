@@ -82,6 +82,7 @@ void SimulationPassGPU::UpdateComputeUBO(uint32_t currentFrame, ModelManager& mo
 	ubo_.datas.sim_params.num_shears = datas_.num_shears;
 	ubo_.datas.sim_params.num_areas = datas_.num_areas;
 	ubo_.datas.sim_params.num_tries = total_tri_;
+	ubo_.datas.sim_params.num_volumes = datas_.num_volumes;
 	ubo_.datas.sim_params.sphere_center = glm::vec4(modelManager.models_[0]->position_, 0.0f);
 	ubo_.datas.sim_params.sphere_radius = modelManager.models_[0]->radius_;
 	float dt = ubo_.datas.sim_params.dt;
@@ -139,7 +140,9 @@ void SimulationPassGPU::RecordComputeCloth(uint32_t currentFrame, vku::TestScene
 
 	auto& pm = particle_manager_;
 
-	uint32_t groupsCloth = ceil_div(cloth_particles_, 256u);
+	uint32_t groupsCloth = ceil_div(cloth_particles_, 256);
+	//uint32_t groupsSoftbody = ceil_div(softbody_particles_, 256);
+	uint32_t groupsTotal = ceil_div(total_particles_, 256);
 
 	for (uint32_t step = 0; step < datas_.substeps; step++)
 	{
@@ -151,15 +154,25 @@ void SimulationPassGPU::RecordComputeCloth(uint32_t currentFrame, vku::TestScene
 			vk::ShaderStageFlagBits::eCompute,
 			sizeof(PushConstant::Solve),
 			push_constants_.mouse_interact);
-		cmd.dispatch(groupsCloth, 1, 1);
+		cmd.dispatch(groupsTotal, 1, 1);
 		TS(timestamp_steps_);
 		//vku::ssboCompWtoCompRW(cmd, ssbos_.pred_position);
 
 		// Clear Lambdas
+		uint32_t Nmax = std::max(
+			{ 
+				total_particles_,
+				datas_.num_edges,
+				datas_.num_bends,
+				datas_.num_shears,
+				datas_.num_areas,
+				datas_.num_volumes 
+			}
+		);
 		TS(timestamp_steps_);
-		uint32_t groupsEdges = ceil_div(datas_.num_edges, 256u);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.clear_lambdas);
-		cmd.dispatch(groupsEdges, 1, 1);
+		uint32_t groups = ceil_div(Nmax, 256);
+		cmd.dispatch(groups, 1, 1);
 		TS(timestamp_steps_);
 
 		// Broad Phase
@@ -175,7 +188,7 @@ void SimulationPassGPU::RecordComputeCloth(uint32_t currentFrame, vku::TestScene
 			if (solver_config_.self_collision)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_hash);
-				cmd.dispatch(groupsCloth, 1, 1);
+				cmd.dispatch(groupsTotal, 1, 1);
 			}
 			TS(timestamp_steps_);
 
@@ -232,7 +245,7 @@ void SimulationPassGPU::RecordComputeCloth(uint32_t currentFrame, vku::TestScene
 			if (solver_config_.self_collision)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_cell);
-				cmd.dispatch(groupsCloth, 1, 1);
+				cmd.dispatch(groupsTotal, 1, 1);
 			}
 			TS(timestamp_steps_);
 
@@ -247,7 +260,7 @@ void SimulationPassGPU::RecordComputeCloth(uint32_t currentFrame, vku::TestScene
 			if (solver_config_.self_collision)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_neighbor);
-				cmd.dispatch(groupsCloth, 1, 1);
+				cmd.dispatch(groupsTotal, 1, 1);
 			}
 			TS(timestamp_steps_);
 
@@ -290,12 +303,17 @@ void SimulationPassGPU::RecordComputeCloth(uint32_t currentFrame, vku::TestScene
 			}
 			TS(timestamp_steps_);
 
-			// Solve Shear
-			TS(timestamp_steps_);
-			if (solver_config_.shear)
+			// solve_softbody_stretch
 			{
-				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_shear);
-				push_constants_.solve.compliance = datas_.compliance.shear;
+				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_softbody_stretch);
+
+				uint32_t base = datas_.pass_offsets[4];
+				uint32_t count = datas_.pass_offsets[5] - datas_.pass_offsets[4];
+				if (!count) continue;
+
+				push_constants_.solve.base = base;
+				push_constants_.solve.count = count;
+				push_constants_.solve.compliance = datas_.compliance.softbody_stretch;
 
 				cmd.pushConstants<PushConstant::Solve>(
 					*pipeline_layouts_.common,
@@ -303,8 +321,47 @@ void SimulationPassGPU::RecordComputeCloth(uint32_t currentFrame, vku::TestScene
 					0,
 					push_constants_.solve);
 
-				uint32_t group = (datas_.num_shears + 256 - 1) / 256;
-				cmd.dispatch(group, 1, 1);
+				uint32_t groupsSoftbodyStretch = ceil_div(count, 256);
+				cmd.dispatch(groupsSoftbodyStretch, 1, 1);
+			}
+
+			// solve_softbody_volume
+			{
+				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_softbody_volume);
+
+				//uint32_t base = datas_.pass_offsets[4];
+				//uint32_t count = datas_.pass_offsets[5] - datas_.pass_offsets[4];
+				//if (!count) continue;
+
+				//push_constants_.solve.base = base;
+				//push_constants_.solve.count = count;
+				push_constants_.solve.compliance = datas_.compliance.softbody_volume;
+
+				cmd.pushConstants<PushConstant::Solve>(
+					*pipeline_layouts_.common,
+					vk::ShaderStageFlagBits::eCompute,
+					0,
+					push_constants_.solve);
+
+				uint32_t groupsSoftbodyVolume = ceil_div(datas_.num_volumes, 256);
+				cmd.dispatch(groupsSoftbodyVolume, 1, 1);
+			}
+
+			// Solve Shear
+			TS(timestamp_steps_);
+			if (solver_config_.shear)
+			{
+				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_shear);
+
+				push_constants_.solve.compliance = datas_.compliance.shear;
+				cmd.pushConstants<PushConstant::Solve>(
+					*pipeline_layouts_.common,
+					vk::ShaderStageFlagBits::eCompute,
+					0,
+					push_constants_.solve);
+
+				uint32_t groupsShear = ceil_div(datas_.num_shears, 256);
+				cmd.dispatch(groupsShear, 1, 1);
 			}
 			TS(timestamp_steps_);
 
@@ -361,7 +418,7 @@ void SimulationPassGPU::RecordComputeCloth(uint32_t currentFrame, vku::TestScene
 					vk::ShaderStageFlagBits::eCompute,
 					0,
 					push_constants_.solve);
-				cmd.dispatch(groupsCloth, 1, 1);
+				cmd.dispatch(groupsTotal, 1, 1);
 			}
 			TS(timestamp_steps_);
 
@@ -373,7 +430,7 @@ void SimulationPassGPU::RecordComputeCloth(uint32_t currentFrame, vku::TestScene
 			// Apply Deltas 
 			TS(timestamp_steps_);
 			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.apply_deltas);
-			cmd.dispatch(groupsCloth, 1, 1);
+			cmd.dispatch(groupsTotal, 1, 1);
 			TS(timestamp_steps_);
 			vku::ssboCompWtoCompRW(cmd, pmSSBO.pred_position);
 		}
@@ -381,18 +438,18 @@ void SimulationPassGPU::RecordComputeCloth(uint32_t currentFrame, vku::TestScene
 		// Collide SDF
 		TS(timestamp_steps_);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.collide_sdf);
-		cmd.dispatch(groupsCloth, 1, 1);
+		cmd.dispatch(groupsTotal, 1, 1);
 		TS(timestamp_steps_);
 
 		// Update Velocity
 		TS(timestamp_steps_);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.update_velocity);
-		cmd.dispatch(groupsCloth, 1, 1);
+		cmd.dispatch(groupsTotal, 1, 1);
 		TS(timestamp_steps_);
 	}
 
 	// Calculate Normals
-	uint32_t groupsTri = ceil_div((cloth_indices_) / 3, 256u);
+	uint32_t groupsTri = ceil_div((total_indices_) / 3, 256u);
 
 	TS(timestamp_steps_);
 	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.tri_normal);
@@ -407,7 +464,7 @@ void SimulationPassGPU::RecordComputeCloth(uint32_t currentFrame, vku::TestScene
 
 	TS(timestamp_steps_);
 	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.vector_normal);
-	cmd.dispatch(groupsCloth, 1, 1);
+	cmd.dispatch(groupsTotal, 1, 1);
 	TS(timestamp_steps_);
 
 	vku::ssboCompWtoVertR(cmd, pmSSBO.position);
@@ -503,6 +560,7 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 		for (auto& cloth : pm.clothes_)
 		{
 			cloth.angle_deg = 90.0f;
+			cloth.axis = glm::vec3(1, 0, 0);
 			pm.Reset(cloth);
 			cloth.angle_deg = 0.0f;
 		}
@@ -570,8 +628,9 @@ void SimulationPassGPU::CreateDescriptorSetLayout()
 			vk::DescriptorSetLayoutBinding{ 21, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
 			vk::DescriptorSetLayoutBinding{ 22, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
 			vk::DescriptorSetLayoutBinding{ 23, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
+			vk::DescriptorSetLayoutBinding{ 24, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
 		};
-		counts_.sb += 24;
+		counts_.sb += 25;
 		counts_.layout += 1;
 
 		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
@@ -694,7 +753,7 @@ void SimulationPassGPU::CreateClothConstraintDatas()
 
 	// Set shears
 	const size_t numTris = cloth_indices_ / 3;
-	datas_.shears.reserve(numTris);
+	//datas_.shears.reserve(numTris);
 
 	for (size_t t = 0; t < numTris; ++t)
 	{
@@ -723,16 +782,57 @@ void SimulationPassGPU::CreateClothConstraintDatas()
 	datas_.num_shears = static_cast<uint32_t>(datas_.shears.size());
 
 	datas_.BuildBendConstraints(pm.positions_, pm.indices_, numTris);
-	datas_.num_bends = static_cast<uint32_t>(datas_.bends.size());
 
 	datas_.BuildAreaConstraints(pm.positions_, pm.indices_, numTris);
-	datas_.num_areas = static_cast<uint32_t>(datas_.areas.size());
 
 }
 
 void SimulationPassGPU::CreateSoftBodyConstraintDatas()
 {
+	auto& pm = particle_manager_;
+	auto& tetmesh = pm.soft_body_.tetmesh;
 
+	softbody_particles_ = pm.num_softbody_particles_;
+	softbody_indices_ = pm.num_softbody_indices_;
+
+	// Distance
+	uint32_t offsetParticle = particle_manager_.soft_body_.offset_particle;
+	std::unordered_set<SimData::EdgeKey, SimData::EdgeKeyHash> edgeSet;
+
+	auto pushEdge = [&](uint32_t i, uint32_t j) {
+		uint32_t a = std::min(i, j);
+		uint32_t b = std::max(i, j);
+		SimData::EdgeKey e{ a, b };
+		if (edgeSet.insert(e).second) {
+			// New edge
+			SimData::Edge c;
+			c.i = a + offsetParticle;
+			c.j = b + offsetParticle;
+			c.rest = length(pm.positions_[c.i] - pm.positions_[c.j]);
+			datas_.edges.push_back(c);
+		}
+		};
+
+	uint32_t before = datas_.edges.size();
+	for (auto& tet : tetmesh.tets) {
+		uint32_t i0 = tet.x;
+		uint32_t i1 = tet.y;
+		uint32_t i2 = tet.z;
+		uint32_t i3 = tet.w;
+
+		pushEdge(i0, i1);
+		pushEdge(i0, i2);
+		pushEdge(i0, i3);
+		pushEdge(i1, i2);
+		pushEdge(i1, i3);
+		pushEdge(i2, i3);
+	}
+	uint32_t after = datas_.edges.size();
+	datas_.pass_offsets[5] = after;
+
+	datas_.num_edges = static_cast<uint32_t>(datas_.edges.size());
+
+	datas_.num_volumes = pm.soft_body_.volume_constraints.size();
 }
 
 void SimulationPassGPU::CreateSSBOBuffers()
@@ -863,6 +963,17 @@ void SimulationPassGPU::CreateSSBOBuffers()
 		datas_.ssbos_.area, datas_.ssbo_memories_.area,
 		&datas_.staging_.area, &datas_.staging_memories_.area);
 	datas_.staging_mapped_.area = datas_.staging_memories_.area.mapMemory(0, datas_.ssbo_size_.area);
+
+	// volume
+	datas_.ssbo_size_.volume = sizeof(SoftBody::Volume) * datas_.num_volumes;
+	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+		datas_.ssbo_size_.volume,
+		vk::BufferUsageFlagBits::eTransferSrc,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+		particle_manager_.soft_body_.volume_constraints,
+		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+		vk::MemoryPropertyFlagBits::eDeviceLocal,
+		datas_.ssbos_.volume, datas_.ssbo_memories_.volume);
 }
 
 void SimulationPassGPU::CreateDescriptorSets()
@@ -931,6 +1042,7 @@ void SimulationPassGPU::CreateDescriptorSets()
 		vk::DescriptorBufferInfo triNormal(*pmSSBO.tri_normals, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo vertexTriOffset(*pmSSBO.vertex_tri_offsets, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo vertexTriIndice(*pmSSBO.vertex_tri_indices, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo volume(*dSSBO.volume, 0, VK_WHOLE_SIZE);
 		std::array descriptorWrites{
 			vk::WriteDescriptorSet{
 				.dstSet = *sets_.cloth_compute,
@@ -1124,6 +1236,14 @@ void SimulationPassGPU::CreateDescriptorSets()
 				.descriptorType = vk::DescriptorType::eStorageBuffer,
 				.pBufferInfo = &vertexTriIndice
 			},
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.cloth_compute,
+				.dstBinding = 24,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &volume
+			},
 		};
 		context_.device_.updateDescriptorSets(descriptorWrites, {});
 	}
@@ -1214,6 +1334,28 @@ void SimulationPassGPU::CreateComputePipelines()
 		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common,
 		};
 		pipelines_.solve_area = vk::raii::Pipeline(context_.device_, nullptr, pipelineInfo);
+	}
+
+	// solve_softbody_stretch
+	{
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context_.device_, vku::ReadFile("shaders/spv/solve_softbody_stretch.comp.spv"));
+
+		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
+
+		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common,
+		};
+		pipelines_.solve_softbody_stretch = vk::raii::Pipeline(context_.device_, nullptr, pipelineInfo);
+	}
+
+	// solve_softbody_volume
+	{
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context_.device_, vku::ReadFile("shaders/spv/solve_softbody_volume.comp.spv"));
+
+		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
+
+		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common,
+		};
+		pipelines_.solve_softbody_volume = vk::raii::Pipeline(context_.device_, nullptr, pipelineInfo);
 	}
 
 	// apply deltas
@@ -1406,7 +1548,7 @@ void SimulationPassGPU::CalculateGpuTime()
 		tIntegrate + tClearLambdas +
 		tHashBuild + tRadixSort + tBuildCell + tBuildNeighbor +
 		tSolveStretch + tSolveBend + tSolveArea + tSolveSelfCollision + tApplyDeltas +
-		tCollideSdf + tUpdate + 
+		tCollideSdf + tUpdate +
 		tCalculateNormals;
 
 	uint32_t c = 0;

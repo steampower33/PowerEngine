@@ -4,6 +4,8 @@ struct SimData {
 
 	struct Compliance {
 		float stretch = 1e-6f;
+		float softbody_stretch = 1e-9f;
+		float softbody_volume = 1e-9f;
 		float shear = 1e-6f;
 		float bend = 1.0f;
 		float area = 1.0f;
@@ -18,6 +20,7 @@ struct SimData {
 	uint32_t num_shears = 0;
 	uint32_t num_bends = 0;
 	uint32_t num_areas = 0;
+	uint32_t num_volumes = 0;
 
 	float frame_dt = 60.0f;
 	int substeps = 10;
@@ -31,7 +34,7 @@ struct SimData {
 	};
 	static_assert(sizeof(Edge) == 16, "Edge must be 16 bytes");
 	std::vector<Edge> edges;
-	std::array<uint32_t, 5> pass_offsets;
+	std::array<uint32_t, 6> pass_offsets;  // cloth 4 + softbody 1
 	std::vector<std::pair<uint32_t, uint32_t>> passes[5];
 
 	// SoftBody Stretch Edge
@@ -228,6 +231,8 @@ struct SimData {
 
 			areas.push_back(area);
 		}
+
+		num_areas = static_cast<uint32_t>(areas.size());
 	}
 
 	void ResetConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices)
@@ -276,6 +281,7 @@ struct SimData {
 		vk::raii::Buffer bend{ nullptr };
 		vk::raii::Buffer grab_state{ nullptr };
 		vk::raii::Buffer area{ nullptr };
+		vk::raii::Buffer volume{ nullptr };
 	} ssbos_;
 
 	struct SSBOMemory {
@@ -288,6 +294,7 @@ struct SimData {
 		vk::raii::DeviceMemory bend{ nullptr };
 		vk::raii::DeviceMemory grab_state{ nullptr };
 		vk::raii::DeviceMemory area{ nullptr };
+		vk::raii::DeviceMemory volume{ nullptr };
 	} ssbo_memories_;
 
 	struct SSBOSize {
@@ -300,6 +307,7 @@ struct SimData {
 		vk::DeviceSize bend = 0;
 		vk::DeviceSize grab_state = 0;
 		vk::DeviceSize area = 0;
+		vk::DeviceSize volume = 0;
 	} ssbo_size_;
 
 	struct Staging {

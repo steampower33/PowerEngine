@@ -180,6 +180,8 @@ set(SIMULATION_SHADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_shear.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_bend.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_area.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_softbody_stretch.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_softbody_volume.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/apply_deltas.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/collide_sdf.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/update_velocity.comp

@@ -20,6 +20,7 @@ public:
 	Model& operator=(Model&& rhs) = delete;
 	~Model() = default;
 
+	void ApplyTransform(glm::vec3 scaleDelta, glm::quat rotationDelta, glm::vec3 translationDelta);
 	void LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo& vertexIncludeInfo, TextureManager& textureManager, float scale);
 
 	glm::mat4 world_{ 1.0f };
@@ -62,7 +63,4 @@ public:
 		float sheen_weight = 0.7f;
 		float sheen_roughness = 1.0f;
 	} factors_;
-
-	void ApplyTransform(glm::vec3 scaleDelta, glm::quat rotationDelta, glm::vec3 translationDelta);
-
 };

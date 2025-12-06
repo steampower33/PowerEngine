@@ -135,6 +135,8 @@ public:
 		vk::raii::Pipeline clear_lambdas{ nullptr };
 		vk::raii::Pipeline integrate{ nullptr };
 		vk::raii::Pipeline solve_stretch{ nullptr };
+		vk::raii::Pipeline solve_softbody_stretch{ nullptr };
+		vk::raii::Pipeline solve_softbody_volume{ nullptr };
 		vk::raii::Pipeline solve_shear{ nullptr };
 		vk::raii::Pipeline solve_bend{ nullptr };
 		vk::raii::Pipeline solve_area{ nullptr };

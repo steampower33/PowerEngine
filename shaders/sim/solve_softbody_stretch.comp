@@ -1,0 +1,70 @@
+#version 460
+#extension GL_EXT_shader_atomic_float : require
+
+#include "../common/params.glsl"
+
+layout(local_size_x = 256) in;
+
+void accumulate_delta(uint i, vec3 corr)
+{
+    atomicAdd(delta_x[i], corr.x);
+    atomicAdd(delta_y[i], corr.y);
+    atomicAdd(delta_z[i], corr.z);
+    atomicAdd(delta_count[i], 1u);
+}
+
+bool isFinite_f(float x) { return !isnan(x) && !isinf(x); }
+
+void main() {
+    uint t = gl_GlobalInvocationID.x;
+    if (t >= pc.solve.count) return;
+
+    uint eidx = pc.solve.base + t;
+    if (eidx >= sim.num_edges) return;
+
+    uint  i      = edges[eidx].i;
+    uint  j      = edges[eidx].j;
+    float rest   = edges[eidx].rest;
+    float lambda = edges[eidx].lambda;
+
+    float wi = w[i];
+    float wj = w[j];
+    float wsum = wi + wj;
+    if (wsum == 0.0) { edges[eidx].lambda = 0.0; return; }
+
+    vec3 xi = xp[i].xyz;
+    vec3 xj = xp[j].xyz;
+
+    vec3 d = xi - xj;
+    float len = length(d);
+    if (len < 1e-7) return;
+    vec3 n = d / len;
+
+    float dt    = sim.dt;
+    float alpha_tilde = pc.solve.compliance / (dt * dt);
+
+    float C = len - rest;
+
+    vec3 pxi = x[i].xyz;
+    vec3 pxj = x[j].xyz;
+
+    vec3 dpi = xi - pxi;
+    vec3 dpj = xj - pxj;
+
+    float rel = dot(n, dpi) + dot(-n, dpj);
+
+    float denom = wsum + alpha_tilde;
+    if (denom < 1e-8) denom = 1e-8;
+
+    float rhs = C + alpha_tilde * lambda;
+
+    float dlambda = -rhs / denom;
+    float newLambda = lambda + dlambda;
+    edges[eidx].lambda = isFinite_f(newLambda) ? newLambda : 0.0;
+
+    vec3 corr = dlambda * n * sim.stretch_stiffness;
+    if (wi > 0.0)
+        accumulate_delta(i, +wi * corr);
+    if (wj > 0.0)
+        accumulate_delta(j, -wj * corr);
+}

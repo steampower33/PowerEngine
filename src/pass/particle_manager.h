@@ -7,52 +7,53 @@ class ModelManager;
 // Cloth
 struct Cloth
 {
-	float spacing = 0.015f;
-	float gsm = 0.2f;
+	float spacing;
+	float gsm;
 	glm::vec2 cloth_size;
-	uint32_t nx = 0.0f;
-	uint32_t ny = 0.0f;
-	uint32_t nx1 = 0.0f;
-	uint32_t ny1 = 0.0f;
+	uint32_t nx;
+	uint32_t ny;
+	uint32_t nx1;
+	uint32_t ny1;
 	float height;
-
 	glm::vec4 color;
 
-	glm::vec3 origin = glm::vec3(0.0f);
-	float     angle_deg = 0.0f;
-	glm::vec3 axis = glm::vec3(1, 0, 0);
+	glm::vec3 origin;
+	float     angle_deg;
+	glm::vec3 axis;
 
-	uint32_t offset_particle = 0;
-	uint32_t offset_indices = 0;
-	uint32_t offset_stretch = 0;
-	uint32_t offset_shear = 0;
-	uint32_t offset_bend = 0;
-	uint32_t offset_area = 0;
+	uint32_t offset_particle;
+	uint32_t offset_indices;
 
-	uint32_t num_particle = 0;
-	uint32_t num_indices = 0;
-	uint32_t num_stretch = 0;
-	uint32_t num_shear = 0;
-	uint32_t num_bend = 0;
-	uint32_t num_area = 0;
+	uint32_t num_particle;
+	uint32_t num_indices;
 };
 
 struct SoftBody
 {
+	vku::TetMesh tetmesh;
+
+	float density;
 	float height;
-	float gsm = 0.2f;
-
 	glm::vec4 color;
-
-	glm::vec3 origin = glm::vec3(0.0f);
-	float     angle_deg = 0.0f;
-	glm::vec3 axis = glm::vec3(1, 0, 0);
 
 	uint32_t offset_particle = 0;
 	uint32_t offset_indices = 0;
 
 	uint32_t num_particle = 0;
 	uint32_t num_indices = 0;
+
+
+	struct Volume {
+		uint32_t i0;
+		uint32_t i1;
+		uint32_t i2;
+		uint32_t i3;
+		float rest_volume;
+		float lambda;
+		float p1;
+		float p2;
+	};
+	std::vector<Volume> volume_constraints;
 };
 
 class ParticleManager

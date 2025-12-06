@@ -20,5 +20,5 @@ public:
 	static constexpr uint32_t kMaxObjects = 4;
 	std::vector<std::unique_ptr<Model>> models_;
 	//std::unique_ptr<Skybox> skybox_;
-	std::unique_ptr<Model> soft_body_;
+	//std::unique_ptr<Model> soft_body_;
 };

@@ -10,48 +10,74 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager)
 	: context_(context)
 {
 	{
-		Cloth cloth;
-		//cloth.spacing = 0.5f;
+		Cloth cloth{};
+
+		cloth.spacing = 0.015f;
+		cloth.gsm = 0.2f;
 		cloth.cloth_size = glm::vec2(1.0f, 1.0f);
 		cloth.nx = (uint32_t)std::round(cloth.cloth_size.x / cloth.spacing);
 		cloth.ny = (uint32_t)std::round(cloth.cloth_size.y / cloth.spacing);
 		cloth.nx1 = cloth.nx + 1;
 		cloth.ny1 = cloth.ny + 1;
-		cloth.num_particle = cloth.nx1 * cloth.ny1;
 		cloth.height = 2.0f;
+
 		cloth.color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
 
+		cloth.origin = glm::vec3(0.0f);
+		cloth.angle_deg = 0.0f;
+		cloth.axis = glm::vec3(0, 1, 0);
+
+		cloth.num_particle = cloth.nx1 * cloth.ny1;
+
 		SetCloth(cloth);
 
 		clothes_.push_back(cloth);
 	}
 
 	{
-		Cloth cloth;
+		Cloth cloth{};
+
+		cloth.spacing = 0.015f;
+		cloth.gsm = 0.2f;
 		cloth.cloth_size = glm::vec2(1.0f, 1.0f);
 		cloth.nx = (uint32_t)std::round(cloth.cloth_size.x / cloth.spacing);
 		cloth.ny = (uint32_t)std::round(cloth.cloth_size.y / cloth.spacing);
 		cloth.nx1 = cloth.nx + 1;
 		cloth.ny1 = cloth.ny + 1;
-		cloth.num_particle = cloth.nx1 * cloth.ny1;
-		cloth.height = 4.0f;
+		cloth.height = 3.0f;
+
 		cloth.color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
 
+		cloth.origin = glm::vec3(0.0f);
+		cloth.angle_deg = 0.0f;
+		cloth.axis = glm::vec3(0, 1, 0);
+
+		cloth.num_particle = cloth.nx1 * cloth.ny1;
+
 		SetCloth(cloth);
 
 		clothes_.push_back(cloth);
 	}
 
 	{
-		Cloth cloth;
+		Cloth cloth{};
+
+		cloth.spacing = 0.015f;
+		cloth.gsm = 0.2f;
 		cloth.cloth_size = glm::vec2(1.0f, 1.0f);
 		cloth.nx = (uint32_t)std::round(cloth.cloth_size.x / cloth.spacing);
 		cloth.ny = (uint32_t)std::round(cloth.cloth_size.y / cloth.spacing);
 		cloth.nx1 = cloth.nx + 1;
 		cloth.ny1 = cloth.ny + 1;
-		cloth.num_particle = cloth.nx1 * cloth.ny1;
-		cloth.height = 6.0f;
+		cloth.height = 4.0f;
+
 		cloth.color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+
+		cloth.origin = glm::vec3(0.0f);
+		cloth.angle_deg = 0.0f;
+		cloth.axis = glm::vec3(0, 1, 0);
+
+		cloth.num_particle = cloth.nx1 * cloth.ny1;
 
 		SetCloth(cloth);
 
@@ -59,18 +85,20 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager)
 	}
 
 	{
+		soft_body_.tetmesh = vku::LoadGmshMsh2("assets/sphere.msh");
+		soft_body_.density = 1.0f;
+		soft_body_.height = 0.0f;
+		soft_body_.color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+
 		soft_body_.offset_particle = positions_.size();
 		soft_body_.offset_indices = indices_.size();
 
-		auto& vertices = modelManager.soft_body_->mesh_data_.vertices;
-		auto& indi = modelManager.soft_body_->mesh_data_.indices;
-		soft_body_.num_particle = vertices.size();
-		soft_body_.num_indices = indi.size();
-		soft_body_.color = glm::vec4(1.0f, 1.0f, 0.0f, 1.0f);
+		soft_body_.num_particle = soft_body_.tetmesh.positions.size();
+		soft_body_.num_indices = soft_body_.tetmesh.surfaceIndices.size();
 
-		for (auto& v : vertices)
+		for (auto& p : soft_body_.tetmesh.positions)
 		{
-			auto pos = glm::vec4(v.pos, 0.0f) + glm::vec4(modelManager.soft_body_->position_, 0.0f);
+			glm::vec4 pos = glm::vec4(p, 0.0f) + glm::vec4(0.0f, 1.0f, 1.0f, 0.0f);
 			positions_.push_back(pos);
 			velocities_.push_back(glm::vec4(0.0f));
 			pred_positions_.push_back(pos);
@@ -79,13 +107,48 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager)
 			normals_.push_back(glm::vec4(0.0f));
 		}
 
-		for (auto& i : indi)
+		for (auto idx : soft_body_.tetmesh.surfaceIndices)
 		{
-			indices_.push_back(i + soft_body_.offset_particle);
+			indices_.push_back(soft_body_.offset_particle + idx);
 		}
-		
-		num_softbody_particles_ = soft_body_.num_particle;
-		num_softbody_indices_ = soft_body_.num_indices;
+
+		num_softbody_particles_ += soft_body_.num_particle;
+		num_softbody_indices_ += soft_body_.num_indices;
+
+		auto VolumeRest = [&](uint32_t i0, uint32_t i1, uint32_t i2, uint32_t i3) {
+			glm::vec3 x0 = soft_body_.tetmesh.positions[i0];
+			glm::vec3 x1 = soft_body_.tetmesh.positions[i1];
+			glm::vec3 x2 = soft_body_.tetmesh.positions[i2];
+			glm::vec3 x3 = soft_body_.tetmesh.positions[i3];
+
+			float vol = glm::dot(glm::cross(x1 - x0, x2 - x0), x3 - x0) / 6.0f;
+			return std::abs(vol);
+			};
+
+		soft_body_.volume_constraints.clear();
+		soft_body_.volume_constraints.reserve(soft_body_.tetmesh.tets.size());
+
+		for (auto t : soft_body_.tetmesh.tets)
+		{
+			SoftBody::Volume c;
+			c.i0 = soft_body_.offset_particle + t.x;
+			c.i1 = soft_body_.offset_particle + t.y;
+			c.i2 = soft_body_.offset_particle + t.z;
+			c.i3 = soft_body_.offset_particle + t.w;
+
+			c.rest_volume = VolumeRest(t.x, t.y, t.z, t.w);
+			c.lambda = 0.0f;
+
+			float tetMass = soft_body_.density * c.rest_volume;
+			float pInvMass = 1.0f / (tetMass * 0.25f);
+
+			inverse_masses_[c.i0] += pInvMass;
+			inverse_masses_[c.i1] += pInvMass;
+			inverse_masses_[c.i2] += pInvMass;
+			inverse_masses_[c.i3] += pInvMass;
+
+			soft_body_.volume_constraints.push_back(c);
+		}
 	}
 
 	vku::CreateIndexBuffer(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_, indices_, index_buffer_, index_buffer_memory_);
@@ -115,6 +178,7 @@ void ParticleManager::SetCloth(Cloth& cloth)
 	const int ny1 = cloth.ny1;
 
 	cloth.offset_particle = num_cloth_particles_;
+	cloth.offset_indices = num_cloth_indices_;
 
 	auto vid = [&](int x, int y) { return cloth.offset_particle + uint32_t(y * nx1 + x); };
 
@@ -144,6 +208,7 @@ void ParticleManager::SetCloth(Cloth& cloth)
 			normals_.push_back(glm::vec4(0.0f));
 		}
 	}
+	cloth.num_particle = positions_.size() - cloth.offset_particle;
 
 	// Set indices
 	for (int y = 0; y < ny; ++y) {
@@ -156,7 +221,6 @@ void ParticleManager::SetCloth(Cloth& cloth)
 			indices_.push_back(i1); indices_.push_back(i2); indices_.push_back(i3);
 		}
 	}
-	cloth.offset_indices = num_cloth_indices_;
 	cloth.num_indices = static_cast<uint32_t>(indices_.size() - cloth.offset_indices);
 
 	// Total area
@@ -226,7 +290,6 @@ void ParticleManager::SetCloth(Cloth& cloth)
 
 void ParticleManager::Reset(Cloth& cloth)
 {
-
 	const int nxCells = cloth.nx;
 	const int nyCells = cloth.ny;
 	const int nx1 = nxCells + 1;
@@ -245,7 +308,7 @@ void ParticleManager::Reset(Cloth& cloth)
 			uint32_t id = vid(x, y);
 
 			float lx = (-0.5f * cloth.cloth_size.x) + x * cloth.spacing;
-			float ly = 0.0f; // 평면 자체는 y=0에서 시작
+			float ly = 0.0f;
 			float lz = (-0.5f * cloth.cloth_size.y) + y * cloth.spacing;
 
 			glm::vec4 local(lx, ly, lz, 1.0f);
@@ -285,6 +348,9 @@ void ParticleManager::Reset(Cloth& cloth)
 	if (totalArea > 0.0f) {
 		density = totalMassTarget / totalArea; // kg/m²
 	}
+
+	for (uint32_t i = cloth.offset_particle; i < cloth.offset_particle + cloth.num_particle; ++i)
+		masses_[i] = 0.0f;
 
 	// Distribute mass to each triangle in proportion to area
 	for (size_t t = cloth.offset_indices; t < cloth.offset_indices + cloth.num_indices; t += 3) {
