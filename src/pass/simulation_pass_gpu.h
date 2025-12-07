@@ -66,7 +66,7 @@ public:
 	uint32_t timestamp_steps_ = 0;
 	uint32_t slots_integrate_clear = 4;
 	uint32_t slots_spatial_hashing_ = 8;
-	uint32_t slots_per_iteration_ = 12;
+	uint32_t slots_per_iteration_ = 16;
 	uint32_t slots_collide_update_ = 4;
 	uint32_t slots_calculate_normals_ = 4;
 	uint32_t slots_per_compute_ =
@@ -79,7 +79,7 @@ public:
 		+ 1;
 	float pass_total_time_ = 0.0f;
 
-	std::array<std::string, 16> labels_ = { "Intergrate", "ClearLambdas", "HashBuild", "RadixSort", "BuildCell", "BuildNeighbor", "SolveStretch", "SolveShear", "SolveBend", "SolveArea", "SolveSelfCollision", "ApplyDeltas", "CollideSdf", "Update", "CalculateNormals", "Total" };
+	std::array<std::string, 18> labels_ = { "Intergrate", "ClearLambdas", "HashBuild", "RadixSort", "BuildCell", "BuildNeighbor", "SolveStretch", "SolveSoftbodyStretch", "SolveSoftbodyVolume", "SolveShear", "SolveBend", "SolveArea", "SolveSelfCollision", "ApplyDeltas", "CollideSdf", "Update", "CalculateNormals", "Total" };
 	std::unordered_map<std::string, double> label_time_;
 	std::unordered_map<std::string, double> label_avg_time_;
 	uint32_t time_count_ = 0;

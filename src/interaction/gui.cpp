@@ -15,7 +15,8 @@
 
 #include "gui.h"
 
-GUI::GUI(GLFWwindow* glfwWindow, Context& context, Swapchain& swapchain)
+GUI::GUI(GLFWwindow* glfwWindow, Context& context, Swapchain& swapchain, TextureManager& textureManager, ModelManager& modelManager, PassManager& passManager)
+	: context_(context), swapchain_(swapchain), texture_manager_(textureManager), model_manager_(modelManager), pass_manager_(passManager)
 {
 	// ImGUI DescriptorPool
 	std::array<vk::DescriptorPoolSize, 11> imguiPoolSizes{
@@ -38,9 +39,9 @@ GUI::GUI(GLFWwindow* glfwWindow, Context& context, Swapchain& swapchain)
 		.poolSizeCount = static_cast<uint32_t>(imguiPoolSizes.size()),
 		.pPoolSizes = imguiPoolSizes.data()
 	};
-	imgui_pool_ = vk::raii::DescriptorPool(context.device_, imguiPoolInfo);
+	imgui_pool_ = vk::raii::DescriptorPool(context_.device_, imguiPoolInfo);
 
-	// Setup Dear ImGui context
+	// Setup Dear ImGui context_
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
@@ -50,17 +51,17 @@ GUI::GUI(GLFWwindow* glfwWindow, Context& context, Swapchain& swapchain)
 	io.DisplaySize.y = swapchain.swapchain_extent_.height;
 
 	// Setup Platform/Renderer backends
-	VkFormat depthFmt = static_cast<VkFormat>(vku::FindDepthFormat(context.physical_device_));
+	VkFormat depthFmt = static_cast<VkFormat>(vku::FindDepthFormat(context_.physical_device_));
 	VkFormat colorFmt = static_cast<VkFormat>(swapchain.swapchain_surface_format_.format);
 	static VkFormat colorFormats[] = { colorFmt };
 	ImGui_ImplGlfw_InitForVulkan(glfwWindow, true);
 	ImGui_ImplVulkan_InitInfo init_info = {
 		.ApiVersion = vk::ApiVersion14,
-		.Instance = *context.instance_,
-		.PhysicalDevice = *context.physical_device_,
-		.Device = *context.device_,
-		.QueueFamily = context.queue_index_,
-		.Queue = *context.queue_,
+		.Instance = *context_.instance_,
+		.PhysicalDevice = *context_.physical_device_,
+		.Device = *context_.device_,
+		.QueueFamily = context_.queue_index_,
+		.Queue = *context_.queue_,
 		.DescriptorPool = *imgui_pool_,
 		.MinImageCount = swapchain.min_image_count_,
 		.ImageCount = swapchain.image_count_,
@@ -176,7 +177,7 @@ void GUI::SetStyle()
 	style.SeparatorTextBorderSize = 2.0f;
 }
 
-void GUI::Update(Context& context, PassManager& passManager, Swapchain& swapchain, float& targetSimFPS, double& simDt, ModelManager& modelManager, TextureManager& textureManager, Camera& camera)
+void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera)
 {
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
@@ -211,35 +212,35 @@ void GUI::Update(Context& context, PassManager& passManager, Swapchain& swapchai
 	ImGui::SetNextWindowSize(sceneSize);
 	if (ImGui::Begin("Scene", nullptr, wf))
 	{
-		SetTestSceneGUI(row, passManager.test_scene_);
+		SetTestSceneGUI(row, pass_manager_.test_scene_);
 	}
 	ImGui::End();
 
 	ImVec2 optionPos{ scenePos.x, scenePos.y + sceneSize.y + spacing };
-	ImVec2 optionSize{ sceneSize.x, swapchain.swapchain_extent_.height - optionPos.y - spacing };
+	ImVec2 optionSize{ sceneSize.x, swapchain_.swapchain_extent_.height - optionPos.y - spacing };
 	ImGui::SetNextWindowPos(optionPos);
 	ImGui::SetNextWindowSize(optionSize);
 	if (ImGui::Begin("Option", nullptr, wf))
 	{
 		SetCameraGUI(row, camera);
-		SetRenderingGUI(row, *passManager.graphics_pass_, textureManager);
+		SetRenderingGUI(row);
 
-		SetObjectsGUI(row, modelManager.models_, passManager.graphics_pass_->ubo_datas_.cloth);
+		SetObjectsGUI(row, model_manager_.models_, pass_manager_.graphics_pass_->ubo_datas_.cloth);
 
-		if (passManager.cpu_or_gpu_ == vku::CpuOrGpu::GPU)
-			SetSimulationGUI(row, passManager, *passManager.sim_pass_gpu_, targetSimFPS, simDt);
+		if (pass_manager_.cpu_or_gpu_ == vku::CpuOrGpu::GPU)
+			SetSimulationGUI(row, *pass_manager_.sim_pass_gpu_, targetSimFPS, simDt);
 
 	}
 	ImGui::End();
 
 	// Right Side
 	ImGui::SetNextWindowSize(ImVec2(600.0f, 0));
-	ImGui::SetNextWindowPos(ImVec2(swapchain.swapchain_extent_.width - 610.0f, spacing));
+	ImGui::SetNextWindowPos(ImVec2(swapchain_.swapchain_extent_.width - 610.0f, spacing));
 	if (ImGui::Begin("Cloth Performance Monitor", nullptr, wf))
 	{
-		SetStatGUI(row, passManager);
+		SetStatGUI(row);
 
-		SetTimeingGUI(row, *passManager.sim_pass_gpu_, *passManager.graphics_pass_);
+		SetTimeingGUI(row, *pass_manager_.sim_pass_gpu_);
 	}
 	ImGui::End();
 
@@ -368,7 +369,7 @@ void GUI::SetObjectsGUI(RowFn&& row, Objects& objects, ClothUBO& clothUBO) {
 }
 
 template<typename RowFn>
-void GUI::SetTimeingGUI(RowFn&& row, SimulationPassGPU& sim, GraphicsPass& graphicsPass)
+void GUI::SetTimeingGUI(RowFn&& row, SimulationPassGPU& sim)
 {
 	auto& labels = sim.labels_;
 	auto& labelToTime = sim.label_time_;
@@ -396,24 +397,18 @@ void GUI::SetTimeingGUI(RowFn&& row, SimulationPassGPU& sim, GraphicsPass& graph
 		}
 		ImGui::SeparatorText("Overall");
 		ImGui::Text("Compute : %.3f", sim.pass_total_time_);
-		ImGui::Text("Graphics : %.3f", graphicsPass.pass_total_time_);
+		ImGui::Text("Graphics : %.3f", pass_manager_.graphics_pass_->pass_total_time_);
 
 		count_ = sim.time_count_;
 	}
 }
 
 template<typename RowFn, typename Sim>
-void GUI::SetSimulationGUI(RowFn&& row, PassManager& passManager, Sim& sim, float& targetSimFPS, double& simDt)
+void GUI::SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& simDt)
 {
 	if (ImGui::CollapsingHeader("Simulation", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		ImGui::SeparatorText("PolygonMode");
-		const char* items[] = { "Solid", "Wireframe", "Point" };
-		int item_current = passManager.graphics_pass_->polygon_mode_;
-		ImGui::ListBox("##", &item_current, items, IM_ARRAYSIZE(items), 3);
-		passManager.graphics_pass_->polygon_mode_ = vku::PolygonMode(item_current);
-
-		auto& pm = *passManager.particle_manager_;
+		auto& pm = *pass_manager_.particle_manager_;
 
 		ImGui::SeparatorText("Parameter");
 		if (ImGui::BeginTable("Parameter", 2,
@@ -520,20 +515,30 @@ void GUI::SetTestSceneGUI(RowFn&& row, Scene& scene)
 }
 
 template<typename RowFn>
-void GUI::SetRenderingGUI(RowFn&& row, GraphicsPass& graphicsPass, TextureManager& textureManager)
+void GUI::SetRenderingGUI(RowFn&& row)
 {
+
 	if (ImGui::CollapsingHeader("Rendering"))//, ImGuiTreeNodeFlags_DefaultOpen))
 	{
+		auto& gp = *pass_manager_.graphics_pass_;
+		auto& tm = texture_manager_;
+
+		ImGui::SeparatorText("PolygonMode");
+		const char* items[] = { "Solid", "Wireframe", "Point" };
+		int item_current = gp.polygon_mode_;
+		ImGui::ListBox("##", &item_current, items, IM_ARRAYSIZE(items), 3);
+		gp.polygon_mode_ = vku::PolygonMode(item_current);
+
 		ImGui::SeparatorText("SpotLight");
 		if (ImGui::BeginTable("SpotLight", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
-			row("Enable", [&] { bool enable = graphicsPass.ubo_datas_.light.light_enable; ImGui::Checkbox("##Enable", &enable); graphicsPass.ubo_datas_.light.light_enable = enable; });
-			row("Pos", [&] { ImGui::DragFloat3("##Pos", &graphicsPass.ubo_datas_.light.position[0], 0.1f); });
-			row("Dir", [&] { ImGui::DragFloat3("##Dir", &graphicsPass.ubo_datas_.light.direction[0], 0.1f); });
-			row("Inner", [&] { ImGui::DragFloat("##Inner", &graphicsPass.ubo_datas_.light.inner, 0.1f); });
-			row("Outer", [&] { ImGui::DragFloat("##Outer", &graphicsPass.ubo_datas_.light.outer, 0.1f); });
-			row("Intensity", [&] { ImGui::DragFloat("##Intensity", &graphicsPass.ubo_datas_.light.intensity, 0.1f, 0.0f, 100.0f); });
+			row("Enable", [&] { bool enable = gp.ubo_datas_.light.light_enable; ImGui::Checkbox("##Enable", &enable); gp.ubo_datas_.light.light_enable = enable; });
+			row("Pos", [&] { ImGui::DragFloat3("##Pos", &gp.ubo_datas_.light.position[0], 0.1f); });
+			row("Dir", [&] { ImGui::DragFloat3("##Dir", &gp.ubo_datas_.light.direction[0], 0.1f); });
+			row("Inner", [&] { ImGui::DragFloat("##Inner", &gp.ubo_datas_.light.inner, 0.1f); });
+			row("Outer", [&] { ImGui::DragFloat("##Outer", &gp.ubo_datas_.light.outer, 0.1f); });
+			row("Intensity", [&] { ImGui::DragFloat("##Intensity", &gp.ubo_datas_.light.intensity, 0.1f, 0.0f, 100.0f); });
 
 			ImGui::EndTable();
 		}
@@ -542,8 +547,8 @@ void GUI::SetRenderingGUI(RowFn&& row, GraphicsPass& graphicsPass, TextureManage
 		if (ImGui::BeginTable("PBR", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
-			row("Enable", [&] { bool enable = graphicsPass.ubo_datas_.light.pbr_enable; ImGui::Checkbox("##Enable", &enable); graphicsPass.ubo_datas_.light.pbr_enable = enable; });
-			row("Exposure", [&] { ImGui::DragFloat("##Exposure", &graphicsPass.ubo_datas_.light.exposure, 0.1f, 0.0f, 2.0f); });
+			row("Enable", [&] { bool enable = gp.ubo_datas_.light.pbr_enable; ImGui::Checkbox("##Enable", &enable); gp.ubo_datas_.light.pbr_enable = enable; });
+			row("Exposure", [&] { ImGui::DragFloat("##Exposure", &gp.ubo_datas_.light.exposure, 0.1f, 0.0f, 2.0f); });
 			ImGui::EndTable();
 		}
 
@@ -551,27 +556,27 @@ void GUI::SetRenderingGUI(RowFn&& row, GraphicsPass& graphicsPass, TextureManage
 		ImVec2 buttonSize = ImVec2(ImGui::GetContentRegionAvail().x, 0);
 		if (ImGui::Button("Morning", buttonSize))
 		{
-			textureManager.skybox_enable_.morning = true;
+			tm.skybox_enable_.morning = true;
 		}
 		if (ImGui::Button("Evening", buttonSize))
 		{
-			textureManager.skybox_enable_.evening = true;
+			tm.skybox_enable_.evening = true;
 		}
 		if (ImGui::Button("Night", buttonSize))
 		{
-			textureManager.skybox_enable_.night = true;
+			tm.skybox_enable_.night = true;
 		}
 	}
 }
 
 template<typename RowFn>
-void GUI::SetStatGUI(RowFn&& row, PassManager& passManager)
+void GUI::SetStatGUI(RowFn&& row)
 {
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 	ImGui::Text("Avr %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
-	auto& pm = *passManager.particle_manager_;
-	auto& d = passManager.sim_pass_gpu_->datas_;
+	auto& pm = *pass_manager_.particle_manager_;
+	auto& d = pass_manager_.sim_pass_gpu_->datas_;
 
 	if (ImGui::BeginTable("Stat", 2, ImGuiTableFlags_BordersInnerV))
 	{

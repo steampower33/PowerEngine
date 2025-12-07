@@ -237,7 +237,10 @@ private:
 		vk::raii::Pipeline cloth_solid{ nullptr };
 		vk::raii::Pipeline cloth_wireframe{ nullptr };
 		vk::raii::Pipeline cloth_point{ nullptr };
-		vk::raii::Pipeline softbody{ nullptr };
+
+		vk::raii::Pipeline softbody_solid{ nullptr };
+		vk::raii::Pipeline softbody_wireframe{ nullptr };
+		vk::raii::Pipeline softbody_point{ nullptr };
 	} pipelines_;
 
 	struct GeometryBuffer {

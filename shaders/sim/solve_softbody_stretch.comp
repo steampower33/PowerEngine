@@ -62,7 +62,7 @@ void main() {
     float newLambda = lambda + dlambda;
     edges[eidx].lambda = isFinite_f(newLambda) ? newLambda : 0.0;
 
-    vec3 corr = dlambda * n * sim.stretch_stiffness;
+    vec3 corr = dlambda * n * sim.softbody_stretch_stiffness;
     if (wi > 0.0)
         accumulate_delta(i, +wi * corr);
     if (wj > 0.0)

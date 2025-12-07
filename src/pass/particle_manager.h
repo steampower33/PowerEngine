@@ -33,7 +33,6 @@ struct SoftBody
 	vku::TetMesh tetmesh;
 
 	float density;
-	float height;
 	glm::vec4 color;
 
 	uint32_t offset_particle = 0;

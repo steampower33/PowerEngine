@@ -367,7 +367,12 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 	// Softbody
 	{
 
-		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.softbody);
+		if (polygon_mode_ == vku::PolygonMode::WIREFRAME)
+			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.softbody_wireframe);
+		else if (polygon_mode_ == vku::PolygonMode::POINT)
+			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.softbody_point);
+		else
+			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.softbody_solid);
 
 		// Global Set
 		cmd.bindDescriptorSets(
@@ -1760,6 +1765,12 @@ void GraphicsPass::CreateGraphicsPipelines()
 			  .pColorAttachmentFormats = geometry_buffers_.formats.data(),
 			  .depthAttachmentFormat = depthFormat}
 		};
-		pipelines_.softbody = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+		pipelines_.softbody_solid = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+
+		softbodyRasterizer.polygonMode = vk::PolygonMode::eLine;
+		pipelines_.softbody_wireframe = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+
+		softbodyRasterizer.polygonMode = vk::PolygonMode::ePoint;
+		pipelines_.softbody_point = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 	}
 }
