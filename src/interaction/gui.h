@@ -39,7 +39,7 @@ public:
 	bool open_timestamps_ = false;
 
 	void SetStyle();
-	void Update(float& targetSimFPS, double& simDt, Camera& camera);
+	void Update(float& targetSimFPS, double& simDt, Camera& camera, bool paused);
 	void DisplayKernelTiming(const std::string name, std::unordered_map<std::string, double>& labelToTime, std::unordered_map<std::string, double>& labelToAvgTime, bool autoColor = true);
 
 	template<typename RowFn>
@@ -49,7 +49,7 @@ public:
 	template<typename RowFn>
 	void SetTimeingGUI(RowFn&& row, SimulationPassGPU& sim);
 	template<typename RowFn, typename Sim>
-	void SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& simDt);
+	void SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& simDt, bool& paused);
 	template<typename RowFn, typename Scene>
 	void SetTestSceneGUI(RowFn&& row, Scene& scene);
 	template<typename RowFn>

@@ -30,16 +30,16 @@ void Renderer::WaitIdle()
 	context_->WaitIdle();
 }
 
-void Renderer::Update(Camera& camera, MouseInteractor& mouse_interactor, float dt, float& targetSimFPS, double& simDt)
+void Renderer::Update(Camera& camera, MouseInteractor& mouse_interactor, float dt, float& targetSimFPS, double& simDt, bool& paused)
 {
-	gui_->Update(targetSimFPS, simDt, camera);
+	gui_->Update(targetSimFPS, simDt, camera, paused);
 	pass_manager_->Update(camera, mouse_interactor, *model_manager_);
 
 	mouse_interactor.Update(camera, glm::vec2(swapchain_->swapchain_extent_.width, swapchain_->swapchain_extent_.height), model_manager_->models_);
 }
 
-void Renderer::Draw()
+void Renderer::Draw(bool paused)
 {
-	pass_manager_->Draw(gui_);
+	pass_manager_->Draw(gui_, paused);
 }
 

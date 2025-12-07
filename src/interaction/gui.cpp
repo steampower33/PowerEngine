@@ -177,7 +177,7 @@ void GUI::SetStyle()
 	style.SeparatorTextBorderSize = 2.0f;
 }
 
-void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera)
+void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera, bool paused)
 {
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
@@ -228,7 +228,7 @@ void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera)
 		SetObjectsGUI(row, model_manager_.models_, pass_manager_.graphics_pass_->ubo_datas_.cloth);
 
 		if (pass_manager_.cpu_or_gpu_ == vku::CpuOrGpu::GPU)
-			SetSimulationGUI(row, *pass_manager_.sim_pass_gpu_, targetSimFPS, simDt);
+			SetSimulationGUI(row, *pass_manager_.sim_pass_gpu_, targetSimFPS, simDt, paused);
 
 	}
 	ImGui::End();
@@ -404,7 +404,7 @@ void GUI::SetTimeingGUI(RowFn&& row, SimulationPassGPU& sim)
 }
 
 template<typename RowFn, typename Sim>
-void GUI::SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& simDt)
+void GUI::SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& simDt, bool& paused)
 {
 	if (ImGui::CollapsingHeader("Simulation", ImGuiTreeNodeFlags_DefaultOpen))
 	{
@@ -414,6 +414,7 @@ void GUI::SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& s
 		if (ImGui::BeginTable("Parameter", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
+			row("Pause", [&] { ImGui::Checkbox("##Pause", &paused); });
 			row("TargetSimFPS", [&] { ImGui::DragFloat("##TargetSimFPS", &targetSimFPS, 1.0f, 30.0f, 1000.0f); simDt = 1.0 / static_cast<double>(targetSimFPS); });
 			row("1 / FrameDt", [&] { ImGui::DragFloat("##FrameDt", &sim.datas_.frame_dt, 1.0f, 60.0f, 240.0f); });
 			row("Substeps", [&] { ImGui::DragInt("##Substeps", &sim.datas_.substeps, 1, 1, 40); });

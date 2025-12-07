@@ -44,7 +44,7 @@ void PassManager::Update(Camera& camera, MouseInteractor& mouseInteractor, Model
 	graphics_pass_->UpdateGraphicsUBO(current_frame_, camera);
 }
 
-void PassManager::Draw(std::unique_ptr<GUI>& gui)
+void PassManager::Draw(std::unique_ptr<GUI>& gui, bool paused_)
 {
 	auto& device = context_.device_;
 	auto& queue = context_.queue_;
@@ -91,8 +91,7 @@ void PassManager::Draw(std::unique_ptr<GUI>& gui)
 	}
 
 	// Record
-
-	if (cpu_or_gpu_ == vku::CpuOrGpu::GPU)
+	if (cpu_or_gpu_ == vku::CpuOrGpu::GPU && !paused_)
 	{
 		sim_pass_gpu_->RecordComputeCloth(frame, test_scene_);
 		//sim_pass_gpu_->RecordComputeSoftBody(frame);

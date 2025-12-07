@@ -20,8 +20,8 @@ public:
 	~Renderer();
 
 	void WaitIdle();
-	void Update(Camera& camera, MouseInteractor& mouse_interactor, float dt, float& targetSimFPS, double& simDt);
-	void Draw();
+	void Update(Camera& camera, MouseInteractor& mouse_interactor, float dt, float& targetSimFPS, double& simDt, bool& paused);
+	void Draw(bool paused);
 
 private:
 	std::unique_ptr<Context> context_;
