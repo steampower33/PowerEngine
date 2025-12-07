@@ -176,6 +176,7 @@ void SimulationPassGPU::RecordComputeCloth(uint32_t currentFrame, vku::TestScene
 		TS(timestamp_steps_);
 
 		// Broad Phase
+		if (step % broadphase_interval_ == 0)
 		{
 			vku::Barrier2(cmd,
 				vk::PipelineStageFlagBits2::eComputeShader,
@@ -407,7 +408,7 @@ void SimulationPassGPU::RecordComputeCloth(uint32_t currentFrame, vku::TestScene
 
 			// Solve Self Collision
 			TS(timestamp_steps_);
-			if (solver_config_.self_collision)
+			if (solver_config_.self_collision && iter % narrowphase_interval_ == 0)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_self_collision);
 				push_constants_.solve.compliance = datas_.compliance.self_collision;
@@ -1471,6 +1472,17 @@ void SimulationPassGPU::CreateVrdxSorter()
 		radix_.storage_memory);
 }
 
+void SimulationPassGPU::ClearCpuTime()
+{
+	uint32_t c = 0;
+
+	for (auto& t : label_time_)
+		t.second = 0.0f;
+
+	for (auto& t : label_avg_time_)
+		t.second = 0.0f;
+}
+
 void SimulationPassGPU::CalculateGpuTime()
 {
 	float nsPerTick = context_.physical_device_.getProperties().limits.timestampPeriod;
@@ -1516,10 +1528,14 @@ void SimulationPassGPU::CalculateGpuTime()
 	{
 		tIntegrate += delta_ms(base + 0, base + 1);
 		tClearLambdas += delta_ms(base + 2, base + 3);
-		tHashBuild += delta_ms(base + 4, base + 5);
-		tRadixSort += delta_ms(base + 6, base + 7);
-		tBuildCell += delta_ms(base + 8, base + 9);
-		tBuildNeighbor += delta_ms(base + 10, base + 11);
+
+		if (sub % broadphase_interval_ == 0)
+		{
+			tHashBuild += delta_ms(base + 4, base + 5);
+			tRadixSort += delta_ms(base + 6, base + 7);
+			tBuildCell += delta_ms(base + 8, base + 9);
+			tBuildNeighbor += delta_ms(base + 10, base + 11);
+		}
 
 		uint32_t iterBase = base + 12;
 		for (uint32_t it = 0; it < datas_.iterations; it++)

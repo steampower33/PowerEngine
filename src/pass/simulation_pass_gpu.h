@@ -38,12 +38,16 @@ public:
 	uint32_t softbody_particles_;
 	uint32_t softbody_indices_;
 
+	int broadphase_interval_ = 2;
+	int narrowphase_interval_ = 2;
+
 	void UpdateMousePushConstant(Camera& camera, MouseInteractor& mouseInteractor, glm::vec2 viewportSize);
 	void UpdateComputeUBO(uint32_t currentFrame, ModelManager& model);
 
 	void RecordComputeSoftBody(uint32_t currentFrame);
 	void RecordComputeCloth(uint32_t currentFrame, vku::TestScene& testScene);
 
+	void ClearCpuTime();
 	void CalculateGpuTime();
 
 	void CopyDatas(const vk::raii::CommandBuffer& cmd);

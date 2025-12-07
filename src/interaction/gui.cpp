@@ -375,8 +375,8 @@ void GUI::SetTimeingGUI(RowFn&& row, SimulationPassGPU& sim)
 	auto& labelToTime = sim.label_time_;
 	auto& labelToAvgTime = sim.label_avg_time_;
 
-	is_print_timestamps = ImGui::CollapsingHeader("Timing"); //, ImGuiTreeNodeFlags_DefaultOpen
-	if (is_print_timestamps)
+	open_timestamps_ = ImGui::CollapsingHeader("Timing"); //, ImGuiTreeNodeFlags_DefaultOpen
+	if (open_timestamps_)
 	{
 		if (ImGui::BeginTable("Timing", 4))//,  ImGuiTableFlags_BordersOuter))
 		{
@@ -418,6 +418,8 @@ void GUI::SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& s
 			row("1 / FrameDt", [&] { ImGui::DragFloat("##FrameDt", &sim.datas_.frame_dt, 1.0f, 60.0f, 240.0f); });
 			row("Substeps", [&] { ImGui::DragInt("##Substeps", &sim.datas_.substeps, 1, 1, 40); });
 			row("Iterations", [&] { ImGui::DragInt("##Iterations", &sim.datas_.iterations, 1, 1, 40); });
+			row("BroadphaseInterval", [&] { ImGui::DragInt("##BroadphaseInterval", &sim.broadphase_interval_, 1.0f, 0.0f, sim.datas_.substeps); });
+			row("NarrowphaseInterval", [&] { ImGui::DragInt("##NarrowphaseInterval", &sim.narrowphase_interval_, 1.0f, 0.0f, sim.datas_.iterations); });
 			row("GlobalDamping", [&] { ImGui::DragFloat("##GlobalDamping", &sim.ubo_.datas.sim_params.global_damping, 0.1f, 1.0f, 2.0f); });
 			row("RelaxationFactor", [&] { ImGui::DragFloat("##RelaxationFactor", &sim.ubo_.datas.sim_params.relaxation_factor, 0.1f, 0.0f, 1.0f); });
 			row("Thickness", [&] { ImGui::DragFloat("##Thickness", &sim.ubo_.datas.sim_params.thickness, 0.001f, 0.0f, 1.0f, "%.3f"); });

@@ -36,7 +36,7 @@ public:
 	ImVec4 color_low = ImVec4(1.000f, 0.889f, 0.000f, 1.000f);
 	ImVec4 color_disabled = ImVec4(0.5f, 0.5f, 0.5f, 1.000f);
 
-	bool is_print_timestamps = false;
+	bool open_timestamps_ = false;
 
 	void SetStyle();
 	void Update(float& targetSimFPS, double& simDt, Camera& camera);

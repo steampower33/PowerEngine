@@ -23,7 +23,7 @@ struct SimData {
 	uint32_t num_volumes = 0;
 
 	float frame_dt = 60.0f;
-	int substeps = 10;
+	int substeps = 8;
 	int iterations = 4;
 
 	struct Edge {

@@ -55,7 +55,7 @@ void PassManager::Draw(std::unique_ptr<GUI>& gui)
 		device.waitForFences(*in_flight_fences_[frame], vk::True, UINT64_MAX);
 		device.resetFences(*in_flight_fences_[frame]);
 
-		if (gui->is_print_timestamps)
+		if (gui->open_timestamps_)
 		{
 			vk::SemaphoreWaitInfo waitInfo{
 				.semaphoreCount = 1,
@@ -66,6 +66,8 @@ void PassManager::Draw(std::unique_ptr<GUI>& gui)
 
 			sim_pass_gpu_->CalculateGpuTime();
 		}
+		
+		//sim_pass_gpu_->ClearCpuTime();
 	}
 
 	uint32_t imageIndex = 0;
@@ -179,7 +181,7 @@ void PassManager::Draw(std::unique_ptr<GUI>& gui)
 		}
 	}
 
-	if (gui->is_print_timestamps)
+	if (gui->open_timestamps_)
 	{
 		graphics_pass_->CalculateGpuTime();
 	}
