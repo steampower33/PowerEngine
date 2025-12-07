@@ -582,6 +582,8 @@ void GraphicsPass::CalculateGpuTime()
 	float nsPerTick = context_.physical_device_.getProperties().limits.timestampPeriod;
 	float toMs = nsPerTick / 1e6f;
 
+	if (timestamp_steps_ <= 0) return;
+
 	uint32_t numTimestamp = timestamp_steps_;
 	std::vector<uint64_t> ts(numTimestamp);
 
@@ -590,7 +592,7 @@ void GraphicsPass::CalculateGpuTime()
 		static_cast<VkQueryPool>(*timestamp_pool_),
 		0, numTimestamp,
 		ts.size() * sizeof(uint64_t), ts.data(), sizeof(uint64_t),
-		VK_QUERY_RESULT_64_BIT
+		VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT
 	);
 
 	auto delta_ms = [&](uint32_t i0, uint32_t i1) {

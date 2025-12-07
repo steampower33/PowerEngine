@@ -44,18 +44,14 @@ void PassManager::Update(Camera& camera, MouseInteractor& mouseInteractor, Model
 	graphics_pass_->UpdateGraphicsUBO(current_frame_, camera);
 }
 
-void PassManager::Draw(std::unique_ptr<GUI>& gui, bool paused_)
+void PassManager::Draw(std::unique_ptr<GUI>& gui, bool paused)
 {
+
 	auto& device = context_.device_;
 	auto& queue = context_.queue_;
 
-	const uint32_t frame = current_frame_;
-
 	{
-		device.waitForFences(*in_flight_fences_[frame], vk::True, UINT64_MAX);
-		device.resetFences(*in_flight_fences_[frame]);
-
-		if (gui->open_timestamps_)
+		if (gui->open_timestamps_ && !paused)
 		{
 			vk::SemaphoreWaitInfo waitInfo{
 				.semaphoreCount = 1,
@@ -66,10 +62,20 @@ void PassManager::Draw(std::unique_ptr<GUI>& gui, bool paused_)
 
 			sim_pass_gpu_->CalculateGpuTime();
 		}
-		
+
 		//sim_pass_gpu_->ClearCpuTime();
 	}
 
+	const uint32_t frame = current_frame_;
+
+	device.waitForFences(*in_flight_fences_[frame], vk::True, UINT64_MAX);
+	device.resetFences(*in_flight_fences_[frame]);
+
+	if (gui->open_timestamps_ && !paused)
+	{
+		graphics_pass_->CalculateGpuTime();
+
+	}
 	uint32_t imageIndex = 0;
 	{
 		auto [result, idx] =
@@ -90,11 +96,9 @@ void PassManager::Draw(std::unique_ptr<GUI>& gui, bool paused_)
 		imageIndex = idx;
 	}
 
-	// Record
-	if (cpu_or_gpu_ == vku::CpuOrGpu::GPU && !paused_)
+	if (cpu_or_gpu_ == vku::CpuOrGpu::GPU && !paused)
 	{
 		sim_pass_gpu_->RecordComputeCloth(frame, test_scene_);
-		//sim_pass_gpu_->RecordComputeSoftBody(frame);
 
 		// compute submit
 		uint64_t computeSignalValue = 0;
@@ -131,7 +135,6 @@ void PassManager::Draw(std::unique_ptr<GUI>& gui, bool paused_)
 
 	graphics_pass_->RecordGraphicsCommandBuffer(imageIndex, current_frame_, cpu_or_gpu_);
 
-	// graphics submit
 	{
 		vk::Semaphore waitSems[] = {
 			*image_available_[frame]
@@ -157,6 +160,7 @@ void PassManager::Draw(std::unique_ptr<GUI>& gui, bool paused_)
 		queue.submit(submitInfo, *in_flight_fences_[frame]);
 	}
 
+
 	{
 		vk::Semaphore waitSem = *image_render_finished_[imageIndex];
 
@@ -180,11 +184,6 @@ void PassManager::Draw(std::unique_ptr<GUI>& gui, bool paused_)
 		}
 	}
 
-	if (gui->open_timestamps_)
-	{
-		graphics_pass_->CalculateGpuTime();
-	}
-
 	current_frame_ = (current_frame_ + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
@@ -205,9 +204,9 @@ void PassManager::CreateSyncObjects()
 	image_available_.reserve(MAX_FRAMES_IN_FLIGHT);
 	in_flight_fences_.reserve(MAX_FRAMES_IN_FLIGHT);
 
-	vk::SemaphoreCreateInfo binarySemaphoreInfo{}; // 기본은 binary
+	vk::SemaphoreCreateInfo binarySemaphoreInfo{};
 	vk::FenceCreateInfo fenceInfo{
-		.flags = vk::FenceCreateFlagBits::eSignaled // 첫 프레임용
+		.flags = vk::FenceCreateFlagBits::eSignaled
 	};
 
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
@@ -215,7 +214,7 @@ void PassManager::CreateSyncObjects()
 		image_available_.emplace_back(context_.device_, binarySemaphoreInfo);
 		in_flight_fences_.emplace_back(context_.device_, fenceInfo);
 
-		frame_timeline_done_[i] = 0;  // 해당 프레임이 마지막으로 기다린 타임라인 값
+		frame_timeline_done_[i] = 0;
 	}
 
 	image_render_finished_.clear();

@@ -64,6 +64,7 @@ void Window::mainloop()
 			sim_accum_ -= sim_dt_;
 
 			renderer_->Update(*camera_, *mouse_interactor_, frameDt, target_sim_fps_, sim_dt_, paused_);
+
 			renderer_->Draw(paused_);
 
 		}

@@ -395,7 +395,7 @@ void GUI::SetTimeingGUI(RowFn&& row, SimulationPassGPU& sim)
 
 			ImGui::EndTable();
 		}
-		ImGui::SeparatorText("Overall");
+		ImGui::SeparatorText("GpuTime");
 		ImGui::Text("Compute : %.3f", sim.pass_total_time_);
 		ImGui::Text("Graphics : %.3f", pass_manager_.graphics_pass_->pass_total_time_);
 
@@ -414,7 +414,7 @@ void GUI::SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& s
 		if (ImGui::BeginTable("Parameter", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
-			row("Pause", [&] { ImGui::Checkbox("##Pause", &paused); });
+			row("Pause(Spacebar)", [&] { ImGui::Checkbox("##Pause", &paused); });
 			row("TargetSimFPS", [&] { ImGui::DragFloat("##TargetSimFPS", &targetSimFPS, 1.0f, 30.0f, 1000.0f); simDt = 1.0 / static_cast<double>(targetSimFPS); });
 			row("1 / FrameDt", [&] { ImGui::DragFloat("##FrameDt", &sim.datas_.frame_dt, 1.0f, 60.0f, 240.0f); });
 			row("Substeps", [&] { ImGui::DragInt("##Substeps", &sim.datas_.substeps, 1, 1, 40); });
