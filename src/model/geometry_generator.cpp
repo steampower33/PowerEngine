@@ -1,8 +1,8 @@
 #include "geometry_generator.h"
 
-MeshData GeometryGenerator::MakeSquare(float scale)
+Mesh GeometryGenerator::MakeSquare(float scale)
 {
-    MeshData meshData;
+    Mesh meshData;
 
     meshData.vertices = {
         Vertex{ glm::vec3(-scale, -scale, 0.0f), glm::vec2(1.0f, 1.0f), glm::vec3(0.0f, 0.0f, -1.0f), glm::vec4(0.0f) },
@@ -18,9 +18,9 @@ MeshData GeometryGenerator::MakeSquare(float scale)
     return meshData;
 }
 
-MeshData GeometryGenerator::MakeBox(float scale)
+Mesh GeometryGenerator::MakeBox(float scale)
 {
-    MeshData meshData;
+    Mesh meshData;
 
     meshData.vertices = {
         // front (-Z)
@@ -74,11 +74,11 @@ MeshData GeometryGenerator::MakeBox(float scale)
     return meshData;
 }
 
-MeshData GeometryGenerator::MakeCylinder(
+Mesh GeometryGenerator::MakeCylinder(
     float bottomRadius, float topRadius,
     float height, int sliceCount)
 {
-    MeshData meshData;
+    Mesh meshData;
     auto& vertices = meshData.vertices;
     auto& indices = meshData.indices;
 
@@ -144,12 +144,12 @@ MeshData GeometryGenerator::MakeCylinder(
     return meshData;
 }
 
-MeshData GeometryGenerator::MakeSphere(
+Mesh GeometryGenerator::MakeSphere(
     float radius,
     int numSlices, int numStacks,
     const glm::vec2 texScale)
 {
-    MeshData meshData;
+    Mesh meshData;
     auto& vertices = meshData.vertices;
     auto& indices = meshData.indices;
 
@@ -216,7 +216,7 @@ MeshData GeometryGenerator::MakeSphere(
     return meshData;
 }
 
-void GeometryGenerator::CalculateTangents(MeshData& meshData)
+void GeometryGenerator::CalculateTangents(Mesh& meshData)
 {
     std::vector<glm::vec3> accumulatedTangents(meshData.vertices.size(), glm::vec3(0.0f));
 

@@ -12,6 +12,8 @@ struct Vertex {
     glm::vec2 uv = {};
     glm::vec3 normal = {};
     glm::vec3 tangent = {};
+    glm::uvec4 joints;   // 4 bone indices
+    glm::vec4 weights;   // 4 weights
 
     static VertexInputDescription GetInputDescription(const vku::VertexIncludeInfo& include)
     {

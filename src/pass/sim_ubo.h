@@ -33,7 +33,7 @@ struct SimUBO {
 
 			float self_collision_stiffness = 25.0f;
 			float max_speed;
-			float volume_stiffness = 5.0f;
+			float volume_stiffness = 10.0f;
 			uint32_t num_tries;
 
 			uint32_t num_volumes;

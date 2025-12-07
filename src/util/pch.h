@@ -35,6 +35,7 @@
 #include <glm/gtc/matrix_transform.hpp> // glm::rotate
 #include <glm/gtx/normalize_dot.hpp>
 #include <glm/gtx/norm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 constexpr int      MAX_FRAMES_IN_FLIGHT = 2;
 

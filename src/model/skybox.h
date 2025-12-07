@@ -5,18 +5,18 @@ class PassManager;
 struct Vertex;
 
 #include "vulkan_utils.h"
-#include "mesh_data.h"
+#include "model_data.h"
 
 struct Skybox {
 public:
-	Skybox(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, PassManager& graphicsContext);
+	Skybox(Mesh& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, PassManager& graphicsContext);
 	Skybox(const Skybox& rhs) = delete;
 	Skybox(Skybox&& rhs) = delete;
 	Skybox& operator=(const Skybox& rhs) = delete;
 	Skybox& operator=(Skybox&& rhs) = delete;
 	~Skybox() = default;
 
-	MeshData mesh_data_;
+	Mesh mesh_data_;
 
 	struct TextureIdx {
 		int env = -1;

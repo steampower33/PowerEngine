@@ -3,7 +3,7 @@
 
 #include "skybox.h"
 
-Skybox::Skybox(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, PassManager& graphicsContext)
+Skybox::Skybox(Mesh& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, PassManager& graphicsContext)
 {
     mesh_data_ = std::move(meshData);
 

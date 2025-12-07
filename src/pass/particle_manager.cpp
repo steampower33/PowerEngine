@@ -85,7 +85,7 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager)
 	}
 
 	{
-		soft_body_.tetmesh = vku::LoadGmshMsh2("assets/bunny.msh");
+		soft_body_.tetmesh = vku::LoadGmshMsh2("assets/sphere.msh");
 		soft_body_.density = 1.0f;
 		soft_body_.color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
 

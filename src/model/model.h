@@ -6,14 +6,14 @@ struct Vertex;
 struct Camera;
 class TextureManager;
 
+#include "model_data.h"
 #include "vulkan_utils.h"
-#include "mesh_data.h"
 
 class Model
 {
 public:
 	Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, TextureManager& textureManager, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble, std::string name, float scale);
-	Model(MeshData& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble, std::string name);
+	Model(Mesh& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble, std::string name);
 	Model(const Model& rhs) = delete;
 	Model(Model&& rhs) = delete;
 	Model& operator=(const Model& rhs) = delete;
@@ -21,7 +21,6 @@ public:
 	~Model() = default;
 
 	void ApplyTransform(glm::vec3 scaleDelta, glm::quat rotationDelta, glm::vec3 translationDelta);
-	void LoadModel(const std::string& modelPath, const vku::VertexIncludeInfo& vertexIncludeInfo, TextureManager& textureManager, float scale);
 
 	glm::mat4 world_{ 1.0f };
 	glm::vec3 position_{ 0.0f, 0.0f, 0.0f };
@@ -31,7 +30,9 @@ public:
 	bool checker_board_enable_ = false;
 	bool movable_ = false;
 
-	MeshData mesh_data_;
+	Mesh mesh_;
+	std::vector<Node> node_;
+	std::vector<Skin> skin_;
 
 	std::string name_;
 	glm::vec4 albedo_{ 0.0f };
@@ -63,4 +64,14 @@ public:
 		float sheen_weight = 0.7f;
 		float sheen_roughness = 1.0f;
 	} factors_;
+
+private:
+	void LoadModel(const std::string& modelPath, vku::VertexIncludeInfo& vertexIncludeInfo, TextureManager& textureManager, float scale);
+	template<typename T>
+	std::vector<T> ReadAccessor(const tinygltf::Model& model, int accessorIndex);
+	void ParseMesh(const tinygltf::Model& model, vku::VertexIncludeInfo& vertexIncludeInfo, float scale);
+	void ParseNodes(const tinygltf::Model& model);
+	void UpdateWorldTransforms(std::vector<Node>& nodes, int nodeIndex, const glm::mat4& parent);
+	void ParseSkins(const tinygltf::Model& model);
+	void UpdateSkinMatrices(int skinIndex);
 };

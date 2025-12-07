@@ -297,9 +297,9 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 				{ objectOffset }
 			);
 
-			cmd.bindVertexBuffers(0, { model_manager_.models_[i]->mesh_data_.vertex_buffer }, { 0 });
-			cmd.bindIndexBuffer(*model_manager_.models_[i]->mesh_data_.index_buffer, 0, vk::IndexType::eUint32);
-			cmd.drawIndexed(model_manager_.models_[i]->mesh_data_.indices_count, 1, 0, 0, 0);
+			cmd.bindVertexBuffers(0, { model_manager_.models_[i]->mesh_.vertex_buffer }, { 0 });
+			cmd.bindIndexBuffer(*model_manager_.models_[i]->mesh_.index_buffer, 0, vk::IndexType::eUint32);
+			cmd.drawIndexed(model_manager_.models_[i]->mesh_.indices_count, 1, 0, 0, 0);
 		}
 	}
 
