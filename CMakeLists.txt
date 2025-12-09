@@ -48,23 +48,25 @@ target_precompile_headers(PowerEngine PRIVATE
 )
 
 if (MSVC)
-  target_compile_options(PowerEngine PRIVATE 
+
+target_compile_options(PowerEngine PRIVATE 
     $<$<CONFIG:Debug>:/Od /RTC1>                         # Debug
     $<$<CONFIG:Release>:/O2 /Ob2 /DNDEBUG>               # Release
     $<$<CONFIG:RelWithDebInfo>:/O2 /Ob2 /DNDEBUG>        # RelWithDebInfo
     $<$<CONFIG:MinSizeRel>:/O1 /DNDEBUG>                 # MinSizeRel
-  )
-  add_custom_command(TARGET PowerEngine POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:PowerEngine>/assets/"
-  COMMAND ${CMAKE_COMMAND} -E copy_directory
-  "${CMAKE_SOURCE_DIR}/assets/"
-  "$<TARGET_FILE_DIR:PowerEngine>/assets/"
-  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:PowerEngine>/shaders"
-  COMMAND ${CMAKE_COMMAND} -E copy_directory
-  "${CMAKE_SOURCE_DIR}/shaders"
-  "$<TARGET_FILE_DIR:PowerEngine>/shaders"
 )
+add_custom_command(TARGET PowerEngine POST_BUILD
+COMMAND ${CMAKE_COMMAND} -E make_directory 
+"$<TARGET_FILE_DIR:PowerEngine>/assets/"
+COMMAND ${CMAKE_COMMAND} -E copy_directory 
+"${CMAKE_SOURCE_DIR}/assets/" "$<TARGET_FILE_DIR:PowerEngine>/assets/"
+COMMAND ${CMAKE_COMMAND} -E make_directory 
+"$<TARGET_FILE_DIR:PowerEngine>/shaders"
+COMMAND ${CMAKE_COMMAND} -E copy_directory 
+"${CMAKE_SOURCE_DIR}/shaders" "$<TARGET_FILE_DIR:PowerEngine>/shaders")
+
 endif()
+
 
 add_library(VulkanCppModule STATIC)
 add_library(Vulkan::cppm ALIAS VulkanCppModule)

@@ -10,29 +10,29 @@ TextureManager::TextureManager(Context& context)
 	: context_(context)
 {
 	{
-		//ConvertFileToKtx("assets/Metal");
-		//ConvertFileToKtx("assets/lut");
-		//ConvertFileToKtx("assets/Fabric");
-		//ConvertFileToKtx("assets/curtain");
+		ConvertFileToKtx("assets/lut");
 	}
 
 	{
 		vulkan_thumbnail_index_ = CreateTexture("assets", "vulkan_cloth_rgba");
 
-		skybox_index_.morning_brdf = CreateTexture("assets/DaySky", "brdf", false);
 		skybox_index_.morning_env = CreateTexture("assets/DaySky", "env", true);
 		skybox_index_.morning_specular = CreateTexture("assets/DaySky", "specular", true);
 		skybox_index_.morning_diffuse = CreateTexture("assets/DaySky", "diffuse", true);
 
-		skybox_index_.evening_brdf = CreateTexture("assets/EveningSky", "brdf", false);
 		skybox_index_.evening_env = CreateTexture("assets/EveningSky", "env", true);
 		skybox_index_.evening_specular = CreateTexture("assets/EveningSky", "specular", true);
 		skybox_index_.evening_diffuse = CreateTexture("assets/EveningSky", "diffuse", true);
 
-		skybox_index_.night_brdf = CreateTexture("assets/NightSky", "brdf", false);
 		skybox_index_.night_env = CreateTexture("assets/NightSky", "env", true);
 		skybox_index_.night_specular = CreateTexture("assets/NightSky", "specular", true);
 		skybox_index_.night_diffuse = CreateTexture("assets/NightSky", "diffuse", true);
+	}
+
+	{
+		brdf_index_.ggx = CreateTexture("assets/lut", "ggx", false);
+		brdf_index_.charlie = CreateTexture("assets/lut", "charlie", false);
+		brdf_index_.sheen_e = CreateTexture("assets/lut", "sheen_e", false);
 	}
 
 	CreateSetLayouts();

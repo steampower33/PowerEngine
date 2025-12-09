@@ -52,16 +52,19 @@ public:
 		"lut",
 	};
 
+	struct BrdfIndex {
+		int ggx = -1;
+		int charlie = -1;
+		int sheen_e = -1;
+	} brdf_index_;
+
 	struct SkyboxIndex {
-		int morning_brdf = -1;
 		int morning_env = -1;
 		int morning_specular = -1;
 		int morning_diffuse = -1;
-		int evening_brdf = -1;
 		int evening_env = -1;
 		int evening_specular = -1;
 		int evening_diffuse = -1;
-		int night_brdf = -1;
 		int night_env = -1;
 		int night_specular = -1;
 		int night_diffuse = -1;

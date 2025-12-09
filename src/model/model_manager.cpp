@@ -37,18 +37,18 @@ ModelManager::ModelManager(Context& context, TextureManager& textureManager)
 		models_.emplace_back(std::move(model));
 	}
 
-	{
-		glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
-		glm::vec3 initPos = glm::vec3(0.0f, 2.0f, 0.0f);
-		glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
+	//{
+	//	glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
+	//	glm::vec3 initPos = glm::vec3(0.0f, 1.0f, 1.0f);
+	//	glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
 
-		//MeshData box = GeometryGenerator::MakeTetraBox(0.2f);
-		//soft_body_ = std::make_unique<Model>(box, vku::VertexIncludeInfo{ true, true }, context, initPos, angleQuat, initColor, true, "soft_body_");
+	//	//MeshData box = GeometryGenerator::MakeTetraBox(0.2f);
+	//	//soft_body_ = std::make_unique<Model>(box, vku::VertexIncludeInfo{ true, true }, context, initPos, angleQuat, initColor, true, "soft_body_");
 
-		std::string filename = "assets/ybot.glb";
-		std::unique_ptr<Model> model = std::make_unique<Model>(filename, vku::VertexIncludeInfo{true, true}, context, textureManager, initPos, angleQuat, initColor, true, "Y Bot", 1.0f);
-		models_.emplace_back(std::move(model));
-	}
+	//	std::string filename = "assets/SheenCloth/SheenCloth.gltf";
+	//	std::unique_ptr<Model> model = std::make_unique<Model>(filename, vku::VertexIncludeInfo{true, true}, context, textureManager, initPos, angleQuat, initColor, true, "SheenCloth", 1.0f);
+	//	models_.emplace_back(std::move(model));
+	//}
 
 
 	//{

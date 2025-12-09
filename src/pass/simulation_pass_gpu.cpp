@@ -780,9 +780,9 @@ void SimulationPassGPU::CreateClothConstraintDatas()
 	}
 	datas_.num_shears = static_cast<uint32_t>(datas_.shears.size());
 
-	datas_.BuildBendConstraints(pm.positions_, pm.indices_, numTris);
+	datas_.BuildBendConstraints(pm.positions_, pm.indices_);
 
-	datas_.BuildAreaConstraints(pm.positions_, pm.indices_, numTris);
+	datas_.BuildAreaConstraints(pm.positions_, pm.indices_);
 
 }
 

@@ -312,8 +312,10 @@ void GUI::SetObjectsGUI(RowFn&& row, Objects& objects, ClothUBO& clothUBO) {
 					row("Roughness", [&] { ImGui::DragFloat("##Roughness", &object->factors_.roughness, 0.1f, 0.0f, 1.0f); });
 					row("AO", [&] { ImGui::DragFloat("##AO", &object->factors_.ao, 0.1f, 0.0f, 1.0f); });
 					row("Height", [&] { ImGui::DragFloat("##Height", &object->factors_.height, 0.001f, 0.0f, 1.0f); });
-					row("SheenWeight", [&] { ImGui::DragFloat("##SheenWeight", &object->factors_.sheen_weight, 0.001f, 0.0f, 1.0f); });
-					row("SheenRoughness", [&] { ImGui::DragFloat("##SheenRoughness", &object->factors_.sheen_roughness, 0.001f, 0.0f, 1.0f); });
+					row("Coat", [&] { ImGui::DragFloat("##Coat", &object->factors_.coat, 0.001f, 0.0f, 1.0f); });
+					row("CoatRoughness", [&] { ImGui::DragFloat("##CoatRoughness", &object->factors_.coat_roughness, 0.001f, 0.0f, 1.0f); });
+					row("Fuzz", [&] { ImGui::DragFloat("##Fuzz", &object->factors_.fuzz, 0.001f, 0.0f, 1.0f); });
+					row("FuzzRoughness", [&] { ImGui::DragFloat("##FuzzRoughness", &object->factors_.fuzz_roughness, 0.001f, 0.0f, 1.0f); });
 					ImGui::EndTable();
 				}
 
@@ -346,8 +348,10 @@ void GUI::SetObjectsGUI(RowFn&& row, Objects& objects, ClothUBO& clothUBO) {
 				row("Roughness", [&] { ImGui::DragFloat("##Roughness", &clothUBO.roughness_factor, 0.1f, 0.0f, 1.0f); });
 				row("AO", [&] { ImGui::DragFloat("##AO", &clothUBO.ao_factor, 0.1f, 0.0f, 1.0f); });
 				row("Height", [&] { ImGui::DragFloat("##Height", &clothUBO.height_factor, 0.001f, 0.0f, 1.0f); });
-				row("SheenWeight", [&] { ImGui::DragFloat("##SheenWeight", &clothUBO.sheen_weight_factor, 0.001f, 0.0f, 1.0f); });
-				row("SheenRoughness", [&] { ImGui::DragFloat("##SheenRoughness", &clothUBO.sheen_roughness_factor, 0.001f, 0.0f, 1.0f); });
+				row("Coat", [&] { ImGui::DragFloat("##Coat", &clothUBO.coat_factor, 0.001f, 0.0f, 1.0f); });
+				row("CoatRoughness", [&] { ImGui::DragFloat("##CoatRoughness", &clothUBO.coat_roughness_factor, 0.001f, 0.0f, 1.0f); });
+				row("Fuzz", [&] { ImGui::DragFloat("##Fuzz", &clothUBO.fuzz_factor, 0.001f, 0.0f, 1.0f); });
+				row("FuzzRoughness", [&] { ImGui::DragFloat("##FuzzRoughness", &clothUBO.fuzz_roughness_factor, 0.001f, 0.0f, 1.0f); });
 				ImGui::EndTable();
 			}
 

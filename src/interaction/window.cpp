@@ -250,13 +250,13 @@ void Window::ProcessKeyboard(float dt) {
 		if (glfwGetKey(glfw_window_, GLFW_KEY_E) == GLFW_PRESS)
 			camera_->position += glm::vec3(0, 1, 0) * v;
 
-		const float yawSpeed = 120.0f;
-		if (glfwGetKey(glfw_window_, GLFW_KEY_LEFT) == GLFW_PRESS) camera_->yaw -= yawSpeed * dt;
-		if (glfwGetKey(glfw_window_, GLFW_KEY_RIGHT) == GLFW_PRESS) camera_->yaw += yawSpeed * dt;
+		//const float yawSpeed = 120.0f;
+		//if (glfwGetKey(glfw_window_, GLFW_KEY_LEFT) == GLFW_PRESS) camera_->yaw -= yawSpeed * dt;
+		//if (glfwGetKey(glfw_window_, GLFW_KEY_RIGHT) == GLFW_PRESS) camera_->yaw += yawSpeed * dt;
 
-		const float pitchSpeed = 90.0f;
-		if (glfwGetKey(glfw_window_, GLFW_KEY_UP) == GLFW_PRESS) camera_->pitch = glm::clamp(camera_->pitch + pitchSpeed * dt, -89.0f, 89.0f);
-		if (glfwGetKey(glfw_window_, GLFW_KEY_DOWN) == GLFW_PRESS) camera_->pitch = glm::clamp(camera_->pitch - pitchSpeed * dt, -89.0f, 89.0f);
+		//const float pitchSpeed = 90.0f;
+		//if (glfwGetKey(glfw_window_, GLFW_KEY_UP) == GLFW_PRESS) camera_->pitch = glm::clamp(camera_->pitch + pitchSpeed * dt, -89.0f, 89.0f);
+		//if (glfwGetKey(glfw_window_, GLFW_KEY_DOWN) == GLFW_PRESS) camera_->pitch = glm::clamp(camera_->pitch - pitchSpeed * dt, -89.0f, 89.0f);
 	}
 
 	// Space

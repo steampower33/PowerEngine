@@ -12,7 +12,8 @@ layout(location = 3) in vec3 in_tangent_world;
 
 layout(location = 0) out vec4 out_albedo_metal;
 layout(location = 1) out vec4 out_normal_rough;
-layout(location = 2) out vec4 out_height_ao;
+layout(location = 2) out vec2 out_height_ao;
+layout(location = 3) out vec4 out_cozz_fuzz;
 
 void main() {
     vec4 albedo    = (object.albedo_enable == 0u || object.albedo_idx == -1) ? vec4(object.albedo.xyz, 0.0): texture(tex[nonuniformEXT(object.albedo_idx)], in_uv);
@@ -46,5 +47,6 @@ void main() {
     vec3 n = normalize(normalTS);
     out_normal_rough = vec4(n * 0.5 + 0.5, rough);
     
-    out_height_ao = vec4(height, ao, object.sheen_weight_factor, object.sheen_roughness_factor);
+    out_height_ao = vec2(height, ao);
+    out_cozz_fuzz = vec4(object.coat_factor, object.coat_roughness_factor, object.fuzz_factor, object.fuzz_roughness_factor);
 }

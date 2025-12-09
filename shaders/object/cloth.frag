@@ -4,6 +4,7 @@
 #extension GL_EXT_nonuniform_qualifier : require
 
 layout(set = 1, binding = 0) uniform Cloth {
+
     vec4 albedo;
 
     int albedo_idx;
@@ -18,8 +19,13 @@ layout(set = 1, binding = 0) uniform Cloth {
 
     float ao_factor;
     float height_factor;
-    float sheen_weight_factor;
-    float sheen_roughness_factor;
+    float coat_factor;
+    float coat_roughness_factor;
+
+    float fuzz_factor;
+    float fuzz_roughness_factor;
+    float p0;
+    float p1;
 
     uint albedo_enable;
     uint metallic_enable;
@@ -28,8 +34,8 @@ layout(set = 1, binding = 0) uniform Cloth {
 
     uint ao_enable;
     uint height_enable;
-    uint p3;
-    uint p4;
+    uint checker_board_enable;
+    uint p2;
 } cloth;
 
 layout(set = 2, binding = 0) uniform sampler2D tex[];
@@ -39,7 +45,8 @@ layout(location = 1) in vec3 in_world_normal;
 
 layout(location = 0) out vec4 out_albedo_metal;
 layout(location = 1) out vec4 out_normal_rough;
-layout(location = 2) out vec4 out_height_ao_sheen;
+layout(location = 2) out vec2 out_height_ao;
+layout(location = 3) out vec4 out_cozz_fuzz;
 
 layout(push_constant) uniform ClothPC { vec4 color; uint nx1; uint ny1; uint p0; float p1; } pc;
 
@@ -53,5 +60,6 @@ void main() {
 
     out_albedo_metal = vec4(albedo.xyz, metallic);
     out_normal_rough = vec4(normal * 0.5 + 0.5, roughness); // [-1,1] -> [0,1]
-    out_height_ao_sheen = vec4(height, ao, cloth.sheen_weight_factor, cloth.sheen_roughness_factor);
+    out_height_ao = vec2(height, ao);
+    out_cozz_fuzz = vec4(cloth.coat_factor, cloth.coat_roughness_factor, cloth.fuzz_factor, cloth.fuzz_roughness_factor);
 }

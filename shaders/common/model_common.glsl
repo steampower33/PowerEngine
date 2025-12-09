@@ -28,8 +28,13 @@ layout(set = 1, binding = 0) uniform ObjectUBO {
 
     float ao_factor;
     float height_factor;
-    float sheen_weight_factor;
-    float sheen_roughness_factor;
+    float coat_factor;
+    float coat_roughness_factor;
+
+    float fuzz_factor;
+    float fuzz_roughness_factor;
+    float p0;
+    float p1;
 
     uint albedo_enable;
     uint metallic_enable;
@@ -39,7 +44,7 @@ layout(set = 1, binding = 0) uniform ObjectUBO {
     uint ao_enable;
     uint height_enable;
     uint checker_board_enable;
-    uint p4;
+    uint p2;
 } object;
 
 layout(set = 2, binding = 0) uniform sampler2D tex[];

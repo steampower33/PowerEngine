@@ -61,8 +61,10 @@ public:
 		float roughness = 1.0f;
 		float ao = 1.0f;
 		float height = 0.0f;
-		float sheen_weight = 0.7f;
-		float sheen_roughness = 1.0f;
+		float coat = 0.0f;
+		float coat_roughness = 0.0f;
+		float fuzz = 0.0f;
+		float fuzz_roughness = 0.0f;
 	} factors_;
 
 private:

@@ -13,23 +13,23 @@ layout(set = 0, binding = 0) uniform LightUBO {
     uint light_enable;
     uint pbr_enable;
     float exposure;
+    int ggx_brdf_idx;
+    int charlie_brdf_idx;
+    int sheen_e_brdf_idx;
+    int p0;
 } light;
 
-layout(set = 0, binding = 1) uniform sampler2D out_albedo_metal;
-layout(set = 0, binding = 2) uniform sampler2D out_normal_rough;
-layout(set = 0, binding = 3) uniform sampler2D out_height_ao;
-layout(set = 0, binding = 4) uniform sampler2D out_depth;
+layout(set = 0, binding = 1) uniform sampler2D albedo_metal;
+layout(set = 0, binding = 2) uniform sampler2D normal_rough;
+layout(set = 0, binding = 3) uniform sampler2D height_ao;
+layout(set = 0, binding = 4) uniform sampler2D cozz_fuzz;
+layout(set = 0, binding = 5) uniform sampler2D depth_tex;
 
 layout(set = 1, binding = 0) uniform SkyboxUBO {
     int env_idx;
     int radiance_idx;
     int irradiance_idx;
     int specular_mip_levels;
-
-    int brdf_lut_index;
-    int p0;
-    int p1;
-    int p2;
 } skybox;
 
 layout(set = 2, binding = 0) uniform sampler2D tex[];
@@ -67,57 +67,78 @@ vec3 tonemap_aces(vec3 x)
                  0.0, 1.0);
 }
 
-vec3 eval_sheen(
-    vec3 N,
-    vec3 V,
-    vec3 albedo,
-    float sheen_weight,
-    float sheen_rough
-) {
-    if (sheen_weight <= 0.0) {
-        return vec3(0.0);
-    }
+const float PI = 3.14159265359;
 
-    float nv = max(dot(N, V), 0.0);
+float D_GGX(float NdotH, float roughness)
+{
+    float a  = roughness * roughness;
+    float a2 = a * a;
+    float NdotH2 = NdotH * NdotH;
 
-    float m = mix(8.0, 1.5, clamp(sheen_rough, 0.0, 1.0));
-    float sheen_term = pow(1.0 - nv, m);
+    float denom = NdotH2 * (a2 - 1.0) + 1.0;
+    return a2 / (PI * denom * denom);
+}
 
-    vec3 sheen_color = mix(vec3(1.0), albedo, 0.5);
+float G_SchlickGGX(float NdotX, float roughness)
+{
+    float r = roughness + 1.0;
+    float k = (r * r) / 8.0;  // UE4 ½ºÅ¸ÀÏ
 
-    return sheen_color * sheen_weight * sheen_term;
+    return NdotX / (NdotX * (1.0 - k) + k);
+}
+
+float G_Smith(float NdotL, float NdotV, float roughness)
+{
+    float g1 = G_SchlickGGX(NdotL, roughness);
+    float g2 = G_SchlickGGX(NdotV, roughness);
+    return g1 * g2;
+}
+
+vec3 fresnel_schlick(float cosTheta, vec3 F0)
+{
+    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
 void main()
 {
-    float depth = texture(out_depth, in_uv).r;
+    float depth = texture(depth_tex, in_uv).r;
     
     vec3 world_pos = reconstruct_world_pos(in_uv, depth);
     
-    vec4 am = texture(out_albedo_metal, in_uv);
-    vec4 nr = texture(out_normal_rough, in_uv);
-    vec4 ha = texture(out_height_ao, in_uv);
+    vec4 am = texture(albedo_metal, in_uv);
+    vec4 nr = texture(normal_rough, in_uv);
+    vec4 ha = texture(height_ao, in_uv);
+    vec4 cf = texture(cozz_fuzz, in_uv);
 
-    vec3 albedo    = am.rgb;
+    vec3  albedo   = am.rgb;
     float metallic = am.a;
 
-    vec3 normal = normalize(nr.rgb * 2.0 - 1.0);
+    vec3  normal    = normalize(nr.rgb * 2.0 - 1.0);
     float roughness = nr.a;
+
     float height = ha.r;
-    float ao = ha.g;
-    float sheen_weight = ha.b;
-    float sheen_rough  = ha.a;
+    float ao     = ha.g;
+    
+    float coat_factor           = cf.r;
+    float coat_roughness_factor = cf.g;
+    float fuzz_factor           = cf.b;
+    float fuzz_roughness_factor = cf.a;
 
     vec3 camera_pos = light.camera_pos.xyz;
-
     vec3 N = normal;
-
     vec3 color = albedo;
+
     if (light.pbr_enable == 1u)
     {
-    
         if (depth >= 1.0 - 1e-5) {
-            vec3 sky = texture(env_tex[nonuniformEXT(skybox.radiance_idx)], world_pos).rgb;
+            vec3 dir = normalize(world_pos - camera_pos);
+
+            vec3 sky = texture(env_tex[nonuniformEXT(skybox.radiance_idx)], dir).rgb;
+
+            float exposure = light.exposure;
+            sky *= exposure;
+            sky = tonemap_aces(sky);
+
             out_color = vec4(sky, 1.0);
             return;
         }
@@ -125,44 +146,90 @@ void main()
         vec3 V = normalize(camera_pos - world_pos);
         float n_dot_v = max(dot(N, V), 0.0);
 
-        vec3 F0 = mix(vec3(0.04), albedo, metallic);
-
+        // base : diffuse IBL
         vec3 diffuse_irr = texture(env_tex[nonuniformEXT(skybox.irradiance_idx)], N).rgb;
         vec3 diffuse_ibl = diffuse_irr * albedo;
+
+        // base : specular IBL
+        vec3 F0_base = mix(vec3(0.04), albedo, metallic);
+        vec3 F_base  = fresnel_schlick_roughness(n_dot_v, F0_base, roughness);
+        vec3 kS_base = F_base;
+        vec3 kD_base = (vec3(1.0) - kS_base) * (1.0 - metallic);
 
         vec3 R = reflect(-V, N);
 
         float max_mip = float(skybox.specular_mip_levels);
-        float lod = roughness * max_mip;
 
-        vec3 prefiltered_color = textureLod(env_tex[nonuniformEXT(skybox.radiance_idx)], R, lod).rgb;
+        float lod_base = roughness * max_mip;
+        vec3 prefiltered_base = textureLod(env_tex[nonuniformEXT(skybox.radiance_idx)], R, lod_base).rgb;
 
-        vec2 brdf = texture(tex[nonuniformEXT(skybox.brdf_lut_index)], vec2(n_dot_v, roughness)).rg;
-
-        vec3 F = fresnel_schlick_roughness(n_dot_v, F0, roughness);
-        vec3 kS = F;
-        vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
-
-        vec3 specular_ibl = prefiltered_color * (F * brdf.x + brdf.y);
-
-        vec3 ambient_diffuse = kD * diffuse_ibl * ao;
-        vec3 ambient_spec    = specular_ibl;
-        vec3 base_ibl        = ambient_diffuse + ambient_spec;
+        vec2 brdf_base = texture(tex[nonuniformEXT(light.ggx_brdf_idx)], vec2(n_dot_v, roughness)).rg;
+        vec3 specular_ibl_base = prefiltered_base * (F_base * brdf_base.x + brdf_base.y);
         
-        vec3 sheen_ibl = eval_sheen(N, V, albedo, sheen_weight, sheen_rough);
-        
-        float sheen_mag = clamp(max(max(sheen_ibl.r, sheen_ibl.g), sheen_ibl.b), 0.0, 1.0);
-        float base_scale = 1.0 - 0.5 * sheen_mag;
+        vec3 ambient_diffuse = kD_base * diffuse_ibl * ao;
+        vec3 ambient_spec    = specular_ibl_base;
      
-        color = ambient_diffuse + ambient_spec;
+        vec3 base_ibl = ambient_diffuse + ambient_spec;
 
-        color = base_ibl * base_scale + sheen_ibl;
-        
-        color = max(color, vec3(0.0));
-    
+        // coat
+        vec3 coat_ibl = vec3(0.0);
+        if (coat_factor > 0.0) {
+            float coat_roughness = clamp(coat_roughness_factor, 0.0, 1.0);
+
+            vec3 F0_coat = vec3(0.04);
+
+            float lod_coat = coat_roughness_factor * max_mip;
+            vec3 prefiltered_coat = textureLod(
+                env_tex[nonuniformEXT(skybox.radiance_idx)], R, lod_coat
+            ).rgb;
+
+            vec2 brdf_coat = texture(
+                tex[nonuniformEXT(light.ggx_brdf_idx)],
+                vec2(n_dot_v, coat_roughness_factor)
+            ).rg;
+
+            vec3 F_coat = fresnel_schlick_roughness(n_dot_v, F0_coat, coat_roughness_factor);
+
+            coat_ibl = prefiltered_coat * (F_coat * brdf_coat.x + brdf_coat.y);
+            coat_ibl *= coat_factor;
+
+            vec3 coat_transmit = vec3(1.0) - F_coat * coat_factor;
+            coat_transmit = clamp(coat_transmit, 0.0, 1.0);
+            base_ibl *= coat_transmit;
+        }
+
+        // fuzz
+        vec3 fuzz_ibl = vec3(0.0);
+        if (fuzz_factor > 0.0) {
+            float fuzz_roughness = clamp(fuzz_roughness_factor, 0.0, 1.0);
+
+            float lod_fuzz = fuzz_roughness * max_mip;
+            vec3 prefiltered_fuzz = textureLod(
+                env_tex[nonuniformEXT(skybox.radiance_idx)], R, lod_fuzz
+            ).rgb;
+            
+            vec2 sheen_e = texture(tex[nonuniformEXT(light.sheen_e_brdf_idx)],
+                       vec2(n_dot_v, fuzz_roughness)).rg;
+
+            vec3 fuzz_color = mix(vec3(1.0), albedo, 0.5);
+
+            vec3 fuzz_spec = prefiltered_base * (fuzz_color * sheen_e.x + sheen_e.y);
+            fuzz_spec *= fuzz_factor;
+            fuzz_ibl = fuzz_spec;
+
+            float fuzzEnergy = clamp(fuzz_factor * 0.5, 0.0, 1.0);
+            base_ibl *= (1.0 - fuzzEnergy);
+        }
+
+        vec3 ibl = base_ibl + coat_ibl + fuzz_ibl;
+
+        ibl = max(ibl, vec3(0.0));
+
         float exposure = light.exposure;
-        color *= exposure;
-        color  = tonemap_aces(color);
+        ibl *= exposure;
+        ibl  = tonemap_aces(ibl);
+
+        color = ibl;
     }
     
     if (light.light_enable == 1u)
@@ -173,36 +240,45 @@ void main()
         }
 
         vec3 light_pos = light.position;
-        vec3 V = normalize(light.camera_pos.xyz - world_pos);
+
+        vec3 V = normalize(camera_pos - world_pos);
         vec3 L = normalize(light_pos - world_pos);
-        vec3 H = normalize(L + V);
-        vec3 L_dir = normalize(light.direction);
-        float cos_theta = dot(-L_dir, L);
-        float spot = smoothstep(cos(radians(light.outer)), cos(radians(light.inner)), cos_theta);
+        vec3 H = normalize(V + L);
+
+        float NdotL = max(dot(N, L), 0.0);
+        float NdotV = max(dot(N, V), 0.0);
+        float NdotH = max(dot(N, H), 0.0);
+        float VdotH = max(dot(V, H), 0.0);
+
+        vec3 spotAxis = normalize(light.direction);
+        float cos_theta = dot(spotAxis, -L);
+        float innerCos = cos(radians(light.inner));
+        float outerCos = cos(radians(light.outer));
+        float spot = smoothstep(outerCos, innerCos, cos_theta);
         float dist = length(light_pos - world_pos);
         float attenuation = 1.0 / (dist * dist);
+        
+        vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
-        float diff = max(dot(N, L), 0.0);
-        float spec = pow(max(dot(N, H), 0.0), 1000.0f);
-        vec3 specular_color = vec3(1.0);
+        vec3 F = fresnel_schlick(VdotH, F0);
 
-        vec3 direct = (color * diff + specular_color * spec);
+        float D = D_GGX(NdotH, roughness);
+        float G = G_Smith(NdotL, NdotV, roughness);
 
-        float sheen_weight = ha.b;
-        float sheen_rough  = ha.a;
+        float denom = max(4.0 * NdotL * NdotV, 1e-4);
+        vec3  specBRDF = (D * G * F) / denom;
+        
+        vec3 kS = F;
+        vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
 
-        float nv = max(dot(N, V), 0.0);
-        float m = mix(8.0, 1.5, clamp(sheen_rough, 0.0, 1.0));
-        float sheen_term = pow(1.0 - nv, m);
+        vec3 diffuseBRDF = kD * albedo / PI;
 
-        vec3 sheen_color = mix(vec3(1.0), albedo, 0.5);
+        vec3 brdf = diffuseBRDF + specBRDF;
 
-        float nl = max(dot(N, L), 0.0);
-        vec3 sheen_direct = sheen_color * sheen_weight * sheen_term * nl;
+        vec3 direct = brdf * NdotL * light.intensity * attenuation * spot;
 
-        direct += sheen_direct;
-
-        color = direct * light.intensity * attenuation * spot;
+        color = direct;
     }
+
     out_color = vec4(color, 1.0);
 }

@@ -29,11 +29,6 @@ public:
 		struct Global {
 			glm::mat4 view;
 			glm::mat4 proj;
-
-			uint32_t vulkan_thumbnail_index;
-			uint32_t p1;
-			uint32_t p2;
-			uint32_t p3;
 		} global;
 		static_assert(sizeof(UBOData::Global) % 16 == 0, "std140 must be 16-byte aligned.");
 
@@ -54,8 +49,13 @@ public:
 
 			float ao_factor = 0.0f;
 			float height_factor = 0.0f;
-			float sheen_weight_factor = 0.0f;
-			float sheen_roughness_factor = 0.0f;
+			float coat_factor = 0.0f;
+			float coat_roughness_factor = 0.0f;
+
+			float fuzz_factor = 0.0f;
+			float fuzz_roughness_factor = 0.0f;
+			float p0;
+			float p1;
 
 			uint32_t albedo_enable = 0;
 			uint32_t metallic_enable = 0;
@@ -64,22 +64,30 @@ public:
 
 			uint32_t ao_enable = 0;
 			uint32_t height_enable = 0;
-			uint32_t checker_board_enable = 1;
-			uint32_t p4;
+			uint32_t checker_board_enable = 0;
+			uint32_t p2;
 		} object;
 		static_assert(sizeof(UBOData::Object) % 16 == 0, "std140 must be 16-byte aligned.");
 
 		struct Light {
 			glm::mat4 invViewProj{};
 			glm::vec4 cameraPos{};
+
 			glm::vec3 position{ 0.0f, 5.0f, 5.0f };
 			float intensity = 20.0f;
+
 			glm::vec3 direction{ 0.0f, -1.0f, -1.0f };
 			float inner = 0.0f;
+
 			float outer = 90.0f;
 			uint32_t light_enable = 0;
 			uint32_t pbr_enable = 1;
 			float exposure = 0.8f;
+
+			int ggx_brdf_idx = 0;
+			int charlie_brdf_idx = 0;
+			int sheen_e_brdf_idx = 0;
+			int p0;
 		} light;
 		static_assert(sizeof(UBOData::Light) % 16 == 0, "std140 must be 16-byte aligned.");
 
@@ -88,11 +96,6 @@ public:
 			int specular_idx = 0;
 			int diffuse_idx = 0;
 			uint32_t specular_mip_levels = 0;
-
-			int brdfIndex = 0;
-			uint32_t p0 = 0;
-			uint32_t p1 = 0;
-			uint32_t p2 = 0;
 		} skybox;
 		static_assert(sizeof(UBOData::SkyBox) % 16 == 0, "std140 must be 16-byte aligned.");
 
@@ -111,8 +114,13 @@ public:
 
 			float ao_factor = 1.0f;
 			float height_factor = 0.0f;
-			float sheen_weight_factor = 0.7f;
-			float sheen_roughness_factor = 1.0f;
+			float coat_factor = 0.0f;
+			float coat_roughness_factor = 0.0f;
+
+			float fuzz_factor = 0.0f;
+			float fuzz_roughness_factor = 0.0f;
+			float p0;
+			float p1;
 
 			uint32_t albedo_enable = 0;
 			uint32_t metallic_enable = 0;
@@ -121,8 +129,8 @@ public:
 
 			uint32_t ao_enable = 0;
 			uint32_t height_enable = 0;
-			uint32_t p3;
-			uint32_t p4;
+			uint32_t checker_board_enable = 0;
+			uint32_t p2;
 		} cloth;
 		static_assert(sizeof(Cloth) % 16 == 0, "std140 must be 16-byte aligned.");
 
@@ -259,6 +267,10 @@ private:
 		vk::raii::Image height_ao_image = nullptr;
 		vk::raii::DeviceMemory height_ao_image_memory = nullptr;
 		vk::raii::ImageView height_ao_image_view = nullptr;
+
+		vk::raii::Image coat_fuzz_image = nullptr;
+		vk::raii::DeviceMemory coat_fuzz_image_memory = nullptr;
+		vk::raii::ImageView coat_fuzz_image_view = nullptr;
 
 	} geometry_buffers_;
 

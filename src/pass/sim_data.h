@@ -4,8 +4,8 @@ struct SimData {
 
 	struct Compliance {
 		float stretch = 1e-6f;
-		float softbody_stretch = 1e-9f;
-		float softbody_volume = 1e-9f;
+		float softbody_stretch = 1e-6f;
+		float softbody_volume = 1e-6f;
 		float shear = 1e-6f;
 		float bend = 1.0f;
 		float area = 1.0f;
@@ -120,12 +120,12 @@ struct SimData {
 		return phi;
 	}
 
-	void BuildBendConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices, uint32_t numTris)
+	void BuildBendConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices)
 	{
 		bends.clear();
 
 		std::unordered_map<EdgeKey, std::pair<TriRef, TriRef>, EdgeKeyHash> edgeMap;
-		edgeMap.reserve(numTris * 3);
+		edgeMap.reserve(indices.size());
 
 		auto make_edge = [](uint32_t i, uint32_t j) {
 			EdgeKey k;
@@ -134,20 +134,20 @@ struct SimData {
 			return k;
 			};
 
-		for (uint32_t t = 0; t < numTris; ++t)
+		for (size_t i = 0; i < indices.size(); i += 3)
 		{
-			uint32_t i0 = indices[3 * t + 0];
-			uint32_t i1 = indices[3 * t + 1];
-			uint32_t i2 = indices[3 * t + 2];
+			uint32_t i0 = indices[i];
+			uint32_t i1 = indices[i + 1];
+			uint32_t i2 = indices[i + 2];
 
 			// tri edges: (i0,i1), (i1,i2), (i2,i0)
 			EdgeKey e01 = make_edge(i0, i1);
 			EdgeKey e12 = make_edge(i1, i2);
 			EdgeKey e20 = make_edge(i2, i0);
 
-			TriRef r0{ t, i2 };
-			TriRef r1{ t, i0 };
-			TriRef r2{ t, i1 };
+			TriRef r0{ i, i2 };
+			TriRef r1{ i, i0 };
+			TriRef r2{ i, i1 };
 
 			auto insert_ref = [&](const EdgeKey& e, const TriRef& r)
 				{
@@ -201,13 +201,13 @@ struct SimData {
 	}
 
 
-	void BuildAreaConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices, uint32_t numTris)
+	void BuildAreaConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices)
 	{
-		for (size_t t = 0; t < numTris; t += 3)
+		for (size_t i = 0; i < indices.size(); i += 3)
 		{
-			uint32_t i0 = indices[t];
-			uint32_t i1 = indices[t + 1];
-			uint32_t i2 = indices[t + 2];
+			uint32_t i0 = indices[i];
+			uint32_t i1 = indices[i + 1];
+			uint32_t i2 = indices[i + 2];
 
 			glm::vec3 p0 = positions[i0];
 			glm::vec3 p1 = positions[i1];

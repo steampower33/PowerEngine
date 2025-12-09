@@ -66,8 +66,10 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera)
 			ubo_datas_.object.metallic_factor = model_manager_.models_[i]->factors_.metallic;
 			ubo_datas_.object.roughness_factor = model_manager_.models_[i]->factors_.roughness;
 			ubo_datas_.object.ao_factor = model_manager_.models_[i]->factors_.ao;
-			ubo_datas_.object.sheen_weight_factor = model_manager_.models_[i]->factors_.sheen_weight;
-			ubo_datas_.object.sheen_roughness_factor = model_manager_.models_[i]->factors_.sheen_roughness;
+			ubo_datas_.object.coat_factor = model_manager_.models_[i]->factors_.coat;
+			ubo_datas_.object.coat_roughness_factor = model_manager_.models_[i]->factors_.coat_roughness;
+			ubo_datas_.object.fuzz_factor = model_manager_.models_[i]->factors_.fuzz;
+			ubo_datas_.object.fuzz_roughness_factor = model_manager_.models_[i]->factors_.fuzz_roughness;
 
 			ubo_datas_.object.albedo_enable = model_manager_.models_[i]->texture_enable_.albedo;
 			ubo_datas_.object.metallic_enable = model_manager_.models_[i]->texture_enable_.metallic;
@@ -102,7 +104,6 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera)
 		if (tm.skybox_enable_.morning)
 		{
 			tm.skybox_enable_.morning = false;
-			ubo_datas_.skybox.brdfIndex = tm.skybox_index_.morning_brdf;
 			ubo_datas_.skybox.env_idx = tm.skybox_index_.morning_env;
 			ubo_datas_.skybox.specular_idx = tm.skybox_index_.morning_specular;
 			ubo_datas_.skybox.diffuse_idx = tm.skybox_index_.morning_diffuse;
@@ -112,7 +113,6 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera)
 		if (tm.skybox_enable_.evening)
 		{
 			tm.skybox_enable_.evening = false;
-			ubo_datas_.skybox.brdfIndex = tm.skybox_index_.evening_brdf;
 			ubo_datas_.skybox.env_idx = tm.skybox_index_.evening_env;
 			ubo_datas_.skybox.specular_idx = tm.skybox_index_.evening_specular;
 			ubo_datas_.skybox.diffuse_idx = tm.skybox_index_.evening_diffuse;
@@ -122,7 +122,6 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera)
 		if (tm.skybox_enable_.night)
 		{
 			tm.skybox_enable_.night = false;
-			ubo_datas_.skybox.brdfIndex = tm.skybox_index_.night_brdf;
 			ubo_datas_.skybox.env_idx = tm.skybox_index_.night_env;
 			ubo_datas_.skybox.specular_idx = tm.skybox_index_.night_specular;
 			ubo_datas_.skybox.diffuse_idx = tm.skybox_index_.night_diffuse;
@@ -190,6 +189,7 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 	toShaderWrite(geometry_buffers_.albedo_mettalic_image);
 	toShaderWrite(geometry_buffers_.normal_roughness_image);
 	toShaderWrite(geometry_buffers_.height_ao_image);
+	toShaderWrite(geometry_buffers_.coat_fuzz_image);
 
 	vku::TransitionImageLayoutCustom(
 		depth_image_,
@@ -204,7 +204,7 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 		vk::ImageAspectFlagBits::eDepth
 	);
 
-	std::array<vk::RenderingAttachmentInfo, 3> gbufferAttachments;
+	std::array<vk::RenderingAttachmentInfo, 4> gbufferAttachments;
 
 	auto renderingAttachmentInfo = [&](vk::raii::ImageView& imageView, vk::ClearValue clearColor) {
 		return vk::RenderingAttachmentInfo{
@@ -224,6 +224,8 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 	gbufferAttachments[1] = renderingAttachmentInfo(geometry_buffers_.normal_roughness_image_view, clearColor1);
 	vk::ClearValue clearColor2 = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f); // height+AO
 	gbufferAttachments[2] = renderingAttachmentInfo(geometry_buffers_.height_ao_image_view, clearColor2);
+	vk::ClearValue clearColor3 = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f); // coat+fuzz
+	gbufferAttachments[3] = renderingAttachmentInfo(geometry_buffers_.coat_fuzz_image_view, clearColor3);
 
 	vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
 	// Depth attachment
@@ -421,6 +423,7 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 	toShaderRead(geometry_buffers_.albedo_mettalic_image);
 	toShaderRead(geometry_buffers_.normal_roughness_image);
 	toShaderRead(geometry_buffers_.height_ao_image);
+	toShaderRead(geometry_buffers_.coat_fuzz_image);
 
 	vku::TransitionImageLayoutCustom(
 		depth_image_,
@@ -702,11 +705,18 @@ void GraphicsPass::CreateDescriptorSetLayout()
 				1,
 				vk::ShaderStageFlagBits::eFragment,
 				nullptr
+			),
+			vk::DescriptorSetLayoutBinding(
+				5,
+				vk::DescriptorType::eCombinedImageSampler,
+				1,
+				vk::ShaderStageFlagBits::eFragment,
+				nullptr
 			)
 		};
 
 		counts_.ubo += 1;
-		counts_.sampler += 4;
+		counts_.sampler += 5;
 		counts_.layout += 1;
 
 		vk::DescriptorSetLayoutCreateInfo layoutInfo{
@@ -813,8 +823,6 @@ void GraphicsPass::CreateUniformBuffers()
 		ubos_.global = std::move(buffer);
 		ubo_memories_.global = std::move(bufferMem);
 		ubo_mapped_.global = ubo_memories_.global.mapMemory(0, totalSize);
-
-		ubo_datas_.global.vulkan_thumbnail_index = texture_manager_.vulkan_thumbnail_index_;
 	}
 
 	// Object
@@ -853,6 +861,10 @@ void GraphicsPass::CreateUniformBuffers()
 		ubos_.light = std::move(buffer);
 		ubo_memories_.light = std::move(bufferMem);
 		ubo_mapped_.light = ubo_memories_.light.mapMemory(0, totalSize);
+
+		ubo_datas_.light.ggx_brdf_idx = texture_manager_.brdf_index_.ggx;
+		ubo_datas_.light.charlie_brdf_idx = texture_manager_.brdf_index_.charlie;
+		ubo_datas_.light.sheen_e_brdf_idx = texture_manager_.brdf_index_.sheen_e;
 	}
 
 	// Skybox
@@ -873,7 +885,6 @@ void GraphicsPass::CreateUniformBuffers()
 		ubo_memories_.skybox = std::move(bufferMem);
 		ubo_mapped_.skybox = ubo_memories_.skybox.mapMemory(0, totalSize);
 
-		ubo_datas_.skybox.brdfIndex = texture_manager_.skybox_index_.morning_brdf;
 		ubo_datas_.skybox.env_idx = texture_manager_.skybox_index_.morning_env;
 		ubo_datas_.skybox.specular_idx = texture_manager_.skybox_index_.morning_specular;
 		ubo_datas_.skybox.diffuse_idx = texture_manager_.skybox_index_.morning_diffuse;
@@ -903,8 +914,6 @@ void GraphicsPass::CreateUniformBuffers()
 		ubos_.cloth = std::move(buffer);
 		ubo_memories_.cloth = std::move(bufferMem);
 		ubo_mapped_.cloth = ubo_memories_.cloth.mapMemory(0, totalSize);
-
-		ubo_datas_.cloth.albedo_enable = 0;
 		ubo_datas_.cloth.albedo_idx = 0;
 	}
 }
@@ -977,7 +986,7 @@ void GraphicsPass::CreateDescriptorSets()
 
 		vk::DescriptorBufferInfo lightUboBufferInfo{ *ubos_.light, 0, sizeof(UBOData::Light) };
 
-		std::array<vk::DescriptorImageInfo, 3> gbufferInfos{
+		std::array<vk::DescriptorImageInfo, 4> gbufferInfos{
 			vk::DescriptorImageInfo{
 				.sampler = *geometry_buffers_.sampler,
 				.imageView = *geometry_buffers_.albedo_mettalic_image_view,
@@ -991,6 +1000,11 @@ void GraphicsPass::CreateDescriptorSets()
 			vk::DescriptorImageInfo{
 				.sampler = *geometry_buffers_.sampler,
 				.imageView = *geometry_buffers_.height_ao_image_view,
+				.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
+			},
+			vk::DescriptorImageInfo{
+				.sampler = *geometry_buffers_.sampler,
+				.imageView = *geometry_buffers_.coat_fuzz_image_view,
 				.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
 			},
 		};
@@ -1037,6 +1051,14 @@ void GraphicsPass::CreateDescriptorSets()
 			vk::WriteDescriptorSet{
 				.dstSet = *sets_.lighting,
 				.dstBinding = 4,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eCombinedImageSampler,
+				.pImageInfo = &gbufferInfos[3]
+			},
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.lighting,
+				.dstBinding = 5,
 				.dstArrayElement = 0,
 				.descriptorCount = 1,
 				.descriptorType = vk::DescriptorType::eCombinedImageSampler,
@@ -1177,7 +1199,7 @@ void GraphicsPass::CreateGeometryBuffers()
 
 	//RT1 : normal + roughness ¡æ VK_FORMAT_R8G8B8A8_UNORM
 	{
-		vk::Format format = vk::Format::eR16G16B16A16Sfloat;
+		vk::Format format = vk::Format::eR8G8B8A8Unorm;
 		geometry_buffers_.formats.push_back(format);
 		auto& image = geometry_buffers_.normal_roughness_image;
 		auto& imageView = geometry_buffers_.normal_roughness_image_view;
@@ -1192,13 +1214,30 @@ void GraphicsPass::CreateGeometryBuffers()
 		imageView = vku::CreateImageView(context_.device_, image, format, vk::ImageAspectFlagBits::eColor, 1);
 	}
 
-	//RT2 : height + ao + sheen weight + sheen roughness ¡æ VK_FORMAT_R8G8B8A8_UNORM
+	//RT2 : height + ao ¡æ VK_FORMAT_R8G8_UNORM
 	{
-		vk::Format format = vk::Format::eR8G8B8A8Unorm;
+		vk::Format format = vk::Format::eR8G8Unorm;
 		geometry_buffers_.formats.push_back(format);
 		auto& image = geometry_buffers_.height_ao_image;
 		auto& imageView = geometry_buffers_.height_ao_image_view;
 		auto& memory = geometry_buffers_.height_ao_image_memory;
+		vku::CreateImage(
+			context_.physical_device_, context_.device_,
+			swapchain_.swapchain_extent_.width, swapchain_.swapchain_extent_.height,
+			1, vk::SampleCountFlagBits::e1,
+			format, vk::ImageTiling::eOptimal,
+			vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
+			vk::MemoryPropertyFlagBits::eDeviceLocal, image, memory);
+		imageView = vku::CreateImageView(context_.device_, image, format, vk::ImageAspectFlagBits::eColor, 1);
+	}
+
+	//RT3 : coat + coat_roughness + fuzz + fuzz_roughness ¡æ VK_FORMAT_R8G8B8A8_UNORM
+	{
+		vk::Format format = vk::Format::eR8G8B8A8Unorm;
+		geometry_buffers_.formats.push_back(format);
+		auto& image = geometry_buffers_.coat_fuzz_image;
+		auto& imageView = geometry_buffers_.coat_fuzz_image_view;
+		auto& memory = geometry_buffers_.coat_fuzz_image_memory;
 		vku::CreateImage(
 			context_.physical_device_, context_.device_,
 			swapchain_.swapchain_extent_.width, swapchain_.swapchain_extent_.height,
@@ -1269,7 +1308,7 @@ void GraphicsPass::CreateGraphicsPipelines()
 		.stencilTestEnable = vk::False
 	};
 
-	std::array<vk::PipelineColorBlendAttachmentState, 3> colorBlendAttachments{};
+	std::array<vk::PipelineColorBlendAttachmentState, 4> colorBlendAttachments{};
 	for (auto& a : colorBlendAttachments) {
 		a.colorWriteMask =
 			vk::ColorComponentFlagBits::eR |
