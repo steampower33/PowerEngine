@@ -24,7 +24,6 @@ Window::Window()
 	//init_width_ = static_cast<int>(1440);
 	//init_height_ = static_cast<int>(init_width_ * 9.0f / 16.0f);
 
-
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
 	glfw_window_ = glfwCreateWindow(init_width_, init_height_, "Vulkan", nullptr, nullptr);

@@ -69,14 +69,27 @@ vec3 tonemap_aces(vec3 x)
 
 const float PI = 3.14159265359;
 
-float D_GGX(float NdotH, float roughness)
+float D_GGX(float n_dot_h, float roughness)
 {
     float a  = roughness * roughness;
     float a2 = a * a;
-    float NdotH2 = NdotH * NdotH;
+    float n_dot_h2 = n_dot_h * n_dot_h;
 
-    float denom = NdotH2 * (a2 - 1.0) + 1.0;
+    float denom = n_dot_h2 * (a2 - 1.0) + 1.0;
     return a2 / (PI * denom * denom);
+}
+
+float D_Charlie(float NdotH, float roughness)
+{
+    float invAlpha = 1.0 / (roughness * roughness + 1e-6); 
+
+    float cos2 = NdotH * NdotH;
+    float sin2 = max(1.0 - cos2, 0.0);
+    float sinTheta = sqrt(sin2);
+
+    // (2 + 1/alpha) * sinTheta^(1/alpha) / (2¥ð)
+    float power = pow(sinTheta, invAlpha);
+    return ( (2.0 + invAlpha) * power ) * (1.0 / (2.0 * PI));
 }
 
 float G_SchlickGGX(float NdotX, float roughness)
@@ -87,10 +100,10 @@ float G_SchlickGGX(float NdotX, float roughness)
     return NdotX / (NdotX * (1.0 - k) + k);
 }
 
-float G_Smith(float NdotL, float NdotV, float roughness)
+float G_Smith(float n_dot_l, float n_dot_v, float roughness)
 {
-    float g1 = G_SchlickGGX(NdotL, roughness);
-    float g2 = G_SchlickGGX(NdotV, roughness);
+    float g1 = G_SchlickGGX(n_dot_l, roughness);
+    float g2 = G_SchlickGGX(n_dot_v, roughness);
     return g1 * g2;
 }
 
@@ -213,7 +226,7 @@ void main()
 
             vec3 fuzz_color = mix(vec3(1.0), albedo, 0.5);
 
-            vec3 fuzz_spec = prefiltered_base * (fuzz_color * sheen_e.x + sheen_e.y);
+            vec3 fuzz_spec = prefiltered_fuzz * (fuzz_color * sheen_e.x + sheen_e.y);
             fuzz_spec *= fuzz_factor;
             fuzz_ibl = fuzz_spec;
 
@@ -245,39 +258,80 @@ void main()
         vec3 L = normalize(light_pos - world_pos);
         vec3 H = normalize(V + L);
 
-        float NdotL = max(dot(N, L), 0.0);
-        float NdotV = max(dot(N, V), 0.0);
-        float NdotH = max(dot(N, H), 0.0);
-        float VdotH = max(dot(V, H), 0.0);
+        float n_dot_l = max(dot(N, L), 0.0);
+        float n_dot_v = max(dot(N, V), 0.0);
+        float n_dot_h = max(dot(N, H), 0.0);
+        float v_dot_h = max(dot(V, H), 0.0);
 
         vec3 spotAxis = normalize(light.direction);
         float cos_theta = dot(spotAxis, -L);
-        float innerCos = cos(radians(light.inner));
-        float outerCos = cos(radians(light.outer));
-        float spot = smoothstep(outerCos, innerCos, cos_theta);
+        float inner_cos = cos(radians(light.inner));
+        float outer_cos = cos(radians(light.outer));
+        float spot = smoothstep(outer_cos, inner_cos, cos_theta);
         float dist = length(light_pos - world_pos);
         float attenuation = 1.0 / (dist * dist);
+
+        vec3 F0_base = mix(vec3(0.04), albedo, metallic);
+        vec3 F_base  = fresnel_schlick(v_dot_h, F0_base);
         
-        vec3 F0 = mix(vec3(0.04), albedo, metallic);
+        float D_base = D_GGX(n_dot_h, roughness);
+        float G_base = G_Smith(n_dot_l, n_dot_v, roughness);
 
-        vec3 F = fresnel_schlick(VdotH, F0);
+        float denom_base = max(4.0 * n_dot_l * n_dot_v, 1e-4);
+        vec3 spec_brdf_base = (D_base * G_base * F_base) / denom_base;
 
-        float D = D_GGX(NdotH, roughness);
-        float G = G_Smith(NdotL, NdotV, roughness);
+        vec3 kS_base = F_base;
+        vec3 kD_base = (vec3(1.0) - kS_base) * (1.0 - metallic);
 
-        float denom = max(4.0 * NdotL * NdotV, 1e-4);
-        vec3  specBRDF = (D * G * F) / denom;
+        vec3 diffuse_brdf_base = kD_base * albedo / PI;
+        vec3 brdf_base = diffuse_brdf_base + spec_brdf_base;
+
+        vec3 direct_base = brdf_base * n_dot_l * light.intensity * attenuation * spot;
+
+        vec3 direct_coat = vec3(0.0);
+        if (coat_factor > 0.0)
+        {
+            float coat_rough = clamp(coat_roughness_factor, 0.0, 1.0);
+
+            vec3 F0_coat = vec3(0.04);
+            vec3 F_coat = fresnel_schlick(v_dot_h, F0_coat);
+
+            float D_coat = D_GGX(n_dot_h, coat_rough);
+            float G_coat = G_Smith(n_dot_l, n_dot_v, coat_rough);
+
+            float denom_coat = max(4.0 * n_dot_l * n_dot_v, 1e-4);
+            vec3 spec_brdf_coat = (D_coat * G_coat * F_coat) / denom_coat;
+
+            direct_coat = spec_brdf_coat * n_dot_l
+                              * light.intensity * attenuation * spot
+                              * coat_factor;
+                              
+            vec3 coatTransmit = vec3(1.0) - F_coat * coat_factor;
+            coatTransmit = clamp(coatTransmit, 0.0, 1.0);
+            direct_base *= coatTransmit;
+        }
+
+        vec3 direct_fuzz = vec3(0.0);
+        if (fuzz_factor > 0.0)
+        {
+            float fuzz_rough = clamp(fuzz_roughness_factor, 0.0, 1.0);
+            
+            float D_fuzz = D_Charlie(n_dot_h, fuzz_rough);
+            vec3 fuzz_color = mix(vec3(1.0), albedo, 0.5);
+
+            vec3 spec_brdf_fuzz = D_fuzz * fuzz_color;
+
+            direct_fuzz = spec_brdf_fuzz * n_dot_l
+                              * light.intensity * attenuation * spot
+                              * fuzz_factor;
+
+            float fuzzEnergy = clamp(fuzz_factor * 0.5, 0.0, 1.0);
+            direct_base *= (1.0 - fuzzEnergy);
+            direct_coat *= (1.0 - fuzzEnergy);
+        }
         
-        vec3 kS = F;
-        vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
-
-        vec3 diffuseBRDF = kD * albedo / PI;
-
-        vec3 brdf = diffuseBRDF + specBRDF;
-
-        vec3 direct = brdf * NdotL * light.intensity * attenuation * spot;
-
-        color = direct;
+        vec3 direct = direct_base + direct_coat + direct_fuzz;
+        color = tonemap_aces(direct);
     }
 
     out_color = vec4(color, 1.0);
