@@ -105,7 +105,7 @@ void GUI::SetStyle()
 	style.FrameRounding = 4.0f;
 	style.GrabRounding = 4.0f;
 	style.ScrollbarRounding = 4.0f;
-	style.FontScaleMain = 2.0f;
+	style.FontScaleMain = 2.0f * swapchain_.swapchain_extent_.width / 2560.0f;
 
 	ImVec4* colors = style.Colors;
 
@@ -202,22 +202,22 @@ void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera, bool paused
 		ImGuiWindowFlags_NoResize |
 		ImGuiWindowFlags_NoMove;
 
-	float spacing = 10.0f;
+	float spacing = swapchain_.swapchain_extent_.width * 0.004f;
 
 	// Left Side
-	ImVec2 scenePos{ spacing, spacing };
-	ImVec2 sceneSize{ 500.0f, 200.0f };
+	ImVec2 sceneGuiPos{ spacing, spacing };
+	ImVec2 sceneGuiSize{ swapchain_.swapchain_extent_.width * 0.2f, swapchain_.swapchain_extent_.height * 0.15f };
 
-	ImGui::SetNextWindowPos(scenePos);
-	ImGui::SetNextWindowSize(sceneSize);
+	ImGui::SetNextWindowPos(sceneGuiPos);
+	ImGui::SetNextWindowSize(sceneGuiSize);
 	if (ImGui::Begin("Scene", nullptr, wf))
 	{
 		SetTestSceneGUI(row, pass_manager_.test_scene_);
 	}
 	ImGui::End();
 
-	ImVec2 optionPos{ scenePos.x, scenePos.y + sceneSize.y + spacing };
-	ImVec2 optionSize{ sceneSize.x, swapchain_.swapchain_extent_.height - optionPos.y - spacing };
+	ImVec2 optionPos{ sceneGuiPos.x, sceneGuiPos.y + sceneGuiSize.y + spacing };
+	ImVec2 optionSize{ sceneGuiSize.x, swapchain_.swapchain_extent_.height - optionPos.y - spacing };
 	ImGui::SetNextWindowPos(optionPos);
 	ImGui::SetNextWindowSize(optionSize);
 	if (ImGui::Begin("Option", nullptr, wf))
@@ -234,8 +234,10 @@ void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera, bool paused
 	ImGui::End();
 
 	// Right Side
-	ImGui::SetNextWindowSize(ImVec2(600.0f, 0));
-	ImGui::SetNextWindowPos(ImVec2(swapchain_.swapchain_extent_.width - 610.0f, spacing));
+	ImVec2 statGuiPos{ swapchain_.swapchain_extent_.width - swapchain_.swapchain_extent_.width * 0.25f - spacing, spacing };
+	ImVec2 StatGuiSize{ swapchain_.swapchain_extent_.width * 0.25f, 0 };
+	ImGui::SetNextWindowPos(statGuiPos);
+	ImGui::SetNextWindowSize(StatGuiSize);
 	if (ImGui::Begin("Cloth Performance Monitor", nullptr, wf))
 	{
 		SetStatGUI(row);
