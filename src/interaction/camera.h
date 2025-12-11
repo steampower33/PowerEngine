@@ -9,10 +9,10 @@ struct Camera {
     Camera(Camera&&) = delete;
     Camera& operator=(Camera&&) = delete;
 
-    glm::vec3 position{ -1.445, 2.97731, 1.24026 };
-    float yaw = -46.1999;
-    float pitch = -41;
-    float fov = 60.0f;    // ¡‹
+    glm::vec3 position{ -2.14521, 1.94542, 1.94562 };
+    float yaw = -44.9999;
+    float pitch = -26.36;
+    float fov = 60.0f;
     float camera_move_speed = 2.0f; // m/s
     float mouse_move_speed = 0.12f;
     float width = 0.0f;

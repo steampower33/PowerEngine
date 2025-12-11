@@ -38,8 +38,8 @@ public:
 	uint32_t softbody_particles_;
 	uint32_t softbody_indices_;
 
-	int broadphase_interval_ = 2;
-	int narrowphase_interval_ = 2;
+	int broadphase_interval_ = 3;
+	int narrowphase_interval_ = 1;
 
 	void UpdateMousePushConstant(Camera& camera, MouseInteractor& mouseInteractor, glm::vec2 viewportSize);
 	void UpdateComputeUBO(uint32_t currentFrame, ModelManager& model);

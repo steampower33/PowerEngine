@@ -4,11 +4,6 @@
 layout(set = 0, binding = 0) uniform GlobalUBO {
     mat4x4 view;
     mat4x4 proj;
-
-    uint vulkan_thumbnail_index;
-    uint p0;
-    uint p1;
-    uint p2;
 } global;
 
 layout(set = 1, binding = 0) uniform ObjectUBO {

@@ -297,27 +297,27 @@ void GUI::DisplayKernelTiming(const std::string name, std::unordered_map<std::st
 	}
 }
 
-template<typename RowFn, typename Objects, typename ClothUBO>
-void GUI::SetObjectsGUI(RowFn&& row, Objects& objects, ClothUBO& clothUBO) {
+template<typename RowFn, typename Models, typename ClothUBO>
+void GUI::SetObjectsGUI(RowFn&& row, Models& models, ClothUBO& clothUBO) {
 	if (ImGui::CollapsingHeader("Objects", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		for (auto& object : objects)
+		for (auto& model : models)
 		{
-			if (ImGui::TreeNode(object->name_.c_str()))
+			if (ImGui::TreeNode(model->name_.c_str()))
 			{
 				ImGui::SeparatorText("Factor");
 				if (ImGui::BeginTable("Factor", 2,
 					ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 				{
-					row("Albedo", [&] { ImGui::DragFloat3("##Albedo", &object->albedo_[0], 0.1f, 0.0f, 1.0f); });
-					row("Meltallic", [&] { ImGui::DragFloat("##Meltallic", &object->factors_.metallic, 0.1f, 0.0f, 1.0f); });
-					row("Roughness", [&] { ImGui::DragFloat("##Roughness", &object->factors_.roughness, 0.1f, 0.0f, 1.0f); });
-					row("AO", [&] { ImGui::DragFloat("##AO", &object->factors_.ao, 0.1f, 0.0f, 1.0f); });
-					row("Height", [&] { ImGui::DragFloat("##Height", &object->factors_.height, 0.001f, 0.0f, 1.0f); });
-					row("Coat", [&] { ImGui::DragFloat("##Coat", &object->factors_.coat, 0.001f, 0.0f, 1.0f); });
-					row("CoatRoughness", [&] { ImGui::DragFloat("##CoatRoughness", &object->factors_.coat_roughness, 0.001f, 0.0f, 1.0f); });
-					row("Fuzz", [&] { ImGui::DragFloat("##Fuzz", &object->factors_.fuzz, 0.001f, 0.0f, 1.0f); });
-					row("FuzzRoughness", [&] { ImGui::DragFloat("##FuzzRoughness", &object->factors_.fuzz_roughness, 0.001f, 0.0f, 1.0f); });
+					row("Albedo", [&] { ImGui::DragFloat3("##Albedo", &model->albedo_[0], 0.1f, 0.0f, 1.0f); });
+					row("Meltallic", [&] { ImGui::DragFloat("##Meltallic", &model->factors_.metallic, 0.1f, 0.0f, 1.0f); });
+					row("Roughness", [&] { ImGui::DragFloat("##Roughness", &model->factors_.roughness, 0.1f, 0.0f, 1.0f); });
+					row("AO", [&] { ImGui::DragFloat("##AO", &model->factors_.ao, 0.1f, 0.0f, 1.0f); });
+					row("Height", [&] { ImGui::DragFloat("##Height", &model->factors_.height, 0.001f, 0.0f, 1.0f); });
+					row("Coat", [&] { ImGui::DragFloat("##Coat", &model->factors_.coat, 0.001f, 0.0f, 1.0f); });
+					row("CoatRoughness", [&] { ImGui::DragFloat("##CoatRoughness", &model->factors_.coat_roughness, 0.001f, 0.0f, 1.0f); });
+					row("Fuzz", [&] { ImGui::DragFloat("##Fuzz", &model->factors_.fuzz, 0.001f, 0.0f, 1.0f); });
+					row("FuzzRoughness", [&] { ImGui::DragFloat("##FuzzRoughness", &model->factors_.fuzz_roughness, 0.001f, 0.0f, 1.0f); });
 					ImGui::EndTable();
 				}
 
@@ -325,14 +325,14 @@ void GUI::SetObjectsGUI(RowFn&& row, Objects& objects, ClothUBO& clothUBO) {
 				if (ImGui::BeginTable("Enable", 2,
 					ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 				{
-					row("Albedo", [&] { ImGui::Checkbox("##Albedo", &object->texture_enable_.albedo); });
-					row("Meltallic", [&] { ImGui::Checkbox("##Meltallic", &object->texture_enable_.metallic); });
-					row("Normal", [&] { ImGui::Checkbox("##Normal", &object->texture_enable_.normal); });
-					row("Roughtness", [&] { ImGui::Checkbox("##Roughtness", &object->texture_enable_.roughness); });
-					row("AO", [&] { ImGui::Checkbox("##AO", &object->texture_enable_.ao); });
-					row("Height", [&] { ImGui::Checkbox("##Height", &object->texture_enable_.height); });
-					row("CheckerBoard", [&] { ImGui::Checkbox("##CheckerBoard", &object->checker_board_enable_); });
-					row("Movable", [&] { ImGui::Checkbox("##Movable", &object->movable_); });
+					row("Albedo", [&] { ImGui::Checkbox("##Albedo", &model->texture_enable_.albedo); });
+					row("Meltallic", [&] { ImGui::Checkbox("##Meltallic", &model->texture_enable_.metallic); });
+					row("Normal", [&] { ImGui::Checkbox("##Normal", &model->texture_enable_.normal); });
+					row("Roughtness", [&] { ImGui::Checkbox("##Roughtness", &model->texture_enable_.roughness); });
+					row("AO", [&] { ImGui::Checkbox("##AO", &model->texture_enable_.ao); });
+					row("Height", [&] { ImGui::Checkbox("##Height", &model->texture_enable_.height); });
+					row("CheckerBoard", [&] { ImGui::Checkbox("##CheckerBoard", &model->checker_board_enable_); });
+					row("Movable", [&] { ImGui::Checkbox("##Movable", &model->movable_); });
 					ImGui::EndTable();
 				}
 				ImGui::TreePop();
@@ -371,6 +371,15 @@ void GUI::SetObjectsGUI(RowFn&& row, Objects& objects, ClothUBO& clothUBO) {
 			}
 			ImGui::TreePop();
 		}
+	}
+
+
+	if (ImGui::TreeNode("SkinnedModel"))
+	{
+		ImGui::Checkbox("SkinnedModelRender", &pass_manager_.graphics_pass_->skinned_model_render_);
+		ImGui::Checkbox("DebugCapsuleRender", &pass_manager_.graphics_pass_->debug_capsule_render_);
+
+		ImGui::TreePop();
 	}
 }
 

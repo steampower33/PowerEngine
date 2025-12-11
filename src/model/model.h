@@ -21,6 +21,9 @@ public:
 	~Model() = default;
 
 	void ApplyTransform(glm::vec3 scaleDelta, glm::quat rotationDelta, glm::vec3 translationDelta);
+	void ApplyAnimation(int clipIndex, float t);
+	void UpdateSkinMatrices();
+	void UpdateCollidersFromBones();
 
 	glm::mat4 world_{ 1.0f };
 	glm::vec3 position_{ 0.0f, 0.0f, 0.0f };
@@ -30,12 +33,23 @@ public:
 	bool checker_board_enable_ = false;
 	bool movable_ = false;
 
-	Mesh mesh_;
-	std::vector<Node> node_;
-	std::vector<Skin> skin_;
+	enum Type {
+		NORMAL,
+		SKINNED
+	} type_;
 
 	std::string name_;
 	glm::vec4 albedo_{ 0.0f };
+
+	Mesh mesh_;
+	std::vector<Node> node_;
+	std::vector<Skin> skin_;
+	std::vector<AnimationClip> animations_;
+	int   current_clip_ = 0;
+	float current_time_ = 0.0f; // second
+
+	std::vector<CapsuleColliderDef> collider_defs_;
+	std::vector<CapsuleInstance> collider_instances_;
 
 	struct TextureIdx {
 		int albedo = -1;
@@ -75,5 +89,6 @@ private:
 	void ParseNodes(const tinygltf::Model& model);
 	void UpdateWorldTransforms(std::vector<Node>& nodes, int nodeIndex, const glm::mat4& parent);
 	void ParseSkins(const tinygltf::Model& model);
-	void UpdateSkinMatrices(int skinIndex);
+	void ParseAnimations(const tinygltf::Model& model);
+	void SetupColliders();
 };

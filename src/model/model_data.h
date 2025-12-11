@@ -20,6 +20,7 @@ struct Node
 	int parent = -1;
 
 	std::vector<int> children;
+	std::string name;
 
 	glm::vec3 translation = glm::vec3(0.0f);
 	glm::quat rotation = glm::quat(1, 0, 0, 0);   // identity
@@ -35,7 +36,39 @@ struct Node
 struct Skin
 {
 	std::string name;
-	std::vector<int> joints;         // glTF node indices
+	std::vector<int> joints;
 	std::vector<glm::mat4> inverseBindMatrices;
 	int skeletonRoot = -1;
+	std::vector<glm::mat4> jointMatrices;
+};
+
+enum class AnimPath {
+	Translation,
+	Rotation,
+	Scale
+};
+
+struct AnimChannel {
+	int nodeIndex;
+	AnimPath path;                      // T / R / S
+	std::vector<float> times;           // keyframe times
+	std::vector<glm::vec4> values;
+};
+
+struct AnimationClip {
+	std::string name;
+	float duration = 0.0f;              // Total length
+	std::vector<AnimChannel> channels;
+};
+
+struct CapsuleColliderDef {
+	int jointA;   // start bone index
+	int jointB;   // end bone index
+	float radius;
+};
+
+struct CapsuleInstance {
+	glm::vec3 p0;
+	glm::vec3 p1;
+	float radius;
 };

@@ -172,6 +172,10 @@ set(OBJECT_RENDER_SHADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/skybox.frag
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/lighting.vert
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/lighting.frag
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/skinned_model.vert
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/skinned_model.frag
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/debug_capsule.vert
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/debug_capsule.frag
 )
 compile_glsl_shaders(object_render_shaders_target SOURCES ${OBJECT_RENDER_SHADERS})
 

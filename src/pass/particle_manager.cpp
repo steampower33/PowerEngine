@@ -34,55 +34,55 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager)
 		clothes_.push_back(cloth);
 	}
 
-	{
-		Cloth cloth{};
+	//{
+	//	Cloth cloth{};
 
-		cloth.spacing = 0.015f;
-		cloth.gsm = 0.2f;
-		cloth.cloth_size = glm::vec2(1.0f, 1.0f);
-		cloth.nx = (uint32_t)std::round(cloth.cloth_size.x / cloth.spacing);
-		cloth.ny = (uint32_t)std::round(cloth.cloth_size.y / cloth.spacing);
-		cloth.nx1 = cloth.nx + 1;
-		cloth.ny1 = cloth.ny + 1;
-		cloth.height = 3.0f;
+	//	cloth.spacing = 0.015f;
+	//	cloth.gsm = 0.2f;
+	//	cloth.cloth_size = glm::vec2(1.0f, 1.0f);
+	//	cloth.nx = (uint32_t)std::round(cloth.cloth_size.x / cloth.spacing);
+	//	cloth.ny = (uint32_t)std::round(cloth.cloth_size.y / cloth.spacing);
+	//	cloth.nx1 = cloth.nx + 1;
+	//	cloth.ny1 = cloth.ny + 1;
+	//	cloth.height = 3.0f;
 
-		cloth.color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
+	//	cloth.color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
 
-		cloth.origin = glm::vec3(0.0f);
-		cloth.angle_deg = 0.0f;
-		cloth.axis = glm::vec3(0, 1, 0);
+	//	cloth.origin = glm::vec3(0.0f);
+	//	cloth.angle_deg = 0.0f;
+	//	cloth.axis = glm::vec3(0, 1, 0);
 
-		cloth.num_particle = cloth.nx1 * cloth.ny1;
+	//	cloth.num_particle = cloth.nx1 * cloth.ny1;
 
-		SetCloth(cloth);
+	//	SetCloth(cloth);
 
-		clothes_.push_back(cloth);
-	}
+	//	clothes_.push_back(cloth);
+	//}
 
-	{
-		Cloth cloth{};
+	//{
+	//	Cloth cloth{};
 
-		cloth.spacing = 0.015f;
-		cloth.gsm = 0.2f;
-		cloth.cloth_size = glm::vec2(1.0f, 1.0f);
-		cloth.nx = (uint32_t)std::round(cloth.cloth_size.x / cloth.spacing);
-		cloth.ny = (uint32_t)std::round(cloth.cloth_size.y / cloth.spacing);
-		cloth.nx1 = cloth.nx + 1;
-		cloth.ny1 = cloth.ny + 1;
-		cloth.height = 4.0f;
+	//	cloth.spacing = 0.015f;
+	//	cloth.gsm = 0.2f;
+	//	cloth.cloth_size = glm::vec2(1.0f, 1.0f);
+	//	cloth.nx = (uint32_t)std::round(cloth.cloth_size.x / cloth.spacing);
+	//	cloth.ny = (uint32_t)std::round(cloth.cloth_size.y / cloth.spacing);
+	//	cloth.nx1 = cloth.nx + 1;
+	//	cloth.ny1 = cloth.ny + 1;
+	//	cloth.height = 4.0f;
 
-		cloth.color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+	//	cloth.color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
 
-		cloth.origin = glm::vec3(0.0f);
-		cloth.angle_deg = 0.0f;
-		cloth.axis = glm::vec3(0, 1, 0);
+	//	cloth.origin = glm::vec3(0.0f);
+	//	cloth.angle_deg = 0.0f;
+	//	cloth.axis = glm::vec3(0, 1, 0);
 
-		cloth.num_particle = cloth.nx1 * cloth.ny1;
+	//	cloth.num_particle = cloth.nx1 * cloth.ny1;
 
-		SetCloth(cloth);
+	//	SetCloth(cloth);
 
-		clothes_.push_back(cloth);
-	}
+	//	clothes_.push_back(cloth);
+	//}
 
 	{
 		soft_body_.tetmesh = vku::LoadGmshMsh2("assets/sphere.msh");

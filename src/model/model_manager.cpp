@@ -9,7 +9,7 @@
 
 ModelManager::ModelManager(Context& context, TextureManager& textureManager)
 {
-	models_.reserve(kMaxObjects);
+	models_.reserve(kMaxModels);
 
 	{
 		//MeshData sphere = GeometryGenerator::MakeBox(1.0f);
@@ -19,8 +19,9 @@ ModelManager::ModelManager(Context& context, TextureManager& textureManager)
 		glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
 		glm::vec3 initPos = glm::vec3(0.0f, 1.0f, 0.0f);
 		glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
-		std::unique_ptr<Model> model = std::make_unique<Model>(sphere, vku::VertexIncludeInfo{ true, true }, context, initPos, angleQuat, initColor, true, "Sphere");
+		std::unique_ptr<Model> model = std::make_unique<Model>(sphere, vku::VertexIncludeInfo{ true, true, true, false, false }, context, initPos, angleQuat, initColor, true, "Sphere");
 		model->radius_ = radius;
+		model->type_ = Model::Type::NORMAL;
 		models_.emplace_back(std::move(model));
 	}
 
@@ -29,12 +30,35 @@ ModelManager::ModelManager(Context& context, TextureManager& textureManager)
 		glm::quat angleQuat = glm::angleAxis(glm::radians(90.0f), glm::vec3(1, 0, 0));
 		glm::vec3 initPos = glm::vec3(0.0f, 0.0f, 0.0f);
 		glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
-		std::unique_ptr<Model> model = std::make_unique<Model>(mesh, vku::VertexIncludeInfo{ true, true }, context, initPos, angleQuat, initColor, false, "BottomPlane");
+		std::unique_ptr<Model> model = std::make_unique<Model>(mesh, vku::VertexIncludeInfo{ true, true, true, false, false }, context, initPos, angleQuat, initColor, false, "BottomPlane");
 		model->factors_.roughness = 1.0f;
 		model->factors_.metallic = 0.0f;
 		model->checker_board_enable_ = true;
+		model->type_ = Model::Type::NORMAL;
 
 		models_.emplace_back(std::move(model));
+	}
+
+	{
+		glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
+		glm::vec3 initPos = glm::vec3(-1.0f, 0.0f, 0.0f);
+		glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
+
+		std::string filename = "assets/walking.glb";
+		std::unique_ptr<Model> model = std::make_unique<Model>(filename, vku::VertexIncludeInfo{ true, true, true, true, true }, context, textureManager, initPos, angleQuat, initColor, true, "walking", 1.0f);
+		model->type_ = Model::Type::SKINNED;
+
+		models_.push_back(std::move(model));
+	}
+
+	{
+		Mesh capsule = GeometryGenerator::MakeCapsule(0.5f, 0.5f, 0.5f, 16);
+		glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
+		glm::vec3 initPos = glm::vec3(0.0f, 1.0f, 1.0f);
+		glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
+		debug_capsule_ = std::make_unique<Model>(capsule, vku::VertexIncludeInfo{ true, true, true, false, false }, context, initPos, angleQuat, initColor, true, "Capsule");
+		debug_capsule_->type_ = Model::Type::NORMAL;
+		//models_.emplace_back(std::move(model));
 	}
 
 	//{
@@ -46,10 +70,9 @@ ModelManager::ModelManager(Context& context, TextureManager& textureManager)
 	//	//soft_body_ = std::make_unique<Model>(box, vku::VertexIncludeInfo{ true, true }, context, initPos, angleQuat, initColor, true, "soft_body_");
 
 	//	std::string filename = "assets/SheenCloth/SheenCloth.gltf";
-	//	std::unique_ptr<Model> model = std::make_unique<Model>(filename, vku::VertexIncludeInfo{true, true}, context, textureManager, initPos, angleQuat, initColor, true, "SheenCloth", 1.0f);
+	//	std::unique_ptr<Model> model = std::make_unique<Model>(filename, vku::VertexIncludeInfo{true, true}, context, textureManager, initPos, angleQuat, initColor, true, "SheenCloth", 10.0f);
 	//	models_.emplace_back(std::move(model));
 	//}
-
 
 	//{
 	//	MeshData box = GeometryGenerator::MakeBox(50.0f);

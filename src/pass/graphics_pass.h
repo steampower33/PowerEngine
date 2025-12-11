@@ -25,6 +25,9 @@ public:
 	
 	void CalculateGpuTime();
 
+	bool skinned_model_render_ = true;
+	bool debug_capsule_render_ = true;
+
 	struct UBOData {
 		struct Global {
 			glm::mat4 view;
@@ -32,7 +35,7 @@ public:
 		} global;
 		static_assert(sizeof(UBOData::Global) % 16 == 0, "std140 must be 16-byte aligned.");
 
-		struct Object {
+		struct Model {
 			glm::mat4 model;
 
 			glm::vec4 albedo_use;
@@ -66,8 +69,8 @@ public:
 			uint32_t height_enable = 0;
 			uint32_t checker_board_enable = 0;
 			uint32_t p2;
-		} object;
-		static_assert(sizeof(UBOData::Object) % 16 == 0, "std140 must be 16-byte aligned.");
+		} model;
+		static_assert(sizeof(UBOData::Model) % 16 == 0, "std140 must be 16-byte aligned.");
 
 		struct Light {
 			glm::mat4 invViewProj{};
@@ -175,56 +178,63 @@ private:
 			glm::vec4 color;
 		} softbody;
 		static_assert(sizeof(SoftBody) % 4 == 0, "push constant must be multiple of 4 bytes");
+
 	} push_constants_;
 
 	struct UBO {
 		vk::raii::Buffer global{ nullptr };
-		vk::raii::Buffer object{ nullptr };
+		vk::raii::Buffer model{ nullptr };
 		vk::raii::Buffer light{ nullptr };
 		vk::raii::Buffer skybox{ nullptr };
 		vk::raii::Buffer cloth{ nullptr };
+		vk::raii::Buffer skinned_model{ nullptr };
 	} ubos_;
 
 	struct UBOMemory {
 		vk::raii::DeviceMemory global{ nullptr };
-		vk::raii::DeviceMemory object{ nullptr };
+		vk::raii::DeviceMemory model{ nullptr };
 		vk::raii::DeviceMemory light{ nullptr };
 		vk::raii::DeviceMemory skybox{ nullptr };
 		vk::raii::DeviceMemory cloth{ nullptr };
+		vk::raii::DeviceMemory skinned_model{ nullptr };
 	} ubo_memories_;
 
 	struct UBOMapped {
 		void* global{ nullptr };
-		void* object{ nullptr };
+		void* model{ nullptr };
 		void* light{ nullptr };
 		void* skybox{ nullptr };
 		void* cloth{ nullptr };
+		void* skinned_model{ nullptr };
 	} ubo_mapped_;
 
 	struct UBOSize {
 		vk::DeviceSize global;
-		vk::DeviceSize object;
+		vk::DeviceSize model;
 		vk::DeviceSize light;
 		vk::DeviceSize skybox;
 		vk::DeviceSize cloth;
+		vk::DeviceSize skinned_model;
 	} ubo_size_;
 
 	struct SetLayout {
 		vk::raii::DescriptorSetLayout global{ nullptr };
-		vk::raii::DescriptorSetLayout object{ nullptr };
+		vk::raii::DescriptorSetLayout model{ nullptr };
 		vk::raii::DescriptorSetLayout lighting{ nullptr };
 		vk::raii::DescriptorSetLayout skybox{ nullptr };
 		vk::raii::DescriptorSetLayout cloth{ nullptr };
 		vk::raii::DescriptorSetLayout softbody{ nullptr };
+		vk::raii::DescriptorSetLayout skinned_model{ nullptr };
 	} set_layouts_;
 
 	struct Set {
 		vk::raii::DescriptorSet global{ nullptr };
-		vk::raii::DescriptorSet object{ nullptr };
+		vk::raii::DescriptorSet model{ nullptr };
 		vk::raii::DescriptorSet lighting{ nullptr };
 		vk::raii::DescriptorSet skybox{ nullptr };
 		vk::raii::DescriptorSet cloth{ nullptr };
 		vk::raii::DescriptorSet softbody{ nullptr };
+		vk::raii::DescriptorSet skinned_model{ nullptr };
 	} sets_;
 
 	struct PipelineLayout {
@@ -233,6 +243,8 @@ private:
 		vk::raii::PipelineLayout skybox{ nullptr };
 		vk::raii::PipelineLayout cloth{ nullptr };
 		vk::raii::PipelineLayout softbody{ nullptr };
+		vk::raii::PipelineLayout skinned_model{ nullptr };
+		vk::raii::PipelineLayout debug_capsule{ nullptr };
 	} pipeline_layouts_;
 
 	struct Pipeline {
@@ -249,6 +261,12 @@ private:
 		vk::raii::Pipeline softbody_solid{ nullptr };
 		vk::raii::Pipeline softbody_wireframe{ nullptr };
 		vk::raii::Pipeline softbody_point{ nullptr };
+
+		vk::raii::Pipeline skinned_model_solid{ nullptr };
+		vk::raii::Pipeline skinned_model_wireframe{ nullptr };
+		vk::raii::Pipeline skinned_model_point{ nullptr };
+
+		vk::raii::Pipeline debug_capsule{ nullptr };
 	} pipelines_;
 
 	struct GeometryBuffer {

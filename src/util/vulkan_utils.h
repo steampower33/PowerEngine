@@ -32,6 +32,8 @@ namespace vku
 		bool uv = false;
 		bool normal = false;
 		bool tangent = false;
+		bool joints = false;
+		bool weights = false;
 	};
 
 	enum PolygonMode {

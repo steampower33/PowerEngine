@@ -20,7 +20,7 @@ void main()
     vec4 world_pos = object.model * vec4(in_pos, 1.0);
 
     mat3 normal_mat = transpose(inverse(mat3(object.model)));
-    out_normal_world = normalize(normal_mat * in_normal);    
+    out_normal_world = normalize(normal_mat * in_normal);
 
     if (object.height_enable == 1u)
     {

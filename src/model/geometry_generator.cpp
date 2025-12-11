@@ -144,6 +144,101 @@ Mesh GeometryGenerator::MakeCylinder(
     return meshData;
 }
 
+Mesh GeometryGenerator::MakeCapsule(
+    float bottomRadius, float topRadius,
+    float height, int sliceCount)
+{
+
+    Mesh meshData;
+    auto& vertices = meshData.vertices;
+    auto& indices = meshData.indices;
+
+    float halfH = 0.5f * height;
+
+    int numStacks = sliceCount;
+    int numSlices = sliceCount;
+    for (int j = 0; j <= numStacks; ++j)
+    {
+        float phi = glm::pi<float>() * static_cast<float>(j) / static_cast<float>(numStacks);
+        float sinPhi = std::sin(phi);
+        float cosPhi = std::cos(phi);
+
+        for (int i = 0; i <= numSlices; ++i)
+        {
+            float theta = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(numSlices);
+            float sinTheta = std::sin(theta);
+            float cosTheta = std::cos(theta);
+
+            Vertex v{};
+            glm::vec3 pos;
+            if (phi <= glm::pi<float>() * 0.5f)
+            {
+                pos = glm::vec3(
+                    topRadius * sinPhi * cosTheta,
+                    halfH + topRadius * cosPhi,
+                    topRadius * sinPhi * sinTheta
+                );
+                v.pos = pos;
+                v.normal = glm::normalize(pos - glm::vec3(0.0f, halfH, 0.0f));
+                v.uv = glm::vec2(
+                    1.0f - (static_cast<float>(i) / numSlices),
+                    (static_cast<float>(j) / numStacks)
+                );
+
+                v.tangent = glm::vec4(0.0f);
+                vertices.push_back(v);
+            }
+            
+            if (phi > glm::pi<float>() * 0.5f)
+            {
+                pos = glm::vec3(
+                    topRadius * sinPhi * cosTheta,
+                    -halfH + topRadius * cosPhi,
+                    topRadius * sinPhi * sinTheta
+                );
+                v.pos = pos;
+                v.normal = glm::normalize(pos - glm::vec3(0.0f, -halfH, 0.0f));
+                v.uv = glm::vec2(
+                    1.0f - (static_cast<float>(i) / numSlices),
+                    (static_cast<float>(j) / numStacks)
+                );
+
+                v.tangent = glm::vec4(0.0f);
+                vertices.push_back(v);
+            }
+
+        }
+    }
+
+    int rowStride = numSlices + 1;
+    for (int j = 0; j < numStacks; ++j)
+    {
+        int rowStart = j * rowStride;
+        int nextRowStart = (j + 1) * rowStride;
+
+        for (int i = 0; i < numSlices; ++i)
+        {
+            int i0 = rowStart + i;
+            int i1 = nextRowStart + i;
+            int i2 = nextRowStart + i + 1;
+            int i3 = rowStart + i + 1;
+
+            indices.push_back(i0);
+            indices.push_back(i2);
+            indices.push_back(i1);
+
+            indices.push_back(i0);
+            indices.push_back(i3);
+            indices.push_back(i2);
+        }
+    }
+
+    meshData.indices_count = meshData.indices.size();
+
+    CalculateTangents(meshData);
+    return meshData;
+}
+
 Mesh GeometryGenerator::MakeSphere(
     float radius,
     int numSlices, int numStacks,

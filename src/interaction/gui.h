@@ -44,8 +44,8 @@ public:
 
 	template<typename RowFn>
 	void SetRenderingGUI(RowFn&& row);
-	template<typename RowFn, typename Objects, typename ClothUBO>
-	void SetObjectsGUI(RowFn&& row, Objects& objects, ClothUBO& clothUBO);
+	template<typename RowFn, typename Models, typename ClothUBO>
+	void SetObjectsGUI(RowFn&& row, Models& models, ClothUBO& clothUBO);
 	template<typename RowFn>
 	void SetTimeingGUI(RowFn&& row, SimulationPassGPU& sim);
 	template<typename RowFn, typename Sim>

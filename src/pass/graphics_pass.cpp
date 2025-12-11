@@ -45,42 +45,63 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera)
 		std::memcpy(dst, &ubo_datas_.global, sizeof(UBOData::Global));
 	}
 
-	// Object UBO
+	// Model UBO
 	{
-		const uint32_t baseObjectOffset = static_cast<uint32_t>(currentFrame * ubo_size_.object * model_manager_.kMaxObjects);
+		const uint32_t baseModelOffset = static_cast<uint32_t>(currentFrame * ubo_size_.model * model_manager_.kMaxModels);
 		for (uint32_t i = 0; i < model_manager_.models_.size(); i++)
 		{
-			const uint32_t objOff = baseObjectOffset + i * static_cast<uint32_t>(ubo_size_.object);
-			auto* dst = static_cast<std::byte*>(ubo_mapped_.object) + objOff;
+			const uint32_t modelOff = baseModelOffset + i * static_cast<uint32_t>(ubo_size_.model);
+			auto* dst = static_cast<std::byte*>(ubo_mapped_.model) + modelOff;
 
-			ubo_datas_.object.model = model_manager_.models_[i]->world_;
-			ubo_datas_.object.albedo_use = model_manager_.models_[i]->albedo_;
+			ubo_datas_.model.model = model_manager_.models_[i]->world_;
+			ubo_datas_.model.albedo_use = model_manager_.models_[i]->albedo_;
 
-			ubo_datas_.object.albedo_idx = model_manager_.models_[i]->texture_idx_.albedo;
-			ubo_datas_.object.metallic_idx = model_manager_.models_[i]->texture_idx_.metallic;
-			ubo_datas_.object.normal_idx = model_manager_.models_[i]->texture_idx_.normal;
-			ubo_datas_.object.roughness_idx = model_manager_.models_[i]->texture_idx_.roughness;
-			ubo_datas_.object.ao_idx = model_manager_.models_[i]->texture_idx_.ao;
-			ubo_datas_.object.height_idx = model_manager_.models_[i]->texture_idx_.height;
+			ubo_datas_.model.albedo_idx = model_manager_.models_[i]->texture_idx_.albedo;
+			ubo_datas_.model.metallic_idx = model_manager_.models_[i]->texture_idx_.metallic;
+			ubo_datas_.model.normal_idx = model_manager_.models_[i]->texture_idx_.normal;
+			ubo_datas_.model.roughness_idx = model_manager_.models_[i]->texture_idx_.roughness;
+			ubo_datas_.model.ao_idx = model_manager_.models_[i]->texture_idx_.ao;
+			ubo_datas_.model.height_idx = model_manager_.models_[i]->texture_idx_.height;
 
-			ubo_datas_.object.metallic_factor = model_manager_.models_[i]->factors_.metallic;
-			ubo_datas_.object.roughness_factor = model_manager_.models_[i]->factors_.roughness;
-			ubo_datas_.object.ao_factor = model_manager_.models_[i]->factors_.ao;
-			ubo_datas_.object.coat_factor = model_manager_.models_[i]->factors_.coat;
-			ubo_datas_.object.coat_roughness_factor = model_manager_.models_[i]->factors_.coat_roughness;
-			ubo_datas_.object.fuzz_factor = model_manager_.models_[i]->factors_.fuzz;
-			ubo_datas_.object.fuzz_roughness_factor = model_manager_.models_[i]->factors_.fuzz_roughness;
+			ubo_datas_.model.metallic_factor = model_manager_.models_[i]->factors_.metallic;
+			ubo_datas_.model.roughness_factor = model_manager_.models_[i]->factors_.roughness;
+			ubo_datas_.model.ao_factor = model_manager_.models_[i]->factors_.ao;
+			ubo_datas_.model.coat_factor = model_manager_.models_[i]->factors_.coat;
+			ubo_datas_.model.coat_roughness_factor = model_manager_.models_[i]->factors_.coat_roughness;
+			ubo_datas_.model.fuzz_factor = model_manager_.models_[i]->factors_.fuzz;
+			ubo_datas_.model.fuzz_roughness_factor = model_manager_.models_[i]->factors_.fuzz_roughness;
 
-			ubo_datas_.object.albedo_enable = model_manager_.models_[i]->texture_enable_.albedo;
-			ubo_datas_.object.metallic_enable = model_manager_.models_[i]->texture_enable_.metallic;
-			ubo_datas_.object.normal_enable = model_manager_.models_[i]->texture_enable_.normal;
-			ubo_datas_.object.roughness_enable = model_manager_.models_[i]->texture_enable_.roughness;
-			ubo_datas_.object.ao_enable = model_manager_.models_[i]->texture_enable_.ao;
-			ubo_datas_.object.height_enable = model_manager_.models_[i]->texture_enable_.height;
+			ubo_datas_.model.albedo_enable = model_manager_.models_[i]->texture_enable_.albedo;
+			ubo_datas_.model.metallic_enable = model_manager_.models_[i]->texture_enable_.metallic;
+			ubo_datas_.model.normal_enable = model_manager_.models_[i]->texture_enable_.normal;
+			ubo_datas_.model.roughness_enable = model_manager_.models_[i]->texture_enable_.roughness;
+			ubo_datas_.model.ao_enable = model_manager_.models_[i]->texture_enable_.ao;
+			ubo_datas_.model.height_enable = model_manager_.models_[i]->texture_enable_.height;
 
-			ubo_datas_.object.checker_board_enable = model_manager_.models_[i]->checker_board_enable_;
+			ubo_datas_.model.checker_board_enable = model_manager_.models_[i]->checker_board_enable_;
 
-			std::memcpy(dst, &ubo_datas_.object, sizeof(UBOData::Object));
+			std::memcpy(dst, &ubo_datas_.model, ubo_size_.model);
+
+			if (model_manager_.models_[i]->type_ == Model::Type::SKINNED)
+			{
+				auto& model = *model_manager_.models_[i];
+				/*model.UpdateSkinMatrices();*/
+				model.current_time_ += 1.0f / 120.0f;
+				model.ApplyAnimation(0, model.current_time_);
+				model.UpdateCollidersFromBones();
+
+				auto& jm = model.skin_[0].jointMatrices;       // std::vector<glm::mat4>
+
+				const uint32_t skinnedModelOff =
+					static_cast<uint32_t>(currentFrame * ubo_size_.skinned_model);
+				auto* dst = static_cast<std::byte*>(ubo_mapped_.skinned_model) + skinnedModelOff;
+
+				size_t boneCount = jm.size();
+
+				size_t copySize = boneCount * sizeof(glm::mat4);
+
+				std::memcpy(dst, jm.data(), copySize);
+			}
 		}
 	}
 
@@ -137,6 +158,7 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera)
 
 		std::memcpy(dst, &ubo_datas_.cloth, sizeof(UBOData::Cloth));
 	}
+
 }
 
 // ============================
@@ -258,51 +280,165 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 	cmd.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchain_.swapchain_extent_));
 
 	uint32_t globalOffset = static_cast<uint32_t>(currentFrame * ubo_size_.global);
-	const uint32_t baseObjectOffset = static_cast<uint32_t>(currentFrame * ubo_size_.object * model_manager_.kMaxObjects);
+	const uint32_t baseObjectOffset = static_cast<uint32_t>(currentFrame * ubo_size_.model * model_manager_.kMaxModels);
 
 	// Model
 	{
-		if (polygon_mode_ == vku::PolygonMode::SOLID)
-			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.model_solid);
-		else if (polygon_mode_ == vku::PolygonMode::WIREFRAME)
-			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.model_wireframe);
-		else if (polygon_mode_ == vku::PolygonMode::POINT)
-			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.model_point);
+
+		for (uint32_t i = 0; i < model_manager_.models_.size(); i++)
+		{
+			uint32_t objectOffset = baseObjectOffset + i * static_cast<uint32_t>(ubo_size_.model);
+
+			if (model_manager_.models_[i]->type_ == Model::Type::NORMAL)
+			{
+				if (polygon_mode_ == vku::PolygonMode::SOLID)
+					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.model_solid);
+				else if (polygon_mode_ == vku::PolygonMode::WIREFRAME)
+					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.model_wireframe);
+				else if (polygon_mode_ == vku::PolygonMode::POINT)
+					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.model_point);
+
+				// Global Set
+				cmd.bindDescriptorSets(
+					vk::PipelineBindPoint::eGraphics,
+					pipeline_layouts_.model,
+					0,
+					{ *sets_.global },
+					{ globalOffset }
+				);
+
+				// Model set
+				cmd.bindDescriptorSets(
+					vk::PipelineBindPoint::eGraphics,
+					pipeline_layouts_.model,
+					1,
+					{ *sets_.model },
+					{ objectOffset }
+				);
+
+				// tex2D
+				cmd.bindDescriptorSets(
+					vk::PipelineBindPoint::eGraphics,
+					pipeline_layouts_.model,
+					2,
+					{ *texture_manager_.sets_.tex2d },
+					{ }
+				);
+
+				cmd.bindVertexBuffers(0, { model_manager_.models_[i]->mesh_.vertex_buffer }, { 0 });
+				cmd.bindIndexBuffer(*model_manager_.models_[i]->mesh_.index_buffer, 0, vk::IndexType::eUint32);
+				cmd.drawIndexed(model_manager_.models_[i]->mesh_.indices_count, 1, 0, 0, 0);
+			}
+			else if (model_manager_.models_[i]->type_ == Model::Type::SKINNED && skinned_model_render_)
+			{
+				if (polygon_mode_ == vku::PolygonMode::SOLID)
+					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.skinned_model_solid);
+				else if (polygon_mode_ == vku::PolygonMode::WIREFRAME)
+					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.skinned_model_wireframe);
+				else if (polygon_mode_ == vku::PolygonMode::POINT)
+					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.skinned_model_point);
+
+
+				// Global Set
+				cmd.bindDescriptorSets(
+					vk::PipelineBindPoint::eGraphics,
+					pipeline_layouts_.skinned_model,
+					0,
+					{ *sets_.global },
+					{ globalOffset }
+				);
+
+				// Model set
+				cmd.bindDescriptorSets(
+					vk::PipelineBindPoint::eGraphics,
+					pipeline_layouts_.skinned_model,
+					1,
+					{ *sets_.model },
+					{ objectOffset }
+				);
+
+				// tex2D
+				cmd.bindDescriptorSets(
+					vk::PipelineBindPoint::eGraphics,
+					pipeline_layouts_.skinned_model,
+					2,
+					{ *texture_manager_.sets_.tex2d },
+					{ }
+				);
+
+				// Skinned
+				const uint32_t skinnedModelOff = static_cast<uint32_t>(currentFrame * ubo_size_.skinned_model);
+				cmd.bindDescriptorSets(
+					vk::PipelineBindPoint::eGraphics,
+					pipeline_layouts_.skinned_model,
+					3,
+					{ *sets_.skinned_model },
+					{ skinnedModelOff }
+				);
+
+				cmd.bindVertexBuffers(0, { model_manager_.models_[i]->mesh_.vertex_buffer }, { 0 });
+				cmd.bindIndexBuffer(*model_manager_.models_[i]->mesh_.index_buffer, 0, vk::IndexType::eUint32);
+				cmd.drawIndexed(model_manager_.models_[i]->mesh_.indices_count, 1, 0, 0, 0);
+			}
+
+		}
+	}
+
+	// Debug Capsule
+	if (debug_capsule_render_)
+	{
+		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.debug_capsule);
 
 		// Global Set
 		cmd.bindDescriptorSets(
 			vk::PipelineBindPoint::eGraphics,
-			pipeline_layouts_.model,
+			pipeline_layouts_.debug_capsule,
 			0,
 			{ *sets_.global },
 			{ globalOffset }
 		);
 
-		// tex2D
-		cmd.bindDescriptorSets(
-			vk::PipelineBindPoint::eGraphics,
-			pipeline_layouts_.model,
-			2,
-			{ *texture_manager_.sets_.tex2d },
-			{ }
-		);
+		auto& debugCapsuleModel = model_manager_.debug_capsule_;
 
-		for (uint32_t i = 0; i < model_manager_.models_.size(); ++i) {
-			uint32_t objectOffset = baseObjectOffset + i * static_cast<uint32_t>(ubo_size_.object);
+		cmd.bindVertexBuffers(0, { debugCapsuleModel->mesh_.vertex_buffer }, { 0 });
+		cmd.bindIndexBuffer(*debugCapsuleModel->mesh_.index_buffer, 0, vk::IndexType::eUint32);
+		
+		for (const auto& inst : model_manager_.models_[model_manager_.models_.size() - 1]->collider_instances_) {
+			glm::vec3 p0 = inst.p0;
+			glm::vec3 p1 = inst.p1;
+			float r = inst.radius;
 
-			// Object set
-			cmd.bindDescriptorSets(
-				vk::PipelineBindPoint::eGraphics,
-				pipeline_layouts_.model,
-				1,
-				{ *sets_.object },
-				{ objectOffset }
-			);
+			glm::vec3 center = 0.5f * (p0 + p1);
+			glm::vec3 seg = p1 - p0;
+			float len = glm::length(seg);
+			if (len < 1e-4f) continue;
 
-			cmd.bindVertexBuffers(0, { model_manager_.models_[i]->mesh_.vertex_buffer }, { 0 });
-			cmd.bindIndexBuffer(*model_manager_.models_[i]->mesh_.index_buffer, 0, vk::IndexType::eUint32);
-			cmd.drawIndexed(model_manager_.models_[i]->mesh_.indices_count, 1, 0, 0, 0);
+			glm::vec3 dir = seg / len;
+			glm::quat q = glm::rotation(glm::vec3(0, 1, 0), dir);
+
+			glm::mat4 R = glm::mat4_cast(q);
+			glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3(r, len, r));
+			//glm::mat4 T = glm::translate(glm::mat4(1.0f), center);
+			//glm::mat4 T = glm::translate(glm::translate(glm::mat4(1.0f), glm::vec3(-2.0f, 0.0f, 0.0f)), center);
+			glm::mat4 T = glm::translate(model_manager_.models_[model_manager_.models_.size() - 1]->world_, center);
+			glm::mat4 M = T * R * S;
+
+			struct DebugPushConst {
+				glm::mat4 model;
+				glm::vec4 color;
+			} pc;
+
+			pc.model = M;
+			pc.color = glm::vec4(1, 0, 0, 1);
+
+			cmd.pushConstants<DebugPushConst>(
+				*pipeline_layouts_.debug_capsule,
+				vk::ShaderStageFlagBits::eVertex,
+				0,
+				pc);
+			cmd.drawIndexed(debugCapsuleModel->mesh_.indices_count, 1, 0, 0, 0);
 		}
+		
 	}
 
 	// Cloth
@@ -647,7 +783,7 @@ void GraphicsPass::CreateDescriptorSetLayout()
 		set_layouts_.global = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
 	}
 
-	// Object UBO
+	// Model UBO
 	{
 		std::array layoutBindings{
 			vk::DescriptorSetLayoutBinding(
@@ -665,7 +801,7 @@ void GraphicsPass::CreateDescriptorSetLayout()
 			.bindingCount = static_cast<uint32_t>(layoutBindings.size()),
 			.pBindings = layoutBindings.data()
 		};
-		set_layouts_.object = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
+		set_layouts_.model = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
 	}
 
 	// Light UBO + G-buffers
@@ -775,6 +911,27 @@ void GraphicsPass::CreateDescriptorSetLayout()
 		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
 		set_layouts_.softbody = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
 	}
+
+	// Skinned Model
+	{
+		std::array layoutBindings{
+			vk::DescriptorSetLayoutBinding(
+				0,
+				vk::DescriptorType::eUniformBufferDynamic,
+				1,
+				vk::ShaderStageFlagBits::eVertex,
+				nullptr
+			)
+		};
+		counts_.ubo_dynamic += 1;
+		counts_.layout += 1;
+
+		vk::DescriptorSetLayoutCreateInfo layoutInfo{
+			.bindingCount = static_cast<uint32_t>(layoutBindings.size()),
+			.pBindings = layoutBindings.data()
+		};
+		set_layouts_.skinned_model = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
+	}
 }
 
 void GraphicsPass::CreateDescriptorPools() {
@@ -825,23 +982,23 @@ void GraphicsPass::CreateUniformBuffers()
 		ubo_mapped_.global = ubo_memories_.global.mapMemory(0, totalSize);
 	}
 
-	// Object
+	// Model
 	{
-		ubos_.object.clear();
-		ubo_memories_.object.clear();
-		ubo_mapped_.object = nullptr;
+		ubos_.model.clear();
+		ubo_memories_.model.clear();
+		ubo_mapped_.model = nullptr;
 
 		auto limits = context_.physical_device_.getProperties().limits;
-		ubo_size_.object = (sizeof(UBOData::Object) + limits.minUniformBufferOffsetAlignment - 1)
+		ubo_size_.model = (sizeof(UBOData::Model) + limits.minUniformBufferOffsetAlignment - 1)
 			& ~(limits.minUniformBufferOffsetAlignment - 1);
-		vk::DeviceSize totalSize = ubo_size_.object * MAX_FRAMES_IN_FLIGHT * model_manager_.kMaxObjects;
+		vk::DeviceSize totalSize = ubo_size_.model * MAX_FRAMES_IN_FLIGHT * model_manager_.kMaxModels;
 
 		vk::raii::Buffer buffer({});
 		vk::raii::DeviceMemory bufferMem({});
 		vku::CreateBuffer(context_.physical_device_, context_.device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
-		ubos_.object = std::move(buffer);
-		ubo_memories_.object = std::move(bufferMem);
-		ubo_mapped_.object = ubo_memories_.object.mapMemory(0, totalSize);
+		ubos_.model = std::move(buffer);
+		ubo_memories_.model = std::move(bufferMem);
+		ubo_mapped_.model = ubo_memories_.model.mapMemory(0, totalSize);
 	}
 
 	// Light
@@ -897,7 +1054,7 @@ void GraphicsPass::CreateUniformBuffers()
 		std::memcpy(dst, &ubo_datas_.skybox, ubo_size_.skybox);
 	}
 
-	// Cloth UBO
+	// Cloth
 	{
 		ubos_.cloth.clear();
 		ubo_memories_.cloth.clear();
@@ -916,6 +1073,26 @@ void GraphicsPass::CreateUniformBuffers()
 		ubo_mapped_.cloth = ubo_memories_.cloth.mapMemory(0, totalSize);
 		ubo_datas_.cloth.albedo_idx = 0;
 	}
+
+	// Skinned Model
+	{
+		ubos_.skinned_model.clear();
+		ubo_memories_.skinned_model.clear();
+		ubo_mapped_.skinned_model = nullptr;
+
+		auto limits = context_.physical_device_.getProperties().limits;
+		auto kMaxJoints = 128;
+		ubo_size_.skinned_model = (sizeof(glm::mat4) * kMaxJoints + limits.minUniformBufferOffsetAlignment - 1)
+			& ~(limits.minUniformBufferOffsetAlignment - 1);
+		vk::DeviceSize totalSize = ubo_size_.skinned_model * MAX_FRAMES_IN_FLIGHT;
+
+		vk::raii::Buffer buffer({});
+		vk::raii::DeviceMemory bufferMem({});
+		vku::CreateBuffer(context_.physical_device_, context_.device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
+		ubos_.skinned_model = std::move(buffer);
+		ubo_memories_.skinned_model = std::move(bufferMem);
+		ubo_mapped_.skinned_model = ubo_memories_.skinned_model.mapMemory(0, totalSize);
+	}
 }
 
 void GraphicsPass::CreateDescriptorSets()
@@ -931,7 +1108,7 @@ void GraphicsPass::CreateDescriptorSets()
 		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
 		sets_.global = std::move(sets.front());
 
-		vk::DescriptorBufferInfo globalUboBufferInfo{ *ubos_.global, 0, sizeof(UBOData::Global) };
+		vk::DescriptorBufferInfo globalUboBufferInfo{ *ubos_.global, 0, ubo_size_.global };
 
 		std::array descriptorWrites{
 			 vk::WriteDescriptorSet{
@@ -946,28 +1123,28 @@ void GraphicsPass::CreateDescriptorSets()
 		context_.device_.updateDescriptorSets(descriptorWrites, {});
 	}
 
-	// Object UBO
+	// Model UBO
 	{
 		vk::DescriptorSetAllocateInfo allocInfo{
 			.descriptorPool = *descriptor_pool_,
 			.descriptorSetCount = 1,
-			.pSetLayouts = &*set_layouts_.object
+			.pSetLayouts = &*set_layouts_.model
 		};
 
 		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
-		sets_.object = std::move(sets.front());
+		sets_.model = std::move(sets.front());
 
 		// Update
-		vk::DescriptorBufferInfo objectUboBufferInfo{ *ubos_.object, 0, sizeof(UBOData::Object) };
+		vk::DescriptorBufferInfo modelUboBufferInfo{ *ubos_.model, 0, ubo_size_.model };
 
 		std::array descriptorWrites{
 			vk::WriteDescriptorSet{
-				.dstSet = *sets_.object,
+				.dstSet = *sets_.model,
 				.dstBinding = 0,
 				.dstArrayElement = 0,
 				.descriptorCount = 1,
 				.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
-				.pBufferInfo = &objectUboBufferInfo
+				.pBufferInfo = &modelUboBufferInfo
 			}
 		};
 		context_.device_.updateDescriptorSets(descriptorWrites, {});
@@ -984,7 +1161,7 @@ void GraphicsPass::CreateDescriptorSets()
 		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
 		sets_.lighting = std::move(sets.front());
 
-		vk::DescriptorBufferInfo lightUboBufferInfo{ *ubos_.light, 0, sizeof(UBOData::Light) };
+		vk::DescriptorBufferInfo lightUboBufferInfo{ *ubos_.light, 0, ubo_size_.light };
 
 		std::array<vk::DescriptorImageInfo, 4> gbufferInfos{
 			vk::DescriptorImageInfo{
@@ -1080,7 +1257,7 @@ void GraphicsPass::CreateDescriptorSets()
 		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
 		sets_.skybox = std::move(sets.front());
 
-		vk::DescriptorBufferInfo skyboxUboBufferInfo{ *ubos_.skybox, 0, sizeof(UBOData::SkyBox) };
+		vk::DescriptorBufferInfo skyboxUboBufferInfo{ *ubos_.skybox, 0, ubo_size_.skybox };
 
 		std::array descriptorWrites{
 			 vk::WriteDescriptorSet{
@@ -1106,7 +1283,7 @@ void GraphicsPass::CreateDescriptorSets()
 		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
 		sets_.cloth = std::move(sets.front());
 
-		vk::DescriptorBufferInfo clothUboInfo{ *ubos_.cloth, 0, sizeof(UBOData::Cloth) };
+		vk::DescriptorBufferInfo clothUboInfo{ *ubos_.cloth, 0, ubo_size_.cloth };
 		vk::DescriptorBufferInfo positions(particle_manager_.ssbos_.position, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo normals(particle_manager_.ssbos_.normal, 0, VK_WHOLE_SIZE);
 
@@ -1175,8 +1352,34 @@ void GraphicsPass::CreateDescriptorSets()
 		};
 		context_.device_.updateDescriptorSets(descriptorWrites, {});
 	}
-}
 
+	// Skinned Model UBO
+	{
+		vk::DescriptorSetAllocateInfo allocInfo{
+			.descriptorPool = *descriptor_pool_,
+			.descriptorSetCount = 1,
+			.pSetLayouts = &*set_layouts_.skinned_model
+		};
+
+		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
+		sets_.skinned_model = std::move(sets.front());
+
+		// Update
+		vk::DescriptorBufferInfo skinnedModelUboBufferInfo{ *ubos_.skinned_model, 0, ubo_size_.skinned_model };
+
+		std::array descriptorWrites{
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.skinned_model,
+				.dstBinding = 0,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
+				.pBufferInfo = &skinnedModelUboBufferInfo
+			},
+		};
+		context_.device_.updateDescriptorSets(descriptorWrites, {});
+	}
+}
 
 void GraphicsPass::CreateGeometryBuffers()
 {
@@ -1281,20 +1484,6 @@ void GraphicsPass::CreateGraphicsPipelines()
 		.viewportCount = 1,
 		.scissorCount = 1
 	};
-	vk::PipelineRasterizationStateCreateInfo rasterizerSolid{
-		.depthClampEnable = vk::False,
-		.rasterizerDiscardEnable = vk::False,
-		.polygonMode = vk::PolygonMode::eFill,
-		.cullMode = vk::CullModeFlagBits::eBack,
-		.frontFace = vk::FrontFace::eCounterClockwise,
-		.depthBiasEnable = vk::False,
-		.lineWidth = 1.0f
-	};
-	vk::PipelineRasterizationStateCreateInfo rasterizerWireframe = rasterizerSolid;
-	rasterizerWireframe.polygonMode = vk::PolygonMode::eLine;
-	rasterizerWireframe.cullMode = vk::CullModeFlagBits::eNone;
-	vk::PipelineRasterizationStateCreateInfo rasterizerPoint = rasterizerWireframe;
-	rasterizerPoint.polygonMode = vk::PolygonMode::ePoint;
 
 	vk::PipelineMultisampleStateCreateInfo multisampling{
 		.rasterizationSamples = msaa_samples_,
@@ -1364,9 +1553,23 @@ void GraphicsPass::CreateGraphicsPipelines()
 		vertexInputInfo.pVertexAttributeDescriptions = vdesc.attributes.data();
 
 		// Pipeline Layout
-		std::array<vk::DescriptorSetLayout, 3> setLayouts(*set_layouts_.global, *set_layouts_.object, *texture_manager_.set_layouts_.tex2d);
+		std::array<vk::DescriptorSetLayout, 3> setLayouts(
+			*set_layouts_.global,
+			*set_layouts_.model,
+			*texture_manager_.set_layouts_.tex2d
+		);
 		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = setLayouts.size(), .pSetLayouts = setLayouts.data(), .pushConstantRangeCount = 0 };
 		pipeline_layouts_.model = vk::raii::PipelineLayout(context_.device_, pipelineLayoutInfo);
+
+		vk::PipelineRasterizationStateCreateInfo rasterizer{
+			.depthClampEnable = vk::False,
+			.rasterizerDiscardEnable = vk::False,
+			.polygonMode = vk::PolygonMode::eFill,
+			.cullMode = vk::CullModeFlagBits::eBack,
+			.frontFace = vk::FrontFace::eCounterClockwise,
+			.depthBiasEnable = vk::False,
+			.lineWidth = 1.0f
+		};
 
 		// Pipeline
 		{
@@ -1378,7 +1581,7 @@ void GraphicsPass::CreateGraphicsPipelines()
 					.pVertexInputState = &vertexInputInfo,
 					.pInputAssemblyState = &inputAssembly,
 					.pViewportState = &viewportState,
-					.pRasterizationState = &rasterizerSolid,
+					.pRasterizationState = &rasterizer,
 					.pMultisampleState = &multisampling,
 					.pDepthStencilState = &depthStencil,
 					.pColorBlendState = &colorBlending,
@@ -1393,57 +1596,12 @@ void GraphicsPass::CreateGraphicsPipelines()
 				}
 			};
 			pipelines_.model_solid = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
-		}
 
-		{
-			vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain =
-			{
-				{
-					.stageCount = 2,
-					.pStages = stages.data(),
-					.pVertexInputState = &vertexInputInfo,
-					.pInputAssemblyState = &inputAssembly,
-					.pViewportState = &viewportState,
-					.pRasterizationState = &rasterizerWireframe,
-					.pMultisampleState = &multisampling,
-					.pDepthStencilState = &depthStencil,
-					.pColorBlendState = &colorBlending,
-					.pDynamicState = &dynamicState,
-					.layout = pipeline_layouts_.model,
-					.renderPass = nullptr
-				},
-				{
-				  .colorAttachmentCount = static_cast<uint32_t>(geometry_buffers_.formats.size()),
-				  .pColorAttachmentFormats = geometry_buffers_.formats.data(),
-				  .depthAttachmentFormat = depthFormat
-				}
-			};
+			rasterizer.polygonMode = vk::PolygonMode::eLine;
+			rasterizer.cullMode = vk::CullModeFlagBits::eNone;
 			pipelines_.model_wireframe = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
-		}
 
-		{
-			vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain =
-			{
-				{
-					.stageCount = 2,
-					.pStages = stages.data(),
-					.pVertexInputState = &vertexInputInfo,
-					.pInputAssemblyState = &inputAssembly,
-					.pViewportState = &viewportState,
-					.pRasterizationState = &rasterizerPoint,
-					.pMultisampleState = &multisampling,
-					.pDepthStencilState = &depthStencil,
-					.pColorBlendState = &colorBlending,
-					.pDynamicState = &dynamicState,
-					.layout = pipeline_layouts_.model,
-					.renderPass = nullptr
-				},
-				{
-				  .colorAttachmentCount = static_cast<uint32_t>(geometry_buffers_.formats.size()),
-				  .pColorAttachmentFormats = geometry_buffers_.formats.data(),
-				  .depthAttachmentFormat = depthFormat
-				}
-			};
+			rasterizer.polygonMode = vk::PolygonMode::ePoint;
 			pipelines_.model_point = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 		}
 	}
@@ -1491,7 +1649,7 @@ void GraphicsPass::CreateGraphicsPipelines()
 			*set_layouts_.lighting,
 			*set_layouts_.skybox,
 			*texture_manager_.set_layouts_.tex2d,
-			* texture_manager_.set_layouts_.tex_env
+			*texture_manager_.set_layouts_.tex_env
 		};
 		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
 			.setLayoutCount = static_cast<uint32_t>(setLayouts.size()),
@@ -1503,14 +1661,24 @@ void GraphicsPass::CreateGraphicsPipelines()
 
 		vk::Format swapchainFormat = swapchain_.swapchain_surface_format_.format;
 
-		rasterizerSolid.cullMode = vk::CullModeFlagBits::eNone;
+
+		vk::PipelineRasterizationStateCreateInfo rasterizer{
+			.depthClampEnable = vk::False,
+			.rasterizerDiscardEnable = vk::False,
+			.polygonMode = vk::PolygonMode::eFill,
+			.cullMode = vk::CullModeFlagBits::eNone,
+			.frontFace = vk::FrontFace::eCounterClockwise,
+			.depthBiasEnable = vk::False,
+			.lineWidth = 1.0f
+		};
+
 		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
 			{.stageCount = 2,
 			  .pStages = stages.data(),
 			  .pVertexInputState = &vertexInputInfo,
 			  .pInputAssemblyState = &inputAssembly,
 			  .pViewportState = &viewportState,
-			  .pRasterizationState = &rasterizerSolid,
+			  .pRasterizationState = &rasterizer,
 			  .pMultisampleState = &multisampling,
 			  .pDepthStencilState = nullptr,
 			  .pColorBlendState = &lightingColorBlending,
@@ -1563,7 +1731,7 @@ void GraphicsPass::CreateGraphicsPipelines()
 		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = setLayouts.size(), .pSetLayouts = setLayouts.data(), .pushConstantRangeCount = 0 };
 		pipeline_layouts_.skybox = vk::raii::PipelineLayout(context_.device_, pipelineLayoutInfo);
 
-		vk::PipelineRasterizationStateCreateInfo skyboxRasterizer{
+		vk::PipelineRasterizationStateCreateInfo rasterizer{
 			.depthClampEnable = vk::False,
 			.rasterizerDiscardEnable = vk::False,
 			.polygonMode = vk::PolygonMode::eFill,
@@ -1610,7 +1778,7 @@ void GraphicsPass::CreateGraphicsPipelines()
 					.pVertexInputState = &vertexInputInfo,
 					.pInputAssemblyState = &inputAssembly,
 					.pViewportState = &viewportState,
-					.pRasterizationState = &skyboxRasterizer,
+					.pRasterizationState = &rasterizer,
 					.pMultisampleState = &multisampling,
 					.pDepthStencilState = &skyboxDepthStencil,
 					.pColorBlendState = &skyboxColorBlending,
@@ -1656,7 +1824,7 @@ void GraphicsPass::CreateGraphicsPipelines()
 			.vertexAttributeDescriptionCount = 0,
 			.pVertexAttributeDescriptions = nullptr
 		};
-			
+
 		vk::PushConstantRange pcRange{
 			.stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
 			.offset = 0,
@@ -1678,15 +1846,15 @@ void GraphicsPass::CreateGraphicsPipelines()
 		pipeline_layouts_.cloth = vk::raii::PipelineLayout(context_.device_, pipelineLayoutInfo);
 
 
-		vk::PipelineRasterizationStateCreateInfo clothRasterizer{
+		vk::PipelineRasterizationStateCreateInfo rasterizer{
 			.depthClampEnable = vk::False,
 			.rasterizerDiscardEnable = vk::False,
 			.polygonMode = vk::PolygonMode::eFill,
 			.cullMode = vk::CullModeFlagBits::eNone,
 			.frontFace = vk::FrontFace::eCounterClockwise,
-			.depthBiasEnable = vk::False
+			.depthBiasEnable = vk::False,
+			.lineWidth = 1.0f
 		};
-		clothRasterizer.lineWidth = 1.0f;
 
 		vk::PipelineDepthStencilStateCreateInfo clothDepthStencil{
 			.depthTestEnable = vk::True,
@@ -1704,7 +1872,7 @@ void GraphicsPass::CreateGraphicsPipelines()
 			.pVertexInputState = &vertexInputInfo,
 			.pInputAssemblyState = &inputAssembly,
 			.pViewportState = &viewportState,
-			.pRasterizationState = &clothRasterizer,
+			.pRasterizationState = &rasterizer,
 			.pMultisampleState = &multisampling,
 			.pDepthStencilState = &clothDepthStencil,
 			.pColorBlendState = &colorBlending,
@@ -1712,17 +1880,17 @@ void GraphicsPass::CreateGraphicsPipelines()
 			.layout = pipeline_layouts_.cloth,
 			.renderPass = nullptr },
 		  {
-			  .colorAttachmentCount = static_cast<uint32_t>(geometry_buffers_.formats.size()), 
+			  .colorAttachmentCount = static_cast<uint32_t>(geometry_buffers_.formats.size()),
 			  .pColorAttachmentFormats = geometry_buffers_.formats.data(),
 			  .depthAttachmentFormat = depthFormat}
 		};
 		pipelines_.cloth_solid = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 
-		clothRasterizer.polygonMode = vk::PolygonMode::eLine;
+		rasterizer.polygonMode = vk::PolygonMode::eLine;
 
 		pipelines_.cloth_wireframe = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 
-		clothRasterizer.polygonMode = vk::PolygonMode::ePoint;
+		rasterizer.polygonMode = vk::PolygonMode::ePoint;
 		pipelines_.cloth_point = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 	}
 
@@ -1755,17 +1923,17 @@ void GraphicsPass::CreateGraphicsPipelines()
 			.pVertexAttributeDescriptions = nullptr
 		};
 
-		vk::PushConstantRange pcRange{
-			.stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
-			.offset = 0,
-			.size = static_cast<uint32_t>(sizeof(PushConstant::SoftBody))
-		};
-
 		// Pipeline Layout
 		std::array<vk::DescriptorSetLayout, 2> setLayouts(
 			*set_layouts_.global,
 			*set_layouts_.softbody
 		);
+
+		vk::PushConstantRange pcRange{
+			.stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+			.offset = 0,
+			.size = static_cast<uint32_t>(sizeof(PushConstant::SoftBody))
+		};
 
 		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
 			.setLayoutCount = setLayouts.size(),
@@ -1776,15 +1944,15 @@ void GraphicsPass::CreateGraphicsPipelines()
 		pipeline_layouts_.softbody = vk::raii::PipelineLayout(context_.device_, pipelineLayoutInfo);
 
 
-		vk::PipelineRasterizationStateCreateInfo softbodyRasterizer{
+		vk::PipelineRasterizationStateCreateInfo rasterizer{
 			.depthClampEnable = vk::False,
 			.rasterizerDiscardEnable = vk::False,
 			.polygonMode = vk::PolygonMode::eFill,
 			.cullMode = vk::CullModeFlagBits::eBack,
 			.frontFace = vk::FrontFace::eCounterClockwise,
-			.depthBiasEnable = vk::False
+			.depthBiasEnable = vk::False,
+			.lineWidth = 1.0f
 		};
-		softbodyRasterizer.lineWidth = 1.0f;
 
 		// Pipeline
 		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
@@ -1794,7 +1962,7 @@ void GraphicsPass::CreateGraphicsPipelines()
 			.pVertexInputState = &vertexInputInfo,
 			.pInputAssemblyState = &inputAssembly,
 			.pViewportState = &viewportState,
-			.pRasterizationState = &softbodyRasterizer,
+			.pRasterizationState = &rasterizer,
 			.pMultisampleState = &multisampling,
 			.pDepthStencilState = &depthStencil,
 			.pColorBlendState = &colorBlending,
@@ -1808,10 +1976,179 @@ void GraphicsPass::CreateGraphicsPipelines()
 		};
 		pipelines_.softbody_solid = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 
-		softbodyRasterizer.polygonMode = vk::PolygonMode::eLine;
+		rasterizer.polygonMode = vk::PolygonMode::eLine;
 		pipelines_.softbody_wireframe = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 
-		softbodyRasterizer.polygonMode = vk::PolygonMode::ePoint;
+		rasterizer.polygonMode = vk::PolygonMode::ePoint;
 		pipelines_.softbody_point = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+	}
+
+	// Skinned Model
+	{
+		// Shader
+		auto vertCode = vku::ReadFile("shaders/spv/skinned_model.vert.spv");
+		auto fragCode = vku::ReadFile("shaders/spv/skinned_model.frag.spv");
+
+		vk::raii::ShaderModule vertModule = vku::CreateShaderModule(context_.device_, vertCode);
+		vk::raii::ShaderModule fragModule = vku::CreateShaderModule(context_.device_, fragCode);
+
+		vk::PipelineShaderStageCreateInfo vertStage{
+			.stage = vk::ShaderStageFlagBits::eVertex,
+			.module = *vertModule,
+			.pName = "main"
+		};
+		vk::PipelineShaderStageCreateInfo fragStage{
+			.stage = vk::ShaderStageFlagBits::eFragment,
+			.module = *fragModule,
+			.pName = "main"
+		};
+		std::array<vk::PipelineShaderStageCreateInfo, 2> stages{ vertStage, fragStage };
+
+		// Vectex Input
+		auto vdesc = Vertex::GetInputDescription(vku::VertexIncludeInfo{ true, true, true, true, true });
+
+		vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
+		vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(vdesc.bindings.size());
+		vertexInputInfo.pVertexBindingDescriptions = vdesc.bindings.data();
+		vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(vdesc.attributes.size());
+		vertexInputInfo.pVertexAttributeDescriptions = vdesc.attributes.data();
+
+
+		// Pipeline Layout
+		std::array<vk::DescriptorSetLayout, 4> setLayouts(
+			*set_layouts_.global,
+			*set_layouts_.model,
+			*texture_manager_.set_layouts_.tex2d,
+			*set_layouts_.skinned_model
+		);
+
+		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
+			.setLayoutCount = setLayouts.size(),
+			.pSetLayouts = setLayouts.data(),
+			.pushConstantRangeCount = 0
+		};
+		pipeline_layouts_.skinned_model = vk::raii::PipelineLayout(context_.device_, pipelineLayoutInfo);
+
+		vk::PipelineRasterizationStateCreateInfo rasterizer{
+			.depthClampEnable = vk::False,
+			.rasterizerDiscardEnable = vk::False,
+			.polygonMode = vk::PolygonMode::eFill,
+			.cullMode = vk::CullModeFlagBits::eBack,
+			.frontFace = vk::FrontFace::eCounterClockwise,
+			.depthBiasEnable = vk::False,
+			.lineWidth = 1.0f
+		};
+
+		// Pipeline
+		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
+		  {
+			.stageCount = 2,
+			.pStages = stages.data(),
+			.pVertexInputState = &vertexInputInfo,
+			.pInputAssemblyState = &inputAssembly,
+			.pViewportState = &viewportState,
+			.pRasterizationState = &rasterizer,
+			.pMultisampleState = &multisampling,
+			.pDepthStencilState = &depthStencil,
+			.pColorBlendState = &colorBlending,
+			.pDynamicState = &dynamicState,
+			.layout = pipeline_layouts_.skinned_model,
+			.renderPass = nullptr },
+		  {
+			  .colorAttachmentCount = static_cast<uint32_t>(geometry_buffers_.formats.size()),
+			  .pColorAttachmentFormats = geometry_buffers_.formats.data(),
+			  .depthAttachmentFormat = depthFormat}
+		};
+		pipelines_.skinned_model_solid = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+
+		rasterizer.polygonMode = vk::PolygonMode::eLine;
+		pipelines_.skinned_model_wireframe = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+
+		rasterizer.polygonMode = vk::PolygonMode::ePoint;
+		pipelines_.skinned_model_point = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+	}
+
+	// Debug Capsule
+	{
+		// Shader
+		auto vertCode = vku::ReadFile("shaders/spv/debug_capsule.vert.spv");
+		auto fragCode = vku::ReadFile("shaders/spv/debug_capsule.frag.spv");
+
+		vk::raii::ShaderModule vertModule = vku::CreateShaderModule(context_.device_, vertCode);
+		vk::raii::ShaderModule fragModule = vku::CreateShaderModule(context_.device_, fragCode);
+
+		vk::PipelineShaderStageCreateInfo vertStage{
+			.stage = vk::ShaderStageFlagBits::eVertex,
+			.module = *vertModule,
+			.pName = "main"
+		};
+		vk::PipelineShaderStageCreateInfo fragStage{
+			.stage = vk::ShaderStageFlagBits::eFragment,
+			.module = *fragModule,
+			.pName = "main"
+		};
+		std::array<vk::PipelineShaderStageCreateInfo, 2> stages{ vertStage, fragStage };
+
+		// Vectex Input
+		auto vdesc = Vertex::GetInputDescription(vku::VertexIncludeInfo{ true, true, false, false, false });
+
+		vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
+		vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(vdesc.bindings.size());
+		vertexInputInfo.pVertexBindingDescriptions = vdesc.bindings.data();
+		vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(vdesc.attributes.size());
+		vertexInputInfo.pVertexAttributeDescriptions = vdesc.attributes.data();
+
+		// Pipeline Layout
+		std::array<vk::DescriptorSetLayout, 1> setLayouts(
+			*set_layouts_.global
+		);
+
+		vk::PushConstantRange pcRange{
+			.stageFlags = vk::ShaderStageFlagBits::eVertex,
+			.offset = 0,
+			.size = static_cast<uint32_t>(sizeof(glm::mat4) + sizeof(glm::vec4))
+		};
+
+		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
+			.setLayoutCount = setLayouts.size(),
+			.pSetLayouts = setLayouts.data(),
+			.pushConstantRangeCount = 1,
+			.pPushConstantRanges = &pcRange
+		};
+		pipeline_layouts_.debug_capsule = vk::raii::PipelineLayout(context_.device_, pipelineLayoutInfo);
+
+		vk::PipelineRasterizationStateCreateInfo rasterizer{
+			.depthClampEnable = vk::False,
+			.rasterizerDiscardEnable = vk::False,
+			.polygonMode = vk::PolygonMode::eFill,
+			.cullMode = vk::CullModeFlagBits::eBack,
+			.frontFace = vk::FrontFace::eCounterClockwise,
+			.depthBiasEnable = vk::False,
+			.lineWidth = 1.0f,
+		};
+
+		// Pipeline
+		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
+		  {
+			.stageCount = 2,
+			.pStages = stages.data(),
+			.pVertexInputState = &vertexInputInfo,
+			.pInputAssemblyState = &inputAssembly,
+			.pViewportState = &viewportState,
+			.pRasterizationState = &rasterizer,
+			.pMultisampleState = &multisampling,
+			.pDepthStencilState = &depthStencil,
+			.pColorBlendState = &colorBlending,
+			.pDynamicState = &dynamicState,
+			.layout = pipeline_layouts_.debug_capsule,
+			.renderPass = nullptr },
+		  {
+			  .colorAttachmentCount = static_cast<uint32_t>(geometry_buffers_.formats.size()),
+			  .pColorAttachmentFormats = geometry_buffers_.formats.data(),
+			  .depthAttachmentFormat = depthFormat}
+		};
+		rasterizer.polygonMode = vk::PolygonMode::eLine;
+		pipelines_.debug_capsule = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+
 	}
 }
