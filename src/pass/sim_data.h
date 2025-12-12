@@ -1,6 +1,7 @@
 #pragma once
 
 #include "model_data.h"
+#include "particle_manager.h"
 
 struct SimData {
 
@@ -37,8 +38,10 @@ struct SimData {
 	};
 	static_assert(sizeof(Edge) == 16, "Edge must be 16 bytes");
 	std::vector<Edge> edges;
-	std::array<uint32_t, 6> pass_offsets;  // cloth 4 + softbody 1
-	std::vector<std::pair<uint32_t, uint32_t>> passes[5];
+	std::vector<uint32_t> pass_offsets;  // cloth + softbody
+	std::vector<std::pair<uint32_t, uint32_t>> passes;
+
+	uint32_t num_colors = 0;
 
 	// SoftBody Stretch Edge
 	std::vector<Edge> softbody_stretch_edges;
@@ -123,6 +126,167 @@ struct SimData {
 		float phi = std::atan2(s, c); // atan(s,c)¿Í µ¿ÀÏ
 
 		return phi;
+	}
+
+	void BuildStretchConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices, std::vector<Cloth> cloth)
+	{
+		uint32_t offsetIndices = cloth[0].offset_indices;
+
+		uint32_t numIndices = 0;
+		for (auto& c : cloth)
+		{
+			numIndices += c.num_indices;
+		}
+
+		const size_t numTris = numIndices / 3;
+
+		struct RawEdge {
+			uint32_t i;
+			uint32_t j;
+		};
+		std::vector<RawEdge> rawEdges;
+
+		auto addEdge = [&](uint32_t a, uint32_t b)
+			{
+				if (a == b) return;
+				if (a > b) std::swap(a, b);
+				rawEdges.push_back({ a, b });
+			};
+
+		for (size_t t = 0; t < numTris; ++t)
+		{
+			uint32_t i0 = indices[offsetIndices + 3 * t + 0];
+			uint32_t i1 = indices[offsetIndices + 3 * t + 1];
+			uint32_t i2 = indices[offsetIndices + 3 * t + 2];
+
+			addEdge(i0, i1);
+			addEdge(i1, i2);
+			addEdge(i2, i0);
+		}
+
+		std::sort(rawEdges.begin(), rawEdges.end(),
+			[](const RawEdge& a, const RawEdge& b)
+			{
+				if (a.i != b.i) return a.i < b.i;
+				return a.j < b.j;
+			});
+
+		rawEdges.erase(
+			std::unique(rawEdges.begin(), rawEdges.end(),
+				[](const RawEdge& a, const RawEdge& b)
+				{
+					return (a.i == b.i) && (a.j == b.j);
+				}),
+			rawEdges.end()
+		);
+
+		struct StretchEdge {
+			uint32_t i;
+			uint32_t j;
+			float    rest;
+			uint32_t color;
+		};
+		std::vector<StretchEdge> stretch;
+		edges.reserve(rawEdges.size());
+
+		for (auto& e : rawEdges)
+		{
+			StretchEdge se{};
+			se.i = e.i;
+			se.j = e.j;
+
+			glm::vec3 pi = positions[se.i];
+			glm::vec3 pj = positions[se.j];
+			se.rest = glm::length(pj - pi);
+			if (se.rest < 1e-6f) continue;
+
+			stretch.push_back(se);
+		}
+
+		std::vector<uint32_t> vertMask(positions.size(), 0u);
+
+		uint32_t maxColorUsed = 0;
+
+		for (auto& e : stretch)
+		{
+			uint32_t im = vertMask[e.i];
+			uint32_t jm = vertMask[e.j];
+
+			uint32_t used = im | jm;
+
+			uint32_t color = 0;
+			while (used & (1u << color)) {
+				++color;
+			}
+
+			e.color = color;
+			maxColorUsed = std::max(maxColorUsed, color);
+
+			vertMask[e.i] |= (1u << color);
+			vertMask[e.j] |= (1u << color);
+		}
+
+		std::cout << "Stretch edges colored. numColors = "
+			<< (maxColorUsed + 1) << std::endl;
+
+		std::sort(stretch.begin(), stretch.end(),
+			[](const StretchEdge& a, const StretchEdge& b) {
+				return a.color < b.color;
+			});
+
+		num_colors = maxColorUsed + 1;
+		std::vector<uint32_t> colorOffset(num_colors + 1, 0);
+
+		uint32_t currentColor = 0;
+		colorOffset[0] = 0;
+		for (uint32_t i = 0; i < stretch.size(); ++i) {
+			StretchEdge s = stretch[i];
+			while (currentColor < s.color) {
+				++currentColor;
+				colorOffset[currentColor] = i;
+			}
+
+			Edge e;
+			e.i = s.i;
+			e.j = s.j;
+			e.rest = s.rest;
+			e.lambda = 0.0f;
+			edges.push_back(e);
+		}
+		colorOffset[num_colors] = edges.size();
+
+		pass_offsets = std::move(colorOffset);
+	}
+
+	void BuildShearConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices)
+	{
+		const size_t numTris = indices.size() / 3;
+
+		for (size_t t = 0; t < numTris; ++t)
+		{
+			uint32_t i0 = indices[3 * t + 0];
+			uint32_t i1 = indices[3 * t + 1];
+			uint32_t i2 = indices[3 * t + 2];
+
+			const glm::vec3& x0 = positions[i0];
+			const glm::vec3& x1 = positions[i1];
+			const glm::vec3& x2 = positions[i2];
+
+			glm::vec3 e1 = x1 - x0;
+			glm::vec3 e2 = x2 - x0;
+
+			float restDot = glm::dot(e1, e2);
+
+			SimData::Shear c;
+			c.i0 = i0;
+			c.i1 = i1;
+			c.i2 = i2;
+			c.rest_dot = restDot;
+			c.lambda = 0.0f;
+
+			shears.push_back(c);
+		}
+		num_shears = static_cast<uint32_t>(shears.size());
 	}
 
 	void BuildBendConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices)
@@ -244,17 +408,17 @@ struct SimData {
 	{
 		// Edge - Stretch, Diagonal
 		{
-			uint32_t idx = 0;
-			for (int p = 0; p < pass_offsets.size(); ++p) {
-				for (auto [i, j] : passes[p]) {
-					glm::vec3 pi = glm::vec3(positions[i]);
-					glm::vec3 pj = glm::vec3(positions[j]);
-					float rest = glm::length(pj - pi);
-					edges[idx].rest = rest;
-					edges[idx].lambda = 0.0f;
-					idx++;
-				}
-			}
+			//uint32_t idx = 0;
+			//for (int p = 0; p < pass_offsets.size(); ++p) {
+			//	for (auto [i, j] : passes[p]) {
+			//		glm::vec3 pi = glm::vec3(positions[i]);
+			//		glm::vec3 pj = glm::vec3(positions[j]);
+			//		float rest = glm::length(pj - pi);
+			//		edges[idx].rest = rest;
+			//		edges[idx].lambda = 0.0f;
+			//		idx++;
+			//	}
+			//}
 		}
 
 		// Shear

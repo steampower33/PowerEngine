@@ -65,7 +65,8 @@ public:
 	ParticleManager& operator=(ParticleManager&& rhs) = delete;
 	~ParticleManager();
 
-	void SetCloth(Cloth& cloth);
+	void SetPlaneCloth(Cloth& cloth);
+	void SetClothFromMesh(Cloth& cloth, Mesh& mesh);
 	void Reset(Cloth& cloth);
 
 	Context& context_;

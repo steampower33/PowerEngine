@@ -384,48 +384,48 @@ void SimulationPassCPU::CreateConstraintDatas()
 	total_particles_ = cloth.num_particle;
 	uint32_t N = total_particles_;
 
-	auto CreateColoringPass = [&](Cloth cloth)
-		{
-			uint32_t nx1 = cloth.nx + 1;
-			uint32_t ny1 = cloth.ny + 1;
+	//auto CreateColoringPass = [&](Cloth cloth)
+	//	{
+	//		uint32_t nx1 = cloth.nx + 1;
+	//		uint32_t ny1 = cloth.ny + 1;
 
-			auto vid = [&](int x, int y) {
-				return cloth.offset_particle + uint32_t(y * nx1 + x);
-				};
+	//		auto vid = [&](int x, int y) {
+	//			return cloth.offset_particle + uint32_t(y * nx1 + x);
+	//			};
 
-			// Set stretch edges coloring
-			for (int x = 0; x < nx1; ++x)
-				for (int y = 0; y + 1 < ny1; y += 2)
-					datas_.passes[0].push_back({ vid(x,y), vid(x,y + 1) });
+	//		// Set stretch edges coloring
+	//		for (int x = 0; x < nx1; ++x)
+	//			for (int y = 0; y + 1 < ny1; y += 2)
+	//				datas_.passes[0].push_back({ vid(x,y), vid(x,y + 1) });
 
-			for (int x = 0; x < nx1; ++x)
-				for (int y = 1; y + 1 < ny1; y += 2)
-					datas_.passes[1].push_back({ vid(x,y), vid(x,y + 1) });
+	//		for (int x = 0; x < nx1; ++x)
+	//			for (int y = 1; y + 1 < ny1; y += 2)
+	//				datas_.passes[1].push_back({ vid(x,y), vid(x,y + 1) });
 
-			for (int y = 0; y < ny1; ++y)
-				for (int x = 0; x + 1 < nx1; x += 2)
-					datas_.passes[2].push_back({ vid(x,y), vid(x + 1,y) });
+	//		for (int y = 0; y < ny1; ++y)
+	//			for (int x = 0; x + 1 < nx1; x += 2)
+	//				datas_.passes[2].push_back({ vid(x,y), vid(x + 1,y) });
 
-			for (int y = 0; y < ny1; ++y)
-				for (int x = 1; x + 1 < nx1; x += 2)
-					datas_.passes[3].push_back({ vid(x,y), vid(x + 1,y) });
-		};
+	//		for (int y = 0; y < ny1; ++y)
+	//			for (int x = 1; x + 1 < nx1; x += 2)
+	//				datas_.passes[3].push_back({ vid(x,y), vid(x + 1,y) });
+	//	};
 
-	CreateColoringPass(cloth);
+	//CreateColoringPass(cloth);
 
-	// Set Edges using coloring
-	datas_.pass_offsets[0] = 0;
+	//// Set Edges using coloring
+	//datas_.pass_offsets[0] = 0;
 
-	for (int p = 0; p < datas_.pass_offsets.size() - 1; ++p) {
-		for (auto [i, j] : datas_.passes[p]) {
-			glm::vec3 pi = glm::vec3(pm.positions_[i]);
-			glm::vec3 pj = glm::vec3(pm.positions_[j]);
-			float rest = glm::length(pj - pi);
+	//for (int p = 0; p < datas_.pass_offsets.size() - 1; ++p) {
+	//	for (auto [i, j] : datas_.passes[p]) {
+	//		glm::vec3 pi = glm::vec3(pm.positions_[i]);
+	//		glm::vec3 pj = glm::vec3(pm.positions_[j]);
+	//		float rest = glm::length(pj - pi);
 
-			datas_.edges.push_back({ i, j, rest, 0.0f });
-		}
-		datas_.pass_offsets[p + 1] = static_cast<uint32_t>(datas_.edges.size());
-	}
+	//		datas_.edges.push_back({ i, j, rest, 0.0f });
+	//	}
+	//	datas_.pass_offsets[p + 1] = static_cast<uint32_t>(datas_.edges.size());
+	//}
 
 	datas_.num_edges = static_cast<uint32_t>(datas_.edges.size());
 	//if (datas_.num_edges != ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)))

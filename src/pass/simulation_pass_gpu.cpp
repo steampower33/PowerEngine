@@ -274,7 +274,7 @@ void SimulationPassGPU::RecordComputeCloth(uint32_t currentFrame, vku::TestScene
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_stretch);
 
-				for (uint32_t c = 0; c < 4; ++c) {
+				for (uint32_t c = 0; c < datas_.num_colors; ++c) {
 					uint32_t base = datas_.pass_offsets[c];
 					uint32_t count = datas_.pass_offsets[c + 1] - datas_.pass_offsets[c];
 					if (!count) continue;
@@ -302,8 +302,8 @@ void SimulationPassGPU::RecordComputeCloth(uint32_t currentFrame, vku::TestScene
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_softbody_stretch);
 
-				uint32_t base = datas_.pass_offsets[4];
-				uint32_t count = datas_.pass_offsets[5] - datas_.pass_offsets[4];
+				uint32_t base = datas_.pass_offsets[datas_.num_colors];
+				uint32_t count = datas_.pass_offsets[datas_.num_colors + 1] - datas_.pass_offsets[datas_.num_colors];
 				if (!count) continue;
 
 				push_constants_.solve.base = base;
@@ -724,93 +724,14 @@ void SimulationPassGPU::CreateClothConstraintDatas()
 	cloth_indices_ = pm.num_cloth_indices_;
 	uint32_t N = cloth_particles_;
 
-	auto CreateColoringPass = [&](Cloth cloth)
-		{
-			uint32_t nx1 = cloth.nx + 1;
-			uint32_t ny1 = cloth.ny + 1;
-
-			auto vid = [&](int x, int y) {
-				return cloth.offset_particle + uint32_t(y * nx1 + x);
-				};
-
-			// Set stretch edges coloring
-			for (int x = 0; x < nx1; ++x)
-				for (int y = 0; y + 1 < ny1; y += 2)
-					datas_.passes[0].push_back({ vid(x,y), vid(x,y + 1) });
-
-			for (int x = 0; x < nx1; ++x)
-				for (int y = 1; y + 1 < ny1; y += 2)
-					datas_.passes[1].push_back({ vid(x,y), vid(x,y + 1) });
-
-			for (int y = 0; y < ny1; ++y)
-				for (int x = 0; x + 1 < nx1; x += 2)
-					datas_.passes[2].push_back({ vid(x,y), vid(x + 1,y) });
-
-			for (int y = 0; y < ny1; ++y)
-				for (int x = 1; x + 1 < nx1; x += 2)
-					datas_.passes[3].push_back({ vid(x,y), vid(x + 1,y) });
-		};
-
-	for (auto& cloth : pm.clothes_)
-	{
-		CreateColoringPass(cloth);
-	}
-
-	// Set Edges using coloring
-	datas_.pass_offsets[0] = 0;
-
-	for (int p = 0; p < datas_.pass_offsets.size() - 1; ++p) {
-		for (auto [i, j] : datas_.passes[p]) {
-			glm::vec3 pi = glm::vec3(pm.positions_[i]);
-			glm::vec3 pj = glm::vec3(pm.positions_[j]);
-			float rest = glm::length(pj - pi);
-
-			datas_.edges.push_back({ i, j, rest, 0.0f });
-		}
-		datas_.pass_offsets[p + 1] = static_cast<uint32_t>(datas_.edges.size());
-	}
-
+	datas_.BuildStretchConstraints(pm.positions_, pm.indices_, pm.clothes_);
 	datas_.num_edges = static_cast<uint32_t>(datas_.edges.size());
-	//if (datas_.num_edges != ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)))
-	//{
-	//	std::cout << datas_.num_edges << " " << ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)) << std::endl;
-	//	throw std::runtime_error("edge size is not right");
-	//}
 
-	// Set shears
-	const size_t numTris = cloth_indices_ / 3;
-	//datas_.shears.reserve(numTris);
-
-	for (size_t t = 0; t < numTris; ++t)
-	{
-		uint32_t i0 = pm.indices_[3 * t + 0];
-		uint32_t i1 = pm.indices_[3 * t + 1];
-		uint32_t i2 = pm.indices_[3 * t + 2];
-
-		const glm::vec3& x0 = pm.positions_[i0];
-		const glm::vec3& x1 = pm.positions_[i1];
-		const glm::vec3& x2 = pm.positions_[i2];
-
-		glm::vec3 e1 = x1 - x0;
-		glm::vec3 e2 = x2 - x0;
-
-		float restDot = glm::dot(e1, e2);
-
-		SimData::Shear c;
-		c.i0 = i0;
-		c.i1 = i1;
-		c.i2 = i2;
-		c.rest_dot = restDot;
-		c.lambda = 0.0f;
-
-		datas_.shears.push_back(c);
-	}
-	datas_.num_shears = static_cast<uint32_t>(datas_.shears.size());
+	datas_.BuildShearConstraints(pm.positions_, pm.indices_);
 
 	datas_.BuildBendConstraints(pm.positions_, pm.indices_);
 
 	datas_.BuildAreaConstraints(pm.positions_, pm.indices_);
-
 }
 
 void SimulationPassGPU::CreateSoftBodyConstraintDatas()
@@ -854,7 +775,7 @@ void SimulationPassGPU::CreateSoftBodyConstraintDatas()
 		pushEdge(i2, i3);
 	}
 	uint32_t after = datas_.edges.size();
-	datas_.pass_offsets[5] = after;
+	datas_.pass_offsets.push_back(after);
 
 	datas_.num_edges = static_cast<uint32_t>(datas_.edges.size());
 

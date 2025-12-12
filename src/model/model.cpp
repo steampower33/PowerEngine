@@ -52,6 +52,27 @@ void Model::LoadModel(const std::string& modelPath, vku::VertexIncludeInfo& vert
 	ParseSkins(model);
 	ParseAnimations(model);
 
+	bool hasSkin = !skin_.empty();
+
+	if (!hasSkin) {
+		int rootMeshNode = -1;
+		for (int i = 0; i < (int)node_.size(); ++i) {
+			if (node_[i].meshIndex >= 0 && node_[i].parent < 0) {
+				rootMeshNode = i;
+				break;
+			}
+		}
+
+		if (rootMeshNode >= 0) {
+			glm::mat4 M = node_[rootMeshNode].localMatrix; // or worldMatrix
+
+			for (auto& v : mesh_.vertices) {
+				glm::vec4 p = M * glm::vec4(v.pos, 1.0f);
+				v.pos = glm::vec3(p);
+			}
+		}
+	}
+
 	for (int i = 0; i < (int)node_.size(); ++i) {
 		if (node_[i].parent < 0) {
 			UpdateWorldTransforms(node_, i, glm::mat4(1.0f));

@@ -3,6 +3,7 @@
 #include "vulkan_utils.h"
 #include "model.h"
 #include "model_manager.h"
+#include "geometry_generator.h"
 
 #include "particle_manager.h"
 
@@ -23,41 +24,44 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager)
 
 		cloth.color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
 
-		cloth.origin = glm::vec3(0.0f);
+		cloth.origin = glm::vec3(-1.0f, 0.0f, 0.0f);
 		cloth.angle_deg = 0.0f;
 		cloth.axis = glm::vec3(0, 1, 0);
 
 		cloth.num_particle = cloth.nx1 * cloth.ny1;
 
-		SetCloth(cloth);
+		//SetPlaneCloth(cloth);
+
+		//Mesh mesh = GeometryGenerator::MakeCapsule(0.5f, 0.5f, 1.0f, 5);
+		SetClothFromMesh(cloth, modelManager.cloth_->mesh_);
 
 		clothes_.push_back(cloth);
 	}
 
-	//{
-	//	Cloth cloth{};
+	{
+		Cloth cloth{};
 
-	//	cloth.spacing = 0.015f;
-	//	cloth.gsm = 0.2f;
-	//	cloth.cloth_size = glm::vec2(1.0f, 1.0f);
-	//	cloth.nx = (uint32_t)std::round(cloth.cloth_size.x / cloth.spacing);
-	//	cloth.ny = (uint32_t)std::round(cloth.cloth_size.y / cloth.spacing);
-	//	cloth.nx1 = cloth.nx + 1;
-	//	cloth.ny1 = cloth.ny + 1;
-	//	cloth.height = 3.0f;
+		cloth.spacing = 0.015f;
+		cloth.gsm = 0.2f;
+		cloth.cloth_size = glm::vec2(1.0f, 1.0f);
+		cloth.nx = (uint32_t)std::round(cloth.cloth_size.x / cloth.spacing);
+		cloth.ny = (uint32_t)std::round(cloth.cloth_size.y / cloth.spacing);
+		cloth.nx1 = cloth.nx + 1;
+		cloth.ny1 = cloth.ny + 1;
+		cloth.height = 3.0f;
 
-	//	cloth.color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
+		cloth.color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
 
-	//	cloth.origin = glm::vec3(0.0f);
-	//	cloth.angle_deg = 0.0f;
-	//	cloth.axis = glm::vec3(0, 1, 0);
+		cloth.origin = glm::vec3(-1.0f, 0.0f, 0.0f);
+		cloth.angle_deg = 0.0f;
+		cloth.axis = glm::vec3(0, 1, 0);
 
-	//	cloth.num_particle = cloth.nx1 * cloth.ny1;
+		cloth.num_particle = cloth.nx1 * cloth.ny1;
 
-	//	SetCloth(cloth);
+		SetPlaneCloth(cloth);
 
-	//	clothes_.push_back(cloth);
-	//}
+		clothes_.push_back(cloth);
+	}
 
 	//{
 	//	Cloth cloth{};
@@ -182,7 +186,7 @@ ParticleManager::~ParticleManager()
 
 }
 
-void ParticleManager::SetCloth(Cloth& cloth)
+void ParticleManager::SetPlaneCloth(Cloth& cloth)
 {
 	const int nx = cloth.nx;
 	const int ny = cloth.ny;
@@ -296,8 +300,111 @@ void ParticleManager::SetCloth(Cloth& cloth)
 	num_cloth_particles_ = positions_.size();
 	num_cloth_indices_ = indices_.size();
 
-	//inverse_masses[cloth.offset_particle] = 0.0f;
-	//inverse_masses[cloth.offset_particle + nx1 - 1] = 0.0f;
+}
+
+void ParticleManager::SetClothFromMesh(Cloth& cloth, Mesh& mesh)
+{
+	const int nx = cloth.nx;
+	const int ny = cloth.ny;
+	const int nx1 = cloth.nx1;
+	const int ny1 = cloth.ny1;
+
+	cloth.offset_particle = num_cloth_particles_;
+	cloth.offset_indices = num_cloth_indices_;
+
+	auto vid = [&](int x, int y) { return cloth.offset_particle + uint32_t(y * nx1 + x); };
+
+	const uint32_t N = nx1 * ny1;
+
+	float angle_rad = glm::radians(cloth.angle_deg);
+	glm::mat4 R = glm::rotate(glm::mat4(1.0f), angle_rad, glm::normalize(cloth.axis));
+
+	// Set positions, velocities, pred_positions
+	for (uint32_t i = 0; i < mesh.vertices.size(); i++)
+	{
+		glm::vec4 local(mesh.vertices[i].pos, 1.0f);
+
+		glm::vec3 rotated = glm::vec3(R * local);
+
+		glm::vec3 worldPos = cloth.origin + rotated + glm::vec3(0.0f, cloth.height, 0.0f);
+
+		positions_.push_back(glm::vec4(worldPos, 1.0f));
+		velocities_.push_back(glm::vec4(0));
+		pred_positions_.push_back(glm::vec4(worldPos, 1.0f));
+		masses_.push_back(0.0f);
+		inverse_masses_.push_back(0.0f);
+		normals_.push_back(glm::vec4(0.0f));
+	}
+
+	cloth.num_particle = positions_.size() - cloth.offset_particle;
+
+	// Set indices
+	for (uint32_t i = 0; i < mesh.indices.size(); i++)
+	{
+		indices_.push_back(cloth.offset_indices + mesh.indices[i]);
+	}
+	cloth.num_indices = static_cast<uint32_t>(indices_.size() - cloth.offset_indices);
+
+	// Total area
+	float totalArea = 0.0f;
+	for (size_t t = cloth.offset_indices; t < cloth.offset_indices + cloth.num_indices; t += 3) {
+		uint32_t i0 = indices_[t + 0];
+		uint32_t i1 = indices_[t + 1];
+		uint32_t i2 = indices_[t + 2];
+
+		glm::vec3 p0 = glm::vec3(positions_[i0]);
+		glm::vec3 p1 = glm::vec3(positions_[i1]);
+		glm::vec3 p2 = glm::vec3(positions_[i2]);
+
+		glm::vec3 e1 = p1 - p0;
+		glm::vec3 e2 = p2 - p0;
+
+		float area = 0.5f * glm::length(glm::cross(e1, e2)); // Triangle area
+		totalArea += area;
+	}
+
+	float totalMassTarget = 10.0f;
+
+	// Area zero defence
+	float density = 0.0f;
+	if (totalArea > 0.0f) {
+		density = totalMassTarget / totalArea; // kg/m©÷
+	}
+
+	// Distribute mass to each triangle in proportion to area
+	for (size_t t = cloth.offset_indices; t < cloth.offset_indices + cloth.num_indices; t += 3) {
+		uint32_t i0 = indices_[t + 0];
+		uint32_t i1 = indices_[t + 1];
+		uint32_t i2 = indices_[t + 2];
+
+		glm::vec3 p0 = glm::vec3(positions_[i0]);
+		glm::vec3 p1 = glm::vec3(positions_[i1]);
+		glm::vec3 p2 = glm::vec3(positions_[i2]);
+
+		glm::vec3 e1 = p1 - p0;
+		glm::vec3 e2 = p2 - p0;
+
+		float area = 0.5f * glm::length(glm::cross(e1, e2));
+
+		float triMass = density * area;
+
+		float share = triMass / 3.0f;
+		masses_[i0] += share;
+		masses_[i1] += share;
+		masses_[i2] += share;
+	}
+
+	// Set inverse masses using mass
+	for (uint32_t i = cloth.offset_particle; i < cloth.offset_particle + cloth.num_particle; i++) {
+		float m = masses_[i];
+		if (m > 0.0f)
+			inverse_masses_[i] = 1.0f / m;
+		else
+			inverse_masses_[i] = 0.0f;
+	}
+
+	num_cloth_particles_ = positions_.size();
+	num_cloth_indices_ = indices_.size();
 }
 
 void ParticleManager::Reset(Cloth& cloth)
