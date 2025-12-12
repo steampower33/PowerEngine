@@ -606,13 +606,9 @@ namespace vku
 						in >> n0 >> n1 >> n2;
 						n0--; n1--; n2--;
 
-						//tris.push_back((uint32_t)n0);
-						//tris.push_back((uint32_t)n1);
-						//tris.push_back((uint32_t)n2);
-
-						tris.push_back((uint32_t)n2);
-						tris.push_back((uint32_t)n1);
 						tris.push_back((uint32_t)n0);
+						tris.push_back((uint32_t)n1);
+						tris.push_back((uint32_t)n2);
 
 					}
 					else

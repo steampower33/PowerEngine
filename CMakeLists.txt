@@ -30,9 +30,13 @@ set_source_files_properties(${IMGUI_SOURCES} PROPERTIES SKIP_PRECOMPILE_HEADERS 
 
 add_subdirectory(external/vulkan_radix_sort)
 
+
+set(CMAKE_PREFIX_PATH "F:/vcpkg/installed/x64-windows" ${CMAKE_PREFIX_PATH})
+
 find_package(Vulkan REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(KTX CONFIG REQUIRED)
+find_package(fmt CONFIG REQUIRED)
 
 file(GLOB SRC CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/context/*.cpp"
@@ -92,6 +96,7 @@ target_link_libraries(PowerEngine
     imgui
     KTX::ktx
     vk_radix_sort
+    fmt::fmt-header-only
 )
 target_include_directories(PowerEngine
   PRIVATE
