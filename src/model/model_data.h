@@ -67,8 +67,10 @@ struct CapsuleColliderDef {
 	float radius;
 };
 
-struct CapsuleInstance {
+struct Collider {
 	glm::vec3 p0;
+	int kind; // kind: 0 = sphere, 1 = plane, 2 = capsule
 	glm::vec3 p1;
 	float radius;
 };
+static_assert(sizeof(Collider) == 32, "Collider must be 32 bytes");

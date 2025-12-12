@@ -1,5 +1,7 @@
 #pragma once
 
+#include "model_data.h"
+
 struct SimData {
 
 	struct Compliance {
@@ -21,6 +23,7 @@ struct SimData {
 	uint32_t num_bends = 0;
 	uint32_t num_areas = 0;
 	uint32_t num_volumes = 0;
+	uint32_t num_colliders = 0;
 
 	float frame_dt = 60.0f;
 	int substeps = 10;
@@ -92,6 +95,8 @@ struct SimData {
 		uint32_t triIndex;
 		uint32_t oppVertex;
 	};
+
+	std::vector<Collider> colliders;
 
 	float ComputeRestBendAngle(
 		uint32_t i1, uint32_t i2,
@@ -282,6 +287,7 @@ struct SimData {
 		vk::raii::Buffer grab_state{ nullptr };
 		vk::raii::Buffer area{ nullptr };
 		vk::raii::Buffer volume{ nullptr };
+		vk::raii::Buffer collider{ nullptr };
 	} ssbos_;
 
 	struct SSBOMemory {
@@ -295,6 +301,7 @@ struct SimData {
 		vk::raii::DeviceMemory grab_state{ nullptr };
 		vk::raii::DeviceMemory area{ nullptr };
 		vk::raii::DeviceMemory volume{ nullptr };
+		vk::raii::DeviceMemory collider{ nullptr };
 	} ssbo_memories_;
 
 	struct SSBOSize {
@@ -308,6 +315,7 @@ struct SimData {
 		vk::DeviceSize grab_state = 0;
 		vk::DeviceSize area = 0;
 		vk::DeviceSize volume = 0;
+		vk::DeviceSize collider = 0;
 	} ssbo_size_;
 
 	struct Staging {
@@ -315,6 +323,7 @@ struct SimData {
 		vk::raii::Buffer shear{ nullptr };
 		vk::raii::Buffer bend{ nullptr };
 		vk::raii::Buffer area{ nullptr };
+		vk::raii::Buffer collider{ nullptr };
 	} staging_;
 
 	struct StagingMemory {
@@ -322,6 +331,7 @@ struct SimData {
 		vk::raii::DeviceMemory shear{ nullptr };
 		vk::raii::DeviceMemory bend{ nullptr };
 		vk::raii::DeviceMemory area{ nullptr };
+		vk::raii::DeviceMemory collider{ nullptr };
 	} staging_memories_;
 
 	struct StagingMapped {
@@ -329,5 +339,6 @@ struct SimData {
 		void* shear{ nullptr };
 		void* bend{ nullptr };
 		void* area{ nullptr };
+		void* collider{ nullptr };
 	} staging_mapped_;
 };

@@ -22,12 +22,14 @@ PassManager::PassManager(GLFWwindow* glfwWindow, Context& context, Swapchain& sw
 	if (cpu_or_gpu_ == vku::CpuOrGpu::CPU)
 		sim_pass_cpu_ = std::make_unique<SimulationPassCPU>(context, *particle_manager_);
 	else
-		sim_pass_gpu_ = std::make_unique<SimulationPassGPU>(context, swapchain, *particle_manager_);
+		sim_pass_gpu_ = std::make_unique<SimulationPassGPU>(context, swapchain, *particle_manager_, modelManager);
 	graphics_pass_ = std::make_unique<GraphicsPass>(context, swapchain, textureManager, modelManager, *particle_manager_);
 }
 
 void PassManager::Update(Camera& camera, MouseInteractor& mouseInteractor, ModelManager& modelManager)
 {
+	modelManager.Update();
+
 	if (cpu_or_gpu_ == vku::CpuOrGpu::CPU)
 	{
 		sim_pass_cpu_->UpdateMousePushConstant(camera, mouseInteractor, glm::vec2(swapchain_.swapchain_extent_.width, swapchain_.swapchain_extent_.height));

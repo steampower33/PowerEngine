@@ -25,7 +25,7 @@ public:
 	
 	void CalculateGpuTime();
 
-	bool skinned_model_render_ = true;
+	bool skinned_model_render_ = false;
 	bool debug_capsule_render_ = true;
 
 	struct UBOData {

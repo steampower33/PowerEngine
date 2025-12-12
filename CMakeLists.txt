@@ -160,7 +160,6 @@ function(compile_glsl_shaders TARGET)
   add_custom_target(${TARGET} DEPENDS ${SPIRV_OUTPUTS})
 endfunction()
 
-# GLSL 소스 나열
 set(OBJECT_RENDER_SHADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/model.vert
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/model.frag

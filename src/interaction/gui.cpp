@@ -225,7 +225,7 @@ void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera, bool paused
 		SetCameraGUI(row, camera);
 		SetRenderingGUI(row);
 
-		SetObjectsGUI(row, model_manager_.models_, pass_manager_.graphics_pass_->ubo_datas_.cloth);
+		SetModelsGUI(row, model_manager_.models_, pass_manager_.graphics_pass_->ubo_datas_.cloth);
 
 		if (pass_manager_.cpu_or_gpu_ == vku::CpuOrGpu::GPU)
 			SetSimulationGUI(row, *pass_manager_.sim_pass_gpu_, targetSimFPS, simDt, paused);
@@ -298,7 +298,7 @@ void GUI::DisplayKernelTiming(const std::string name, std::unordered_map<std::st
 }
 
 template<typename RowFn, typename Models, typename ClothUBO>
-void GUI::SetObjectsGUI(RowFn&& row, Models& models, ClothUBO& clothUBO) {
+void GUI::SetModelsGUI(RowFn&& row, Models& models, ClothUBO& clothUBO) {
 	if (ImGui::CollapsingHeader("Objects", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		for (auto& model : models)
@@ -333,6 +333,7 @@ void GUI::SetObjectsGUI(RowFn&& row, Models& models, ClothUBO& clothUBO) {
 					row("Height", [&] { ImGui::Checkbox("##Height", &model->texture_enable_.height); });
 					row("CheckerBoard", [&] { ImGui::Checkbox("##CheckerBoard", &model->checker_board_enable_); });
 					row("Movable", [&] { ImGui::Checkbox("##Movable", &model->movable_); });
+					row("Render", [&] { ImGui::Checkbox("##Render", &model->render_); });
 					ImGui::EndTable();
 				}
 				ImGui::TreePop();

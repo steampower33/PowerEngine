@@ -50,46 +50,44 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera)
 		const uint32_t baseModelOffset = static_cast<uint32_t>(currentFrame * ubo_size_.model * model_manager_.kMaxModels);
 		for (uint32_t i = 0; i < model_manager_.models_.size(); i++)
 		{
+			auto& model = *model_manager_.models_[i];
+
+			if (!model.render_) continue;
+
 			const uint32_t modelOff = baseModelOffset + i * static_cast<uint32_t>(ubo_size_.model);
 			auto* dst = static_cast<std::byte*>(ubo_mapped_.model) + modelOff;
 
-			ubo_datas_.model.model = model_manager_.models_[i]->world_;
-			ubo_datas_.model.albedo_use = model_manager_.models_[i]->albedo_;
+			ubo_datas_.model.model = model.world_;
+			ubo_datas_.model.albedo_use = model.albedo_;
 
-			ubo_datas_.model.albedo_idx = model_manager_.models_[i]->texture_idx_.albedo;
-			ubo_datas_.model.metallic_idx = model_manager_.models_[i]->texture_idx_.metallic;
-			ubo_datas_.model.normal_idx = model_manager_.models_[i]->texture_idx_.normal;
-			ubo_datas_.model.roughness_idx = model_manager_.models_[i]->texture_idx_.roughness;
-			ubo_datas_.model.ao_idx = model_manager_.models_[i]->texture_idx_.ao;
-			ubo_datas_.model.height_idx = model_manager_.models_[i]->texture_idx_.height;
+			ubo_datas_.model.albedo_idx = model.texture_idx_.albedo;
+			ubo_datas_.model.metallic_idx = model.texture_idx_.metallic;
+			ubo_datas_.model.normal_idx = model.texture_idx_.normal;
+			ubo_datas_.model.roughness_idx = model.texture_idx_.roughness;
+			ubo_datas_.model.ao_idx = model.texture_idx_.ao;
+			ubo_datas_.model.height_idx = model.texture_idx_.height;
 
-			ubo_datas_.model.metallic_factor = model_manager_.models_[i]->factors_.metallic;
-			ubo_datas_.model.roughness_factor = model_manager_.models_[i]->factors_.roughness;
-			ubo_datas_.model.ao_factor = model_manager_.models_[i]->factors_.ao;
-			ubo_datas_.model.coat_factor = model_manager_.models_[i]->factors_.coat;
-			ubo_datas_.model.coat_roughness_factor = model_manager_.models_[i]->factors_.coat_roughness;
-			ubo_datas_.model.fuzz_factor = model_manager_.models_[i]->factors_.fuzz;
-			ubo_datas_.model.fuzz_roughness_factor = model_manager_.models_[i]->factors_.fuzz_roughness;
+			ubo_datas_.model.metallic_factor = model.factors_.metallic;
+			ubo_datas_.model.roughness_factor = model.factors_.roughness;
+			ubo_datas_.model.ao_factor = model.factors_.ao;
+			ubo_datas_.model.coat_factor = model.factors_.coat;
+			ubo_datas_.model.coat_roughness_factor = model.factors_.coat_roughness;
+			ubo_datas_.model.fuzz_factor = model.factors_.fuzz;
+			ubo_datas_.model.fuzz_roughness_factor = model.factors_.fuzz_roughness;
 
-			ubo_datas_.model.albedo_enable = model_manager_.models_[i]->texture_enable_.albedo;
-			ubo_datas_.model.metallic_enable = model_manager_.models_[i]->texture_enable_.metallic;
-			ubo_datas_.model.normal_enable = model_manager_.models_[i]->texture_enable_.normal;
-			ubo_datas_.model.roughness_enable = model_manager_.models_[i]->texture_enable_.roughness;
-			ubo_datas_.model.ao_enable = model_manager_.models_[i]->texture_enable_.ao;
-			ubo_datas_.model.height_enable = model_manager_.models_[i]->texture_enable_.height;
+			ubo_datas_.model.albedo_enable = model.texture_enable_.albedo;
+			ubo_datas_.model.metallic_enable = model.texture_enable_.metallic;
+			ubo_datas_.model.normal_enable = model.texture_enable_.normal;
+			ubo_datas_.model.roughness_enable = model.texture_enable_.roughness;
+			ubo_datas_.model.ao_enable = model.texture_enable_.ao;
+			ubo_datas_.model.height_enable = model.texture_enable_.height;
 
-			ubo_datas_.model.checker_board_enable = model_manager_.models_[i]->checker_board_enable_;
+			ubo_datas_.model.checker_board_enable = model.checker_board_enable_;
 
 			std::memcpy(dst, &ubo_datas_.model, ubo_size_.model);
 
-			if (model_manager_.models_[i]->type_ == Model::Type::SKINNED)
+			if (model.model_type_ == ModelType::SKINNED)
 			{
-				auto& model = *model_manager_.models_[i];
-				/*model.UpdateSkinMatrices();*/
-				model.current_time_ += 1.0f / 120.0f;
-				model.ApplyAnimation(0, model.current_time_);
-				model.UpdateCollidersFromBones();
-
 				auto& jm = model.skin_[0].jointMatrices;       // std::vector<glm::mat4>
 
 				const uint32_t skinnedModelOff =
@@ -284,12 +282,15 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 
 	// Model
 	{
-
 		for (uint32_t i = 0; i < model_manager_.models_.size(); i++)
 		{
+			auto& model = *model_manager_.models_[i];
+
+			if (!model.render_) continue;
+
 			uint32_t objectOffset = baseObjectOffset + i * static_cast<uint32_t>(ubo_size_.model);
 
-			if (model_manager_.models_[i]->type_ == Model::Type::NORMAL)
+			if (model.model_type_ == ModelType::SHAPE)
 			{
 				if (polygon_mode_ == vku::PolygonMode::SOLID)
 					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.model_solid);
@@ -325,11 +326,11 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 					{ }
 				);
 
-				cmd.bindVertexBuffers(0, { model_manager_.models_[i]->mesh_.vertex_buffer }, { 0 });
-				cmd.bindIndexBuffer(*model_manager_.models_[i]->mesh_.index_buffer, 0, vk::IndexType::eUint32);
-				cmd.drawIndexed(model_manager_.models_[i]->mesh_.indices_count, 1, 0, 0, 0);
+				cmd.bindVertexBuffers(0, { model.mesh_.vertex_buffer }, { 0 });
+				cmd.bindIndexBuffer(*model.mesh_.index_buffer, 0, vk::IndexType::eUint32);
+				cmd.drawIndexed(model.mesh_.indices_count, 1, 0, 0, 0);
 			}
-			else if (model_manager_.models_[i]->type_ == Model::Type::SKINNED && skinned_model_render_)
+			else if (model.model_type_ == ModelType::SKINNED && skinned_model_render_)
 			{
 				if (polygon_mode_ == vku::PolygonMode::SOLID)
 					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.skinned_model_solid);
@@ -376,9 +377,9 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 					{ skinnedModelOff }
 				);
 
-				cmd.bindVertexBuffers(0, { model_manager_.models_[i]->mesh_.vertex_buffer }, { 0 });
-				cmd.bindIndexBuffer(*model_manager_.models_[i]->mesh_.index_buffer, 0, vk::IndexType::eUint32);
-				cmd.drawIndexed(model_manager_.models_[i]->mesh_.indices_count, 1, 0, 0, 0);
+				cmd.bindVertexBuffers(0, { model.mesh_.vertex_buffer }, { 0 });
+				cmd.bindIndexBuffer(*model.mesh_.index_buffer, 0, vk::IndexType::eUint32);
+				cmd.drawIndexed(model.mesh_.indices_count, 1, 0, 0, 0);
 			}
 
 		}
@@ -403,7 +404,7 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 		cmd.bindVertexBuffers(0, { debugCapsuleModel->mesh_.vertex_buffer }, { 0 });
 		cmd.bindIndexBuffer(*debugCapsuleModel->mesh_.index_buffer, 0, vk::IndexType::eUint32);
 		
-		for (const auto& inst : model_manager_.models_[model_manager_.models_.size() - 1]->collider_instances_) {
+		for (const auto& inst : model_manager_.models_[model_manager_.models_.size() - 1]->capsule_colliders_) {
 			glm::vec3 p0 = inst.p0;
 			glm::vec3 p1 = inst.p1;
 			float r = inst.radius;

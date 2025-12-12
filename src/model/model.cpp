@@ -8,31 +8,27 @@
 
 #include "model.h"
 
-Model::Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, TextureManager& textureManager, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool movable, std::string name, float scale)
+Model::Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, TextureManager& textureManager, glm::vec3 initPos, glm::quat initRotation, glm::vec4 initColor, float initRadius, bool moveble, std::string name, float scale, ShapeColliderType colliderType, ModelType modelType)
+	: albedo_(initColor), movable_(moveble), name_(name), radius_(initRadius), shape_collision_type_(colliderType), model_type_(modelType)
 {
 	LoadModel(modelPath, vertexIncludeInfo, textureManager, scale);
 
 	vku::CreateVertexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, mesh_.vertices, mesh_.vertex_buffer, mesh_.vertex_buffer_memory);
 	vku::CreateIndexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, mesh_.indices, mesh_.index_buffer, mesh_.index_buffer_memory);
 
-	albedo_ = colorUse;
-	movable_ = movable;
-	name_ = name;
-
+	SetupShapeColliders();
 	ApplyTransform(glm::vec3(1.0f), initRotation, initPos);
 }
 
-Model::Model(Mesh& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, glm::vec3 initPos, glm::quat initRotation, glm::vec4 colorUse, bool moveble, std::string name)
+Model::Model(Mesh& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, glm::vec3 initPos, glm::quat initRotation, glm::vec4 initColor, float initRadius, bool moveble, std::string name, ShapeColliderType colliderType, ModelType modelType)
+	: albedo_(initColor), movable_(moveble), name_(name), radius_(initRadius), shape_collision_type_(colliderType), model_type_(modelType)
 {
 	mesh_ = std::move(meshData);
 
 	vku::CreateVertexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, mesh_.vertices, mesh_.vertex_buffer, mesh_.vertex_buffer_memory);
 	vku::CreateIndexBuffer(context.physical_device_, context.device_, context.queue_, context.command_pool_, mesh_.indices, mesh_.index_buffer, mesh_.index_buffer_memory);
 
-	albedo_ = colorUse;
-	movable_ = moveble;
-	name_ = name;
-
+	SetupShapeColliders();
 	ApplyTransform(glm::vec3(1.0f), initRotation, initPos);
 }
 
@@ -64,12 +60,19 @@ void Model::LoadModel(const std::string& modelPath, vku::VertexIncludeInfo& vert
 
 	UpdateSkinMatrices();
 
-	SetupColliders();
+	SetupCapsuleColliders();
+	UpdateCapsuleCollidersFromBones();
 }
 
-void Model::UpdateCollidersFromBones()
+void Model::UpdateShapeColliders()
 {
-	collider_instances_.resize(collider_defs_.size());
+	for (size_t i = 0; i < shape_colliders_.size(); ++i) {
+		shape_colliders_[i].p0 = position_;
+	}
+}
+
+void Model::UpdateCapsuleCollidersFromBones()
+{
 
 	for (size_t i = 0; i < collider_defs_.size(); ++i) {
 		const auto& def = collider_defs_[i];
@@ -80,14 +83,19 @@ void Model::UpdateCollidersFromBones()
 		glm::vec3 p0 = glm::vec3(M0 * glm::vec4(0, 0, 0, 1));
 		glm::vec3 p1 = glm::vec3(M1 * glm::vec4(0, 0, 0, 1));
 
-		collider_instances_[i].p0 = p0;
-		collider_instances_[i].p1 = p1;
-		collider_instances_[i].radius = def.radius;
+		capsule_colliders_[i].p0 = p0;
+		capsule_colliders_[i].kind = ShapeColliderType::CAPSULE;
+		capsule_colliders_[i].p1 = p1;
+		capsule_colliders_[i].radius = def.radius;
 	}
+
+	capsule_collision_update_ = true;
 }
 
 void Model::ApplyTransform(glm::vec3 scaleDelta, glm::quat rotationDelta, glm::vec3 translationDelta)
 {
+	shape_collision_update_ = true;
+
 	position_ += translationDelta;
 	rotation_ = rotationDelta * rotation_;
 	rotation_ = glm::normalize(rotation_);
@@ -97,6 +105,9 @@ void Model::ApplyTransform(glm::vec3 scaleDelta, glm::quat rotationDelta, glm::v
 	glm::mat4 translationMatrix = glm::translate(glm::mat4(1.0f), position_);
 
 	world_ = translationMatrix * rotationMatrix * scaleMatrix;
+
+	UpdateShapeColliders();
+
 }
 
 void Model::UpdateSkinMatrices()
@@ -471,13 +482,24 @@ void Model::ApplyAnimation(int clipIndex, float t)
 	UpdateSkinMatrices();
 }
 
-void Model::SetupColliders()
+void Model::SetupShapeColliders()
+{
+	Collider c;
+	c.p0 = position_;
+	c.kind = shape_collision_type_;
+	c.p1 = glm::vec3(0.0f, 1.0f, 0.0f); // simple
+	c.radius = radius_;
+
+	shape_colliders_.push_back(c);
+}
+
+void Model::SetupCapsuleColliders()
 {
 	collider_defs_.clear();
 
 	std::function<void(int)> dfs = [&](int idx)
 		{
-			std::cout << idx << " : " << node_[idx].name << std::endl;
+			//std::cout << idx << " : " << node_[idx].name << std::endl;
 
 			for (int c : node_[idx].children) {
 				glm::vec3 p0 = glm::vec3(node_[idx].worldMatrix * glm::vec4(0, 0, 0, 1));
@@ -513,6 +535,5 @@ void Model::SetupColliders()
 		}
 	}
 
-
-
+	capsule_colliders_.resize(collider_defs_.size());
 }

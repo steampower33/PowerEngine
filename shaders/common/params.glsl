@@ -27,22 +27,26 @@ layout(push_constant) uniform PushConstant {
 
 layout(std140, set = 0, binding = 0) uniform SimParams {
     vec4 gravity;
-    vec4 sphere_center;
 
-    float sphere_radius;
+    float dt;
     float thickness;
     float friction;
-    float dt;
+    float max_speed;
 
     float global_damping;
     float relaxation_factor;
     float neighbor_friction;
-    uint num_particles;
+    float p0;
 
+    uint num_particles;
     uint num_edges;
     uint num_shears;
     uint num_bends;
+
     uint num_areas;
+    uint num_tries;
+    uint num_volumes;
+    uint num_colliders;
 
     float cell_size;
     uint num_tables;
@@ -55,14 +59,9 @@ layout(std140, set = 0, binding = 0) uniform SimParams {
     float area_stiffness;
 
     float self_collision_stiffness;
-    float max_speed;
     float volume_stiffness;
-    uint num_tries;
-
-    uint num_volumes;
     float softbody_stretch_stiffness;
     float p1;
-    float p2;
 } sim;
 
 layout(std430, set = 1, binding = 0) buffer X { vec4 x[]; };
@@ -135,7 +134,15 @@ struct Volume {
     float p0;
     float p1;
 };
-
 layout(std430, set = 1, binding = 24) buffer Volumes { Volume volumes[]; };
+
+struct Collider {
+    vec3 p0;
+    int kind; // 0 = sphere, 1 = plane, 2 = capsule
+    vec3 p1;
+    float radius;
+};
+layout(std430, set = 1, binding = 25) buffer Colliders { Collider colliders[]; };
+
 
 #endif

@@ -19,7 +19,7 @@ class ParticleManager;
 class SimulationPassGPU
 {
 public:
-	SimulationPassGPU(Context& context, Swapchain& swapchain, ParticleManager& particleManager);
+	SimulationPassGPU(Context& context, Swapchain& swapchain, ParticleManager& particleManager, ModelManager& modelManager);
 	SimulationPassGPU(const SimulationPassGPU& rhs) = delete;
 	SimulationPassGPU(SimulationPassGPU&& rhs) = delete;
 	SimulationPassGPU& operator=(const SimulationPassGPU& rhs) = delete;
@@ -28,6 +28,7 @@ public:
 
 	Context& context_;
 	ParticleManager& particle_manager_;
+	ModelManager& model_manager_;
 
 	uint32_t total_particles_;
 	uint32_t total_indices_;
@@ -44,14 +45,14 @@ public:
 	void UpdateMousePushConstant(Camera& camera, MouseInteractor& mouseInteractor, glm::vec2 viewportSize);
 	void UpdateComputeUBO(uint32_t currentFrame, ModelManager& model);
 
-	void RecordComputeSoftBody(uint32_t currentFrame);
 	void RecordComputeCloth(uint32_t currentFrame, vku::TestScene& testScene);
 
 	void ClearCpuTime();
 	void CalculateGpuTime();
 
-	void CopyDatas(const vk::raii::CommandBuffer& cmd);
+	void CopySimDatas(const vk::raii::CommandBuffer& cmd);
 	void ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene);
+	void CopyModelDatas(const vk::raii::CommandBuffer& cmd);
 
 	std::vector<vk::raii::CommandBuffer> cmds_;
 
@@ -166,6 +167,7 @@ private:
 	void CreateUniformBuffers();
 	void CreateClothConstraintDatas();
 	void CreateSoftBodyConstraintDatas();
+	void CreateColiiders();
 	void CreateSSBOBuffers();
 	void CreateDescriptorSets();
 	void CreateComputePipelines();
