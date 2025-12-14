@@ -725,7 +725,6 @@ void SimulationPassGPU::CreateClothConstraintDatas()
 	uint32_t N = cloth_particles_;
 
 	datas_.BuildStretchConstraints(pm.positions_, pm.indices_, pm.clothes_);
-	datas_.num_edges = static_cast<uint32_t>(datas_.edges.size());
 
 	datas_.BuildShearConstraints(pm.positions_, pm.indices_);
 

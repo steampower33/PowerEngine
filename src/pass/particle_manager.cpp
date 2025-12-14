@@ -13,7 +13,7 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager)
 	{
 		Cloth cloth{};
 
-		cloth.spacing = 0.015f;
+		cloth.spacing = default_cloth_spacing_;
 		cloth.gsm = 0.2f;
 		cloth.cloth_size = glm::vec2(1.0f, 1.0f);
 		cloth.nx = (uint32_t)std::round(cloth.cloth_size.x / cloth.spacing);
@@ -30,10 +30,10 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager)
 
 		cloth.num_particle = cloth.nx1 * cloth.ny1;
 
-		//SetPlaneCloth(cloth);
+		SetPlaneCloth(cloth);
 
 		//Mesh mesh = GeometryGenerator::MakeCapsule(0.5f, 0.5f, 1.0f, 5);
-		SetClothFromMesh(cloth, modelManager.cloth_->mesh_);
+		//SetClothFromMesh(cloth, modelManager.cloth_->mesh_);
 
 		clothes_.push_back(cloth);
 	}
@@ -41,7 +41,7 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager)
 	{
 		Cloth cloth{};
 
-		cloth.spacing = 0.015f;
+		cloth.spacing = default_cloth_spacing_;
 		cloth.gsm = 0.2f;
 		cloth.cloth_size = glm::vec2(1.0f, 1.0f);
 		cloth.nx = (uint32_t)std::round(cloth.cloth_size.x / cloth.spacing);

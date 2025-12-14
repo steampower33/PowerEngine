@@ -5,12 +5,12 @@
 
 layout(local_size_x = 256) in;
 
-void accumulate_delta(uint i, vec3 corr)
+void accumulate_delta(uint i, vec3 corr, uint count)
 {
     atomicAdd(delta_x[i], corr.x);
     atomicAdd(delta_y[i], corr.y);
     atomicAdd(delta_z[i], corr.z);
-    atomicAdd(delta_count[i], 1u);
+    atomicAdd(delta_count[i], count);
 }
 
 vec3 compute_friction(vec3 correction, vec3 rel_vel)
@@ -112,11 +112,12 @@ void main()
         }
 
         if (wj > 0.0) {
-            accumulate_delta(j, corr_j);
+            vec3 delta_j = corr_j - wj * friction_i;
+            accumulate_delta(j, delta_j, 1u);
         }
     }
 
     if (wi > 0.0 && (count_i > 0u)) {
-        accumulate_delta(i, delta_i);
+        accumulate_delta(i, delta_i, count_i);
     }
 }

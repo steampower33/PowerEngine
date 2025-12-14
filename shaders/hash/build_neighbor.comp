@@ -19,8 +19,7 @@ ivec3 int_coord(vec3 p) {
 void main()
 {
     uint gid = gl_GlobalInvocationID.x;
-    uint N = sim.num_particles;
-    if (gid >= N) return;
+    if (gid >= sim.num_particles) return;
     
     const uint maxN = sim.max_neighbors;
     const float r   = sim.collision_radius;
@@ -52,7 +51,7 @@ void main()
 
                 for (uint idx = start; idx < end; ++idx) {
                     uint j = sorted_indices[idx];
-                    if (j == gid) continue;
+                    if (j <= gid) continue;
 
                     vec3 pj = xp[j].xyz;
                     vec3 d  = p - pj;

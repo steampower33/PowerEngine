@@ -40,19 +40,6 @@ ModelManager::ModelManager(Context& context, TextureManager& textureManager)
 
 	{
 		glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
-		glm::vec3 initPos = glm::vec3(0.0f, 2.0f, 0.0f);
-		glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
-		float initRadius = 1.0f;
-
-		std::string filename = "assets/cloth.glb";
-		std::unique_ptr<Model> model = std::make_unique<Model>(filename, vku::VertexIncludeInfo{ true, true, true, false, false }, context, textureManager, initPos, angleQuat, initColor, initRadius, true, "Cloth Model", 1.0f, ShapeColliderType::NONE, ModelType::SHAPE);
-
-		cloth_ = std::move(model);
-		//models_.push_back(std::move(model));
-	}
-
-	{
-		glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
 		glm::vec3 initPos = glm::vec3(0.0f, 0.0f, 0.0f);
 		glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
 		float initRadius = 1.0f;
@@ -74,6 +61,19 @@ ModelManager::ModelManager(Context& context, TextureManager& textureManager)
 		debug_capsule_->render_ = false;
 
 		//models_.emplace_back(std::move(model));
+	}
+
+	{
+		glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
+		glm::vec3 initPos = glm::vec3(0.0f, 2.0f, 0.0f);
+		glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
+		float initRadius = 1.0f;
+
+		std::string filename = "assets/SheenCloth/SheenCloth.gltf";
+		std::unique_ptr<Model> model = std::make_unique<Model>(filename, vku::VertexIncludeInfo{ true, true, true, false, false }, context, textureManager, initPos, angleQuat, initColor, initRadius, true, "Cloth Model", 1.0f, ShapeColliderType::NONE, ModelType::SHAPE);
+
+		cloth_ = std::move(model);
+		//models_.push_back(std::move(model));
 	}
 
 	//{

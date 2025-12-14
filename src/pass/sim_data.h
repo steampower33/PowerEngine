@@ -256,6 +256,8 @@ struct SimData {
 		colorOffset[num_colors] = edges.size();
 
 		pass_offsets = std::move(colorOffset);
+
+		num_edges = static_cast<uint32_t>(edges.size());
 	}
 
 	void BuildShearConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices)

@@ -77,7 +77,7 @@ public:
 			glm::vec4 cameraPos{};
 
 			glm::vec3 position{ 0.0f, 5.0f, 5.0f };
-			float intensity = 20.0f;
+			float intensity = 50.0f;
 
 			glm::vec3 direction{ 0.0f, -1.0f, -1.0f };
 			float inner = 0.0f;

@@ -372,16 +372,17 @@ void GUI::SetModelsGUI(RowFn&& row, Models& models, ClothUBO& clothUBO) {
 			}
 			ImGui::TreePop();
 		}
+
+		if (ImGui::TreeNode("SkinnedModel"))
+		{
+			ImGui::Checkbox("SkinnedModelRender", &pass_manager_.graphics_pass_->skinned_model_render_);
+			ImGui::Checkbox("DebugCapsuleRender", &pass_manager_.graphics_pass_->debug_capsule_render_);
+
+			ImGui::TreePop();
+		}
 	}
 
 
-	if (ImGui::TreeNode("SkinnedModel"))
-	{
-		ImGui::Checkbox("SkinnedModelRender", &pass_manager_.graphics_pass_->skinned_model_render_);
-		ImGui::Checkbox("DebugCapsuleRender", &pass_manager_.graphics_pass_->debug_capsule_render_);
-
-		ImGui::TreePop();
-	}
 }
 
 template<typename RowFn>
@@ -614,7 +615,7 @@ template<typename RowFn>
 void GUI::SetCameraGUI(RowFn&& row, Camera& camera)
 {
 
-	if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen))
+	if (ImGui::CollapsingHeader("Camera"))//, ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		if (ImGui::BeginTable("Camera", 2, ImGuiTableFlags_BordersInnerV))
 		{
