@@ -169,7 +169,7 @@ private:
 			glm::vec4 color;
 			uint32_t nx1;
 			uint32_t ny1;
-			uint32_t p0;
+			uint32_t offset_particle;
 			float p1;
 		} cloth_render;
 		static_assert(sizeof(ClothRender) % 4 == 0, "push constant must be multiple of 4 bytes");

@@ -487,6 +487,7 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 			push_constants_.cloth_render.color = cloth.color;
 			push_constants_.cloth_render.nx1 = cloth.nx1;
 			push_constants_.cloth_render.ny1 = cloth.ny1;
+			push_constants_.cloth_render.offset_particle = cloth.offset_particle;
 			cmd.pushConstants<PushConstant::ClothRender>(
 				*pipeline_layouts_.cloth,
 				vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,

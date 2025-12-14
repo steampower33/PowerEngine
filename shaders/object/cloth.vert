@@ -42,7 +42,7 @@ layout(set=1, binding=2, std430) readonly buffer Normals { vec4 normals[]; };
 
 layout(set = 2, binding = 0) uniform sampler2D tex[];
 
-layout(push_constant) uniform ClothPC { vec4 color; uint nx1; uint ny1; uint p0; float p1; } pc;
+layout(push_constant) uniform ClothPC { vec4 color; uint nx1; uint ny1; uint offset_particle; float p1; } pc;
 
 layout(location = 0) out vec2 out_uv;
 layout(location = 1) out vec3 out_world_normal;
@@ -55,9 +55,11 @@ void main() {
     
     uint nx1 = pc.nx1;
     uint ny1 = pc.ny1;
-    uint x = vid % nx1;
-    uint y = vid / ny1;
-    out_uv = vec2(float(x) / float(nx1 - 1), float(y) / float(ny1 - 1));
+
+    uint vid_no_offset = (vid - pc.offset_particle);
+    uint x = vid_no_offset % nx1;
+    uint y = vid_no_offset / ny1;
+    out_uv = vec2(float(x) / float(nx1 - 1.0), float(y) / float(ny1 - 1.0));
 
     out_world_normal = normals[vid].xyz;
     
