@@ -143,7 +143,12 @@ struct Collider {
     float radius;
 };
 layout(std430, set = 1, binding = 25) buffer Colliders { Collider colliders[]; };
-layout(std430, set = 1, binding = 26) buffer ObjectIds { uint object_ids[]; };
+
+struct ColiisiotnMask {
+    uint object_id;
+    uint object_type;
+};
+layout(std430, set = 1, binding = 26) buffer CollisionMasks { ColiisiotnMask collision_masks[]; };
 
 
 #endif

@@ -69,6 +69,7 @@ public:
 
 	void SetPlaneCloth(Cloth& cloth);
 	void SetClothFromMesh(Cloth& cloth, Mesh& mesh);
+	void SetSoftbody(std::string path);
 	void Reset(Cloth& cloth);
 
 	Context& context_;
@@ -85,7 +86,7 @@ public:
 	uint32_t num_softbody_indices_ = 0;
 	SoftBody soft_body_;
 
-	float default_cloth_spacing_ = 0.02f;
+	float default_cloth_spacing_ = 0.5f;
 
 	std::vector<glm::vec4> positions_;
 	std::vector<glm::vec4> pred_positions_;
@@ -95,8 +96,19 @@ public:
 	std::vector<uint32_t> indices_;
 	std::vector<glm::vec4> normals_;
 
-	uint32_t object_id = 0;
-	std::vector<uint32_t> object_ids_;
+	uint32_t object_cnt_ = 0;
+
+	enum ObjectType {
+		CLOTH,
+		SOFTBODY
+	};
+
+	struct ColiisiotnMask {
+		uint32_t object_id;
+		uint32_t object_type;
+	};
+
+	std::vector<ColiisiotnMask> collision_masks_;
 
 	std::vector<glm::vec4> tri_normals_;
 	std::vector<uint32_t> vertex_tri_offsets_;  // size = numVertices + 1
@@ -134,7 +146,7 @@ public:
 		vk::raii::Buffer vertex_tri_offsets{ nullptr };
 		vk::raii::Buffer vertex_tri_indices{ nullptr };
 
-		vk::raii::Buffer object_ids_{ nullptr };
+		vk::raii::Buffer collision_masks_{ nullptr };
 	} ssbos_;
 
 	struct SSBOMemory {
@@ -157,7 +169,7 @@ public:
 		vk::raii::DeviceMemory vertex_tri_offsets{ nullptr };
 		vk::raii::DeviceMemory vertex_tri_indices{ nullptr };
 
-		vk::raii::DeviceMemory object_ids_{ nullptr };
+		vk::raii::DeviceMemory collision_masks_{ nullptr };
 	} ssbo_memories_;
 
 	struct SSBOSize {
@@ -179,7 +191,7 @@ public:
 		vk::DeviceSize vertex_tri_offsets = 0;
 		vk::DeviceSize vertex_tri_indices = 0;
 
-		vk::DeviceSize object_ids_ = 0;
+		vk::DeviceSize collision_masks_ = 0;
 	} ssbo_size_;
 
 	struct Staging {

@@ -3,6 +3,9 @@
 
 #include "../common/params.glsl"
 
+#define TYPE_CLOTH 0
+#define TYPE_SOFTBODY 1
+
 layout(local_size_x = 256) in;
 
 void accumulate_delta(uint i, vec3 corr, uint count)
@@ -54,7 +57,7 @@ void main()
     vec3 delta_i = vec3(0.0);
     uint count_i = 0u;
 
-    uint object_i = object_ids[i];
+    uint object_i = collision_masks[i].object_id;
 
     for (uint k = 0; k < maxN; ++k)
     {
@@ -64,9 +67,13 @@ void main()
         if (j == 0xFFFFFFFFu)
             break;
             
-        uint object_j = object_ids[j];
+        uint object_j = collision_masks[j].object_id;
 
         bool same = (object_i == object_j);
+
+        bool bothSoftbody = same && (collision_masks[j].object_type == TYPE_SOFTBODY);
+
+        if (bothSoftbody) continue;
 
         float compliance = same ? pc.solve.compliance : 0.0;
         float mu         = same ? sim.neighbor_friction : 0.0;

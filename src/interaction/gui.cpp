@@ -340,7 +340,7 @@ void GUI::SetModelsGUI(RowFn&& row, Models& models, ClothUBO& clothUBO) {
 			}
 		}
 
-		if (ImGui::TreeNode("Cloth"))
+		if (ImGui::TreeNode("ClothModel"))
 		{
 			ImGui::SeparatorText("Factor");
 			if (ImGui::BeginTable("Factor", 2,
@@ -448,61 +448,90 @@ void GUI::SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& s
 			ImGui::EndTable();
 		}
 
-		ImGui::SeparatorText("SolverConfig");
-		if (ImGui::BeginTable("SolverConfig", 2,
-			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+		ImGui::SeparatorText("SimulationFactors");
+		if (ImGui::TreeNode("ClothSimulationFactors"))
 		{
-			row("Stretch", [&] { ImGui::Checkbox("##Stretch", &sim.solver_config_.stretch); });
-			row("Shear", [&] { ImGui::Checkbox("##Shear", &sim.solver_config_.shear); });
-			row("Bend", [&] { ImGui::Checkbox("##Bend", &sim.solver_config_.bend); });
-			row("Area", [&] { ImGui::Checkbox("##Area", &sim.solver_config_.area); });
-			row("SelfCollision", [&] { ImGui::Checkbox("##SelfCollision", &sim.solver_config_.self_collision); });
-			ImGui::EndTable();
+			ImGui::SeparatorText("SolverConfig");
+			if (ImGui::BeginTable("SolverConfig", 2,
+				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+			{
+				row("Stretch", [&] { ImGui::Checkbox("##Stretch", &sim.solver_config_.stretch); });
+				row("Shear", [&] { ImGui::Checkbox("##Shear", &sim.solver_config_.shear); });
+				row("Bend", [&] { ImGui::Checkbox("##Bend", &sim.solver_config_.bend); });
+				row("Area", [&] { ImGui::Checkbox("##Area", &sim.solver_config_.area); });
+				row("SelfCollision", [&] { ImGui::Checkbox("##SelfCollision", &sim.solver_config_.self_collision); });
+				ImGui::EndTable();
+			}
+
+			ImGui::SeparatorText("Stiffness");
+			if (ImGui::BeginTable("Stiffness", 2,
+				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+			{
+				row("StretchStiffness", [&] { ImGui::DragFloat("##StretchStiffness", &sim.ubo_.datas.sim_params.stretch_stiffness, 1e-2f, 0.0f, 100.0f, "%.3f"); });
+				row("SoftbodyStretchStiffness", [&] { ImGui::DragFloat("##SoftbodyStretchStiffness", &sim.ubo_.datas.sim_params.softbody_stretch_stiffness, 1e-2f, 0.0f, 100.0f, "%.1f"); });
+				row("SoftbodyVolumeStiffness", [&] { ImGui::DragFloat("##SoftbodyVolumeStiffness", &sim.ubo_.datas.sim_params.volume_stiffness, 1e-2f, 0.0f, 100.0f, "%.1f"); });
+				row("ShearStiffness", [&] { ImGui::DragFloat("##ShearStiffness", &sim.ubo_.datas.sim_params.shear_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
+				row("BendStiffness", [&] { ImGui::DragFloat("##BendStiffness", &sim.ubo_.datas.sim_params.bend_stiffness, 1e-3f, 0.0f, 2.0f, "%.3f"); });
+				row("AreaStiffness", [&] { ImGui::DragFloat("##AreaStiffness", &sim.ubo_.datas.sim_params.area_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
+				row("SelfCollisionStiffness", [&] { ImGui::DragFloat("##SelfCollisionStiffness", &sim.ubo_.datas.sim_params.self_collision_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
+				ImGui::EndTable();
+			}
+			ImGui::SeparatorText("Compliance");
+			if (ImGui::BeginTable("Compliance", 2,
+				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+			{
+				row("Stretch", [&] { ImGui::DragFloat("##Stretch", &sim.datas_.compliance.stretch,
+					1e-9f, 0.0f, 1.0f, "%.9f"); });
+				row("SoftbodyStretch", [&] { ImGui::DragFloat("##SoftbodyStretch", &sim.datas_.compliance.softbody_stretch,
+					1e-9f, 0.0f, 1.0f, "%.9f"); });
+				row("SoftbodyVolume", [&] { ImGui::DragFloat("##SoftbodyVolume", &sim.datas_.compliance.softbody_volume,
+					1e-9f, 0.0f, 1.0f, "%.9f"); });
+				row("Shear", [&] { ImGui::DragFloat("##Shear", &sim.datas_.compliance.shear
+					, 1e-9f, 0.0f, 1.0f, "%.9f"); });
+				row("Bend", [&] { ImGui::DragFloat("##Bend", &sim.datas_.compliance.bend
+					, 1e-2f, 0.0f, 1.0f, "%.9f"); });
+				row("Area", [&] { ImGui::DragFloat("##Area", &sim.datas_.compliance.area
+					, 1e-2f, 0.0f, 1.0f, "%.9f"); });
+				row("SelfCollision", [&] { ImGui::DragFloat("##SelfCollision", &sim.datas_.compliance.self_collision
+					, 1e-9f, 0.0f, 1.0f, "%.9f"); });
+				ImGui::EndTable();
+			}
+
+			ImGui::SeparatorText("Beta");
+			if (ImGui::BeginTable("Beta", 2,
+				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+			{
+				row("Stretch", [&] { ImGui::DragFloat("##Stretch", &sim.datas_.beta.stretch, 1.0f, 0.0f, 1000.0f, "%.1f"); });
+
+				ImGui::EndTable();
+			}
+
+			ImGui::TreePop();
 		}
 
-
-		ImGui::SeparatorText("Stiffness");
-		if (ImGui::BeginTable("Stiffness", 2,
-			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+		if (ImGui::TreeNode("SoftbodySimulationFactors"))
 		{
-			row("StretchStiffness", [&] { ImGui::DragFloat("##StretchStiffness", &sim.ubo_.datas.sim_params.stretch_stiffness, 1e-2f, 0.0f, 100.0f, "%.3f"); });
-			row("SoftbodyStretchStiffness", [&] { ImGui::DragFloat("##SoftbodyStretchStiffness", &sim.ubo_.datas.sim_params.softbody_stretch_stiffness, 1e-2f, 0.0f, 100.0f, "%.1f"); });
-			row("SoftbodyVolumeStiffness", [&] { ImGui::DragFloat("##SoftbodyVolumeStiffness", &sim.ubo_.datas.sim_params.volume_stiffness, 1e-2f, 0.0f, 100.0f, "%.1f"); });
-			row("ShearStiffness", [&] { ImGui::DragFloat("##ShearStiffness", &sim.ubo_.datas.sim_params.shear_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
-			row("BendStiffness", [&] { ImGui::DragFloat("##BendStiffness", &sim.ubo_.datas.sim_params.bend_stiffness, 1e-3f, 0.0f, 2.0f, "%.3f"); });
-			row("AreaStiffness", [&] { ImGui::DragFloat("##AreaStiffness", &sim.ubo_.datas.sim_params.area_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
-			row("SelfCollisionStiffness", [&] { ImGui::DragFloat("##SelfCollisionStiffness", &sim.ubo_.datas.sim_params.self_collision_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
-			ImGui::EndTable();
-		}
+			ImGui::SeparatorText("Stiffness");
+			if (ImGui::BeginTable("Stiffness", 2,
+				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+			{
+				row("SoftbodyStretchStiffness", [&] { ImGui::DragFloat("##SoftbodyStretchStiffness", &sim.ubo_.datas.sim_params.softbody_stretch_stiffness, 1e-2f, 0.0f, 100.0f, "%.1f"); });
+				row("SoftbodyVolumeStiffness", [&] { ImGui::DragFloat("##SoftbodyVolumeStiffness", &sim.ubo_.datas.sim_params.volume_stiffness, 1e-2f, 0.0f, 100.0f, "%.1f"); });
+				ImGui::EndTable();
+			}
+			ImGui::SeparatorText("Compliance");
+			if (ImGui::BeginTable("Compliance", 2,
+				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+			{
+				row("SoftbodyStretch", [&] { ImGui::DragFloat("##SoftbodyStretch", &sim.datas_.compliance.softbody_stretch,
+					1e-9f, 0.0f, 1.0f, "%.9f"); });
+				row("SoftbodyVolume", [&] { ImGui::DragFloat("##SoftbodyVolume", &sim.datas_.compliance.softbody_volume,
+					1e-9f, 0.0f, 1.0f, "%.9f"); });
 
-		ImGui::SeparatorText("Compliance");
-		if (ImGui::BeginTable("Compliance", 2,
-			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
-		{
-			row("Stretch", [&] { ImGui::DragFloat("##Stretch", &sim.datas_.compliance.stretch,
-				1e-9f, 0.0f, 1.0f, "%.9f"); });
-			row("SoftbodyStretch", [&] { ImGui::DragFloat("##SoftbodyStretch", &sim.datas_.compliance.softbody_stretch,
-				1e-9f, 0.0f, 1.0f, "%.9f"); });
-			row("SoftbodyVolume", [&] { ImGui::DragFloat("##SoftbodyVolume", &sim.datas_.compliance.softbody_volume,
-				1e-9f, 0.0f, 1.0f, "%.9f"); });
-			row("Shear", [&] { ImGui::DragFloat("##Shear", &sim.datas_.compliance.shear
-				, 1e-9f, 0.0f, 1.0f, "%.9f"); });
-			row("Bend", [&] { ImGui::DragFloat("##Bend", &sim.datas_.compliance.bend
-				, 1e-2f, 0.0f, 1.0f, "%.9f"); });
-			row("Area", [&] { ImGui::DragFloat("##Area", &sim.datas_.compliance.area
-				, 1e-2f, 0.0f, 1.0f, "%.9f"); });
-			row("SelfCollision", [&] { ImGui::DragFloat("##SelfCollision", &sim.datas_.compliance.self_collision
-				, 1e-9f, 0.0f, 1.0f, "%.9f"); });
-			ImGui::EndTable();
-		}
+				ImGui::EndTable();
+			}
 
-		ImGui::SeparatorText("Beta");
-		if (ImGui::BeginTable("Beta", 2,
-			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
-		{
-			row("Stretch", [&] { ImGui::DragFloat("##Stretch", &sim.datas_.beta.stretch, 1.0f, 0.0f, 1000.0f, "%.1f"); });
-
-			ImGui::EndTable();
+			ImGui::TreePop();
 		}
 	}
 }

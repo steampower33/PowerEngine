@@ -1018,7 +1018,7 @@ void SimulationPassGPU::CreateDescriptorSets()
 		vk::DescriptorBufferInfo vertexTriIndice(*pmSSBO.vertex_tri_indices, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo volume(*dSSBO.volume, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo collider(*dSSBO.collider, 0, VK_WHOLE_SIZE);
-		vk::DescriptorBufferInfo objectId(*pmSSBO.object_ids_, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo collisionMask(*pmSSBO.collision_masks_, 0, VK_WHOLE_SIZE);
 
 		std::array descriptorWrites{
 			vk::WriteDescriptorSet{
@@ -1235,7 +1235,7 @@ void SimulationPassGPU::CreateDescriptorSets()
 				.dstArrayElement = 0,
 				.descriptorCount = 1,
 				.descriptorType = vk::DescriptorType::eStorageBuffer,
-				.pBufferInfo = &objectId
+				.pBufferInfo = &collisionMask
 			},
 		};
 		context_.device_.updateDescriptorSets(descriptorWrites, {});
