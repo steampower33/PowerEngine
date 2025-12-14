@@ -299,6 +299,7 @@ void SimulationPassGPU::RecordComputeCloth(uint32_t currentFrame, vku::TestScene
 
 			// solve_softbody_stretch
 			TS(timestamp_steps_);
+			if (solver_config_.softbody_stretch)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_softbody_stretch);
 
@@ -323,6 +324,7 @@ void SimulationPassGPU::RecordComputeCloth(uint32_t currentFrame, vku::TestScene
 
 			// solve_softbody_volume
 			TS(timestamp_steps_);
+			if (solver_config_.softbody_volume)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_softbody_volume);
 

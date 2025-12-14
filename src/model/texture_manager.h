@@ -5,6 +5,10 @@ class Context;
 
 #include "vulkan_utils.h"
 
+constexpr char kAlbedoKeyword[7] = "albedo";
+constexpr char kNormalKeyword[7] = "normal";
+constexpr char kSheenKeyword[6] = "sheen";
+
 class TextureManager
 {
 public:
@@ -33,13 +37,14 @@ public:
 
 	const uint32_t max_tex2d_ = 32;
 	std::vector<std::unique_ptr<Texture>> tex2d_;
+	uint32_t cnt_tex2d_ = 0;
 
 	const uint32_t max_tex_env_ = 32;
 	std::vector<std::unique_ptr<Texture>> tex_env_;
-
+	
 	int vulkan_thumbnail_index_ = 0;
 
-	const char* keywords_[10] = {
+	const char* create_keywords_[10] = {
 		"color",
 		"albedo",
 		"metallic",
@@ -51,6 +56,8 @@ public:
 		"displacement",
 		"lut",
 	};
+
+	std::unordered_map<std::string, std::vector<uint32_t>> keyword_index_;
 
 	struct BrdfIndex {
 		int ggx = -1;

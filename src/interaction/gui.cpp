@@ -8,6 +8,7 @@
 #include "simulation_pass_cpu.h"
 #include "model.h"
 #include "model_manager.h"
+#include "texture.h"
 #include "texture_manager.h"
 #include "graphics_pass.h"
 #include "particle_manager.h"
@@ -85,6 +86,24 @@ GUI::GUI(GLFWwindow* glfwWindow, Context& context, Swapchain& swapchain, Texture
 	};
 
 	ImGui_ImplVulkan_Init(&init_info);
+
+	for (auto& texPtr : texture_manager_.tex2d_)
+	{
+		if (!texPtr) continue;
+		auto& tex = *texPtr;
+
+		VkImageView view = static_cast<VkImageView>(*tex.texture_image_view_);
+		VkSampler  sampler = static_cast<VkSampler>(*tex.texture_sampler_);
+
+		if (view == VK_NULL_HANDLE || sampler == VK_NULL_HANDLE)
+			continue;
+
+		imgui_id_.push_back(std::pair{ texPtr->filename_, ImGui_ImplVulkan_AddTexture(
+			sampler,
+			view,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		) });
+	}
 }
 
 GUI::~GUI()
@@ -198,6 +217,7 @@ void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera, bool paused
 			drawControl();
 		};
 
+
 	ImGuiWindowFlags wf =
 		ImGuiWindowFlags_NoResize |
 		ImGuiWindowFlags_NoMove;
@@ -246,7 +266,7 @@ void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera, bool paused
 	}
 	ImGui::End();
 
-	//ImGui::ShowDemoWindow();
+	ImGui::ShowDemoWindow();
 
 	ImGui::Render();
 }
@@ -299,77 +319,188 @@ void GUI::DisplayKernelTiming(const std::string name, std::unordered_map<std::st
 
 template<typename RowFn, typename Models, typename ClothUBO>
 void GUI::SetModelsGUI(RowFn&& row, Models& models, ClothUBO& clothUBO) {
+	auto row3 = [&](const char* label, auto&& drawControl, auto&& drawExtra)
+		{
+			ImGui::TableNextRow();
+
+			ImGui::TableSetColumnIndex(0);
+			ImGui::AlignTextToFramePadding();
+			ImGui::TextUnformatted(label);
+
+			ImGui::TableSetColumnIndex(1);
+			ImGui::SetNextItemWidth(-FLT_MIN);
+			drawControl();
+
+			ImGui::TableSetColumnIndex(2);
+			ImGui::SetNextItemWidth(-FLT_MIN);
+			drawExtra();
+		};
+
+
+	auto selectPopUp = [&](const char* label, int& idx)
+		{
+			if (ImGui::Button(label))
+				ImGui::OpenPopup(label);
+			ImGui::SetNextWindowSize(ImVec2(520, 360), ImGuiCond_Appearing);
+			if (ImGui::BeginPopup(label))
+			{
+				const int cols = 6;
+				const float thumb = 64.0f;
+
+				ImGui::BeginChild("tex_scroll", ImVec2(0, 0), true);
+
+				if (ImGui::BeginTable("tex_grid", cols))
+				{
+					for (int i = 0; i < (int)imgui_id_.size(); ++i)
+					{
+						ImGui::TableNextColumn();
+
+						auto& id = imgui_id_[i];
+						if (ImGui::ImageButton(id.first.c_str(), id.second, ImVec2(thumb, thumb)))
+						{
+							idx = i;
+							ImGui::CloseCurrentPopup();
+						}
+						//ImGui::TextWrapped("%s", id.first.c_str());
+					}
+					ImGui::EndTable();
+				}
+
+				ImGui::EndChild();
+				ImGui::EndPopup();
+			}
+		};
+
 	if (ImGui::CollapsingHeader("Objects", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		for (auto& model : models)
 		{
 			if (ImGui::TreeNode(model->name_.c_str()))
 			{
-				ImGui::SeparatorText("Factor");
-				if (ImGui::BeginTable("Factor", 2,
-					ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 				{
-					row("Albedo", [&] { ImGui::DragFloat3("##Albedo", &model->albedo_[0], 0.1f, 0.0f, 1.0f); });
-					row("Meltallic", [&] { ImGui::DragFloat("##Meltallic", &model->factors_.metallic, 0.1f, 0.0f, 1.0f); });
-					row("Roughness", [&] { ImGui::DragFloat("##Roughness", &model->factors_.roughness, 0.1f, 0.0f, 1.0f); });
-					row("AO", [&] { ImGui::DragFloat("##AO", &model->factors_.ao, 0.1f, 0.0f, 1.0f); });
-					row("Height", [&] { ImGui::DragFloat("##Height", &model->factors_.height, 0.001f, 0.0f, 1.0f); });
-					row("Coat", [&] { ImGui::DragFloat("##Coat", &model->factors_.coat, 0.001f, 0.0f, 1.0f); });
-					row("CoatRoughness", [&] { ImGui::DragFloat("##CoatRoughness", &model->factors_.coat_roughness, 0.001f, 0.0f, 1.0f); });
-					row("Fuzz", [&] { ImGui::DragFloat("##Fuzz", &model->factors_.fuzz, 0.001f, 0.0f, 1.0f); });
-					row("FuzzRoughness", [&] { ImGui::DragFloat("##FuzzRoughness", &model->factors_.fuzz_roughness, 0.001f, 0.0f, 1.0f); });
-					ImGui::EndTable();
+					ImGui::SeparatorText("Factor");
+					ImGui::Indent();
+					ImGui::BeginChild("Factor", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+
+					if (ImGui::BeginTable("Factor", 2,
+						ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+					{
+
+						row("Albedo", [&] { ImGui::DragFloat3("##Albedo", &model->albedo_[0], 0.1f, 0.0f, 1.0f); });
+						row("Meltallic", [&] { ImGui::DragFloat("##Meltallic", &model->factors_.metallic, 0.1f, 0.0f, 1.0f); });
+						row("Roughness", [&] { ImGui::DragFloat("##Roughness", &model->factors_.roughness, 0.1f, 0.0f, 1.0f); });
+						row("AO", [&] { ImGui::DragFloat("##AO", &model->factors_.ao, 0.1f, 0.0f, 1.0f); });
+						row("Height", [&] { ImGui::DragFloat("##Height", &model->factors_.height, 0.001f, 0.0f, 1.0f); });
+						row("Coat", [&] { ImGui::DragFloat("##Coat", &model->factors_.coat, 0.001f, 0.0f, 1.0f); });
+						row("CoatRoughness", [&] { ImGui::DragFloat("##CoatRoughness", &model->factors_.coat_roughness, 0.001f, 0.0f, 1.0f); });
+						row("Fuzz", [&] { ImGui::DragFloat("##Fuzz", &model->factors_.fuzz, 0.001f, 0.0f, 1.0f); });
+						row("FuzzRoughness", [&] { ImGui::DragFloat("##FuzzRoughness", &model->factors_.fuzz_roughness, 0.001f, 0.0f, 1.0f); });
+						ImGui::EndTable();
+					}
+					ImGui::EndChild();
+					ImGui::Unindent();
+
 				}
 
-				ImGui::SeparatorText("Enable");
-				if (ImGui::BeginTable("Enable", 2,
-					ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 				{
-					row("Albedo", [&] { ImGui::Checkbox("##Albedo", &model->texture_enable_.albedo); });
-					row("Meltallic", [&] { ImGui::Checkbox("##Meltallic", &model->texture_enable_.metallic); });
-					row("Normal", [&] { ImGui::Checkbox("##Normal", &model->texture_enable_.normal); });
-					row("Roughtness", [&] { ImGui::Checkbox("##Roughtness", &model->texture_enable_.roughness); });
-					row("AO", [&] { ImGui::Checkbox("##AO", &model->texture_enable_.ao); });
-					row("Height", [&] { ImGui::Checkbox("##Height", &model->texture_enable_.height); });
-					row("CheckerBoard", [&] { ImGui::Checkbox("##CheckerBoard", &model->checker_board_enable_); });
-					row("Movable", [&] { ImGui::Checkbox("##Movable", &model->movable_); });
-					row("Render", [&] { ImGui::Checkbox("##Render", &model->render_); });
-					ImGui::EndTable();
+					ImGui::SeparatorText("Enable");
+					ImGui::Indent();
+					ImGui::BeginChild("Enable", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+
+					if (ImGui::BeginTable("Enable", 3,
+						ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+					{
+						row3("Albedo", 
+							[&] {ImGui::Checkbox("##Albedo", &model->texture_enable_.albedo);},
+							[&] { selectPopUp("Select##Albedo", model->texture_idx_.albedo); });
+						row3("Meltallic", 
+							[&] { ImGui::Checkbox("##Meltallic", &model->texture_enable_.metallic); },
+							[&] { selectPopUp("Select##Meltallic", model->texture_idx_.metallic); });
+						row3("Normal", 
+							[&] { ImGui::Checkbox("##Normal", &model->texture_enable_.normal); },
+							[&] { selectPopUp("Select##Normal", model->texture_idx_.normal); });
+						row3("Roughtness", 
+							[&] { ImGui::Checkbox("##Roughness", &model->texture_enable_.roughness); },
+							[&] { selectPopUp("Select##Roughness", model->texture_idx_.roughness); });
+						row3("AO", 
+							[&] { ImGui::Checkbox("##AO", &model->texture_enable_.ao); },
+							[&] { selectPopUp("Select##AO", model->texture_idx_.ao); });
+						row3("Height", 
+							[&] { ImGui::Checkbox("##Height", &model->texture_enable_.height); },
+							[&] { selectPopUp("Select##Height", model->texture_idx_.height); });
+						row("CheckerBoard", [&] { ImGui::Checkbox("##CheckerBoard", &model->checker_board_enable_); });
+						row("Movable", [&] { ImGui::Checkbox("##Movable", &model->movable_); });
+						row("Render", [&] { ImGui::Checkbox("##Render", &model->render_); });
+						ImGui::EndTable();
+					}
+
+					ImGui::EndChild();
+					ImGui::Unindent();
 				}
+
 				ImGui::TreePop();
 			}
 		}
 
 		if (ImGui::TreeNode("ClothModel"))
 		{
-			ImGui::SeparatorText("Factor");
-			if (ImGui::BeginTable("Factor", 2,
-				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
-				row("Albedo", [&] { ImGui::DragFloat3("##Albedo", &clothUBO.albedo[0], 0.1f, 0.0f, 1.0f); });
-				row("Meltallic", [&] { ImGui::DragFloat("##Meltallic", &clothUBO.metallic_factor, 0.1f, 0.0f, 1.0f); });
-				row("Roughness", [&] { ImGui::DragFloat("##Roughness", &clothUBO.roughness_factor, 0.1f, 0.0f, 1.0f); });
-				row("AO", [&] { ImGui::DragFloat("##AO", &clothUBO.ao_factor, 0.1f, 0.0f, 1.0f); });
-				row("Height", [&] { ImGui::DragFloat("##Height", &clothUBO.height_factor, 0.001f, 0.0f, 1.0f); });
-				row("Coat", [&] { ImGui::DragFloat("##Coat", &clothUBO.coat_factor, 0.001f, 0.0f, 1.0f); });
-				row("CoatRoughness", [&] { ImGui::DragFloat("##CoatRoughness", &clothUBO.coat_roughness_factor, 0.001f, 0.0f, 1.0f); });
-				row("Fuzz", [&] { ImGui::DragFloat("##Fuzz", &clothUBO.fuzz_factor, 0.001f, 0.0f, 1.0f); });
-				row("FuzzRoughness", [&] { ImGui::DragFloat("##FuzzRoughness", &clothUBO.fuzz_roughness_factor, 0.001f, 0.0f, 1.0f); });
-				ImGui::EndTable();
+				ImGui::SeparatorText("Factor");
+				ImGui::Indent();
+				ImGui::BeginChild("Factor", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+				if (ImGui::BeginTable("Factor", 2,
+					ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+				{
+					row("Albedo", [&] { ImGui::DragFloat3("##Albedo", &clothUBO.albedo[0], 0.1f, 0.0f, 1.0f); });
+					row("Meltallic", [&] { ImGui::DragFloat("##Meltallic", &clothUBO.metallic_factor, 0.1f, 0.0f, 1.0f); });
+					row("Roughness", [&] { ImGui::DragFloat("##Roughness", &clothUBO.roughness_factor, 0.1f, 0.0f, 1.0f); });
+					row("AO", [&] { ImGui::DragFloat("##AO", &clothUBO.ao_factor, 0.1f, 0.0f, 1.0f); });
+					row("Height", [&] { ImGui::DragFloat("##Height", &clothUBO.height_factor, 0.001f, 0.0f, 1.0f); });
+					row("Coat", [&] { ImGui::DragFloat("##Coat", &clothUBO.coat_factor, 0.001f, 0.0f, 1.0f); });
+					row("CoatRoughness", [&] { ImGui::DragFloat("##CoatRoughness", &clothUBO.coat_roughness_factor, 0.001f, 0.0f, 1.0f); });
+					row("Fuzz", [&] { ImGui::DragFloat("##Fuzz", &clothUBO.fuzz_factor, 0.001f, 0.0f, 1.0f); });
+					row("FuzzRoughness", [&] { ImGui::DragFloat("##FuzzRoughness", &clothUBO.fuzz_roughness_factor, 0.001f, 0.0f, 1.0f); });
+					ImGui::EndTable();
+				}
+				ImGui::EndChild();
+				ImGui::Unindent();
 			}
 
-			ImGui::SeparatorText("Enable");
-			if (ImGui::BeginTable("Enable", 2,
-				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+			auto checkEnable = [&](const char* label, uint32_t& enable) {
+				bool check = enable; ImGui::Checkbox(label, &check); enable = check;
+				};
+
 			{
-				row("Albedo", [&] { bool check = clothUBO.albedo_enable; ImGui::Checkbox("##Albedo", &check); clothUBO.albedo_enable = check; });
-				row("Meltallic", [&] { bool check = clothUBO.metallic_enable;  ImGui::Checkbox("##Meltallic", &check); clothUBO.metallic_enable = check;  });
-				row("Normal", [&] { bool check = clothUBO.normal_enable; ImGui::Checkbox("##Normal", &check); clothUBO.normal_enable = check; });
-				row("Roughtness", [&] { bool check = clothUBO.roughness_enable; ImGui::Checkbox("##Roughtness", &check); clothUBO.roughness_enable = check; });
-				row("AO", [&] { bool check = clothUBO.ao_enable; ImGui::Checkbox("##AO", &check); clothUBO.ao_enable = check; });
-				row("Height", [&] { bool check = clothUBO.height_enable; ImGui::Checkbox("##Height", &check); clothUBO.height_enable = check;  });
-				ImGui::EndTable();
+				ImGui::SeparatorText("Enable");
+				ImGui::Indent();
+				ImGui::BeginChild("Enable", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+				if (ImGui::BeginTable("Enable", 3,
+					ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+				{
+					row3("Albedo",
+						[&] { checkEnable("##Albedo", clothUBO.albedo_enable); },
+						[&] { selectPopUp("Select##Albedo", clothUBO.albedo_idx); });
+					row3("Meltallic",
+						[&] { checkEnable("##Meltallic", clothUBO.metallic_enable); },
+						[&] { selectPopUp("Select##Meltallic", clothUBO.metallic_idx); });
+					row3("Normal",
+						[&] { checkEnable("##Normal", clothUBO.normal_enable); },
+						[&] { selectPopUp("Select##Normal", clothUBO.normal_idx); });
+					row3("Roughtness",
+						[&] { checkEnable("##Roughtness", clothUBO.roughness_enable); },
+						[&] { selectPopUp("Select##Roughtness", clothUBO.roughness_idx); });
+					row3("AO",
+						[&] { checkEnable("##AO", clothUBO.ao_enable); },
+						[&] { selectPopUp("Select##AO", clothUBO.ao_idx); });
+					row3("Height",
+						[&] { checkEnable("##Height", clothUBO.height_enable); },
+						[&] { selectPopUp("Select##Height", clothUBO.height_idx); });
+					ImGui::EndTable();
+				}
+				ImGui::EndChild();
+				ImGui::Unindent();
 			}
+
 			ImGui::TreePop();
 		}
 
@@ -428,6 +559,10 @@ void GUI::SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& s
 		auto& pm = *pass_manager_.particle_manager_;
 
 		ImGui::SeparatorText("Parameter");
+
+		ImGui::Indent();
+		ImGui::BeginChild("Parameter", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+
 		if (ImGui::BeginTable("Parameter", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
@@ -447,11 +582,15 @@ void GUI::SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& s
 			row("MaxSpeed", [&] { ImGui::DragFloat("##MaxSpeed", &sim.ubo_.datas.sim_params.max_speed, 0.1f, sim.ubo_.datas.sim_params.max_speed, sim.ubo_.datas.sim_params.max_speed, "%.1f"); });
 			ImGui::EndTable();
 		}
+		ImGui::EndChild();
+		ImGui::Unindent();
 
 		ImGui::SeparatorText("SimulationFactors");
 		if (ImGui::TreeNode("ClothSimulationFactors"))
 		{
 			ImGui::SeparatorText("SolverConfig");
+			ImGui::Indent();
+			ImGui::BeginChild("SolverConfig", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
 			if (ImGui::BeginTable("SolverConfig", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
@@ -462,8 +601,12 @@ void GUI::SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& s
 				row("SelfCollision", [&] { ImGui::Checkbox("##SelfCollision", &sim.solver_config_.self_collision); });
 				ImGui::EndTable();
 			}
+			ImGui::EndChild();
+			ImGui::Unindent();
 
 			ImGui::SeparatorText("Stiffness");
+			ImGui::Indent();
+			ImGui::BeginChild("Stiffness", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
 			if (ImGui::BeginTable("Stiffness", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
@@ -476,7 +619,12 @@ void GUI::SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& s
 				row("SelfCollisionStiffness", [&] { ImGui::DragFloat("##SelfCollisionStiffness", &sim.ubo_.datas.sim_params.self_collision_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
 				ImGui::EndTable();
 			}
+			ImGui::EndChild();
+			ImGui::Unindent();
+
 			ImGui::SeparatorText("Compliance");
+			ImGui::Indent();
+			ImGui::BeginChild("Compliance", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
 			if (ImGui::BeginTable("Compliance", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
@@ -496,8 +644,12 @@ void GUI::SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& s
 					, 1e-9f, 0.0f, 1.0f, "%.9f"); });
 				ImGui::EndTable();
 			}
+			ImGui::EndChild();
+			ImGui::Unindent();
 
 			ImGui::SeparatorText("Beta");
+			ImGui::Indent();
+			ImGui::BeginChild("Beta", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
 			if (ImGui::BeginTable("Beta", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
@@ -505,34 +657,59 @@ void GUI::SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& s
 
 				ImGui::EndTable();
 			}
+			ImGui::EndChild();
+			ImGui::Unindent();
 
 			ImGui::TreePop();
 		}
 
 		if (ImGui::TreeNode("SoftbodySimulationFactors"))
 		{
+			ImGui::SeparatorText("SolverConfig");
+			ImGui::Indent();
+			ImGui::BeginChild("SolverConfig", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+			if (ImGui::BeginTable("SolverConfig", 2,
+				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+			{
+				row("Stretch", [&] { ImGui::Checkbox("##SoftbodyStretch", &sim.solver_config_.softbody_stretch); });
+				row("Volume", [&] { ImGui::Checkbox("##SoftbodyVolume", &sim.solver_config_.softbody_volume); });
+				ImGui::EndTable();
+			}
+			ImGui::EndChild();
+			ImGui::Unindent();
+
 			ImGui::SeparatorText("Stiffness");
+			ImGui::Indent();
+			ImGui::BeginChild("Stiffness", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
 			if (ImGui::BeginTable("Stiffness", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
-				row("SoftbodyStretchStiffness", [&] { ImGui::DragFloat("##SoftbodyStretchStiffness", &sim.ubo_.datas.sim_params.softbody_stretch_stiffness, 1e-2f, 0.0f, 100.0f, "%.1f"); });
-				row("SoftbodyVolumeStiffness", [&] { ImGui::DragFloat("##SoftbodyVolumeStiffness", &sim.ubo_.datas.sim_params.volume_stiffness, 1e-2f, 0.0f, 100.0f, "%.1f"); });
+				row("Stretch", [&] { ImGui::DragFloat("##SoftbodyStretch", &sim.ubo_.datas.sim_params.softbody_stretch_stiffness, 1e-2f, 0.0f, 100.0f, "%.1f"); });
+				row("Volume", [&] { ImGui::DragFloat("##SoftbodyVolume", &sim.ubo_.datas.sim_params.volume_stiffness, 1e-2f, 0.0f, 100.0f, "%.1f"); });
 				ImGui::EndTable();
 			}
+			ImGui::EndChild();
+			ImGui::Unindent();
+
 			ImGui::SeparatorText("Compliance");
+			ImGui::Indent();
+			ImGui::BeginChild("Compliance", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
 			if (ImGui::BeginTable("Compliance", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
-				row("SoftbodyStretch", [&] { ImGui::DragFloat("##SoftbodyStretch", &sim.datas_.compliance.softbody_stretch,
+				row("Stretch", [&] { ImGui::DragFloat("##SoftbodyStretch", &sim.datas_.compliance.softbody_stretch,
 					1e-9f, 0.0f, 1.0f, "%.9f"); });
-				row("SoftbodyVolume", [&] { ImGui::DragFloat("##SoftbodyVolume", &sim.datas_.compliance.softbody_volume,
+				row("Volume", [&] { ImGui::DragFloat("##SoftbodyVolume", &sim.datas_.compliance.softbody_volume,
 					1e-9f, 0.0f, 1.0f, "%.9f"); });
 
 				ImGui::EndTable();
 			}
+			ImGui::EndChild();
+			ImGui::Unindent();
 
 			ImGui::TreePop();
 		}
+
 	}
 }
 
@@ -573,12 +750,20 @@ void GUI::SetRenderingGUI(RowFn&& row)
 		auto& tm = texture_manager_;
 
 		ImGui::SeparatorText("PolygonMode");
+		ImGui::Indent();
+		ImGui::BeginChild("PolygonMode", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+
 		const char* items[] = { "Solid", "Wireframe", "Point" };
 		int item_current = gp.polygon_mode_;
 		ImGui::ListBox("##", &item_current, items, IM_ARRAYSIZE(items), 3);
 		gp.polygon_mode_ = vku::PolygonMode(item_current);
+		ImGui::EndChild();
+		ImGui::Unindent();
 
 		ImGui::SeparatorText("SpotLight");
+		ImGui::Indent();
+		ImGui::BeginChild("SpotLight", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+
 		if (ImGui::BeginTable("SpotLight", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
@@ -591,8 +776,12 @@ void GUI::SetRenderingGUI(RowFn&& row)
 
 			ImGui::EndTable();
 		}
+		ImGui::EndChild();
+		ImGui::Unindent();
 
 		ImGui::SeparatorText("PBR");
+		ImGui::Indent();
+		ImGui::BeginChild("PBR", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
 		if (ImGui::BeginTable("PBR", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
@@ -600,8 +789,13 @@ void GUI::SetRenderingGUI(RowFn&& row)
 			row("Exposure", [&] { ImGui::DragFloat("##Exposure", &gp.ubo_datas_.light.exposure, 0.1f, 0.0f, 2.0f); });
 			ImGui::EndTable();
 		}
+		ImGui::EndChild();
+		ImGui::Unindent();
 
 		ImGui::SeparatorText("Skybox");
+
+		ImGui::Indent();
+		ImGui::BeginChild("Skybox", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
 		ImVec2 buttonSize = ImVec2(ImGui::GetContentRegionAvail().x, 0);
 		if (ImGui::Button("Morning", buttonSize))
 		{
@@ -615,6 +809,9 @@ void GUI::SetRenderingGUI(RowFn&& row)
 		{
 			tm.skybox_enable_.night = true;
 		}
+
+		ImGui::EndChild();
+		ImGui::Unindent();
 	}
 }
 
@@ -643,10 +840,15 @@ void GUI::SetStatGUI(RowFn&& row)
 template<typename RowFn>
 void GUI::SetCameraGUI(RowFn&& row, Camera& camera)
 {
-
-	if (ImGui::CollapsingHeader("Camera"))//, ImGuiTreeNodeFlags_DefaultOpen))
+	if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		if (ImGui::BeginTable("Camera", 2, ImGuiTableFlags_BordersInnerV))
+		ImGui::SeparatorText("Move");
+
+		ImGui::Indent();
+		ImGui::BeginChild("Move", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+
+		if (ImGui::BeginTable("Camera", 2,
+			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
 			row("MouseMove(R)", [&] { ImGui::Checkbox("##MouseMove", &camera.mouse_move_enabled); });
 			row("CameraMoveSpeed", [&] { ImGui::DragFloat("##CameraMoveSpeed", &camera.camera_move_speed, 0.1f, 0.0f, 10.0f); });
@@ -659,6 +861,7 @@ void GUI::SetCameraGUI(RowFn&& row, Camera& camera)
 
 			ImGui::EndTable();
 		}
-
+		ImGui::EndChild();
+		ImGui::Unindent();
 	}
 }

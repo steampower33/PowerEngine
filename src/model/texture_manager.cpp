@@ -11,6 +11,7 @@ TextureManager::TextureManager(Context& context)
 {
 	{
 		ConvertFileToKtx("assets/lut");
+		ConvertFileToKtx("assets/SheenCloth");
 	}
 
 	{
@@ -35,6 +36,14 @@ TextureManager::TextureManager(Context& context)
 		brdf_index_.sheen_e = CreateTexture("assets/lut", "sheen_e", false);
 	}
 
+	{
+		keyword_index_[kAlbedoKeyword].push_back(CreateTexture("assets/SheenCloth", "color", false));
+		keyword_index_[kNormalKeyword].push_back(CreateTexture("assets/SheenCloth", "normal", false));
+		keyword_index_[kSheenKeyword].push_back(CreateTexture("assets/SheenCloth", "sheen", false));
+	}
+
+	cnt_tex2d_ = tex2d_.size();
+
 	CreateSetLayouts();
 	CreateDescriptorPool();
 	CreateDescriptorSets();
@@ -51,7 +60,7 @@ bool TextureManager::IsRightTextureName(const std::string& name)
 	std::transform(lower.begin(), lower.end(), lower.begin(),
 		[](unsigned char c) { return std::tolower(c); });
 
-	for (const char* kw : keywords_) {
+	for (const char* kw : create_keywords_) {
 		if (lower.find(kw) != std::string::npos) {
 			return true;
 		}
@@ -154,7 +163,7 @@ void TextureManager::CreateKtxFromFile(const fs::path& pngPath, const fs::path& 
 }
 
 
-int TextureManager::CreateTexture(std::string path, std::string keyword, bool isCubemap)
+int TextureManager::CreateTexture(std::string path, std::string findWord, bool isCubemap)
 {
 	auto CreateTexture = [&](std::string path, std::string filename)
 		{
@@ -188,8 +197,10 @@ int TextureManager::CreateTexture(std::string path, std::string keyword, bool is
 		if (p.extension() != ".ktx" && p.extension() != ".ktx2") continue;
 
 		std::for_each(filename.begin(), filename.end(), [](auto& c) {c = tolower(c); });
-		if (filename.find(keyword) != std::string::npos)
+		if (filename.find(findWord) != std::string::npos)
+		{
 			return CreateTexture(parentPath, filename);
+		}
 
 	}
 

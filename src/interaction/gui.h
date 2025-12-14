@@ -38,6 +38,8 @@ public:
 
 	bool open_timestamps_ = false;
 
+	std::vector<std::pair<std::string, VkDescriptorSet>> imgui_id_;
+
 	void SetStyle();
 	void Update(float& targetSimFPS, double& simDt, Camera& camera, bool paused);
 	void DisplayKernelTiming(const std::string name, std::unordered_map<std::string, double>& labelToTime, std::unordered_map<std::string, double>& labelToAvgTime, bool autoColor = true);

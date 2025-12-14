@@ -1,3 +1,11 @@
+/*
+In this shader, 
+all particles within a certain distance of a particle are set as neighbors, 
+and then the solver is set to process them based on their type. 
+This shader could also process them based on their type, 
+but it is left in place for future extensibility.
+*/
+
 #version 460
 #extension GL_EXT_shader_atomic_float : require
 
@@ -16,6 +24,7 @@ uint hash_coords(int xi, int yi, int zi)
 ivec3 int_coord(vec3 p) {
     return ivec3(floor(p / sim.cell_size));
 }
+
 void main()
 {
     uint gid = gl_GlobalInvocationID.x;

@@ -65,6 +65,9 @@ public:
 		bool bend = true;
 		bool area = true;
 		bool self_collision = true;
+
+		bool softbody_stretch = true;
+		bool softbody_volume = true;
 	} solver_config_;
 
 	vk::raii::QueryPool timestamp_pool_{ nullptr };

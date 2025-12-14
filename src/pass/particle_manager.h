@@ -86,7 +86,7 @@ public:
 	uint32_t num_softbody_indices_ = 0;
 	SoftBody soft_body_;
 
-	float default_cloth_spacing_ = 0.5f;
+	float default_cloth_spacing_ = 0.02f;
 
 	std::vector<glm::vec4> positions_;
 	std::vector<glm::vec4> pred_positions_;
