@@ -655,8 +655,9 @@ void SimulationPassGPU::CreateDescriptorSetLayout()
 			vk::DescriptorSetLayoutBinding{ 23, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
 			vk::DescriptorSetLayoutBinding{ 24, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
 			vk::DescriptorSetLayoutBinding{ 25, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
+			vk::DescriptorSetLayoutBinding{ 26, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
 		};
-		counts_.sb += 26;
+		counts_.sb += 27;
 		counts_.layout += 1;
 
 		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
@@ -1017,6 +1018,8 @@ void SimulationPassGPU::CreateDescriptorSets()
 		vk::DescriptorBufferInfo vertexTriIndice(*pmSSBO.vertex_tri_indices, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo volume(*dSSBO.volume, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo collider(*dSSBO.collider, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo objectId(*pmSSBO.object_ids_, 0, VK_WHOLE_SIZE);
+
 		std::array descriptorWrites{
 			vk::WriteDescriptorSet{
 				.dstSet = *sets_.cloth_compute,
@@ -1225,6 +1228,14 @@ void SimulationPassGPU::CreateDescriptorSets()
 				.descriptorCount = 1,
 				.descriptorType = vk::DescriptorType::eStorageBuffer,
 				.pBufferInfo = &collider
+			},
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.cloth_compute,
+				.dstBinding = 26,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &objectId
 			},
 		};
 		context_.device_.updateDescriptorSets(descriptorWrites, {});

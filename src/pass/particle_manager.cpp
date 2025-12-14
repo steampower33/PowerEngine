@@ -38,30 +38,30 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager)
 		clothes_.push_back(cloth);
 	}
 
-	//{
-	//	Cloth cloth{};
+	{
+		Cloth cloth{};
 
-	//	cloth.spacing = default_cloth_spacing_;
-	//	cloth.gsm = 0.2f;
-	//	cloth.cloth_size = glm::vec2(1.0f, 1.0f);
-	//	cloth.nx = (uint32_t)std::round(cloth.cloth_size.x / cloth.spacing);
-	//	cloth.ny = (uint32_t)std::round(cloth.cloth_size.y / cloth.spacing);
-	//	cloth.nx1 = cloth.nx + 1;
-	//	cloth.ny1 = cloth.ny + 1;
-	//	cloth.height = 3.0f;
+		cloth.spacing = default_cloth_spacing_;
+		cloth.gsm = 0.2f;
+		cloth.cloth_size = glm::vec2(1.0f, 1.0f);
+		cloth.nx = (uint32_t)std::round(cloth.cloth_size.x / cloth.spacing);
+		cloth.ny = (uint32_t)std::round(cloth.cloth_size.y / cloth.spacing);
+		cloth.nx1 = cloth.nx + 1;
+		cloth.ny1 = cloth.ny + 1;
+		cloth.height = 3.0f;
 
-	//	cloth.color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
+		cloth.color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
 
-	//	cloth.origin = glm::vec3(-1.0f, 0.0f, 0.0f);
-	//	cloth.angle_deg = 0.0f;
-	//	cloth.axis = glm::vec3(0, 1, 0);
+		cloth.origin = glm::vec3(-1.0f, 0.0f, 0.0f);
+		cloth.angle_deg = 0.0f;
+		cloth.axis = glm::vec3(0, 1, 0);
 
-	//	cloth.num_particle = cloth.nx1 * cloth.ny1;
+		cloth.num_particle = cloth.nx1 * cloth.ny1;
 
-	//	SetPlaneCloth(cloth);
+		SetPlaneCloth(cloth);
 
-	//	clothes_.push_back(cloth);
-	//}
+		clothes_.push_back(cloth);
+	}
 
 	//{
 	//	Cloth cloth{};
@@ -108,6 +108,7 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager)
 			masses_.push_back(0.0f);
 			inverse_masses_.push_back(0.0f);
 			normals_.push_back(glm::vec4(0.0f));
+			object_ids_.push_back(object_id);
 		}
 
 		for (auto idx : soft_body_.tetmesh.surfaceIndices)
@@ -165,6 +166,8 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager)
 		{
 			inverse_masses_[i] = (masses_[i] > 0.0f) ? (1.0f / masses_[i]) : 0.0f;
 		}
+
+		object_id++;
 	}
 
 	vku::CreateIndexBuffer(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_, indices_, index_buffer_, index_buffer_memory_);
@@ -222,6 +225,7 @@ void ParticleManager::SetPlaneCloth(Cloth& cloth)
 			masses_.push_back(0.0f);
 			inverse_masses_.push_back(0.0f);
 			normals_.push_back(glm::vec4(0.0f));
+			object_ids_.push_back(object_id);
 		}
 	}
 	cloth.num_particle = positions_.size() - cloth.offset_particle;
@@ -300,6 +304,7 @@ void ParticleManager::SetPlaneCloth(Cloth& cloth)
 	num_cloth_particles_ = positions_.size();
 	num_cloth_indices_ = indices_.size();
 
+	object_id++;
 }
 
 void ParticleManager::SetClothFromMesh(Cloth& cloth, Mesh& mesh)
@@ -693,6 +698,17 @@ void ParticleManager::CreateSSBO()
 		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
 		vk::MemoryPropertyFlagBits::eDeviceLocal,
 		ssbos_.vertex_tri_indices, ssbo_memories_.vertex_tri_indices);
+
+	// object_ids_
+	ssbo_size_.object_ids_ = sizeof(uint32_t) * object_ids_.size();
+	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+		ssbo_size_.object_ids_,
+		vk::BufferUsageFlagBits::eTransferSrc,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+		object_ids_,
+		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+		vk::MemoryPropertyFlagBits::eDeviceLocal,
+		ssbos_.object_ids_, ssbo_memories_.object_ids_);
 
 }
 

@@ -192,6 +192,7 @@ set(SIMULATION_SHADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_area.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_softbody_stretch.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_softbody_volume.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_self_collision.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/apply_deltas.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/collide_sdf.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/update_velocity.comp
@@ -200,7 +201,6 @@ set(SIMULATION_SHADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/hash/build_hash.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/hash/build_cell.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/hash/build_neighbor.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/hash/solve_self_collision.comp
 )
 compile_glsl_shaders(simulation_shaders_target SOURCES ${SIMULATION_SHADERS})
 

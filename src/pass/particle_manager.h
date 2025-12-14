@@ -95,6 +95,9 @@ public:
 	std::vector<uint32_t> indices_;
 	std::vector<glm::vec4> normals_;
 
+	uint32_t object_id = 0;
+	std::vector<uint32_t> object_ids_;
+
 	std::vector<glm::vec4> tri_normals_;
 	std::vector<uint32_t> vertex_tri_offsets_;  // size = numVertices + 1
 	std::vector<uint32_t> vertex_tri_indices_;  // size = numTris * 3
@@ -130,6 +133,8 @@ public:
 		vk::raii::Buffer tri_normals{ nullptr };
 		vk::raii::Buffer vertex_tri_offsets{ nullptr };
 		vk::raii::Buffer vertex_tri_indices{ nullptr };
+
+		vk::raii::Buffer object_ids_{ nullptr };
 	} ssbos_;
 
 	struct SSBOMemory {
@@ -151,6 +156,8 @@ public:
 		vk::raii::DeviceMemory tri_normals{ nullptr };
 		vk::raii::DeviceMemory vertex_tri_offsets{ nullptr };
 		vk::raii::DeviceMemory vertex_tri_indices{ nullptr };
+
+		vk::raii::DeviceMemory object_ids_{ nullptr };
 	} ssbo_memories_;
 
 	struct SSBOSize {
@@ -171,6 +178,8 @@ public:
 		vk::DeviceSize tri_normals = 0;
 		vk::DeviceSize vertex_tri_offsets = 0;
 		vk::DeviceSize vertex_tri_indices = 0;
+
+		vk::DeviceSize object_ids_ = 0;
 	} ssbo_size_;
 
 	struct Staging {

@@ -13,31 +13,32 @@ void accumulate_delta(uint i, vec3 corr, uint count)
     atomicAdd(delta_count[i], count);
 }
 
-vec3 compute_friction(vec3 correction, vec3 rel_vel)
+vec3 compute_friction(vec3 correction_disp, vec3 rel_vel, float mu)
 {
     vec3 friction = vec3(0.0);
-    float correction_length = length(correction);
+    float correction_length = length(correction_disp);
 
-    if (sim.neighbor_friction > 0.0 && correction_length > 0.0)
-    {
-        vec3 norm = correction / correction_length;
+    if (mu <= 0.0 || correction_length <= 0.0)
+        return friction;
 
-        vec3 tan_vel = rel_vel - norm * dot(rel_vel, norm);
-        float tan_length = length(tan_vel);
-        if (tan_length > 1e-6) {
-            float max_tanLength = correction_length * sim.neighbor_friction;
-            float scale = min(max_tanLength / tan_length, 1.0);
-            friction = -tan_vel * scale;
-        }
-    }
+    vec3 n = correction_disp / correction_length;
+
+    vec3 tan_vel = rel_vel - n * dot(rel_vel, n);
+    float tan_length = length(tan_vel);
+    if (tan_length < 1e-6)
+        return friction;
+        
+    float max_tanLength = correction_length * mu;
+    float scale = min(max_tanLength / tan_length, 1.0);
+
+    friction = -tan_vel * scale;
     return friction;
 }
 
 void main()
 {
     uint i = gl_GlobalInvocationID.x;
-    uint N = sim.num_particles;
-    if (i >= N) return;
+    if (i >= sim.num_particles) return;
 
     float wi = w[i];
     vec3  xi = xp[i].xyz;
@@ -49,10 +50,11 @@ void main()
     uint base = i * maxN;
 
     float dt = sim.dt;
-    float alpha_tilde = pc.solve.compliance / (dt * dt);
 
     vec3 delta_i = vec3(0.0);
     uint count_i = 0u;
+
+    uint object_i = object_ids[i];
 
     for (uint k = 0; k < maxN; ++k)
     {
@@ -61,6 +63,14 @@ void main()
 
         if (j == 0xFFFFFFFFu)
             break;
+            
+        uint object_j = object_ids[j];
+
+        bool same = (object_i == object_j);
+
+        float compliance = same ? pc.solve.compliance : 0.0;
+        float mu         = same ? sim.neighbor_friction : 0.0;
+        float alpha_tilde = compliance / (dt * dt);
 
         float wj = w[j];
         if (wi + wj == 0.0)
@@ -99,12 +109,13 @@ void main()
 
         vec3 corr_i =  wi * dLambda * n * sim.self_collision_stiffness;
         vec3 corr_j = -wj * dLambda * n * sim.self_collision_stiffness;
+
         vec3 vel_i = xi - pxi;
         vec3 vel_j = xj - pxj;
         vec3 relVel = vel_i - vel_j;
 
         vec3 commma_i = (wi > 0.0) ? (corr_i / wi) : vec3(0.0);
-        vec3 friction_i = compute_friction(commma_i, relVel);
+        vec3 friction_i = compute_friction(commma_i, relVel, mu);
 
         if (wi > 0.0) {
             delta_i += corr_i + wi * friction_i;
@@ -117,7 +128,7 @@ void main()
         }
     }
 
-    if (wi > 0.0 && (count_i > 0u)) {
+    if (count_i > 0u) {
         accumulate_delta(i, delta_i, count_i);
     }
 }
