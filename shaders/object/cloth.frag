@@ -24,8 +24,7 @@ layout(set = 1, binding = 0) uniform Cloth {
 
     float fuzz_factor;
     float fuzz_roughness_factor;
-    float p0;
-    float p1;
+    vec2 tile_uv;
 
     uint albedo_enable;
     uint metallic_enable;
@@ -35,7 +34,7 @@ layout(set = 1, binding = 0) uniform Cloth {
     uint ao_enable;
     uint height_enable;
     uint checker_board_enable;
-    uint p2;
+    uint p0;
 } cloth;
 
 layout(set = 2, binding = 0) uniform sampler2D tex[];
@@ -51,6 +50,7 @@ layout(location = 3) out vec4 out_cozz_fuzz;
 layout(push_constant) uniform ClothPC { vec4 color; uint nx1; uint ny1; uint p0; float p1; } pc;
 
 void main() {
+
     vec4 albedo    = (cloth.albedo_enable == 0u || cloth.albedo_idx == -1) ? pc.color : texture(tex[nonuniformEXT(cloth.albedo_idx)], in_uv);
     vec3 normal  = (!gl_FrontFacing) ? -in_world_normal : in_world_normal;
     float metallic = (cloth.metallic_enable == 0u || cloth.metallic_idx == -1) ? cloth.metallic_factor : texture(tex[nonuniformEXT(cloth.metallic_idx)], in_uv).r;

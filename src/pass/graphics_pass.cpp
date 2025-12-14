@@ -1073,7 +1073,6 @@ void GraphicsPass::CreateUniformBuffers()
 		ubos_.cloth = std::move(buffer);
 		ubo_memories_.cloth = std::move(bufferMem);
 		ubo_mapped_.cloth = ubo_memories_.cloth.mapMemory(0, totalSize);
-		ubo_datas_.cloth.albedo_idx = 0;
 	}
 
 	// Skinned Model

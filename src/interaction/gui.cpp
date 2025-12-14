@@ -124,7 +124,7 @@ void GUI::SetStyle()
 	style.FrameRounding = 4.0f;
 	style.GrabRounding = 4.0f;
 	style.ScrollbarRounding = 4.0f;
-	style.FontScaleMain = 2.0f * swapchain_.swapchain_extent_.width / 2560.0f;
+	style.FontScaleMain = 1.5f * swapchain_.swapchain_extent_.width / 2560.0f;
 
 	ImVec4* colors = style.Colors;
 
@@ -258,7 +258,7 @@ void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera, bool paused
 	ImVec2 StatGuiSize{ swapchain_.swapchain_extent_.width * 0.25f, 0 };
 	ImGui::SetNextWindowPos(statGuiPos);
 	ImGui::SetNextWindowSize(StatGuiSize);
-	if (ImGui::Begin("Cloth Performance Monitor", nullptr, wf))
+	if (ImGui::Begin("Performance Monitor", nullptr, wf))
 	{
 		SetStatGUI(row);
 
@@ -266,7 +266,7 @@ void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera, bool paused
 	}
 	ImGui::End();
 
-	ImGui::ShowDemoWindow();
+	//ImGui::ShowDemoWindow();
 
 	ImGui::Render();
 }
@@ -460,6 +460,8 @@ void GUI::SetModelsGUI(RowFn&& row, Models& models, ClothUBO& clothUBO) {
 					row("CoatRoughness", [&] { ImGui::DragFloat("##CoatRoughness", &clothUBO.coat_roughness_factor, 0.001f, 0.0f, 1.0f); });
 					row("Fuzz", [&] { ImGui::DragFloat("##Fuzz", &clothUBO.fuzz_factor, 0.001f, 0.0f, 1.0f); });
 					row("FuzzRoughness", [&] { ImGui::DragFloat("##FuzzRoughness", &clothUBO.fuzz_roughness_factor, 0.001f, 0.0f, 1.0f); });
+					row("TileUV", [&] { ImGui::DragFloat2("##TileUV", &clothUBO.tile_uv[0], 1.0f, 0.0f, 100.0f); });
+
 					ImGui::EndTable();
 				}
 				ImGui::EndChild();
@@ -528,10 +530,10 @@ void GUI::SetTimeingGUI(RowFn&& row, SimulationPassGPU& sim)
 	{
 		if (ImGui::BeginTable("Timing", 4))//,  ImGuiTableFlags_BordersOuter))
 		{
-			ImGui::TableSetupColumn("Kernel", ImGuiTableColumnFlags_WidthStretch, 0.5f);
-			ImGui::TableSetupColumn("Time (ms)", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-			ImGui::TableSetupColumn("Avg (ms)", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-			ImGui::TableSetupColumn("%", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+			ImGui::TableSetupColumn("Kernel", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+			ImGui::TableSetupColumn("Time (ms)", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+			ImGui::TableSetupColumn("Avg (ms)", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+			ImGui::TableSetupColumn("%", ImGuiTableColumnFlags_WidthFixed, 70.0f);
 			ImGui::TableHeadersRow();
 
 			for (uint32_t i = 0; i < labels.size() - 1; i++)

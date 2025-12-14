@@ -122,8 +122,7 @@ public:
 
 			float fuzz_factor = 0.0f;
 			float fuzz_roughness_factor = 0.0f;
-			float p0;
-			float p1;
+			glm::vec2 tile_uv {1.0f, 1.0f};
 
 			uint32_t albedo_enable = 0;
 			uint32_t metallic_enable = 0;

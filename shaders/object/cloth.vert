@@ -23,8 +23,12 @@ layout(set = 1, binding = 0) uniform Cloth {
 
     float ao_factor;
     float height_factor;
-    float sheen_weight_factor;
-    float sheen_roughness_factor;
+    float coat_factor;
+    float coat_roughness_factor;
+    
+    float fuzz_factor;
+    float fuzz_roughness_factor;
+    vec2 tile_uv;
 
     uint albedo_enable;
     uint metallic_enable;
@@ -33,8 +37,8 @@ layout(set = 1, binding = 0) uniform Cloth {
 
     uint ao_enable;
     uint height_enable;
-    uint p3;
-    uint p4;
+    uint checker_board_enable;
+    uint p0;
 } cloth;
 
 layout(set=1, binding=1, std430) readonly buffer Positions { vec4 pos[]; };
@@ -59,7 +63,7 @@ void main() {
     uint vid_no_offset = (vid - pc.offset_particle);
     uint x = vid_no_offset % nx1;
     uint y = vid_no_offset / ny1;
-    out_uv = vec2(float(x) / float(nx1 - 1.0), float(y) / float(ny1 - 1.0));
+    out_uv = vec2(float(x) / float(nx1 - 1.0), float(y) / float(ny1 - 1.0)) * cloth.tile_uv;
 
     out_world_normal = normals[vid].xyz;
     
