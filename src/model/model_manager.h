@@ -17,8 +17,6 @@ public:
 	ModelManager& operator=(ModelManager&& rhs) = delete;
 	~ModelManager();
 
-	void Update();
-
 	static constexpr uint32_t kMaxModels = 8;
 	std::vector<std::unique_ptr<Model>> models_;
 	std::unique_ptr<Model> debug_capsule_;

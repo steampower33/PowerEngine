@@ -35,7 +35,7 @@ struct SimUBO {
 			float bend_stiffness = 0.001f;
 			float area_stiffness = 1.0f;
 
-			float self_collision_stiffness = 25.0f;
+			float self_collision_stiffness = 30.0f;
 			float volume_stiffness = 10.0f;
 			float softbody_stretch_stiffness = 20.0f;
 			float p1;

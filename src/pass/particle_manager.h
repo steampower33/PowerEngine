@@ -3,6 +3,11 @@
 class Context;
 class Model;
 class ModelManager;
+class Texture;
+class TextureManager;
+class ModelLoader;
+
+#include "model_data.h"
 
 struct Cloth
 {
@@ -33,6 +38,11 @@ struct Cloth
 		PLANE,
 		MESH
 	} type;
+
+	bool render;
+
+	std::vector<Vertex> vertices;
+	std::vector<uint32_t> indices;
 };
 
 struct SoftBody
@@ -54,17 +64,7 @@ struct SoftBody
 	float     angle_deg;
 	glm::vec3 axis;
 
-	struct Volume {
-		uint32_t i0;
-		uint32_t i1;
-		uint32_t i2;
-		uint32_t i3;
-		float rest_volume;
-		float lambda;
-		float p1;
-		float p2;
-	};
-	std::vector<Volume> volume_constraints;
+	bool render;
 
 	ubo_data::Model ubo_data;
 };
@@ -72,7 +72,7 @@ struct SoftBody
 class ParticleManager
 {
 public:
-	ParticleManager(Context& context, ModelManager& modelManager);
+	ParticleManager(Context& context, ModelManager& modelManager, TextureManager& textureManager);
 	ParticleManager(const ParticleManager& rhs) = delete;
 	ParticleManager(ParticleManager&& rhs) = delete;
 	ParticleManager& operator=(const ParticleManager& rhs) = delete;
@@ -80,9 +80,11 @@ public:
 	~ParticleManager();
 
 	void SetPlaneCloth(Cloth& cloth);
-	void SetClothFromMesh(Cloth& cloth, Mesh& mesh);
-	void SetSoftbody(std::string path);
-	void ResetPlaneCloth(Cloth& cloth);
+	void SetClothFromMesh(Cloth& cloth);
+	void SetSoftbody(std::string path, SoftBody& softbody);
+	void ResetCloth(Cloth& cloth);
+	void ResetSoftbody(SoftBody& softbody);
+	void ResetVolumeConstraint();
 
 	Context& context_;
 
@@ -96,7 +98,8 @@ public:
 
 	uint32_t num_softbody_particles_ = 0;
 	uint32_t num_softbody_indices_ = 0;
-	SoftBody soft_body_;
+	//SoftBody soft_body_;
+	std::vector<SoftBody> softbodies_;
 
 	float default_cloth_spacing_ = 0.02f;
 
@@ -107,6 +110,18 @@ public:
 	std::vector<float> masses_;
 	std::vector<uint32_t> indices_;
 	std::vector<glm::vec4> normals_;
+
+	struct Volume {
+		uint32_t i0;
+		uint32_t i1;
+		uint32_t i2;
+		uint32_t i3;
+		float rest_volume;
+		float lambda;
+		float p1;
+		float p2;
+	};
+	std::vector<Volume> volume_constraints;
 
 	uint32_t object_cnt_ = 0;
 

@@ -80,6 +80,7 @@ private:
 		vk::raii::Buffer light{ nullptr };
 		vk::raii::Buffer skybox{ nullptr };
 		vk::raii::Buffer cloth{ nullptr };
+		vk::raii::Buffer softbody{ nullptr };
 		vk::raii::Buffer skinned_model{ nullptr };
 	} ubos_;
 
@@ -89,6 +90,7 @@ private:
 		vk::raii::DeviceMemory light{ nullptr };
 		vk::raii::DeviceMemory skybox{ nullptr };
 		vk::raii::DeviceMemory cloth{ nullptr };
+		vk::raii::DeviceMemory softbody{ nullptr };
 		vk::raii::DeviceMemory skinned_model{ nullptr };
 	} ubo_memories_;
 
@@ -98,6 +100,7 @@ private:
 		void* light{ nullptr };
 		void* skybox{ nullptr };
 		void* cloth{ nullptr };
+		void* softbody{ nullptr };
 		void* skinned_model{ nullptr };
 	} ubo_mapped_;
 
@@ -107,6 +110,7 @@ private:
 		vk::DeviceSize light;
 		vk::DeviceSize skybox;
 		vk::DeviceSize cloth;
+		vk::DeviceSize softbody;
 		vk::DeviceSize skinned_model;
 	} ubo_size_;
 

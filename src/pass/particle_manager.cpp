@@ -3,27 +3,58 @@
 #include "vulkan_utils.h"
 #include "model.h"
 #include "model_manager.h"
+#include "texture.h"
+#include "texture_manager.h"
 #include "geometry_generator.h"
+#include "model_loader.h"
 
 #include "particle_manager.h"
 
-ParticleManager::ParticleManager(Context& context, ModelManager& modelManager)
+ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, TextureManager& textureManager)
 	: context_(context)
 {
+	//{
+	//	Cloth cloth{};
+
+	//	cloth.name = "Dress";
+	//	cloth.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+
+	//	cloth.origin = glm::vec3(0.0f, 1.0f, 0.0f);
+	//	cloth.angle_deg = 0.0f;
+	//	cloth.axis = glm::vec3(0, 1, 0);
+
+	//	
+	//	ModelLoader modelLoader;
+	//	std::string filename = "assets/cloth.glb";
+	//	modelLoader.LoadModel(filename, vku::VertexIncludeInfo{ true, true, true, false, false }, textureManager, 1.0f);
+
+	//	cloth.vertices = std::move(modelLoader.mesh_.vertices);
+	//	cloth.indices = std::move(modelLoader.mesh_.indices);
+
+	//	SetClothFromMesh(cloth);
+
+	//}
+
 	{
 		Cloth cloth{};
 
-		cloth.name = "Dress";
-		cloth.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+		cloth.name = "1x1 Cloth";
+		cloth.spacing = default_cloth_spacing_;
+		cloth.gsm = 0.2f;
+		cloth.cloth_size = glm::vec2(1.0f, 1.0f);
 
-		cloth.origin = glm::vec3(0.0f, 1.0f, 0.0f);
+		cloth.color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+
+		cloth.origin = glm::vec3(0.0f, 5.0f, 0.0f);
 		cloth.angle_deg = 0.0f;
 		cloth.axis = glm::vec3(0, 1, 0);
 
-		//Mesh mesh = GeometryGenerator::MakeCapsule(0.5f, 0.5f, 1.0f, 5);
-		SetClothFromMesh(cloth, modelManager.dress_->mesh_);
+		cloth.num_particle = cloth.nx1 * cloth.ny1;
 
-		clothes_.push_back(cloth);
+		cloth.render = true;
+
+		SetPlaneCloth(cloth);
+
 	}
 
 	{
@@ -36,40 +67,64 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager)
 
 		cloth.color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
 
-		cloth.origin = glm::vec3(-1.0f, 2.0f, 0.0f);
+		cloth.origin = glm::vec3(0.0f, 4.0f, 0.0f);
 		cloth.angle_deg = 0.0f;
 		cloth.axis = glm::vec3(0, 1, 0);
 
 		cloth.num_particle = cloth.nx1 * cloth.ny1;
 
+		cloth.render = true;
+
 		SetPlaneCloth(cloth);
 
-		clothes_.push_back(cloth);
 	}
 
 	{
 		Cloth cloth{};
 
-		cloth.name = "1x1 Cloth";
+		cloth.name = "3x3 Cloth";
 		cloth.spacing = default_cloth_spacing_;
 		cloth.gsm = 0.2f;
-		cloth.cloth_size = glm::vec2(1.0f, 1.0f);
+		cloth.cloth_size = glm::vec2(3.0f, 3.0f);
 
 		cloth.color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
 
-		cloth.origin = glm::vec3(-1.0f, 3.0f, 0.0f);
+		cloth.origin = glm::vec3(0.0f, 3.0f, 0.0f);
 		cloth.angle_deg = 0.0f;
 		cloth.axis = glm::vec3(0, 1, 0);
 
 		cloth.num_particle = cloth.nx1 * cloth.ny1;
 
+		cloth.render = true;
+
 		SetPlaneCloth(cloth);
 
-		clothes_.push_back(cloth);
 	}
 
 	{
-		SetSoftbody("assets/sphere.msh");
+		SoftBody softbody;
+		softbody.name = "softbody1";
+		softbody.origin = glm::vec3(2.0f, 1.0f, 0.0f);
+		softbody.render = true;
+
+		SetSoftbody("assets/sphere.msh", softbody);
+	}
+
+	{
+		SoftBody softbody;
+
+		softbody.name = "softbody2";
+		softbody.origin = glm::vec3(2.0f, 2.0f, 0.0f);
+		softbody.render = true;
+		SetSoftbody("assets/sphere.msh", softbody);
+	}
+	{
+		SoftBody softbody;
+
+		softbody.name = "softbody3";
+		softbody.origin = glm::vec3(2.0f, 3.0f, 0.0f);
+		softbody.render = true;
+		SetSoftbody("assets/sphere.msh", softbody);
 	}
 
 	vku::CreateIndexBuffer(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_, indices_, index_buffer_, index_buffer_memory_);
@@ -213,9 +268,11 @@ void ParticleManager::SetPlaneCloth(Cloth& cloth)
 	num_cloth_indices_ = indices_.size();
 
 	object_cnt_++;
+
+	clothes_.push_back(cloth);
 }
 
-void ParticleManager::SetClothFromMesh(Cloth& cloth, Mesh& mesh)
+void ParticleManager::SetClothFromMesh(Cloth& cloth)
 {
 	cloth.type = Cloth::Type::MESH;
 
@@ -226,9 +283,9 @@ void ParticleManager::SetClothFromMesh(Cloth& cloth, Mesh& mesh)
 	glm::mat4 R = glm::rotate(glm::mat4(1.0f), angle_rad, glm::normalize(cloth.axis));
 
 	// Set positions, velocities, pred_positions
-	for (uint32_t i = 0; i < mesh.vertices.size(); i++)
+	for (uint32_t i = 0; i < cloth.vertices.size(); i++)
 	{
-		glm::vec4 local(mesh.vertices[i].pos, 1.0f);
+		glm::vec4 local(cloth.vertices[i].pos, 1.0f);
 
 		glm::vec3 rotated = glm::vec3(R * local);
 
@@ -246,9 +303,9 @@ void ParticleManager::SetClothFromMesh(Cloth& cloth, Mesh& mesh)
 	cloth.num_particle = positions_.size() - cloth.offset_particle;
 
 	// Set indices
-	for (uint32_t i = 0; i < mesh.indices.size(); i++)
+	for (uint32_t i = 0; i < cloth.indices.size(); i++)
 	{
-		indices_.push_back(cloth.offset_indices + mesh.indices[i]);
+		indices_.push_back(cloth.offset_indices + cloth.indices[i]);
 	}
 	cloth.num_indices = static_cast<uint32_t>(indices_.size() - cloth.offset_indices);
 
@@ -314,23 +371,27 @@ void ParticleManager::SetClothFromMesh(Cloth& cloth, Mesh& mesh)
 	num_cloth_indices_ = indices_.size();
 
 	object_cnt_++;
+
+	clothes_.push_back(cloth);
+
+	//cloth.mesh = std::move(mesh);
 }
 
-void ParticleManager::SetSoftbody(std::string path)
+void ParticleManager::SetSoftbody(std::string path, SoftBody& softbody)
 {
-	soft_body_.tetmesh = vku::LoadGmshMsh2(path.c_str());
-	soft_body_.density = 1.0f;
-	soft_body_.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+	softbody.tetmesh = vku::LoadGmshMsh2(path.c_str());
+	softbody.density = 10.0f;
+	softbody.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
 
-	soft_body_.offset_particle = positions_.size();
-	soft_body_.offset_indices = indices_.size();
+	softbody.offset_particle = positions_.size();
+	softbody.offset_indices = indices_.size();
 
-	soft_body_.num_particle = soft_body_.tetmesh.positions.size();
-	soft_body_.num_indices = soft_body_.tetmesh.surfaceIndices.size();
+	softbody.num_particle = softbody.tetmesh.positions.size();
+	softbody.num_indices = softbody.tetmesh.surfaceIndices.size();
 
-	for (auto& p : soft_body_.tetmesh.positions)
+	for (auto& p : softbody.tetmesh.positions)
 	{
-		glm::vec4 pos = glm::vec4(p, 1.0f) + glm::vec4(0.0f, 1.0f, 1.0f, 0.0f);
+		glm::vec4 pos = glm::vec4(p, 1.0f) + glm::vec4(softbody.origin, 0.0f);
 		positions_.push_back(pos);
 		velocities_.push_back(glm::vec4(0.0f));
 		pred_positions_.push_back(pos);
@@ -340,26 +401,23 @@ void ParticleManager::SetSoftbody(std::string path)
 		collision_masks_.push_back({ object_cnt_, ObjectType::SOFTBODY });
 	}
 
-	for (auto idx : soft_body_.tetmesh.surfaceIndices)
+	for (auto idx : softbody.tetmesh.surfaceIndices)
 	{
-		indices_.push_back(soft_body_.offset_particle + idx);
+		indices_.push_back(softbody.offset_particle + idx);
 	}
 
-	num_softbody_particles_ += soft_body_.num_particle;
-	num_softbody_indices_ += soft_body_.num_indices;
+	num_softbody_particles_ += softbody.num_particle;
+	num_softbody_indices_ += softbody.num_indices;
 
 	auto SignedVolume = [&](uint32_t i0, uint32_t i1, uint32_t i2, uint32_t i3) {
-		glm::vec3 x0 = soft_body_.tetmesh.positions[i0];
-		glm::vec3 x1 = soft_body_.tetmesh.positions[i1];
-		glm::vec3 x2 = soft_body_.tetmesh.positions[i2];
-		glm::vec3 x3 = soft_body_.tetmesh.positions[i3];
+		glm::vec3 x0 = softbody.tetmesh.positions[i0];
+		glm::vec3 x1 = softbody.tetmesh.positions[i1];
+		glm::vec3 x2 = softbody.tetmesh.positions[i2];
+		glm::vec3 x3 = softbody.tetmesh.positions[i3];
 		return glm::dot(glm::cross(x1 - x0, x2 - x0), x3 - x0) / 6.0f;
 		};
 
-	soft_body_.volume_constraints.clear();
-	soft_body_.volume_constraints.reserve(soft_body_.tetmesh.tets.size());
-
-	for (auto t : soft_body_.tetmesh.tets)
+	for (auto t : softbody.tetmesh.tets)
 	{
 		float v = SignedVolume(t.x, t.y, t.z, t.w);
 
@@ -370,18 +428,18 @@ void ParticleManager::SetSoftbody(std::string path)
 			v = -v;
 		}
 
-		SoftBody::Volume c;
-		c.i0 = soft_body_.offset_particle + t.x;
-		c.i1 = soft_body_.offset_particle + t.y;
-		c.i2 = soft_body_.offset_particle + t.z;
-		c.i3 = soft_body_.offset_particle + t.w;
+		Volume c;
+		c.i0 = softbody.offset_particle + t.x;
+		c.i1 = softbody.offset_particle + t.y;
+		c.i2 = softbody.offset_particle + t.z;
+		c.i3 = softbody.offset_particle + t.w;
 
 		c.rest_volume = v;
 		c.lambda = 0.0f;
 
-		soft_body_.volume_constraints.push_back(c);
+		volume_constraints.push_back(c);
 
-		float tetMass = soft_body_.density * c.rest_volume;
+		float tetMass = softbody.density * c.rest_volume;
 		float pMass = tetMass * 0.25f;
 
 		masses_[c.i0] += pMass;
@@ -390,17 +448,21 @@ void ParticleManager::SetSoftbody(std::string path)
 		masses_[c.i3] += pMass;
 	}
 
-	for (uint32_t i = soft_body_.offset_particle;
-		i < soft_body_.offset_particle + soft_body_.num_particle; ++i)
+	for (uint32_t i = softbody.offset_particle; i < softbody.offset_particle + softbody.num_particle; ++i)
 	{
 		inverse_masses_[i] = (masses_[i] > 0.0f) ? (1.0f / masses_[i]) : 0.0f;
 	}
 
 	object_cnt_++;
+
+	softbodies_.push_back(softbody);
 }
 
-void ParticleManager::ResetPlaneCloth(Cloth& cloth)
+void ParticleManager::ResetCloth(Cloth& cloth)
 {
+	if (cloth.type == Cloth::Type::MESH)
+		return;
+
 	const int nxCells = cloth.nx;
 	const int nyCells = cloth.ny;
 	const int nx1 = nxCells + 1;
@@ -414,23 +476,31 @@ void ParticleManager::ResetPlaneCloth(Cloth& cloth)
 	glm::mat4 R = glm::rotate(glm::mat4(1.0f), angle_rad, glm::normalize(cloth.axis));
 
 	// Set positions, velocities, pred_positions
-	for (int y = 0; y < ny1; ++y) {
-		for (int x = 0; x < nx1; ++x) {
-			uint32_t id = vid(x, y);
 
-			float lx = (-0.5f * cloth.cloth_size.x) + x * cloth.spacing;
-			float ly = 0.0f;
-			float lz = (-0.5f * cloth.cloth_size.y) + y * cloth.spacing;
+	if (cloth.type == Cloth::Type::MESH)
+	{
 
-			glm::vec4 local(lx, ly, lz, 1.0f);
+	}
+	else if (cloth.type == Cloth::Type::PLANE)
+	{
+		for (int y = 0; y < ny1; ++y) {
+			for (int x = 0; x < nx1; ++x) {
+				uint32_t id = vid(x, y);
 
-			glm::vec3 rotated = glm::vec3(R * local);
+				float lx = (-0.5f * cloth.cloth_size.x) + x * cloth.spacing;
+				float ly = 0.0f;
+				float lz = (-0.5f * cloth.cloth_size.y) + y * cloth.spacing;
 
-			glm::vec3 worldPos = cloth.origin + rotated;
+				glm::vec4 local(lx, ly, lz, 1.0f);
 
-			positions_[id] = { worldPos, 0.0f };
-			velocities_[id] = glm::vec4(0.0f);
-			pred_positions_[id] = { worldPos, 0.0f };
+				glm::vec3 rotated = glm::vec3(R * local);
+
+				glm::vec3 worldPos = cloth.origin + rotated;
+
+				positions_[id] = { worldPos, 0.0f };
+				velocities_[id] = glm::vec4(0.0f);
+				pred_positions_[id] = { worldPos, 0.0f };
+			}
 		}
 	}
 
@@ -493,6 +563,23 @@ void ParticleManager::ResetPlaneCloth(Cloth& cloth)
 			inverse_masses_[i] = 1.0f / m;
 		else
 			inverse_masses_[i] = 0.0f;
+	}
+}
+
+void ParticleManager::ResetSoftbody(SoftBody& softbody)
+{
+	for (uint32_t i = 0; i < softbody.tetmesh.positions.size(); i++)
+	{
+		glm::vec4 pos = glm::vec4(softbody.tetmesh.positions[i], 1.0f) + glm::vec4(softbody.origin, 0.0f);
+		positions_[softbody.offset_particle + i] = pos;
+	}
+}
+
+void ParticleManager::ResetVolumeConstraint()
+{
+	for (auto& v : volume_constraints)
+	{
+		v.lambda = 0.0f;
 	}
 }
 

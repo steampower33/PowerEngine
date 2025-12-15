@@ -98,7 +98,7 @@ void SimulationPassGPU::UpdateComputeUBO(uint32_t currentFrame, ModelManager& mo
 	std::memcpy(dst, &ubo_.datas.sim_params, sizeof(SimUBO::Data::SimParams));
 }
 
-void SimulationPassGPU::RecordComputeCloth(uint32_t currentFrame, vku::TestScene& testScene)
+void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene)
 {
 	auto& cmd = cmds_[currentFrame];
 
@@ -116,7 +116,7 @@ void SimulationPassGPU::RecordComputeCloth(uint32_t currentFrame, vku::TestScene
 	TS(timestamp_steps_); // Start
 
 	ResetTestScene(cmd, testScene);
-	CopyModelDatas(cmd);
+	CopyColliders(cmd);
 
 	uint32_t simparamOffset = currentFrame * static_cast<uint32_t>(ubo_.size.sim_params);
 	cmd.bindDescriptorSets(
@@ -303,7 +303,7 @@ void SimulationPassGPU::RecordComputeCloth(uint32_t currentFrame, vku::TestScene
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_softbody_stretch);
 
-				uint32_t base = datas_.pass_offsets[datas_.num_colors];
+ 				uint32_t base = datas_.pass_offsets[datas_.num_colors];
 				uint32_t count = datas_.pass_offsets[datas_.num_colors + 1] - datas_.pass_offsets[datas_.num_colors];
 				if (!count) continue;
 
@@ -507,6 +507,14 @@ void SimulationPassGPU::CopySimDatas(const vk::raii::CommandBuffer& cmd)
 	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.bend, datas_.staging_mapped_.bend, datas_.bends, datas_.staging_.bend, datas_.ssbos_.bend,
 		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
 		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+
+	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.area, datas_.staging_mapped_.area, datas_.areas, datas_.staging_.area, datas_.ssbos_.area,
+		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
+		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+
+	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.volume, datas_.staging_mapped_.volume, pm.volume_constraints, datas_.staging_.volume, datas_.ssbos_.volume,
+		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
+		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
 }
 
 void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene)
@@ -517,11 +525,21 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 	{
 		testScene.sphereCollision = false;
 
+		float height = 5.0f;
 		for (auto& cloth : pm.clothes_)
 		{
-			pm.ResetPlaneCloth(cloth);
+			cloth.origin = glm::vec3(0.0f, height, 0.0f);
+			cloth.angle_deg = 0.0f;
+			cloth.axis = glm::vec3(0, 1, 0);
+
+			pm.ResetCloth(cloth);
+
+			height -= 1.0f;
 		}
+		
 		datas_.ResetConstraints(pm.positions_, pm.indices_);
+
+		pm.ResetVolumeConstraint();
 
 		CopySimDatas(cmd);
 	}
@@ -529,13 +547,32 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 	{
 		testScene.pinnedCorner = false;
 
-		pm.ResetPlaneCloth(pm.clothes_[1]);
+		pm.ResetCloth(pm.clothes_[0]);
+		pm.ResetCloth(pm.clothes_[1]);
 
 		auto& cloth = pm.clothes_[2];
-		pm.ResetPlaneCloth(cloth);
+		cloth.origin = glm::vec3(0.0f, 3.0f, 0.0f);
+		cloth.angle_deg = 0.0f;
+		cloth.axis = glm::vec3(0, 1, 0);
+		pm.ResetCloth(cloth);
 		pm.inverse_masses_[cloth.offset_particle] = 0.0f;
 		pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
+		pm.inverse_masses_[cloth.offset_particle + (cloth.ny1 - 1) * cloth.nx1] = 0.0f;
+		pm.inverse_masses_[cloth.offset_particle + (cloth.ny1 - 1) * cloth.nx1 + cloth.nx1 - 1] = 0.0f;
 		datas_.ResetConstraints(pm.positions_, pm.indices_);
+
+		float height = 4.0f;
+		for (auto& s : pm.softbodies_)
+		{
+			s.render = true;
+			s.origin = glm::vec3(0.0f, height, 0.0f);
+
+			pm.ResetSoftbody(s);
+
+			height += 1.0f;
+		}
+
+		pm.ResetVolumeConstraint();
 
 		CopySimDatas(cmd);
 	}
@@ -545,11 +582,13 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 
 		for (auto& cloth : pm.clothes_)
 		{
-			pm.ResetPlaneCloth(cloth);
+			pm.ResetCloth(cloth);
 			pm.inverse_masses_[cloth.offset_particle] = 0.0f;
 			pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
 		}
 		datas_.ResetConstraints(pm.positions_, pm.indices_);
+
+		pm.ResetVolumeConstraint();
 
 		CopySimDatas(cmd);
 	}
@@ -561,15 +600,18 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 		{
 			cloth.angle_deg = 90.0f;
 			cloth.axis = glm::vec3(1, 0, 0);
-			pm.ResetPlaneCloth(cloth);
+			pm.ResetCloth(cloth);
 			cloth.angle_deg = 0.0f;
 		}
 		datas_.ResetConstraints(pm.positions_, pm.indices_);
+
+		pm.ResetVolumeConstraint();
+
 		CopySimDatas(cmd);
 	}
 }
 
-void SimulationPassGPU::CopyModelDatas(const vk::raii::CommandBuffer& cmd)
+void SimulationPassGPU::CopyColliders(const vk::raii::CommandBuffer& cmd)
 {
 	uint32_t base = 0;
 	for (uint32_t i = 0; i < model_manager_.models_.size(); i++)
@@ -579,17 +621,22 @@ void SimulationPassGPU::CopyModelDatas(const vk::raii::CommandBuffer& cmd)
 		if (model.shape_collision_update_)
 		{
 			model.shape_collision_update_ = false;
+
+			model.UpdateShapeColliders();
 			
 			//std::cout <<" Update " << model.name_ << std::endl;
 
 			for (uint32_t j = 0; j < model.shape_colliders_.size(); j++)
 				datas_.colliders[base + j] = model.shape_colliders_[j];
+
 		}
 		base += model.shape_colliders_.size();
 
 		if (model.capsule_collision_update_)
 		{
 			model.capsule_collision_update_ = false;
+
+			model.UpdateCapsuleCollidersFromBones();
 
 			for (uint32_t j = 0; j < model.capsule_colliders_.size(); j++)
 				datas_.colliders[base + j] = model.capsule_colliders_[j];
@@ -745,49 +792,49 @@ void SimulationPassGPU::CreateClothConstraintDatas()
 void SimulationPassGPU::CreateSoftBodyConstraintDatas()
 {
 	auto& pm = particle_manager_;
-	auto& tetmesh = pm.soft_body_.tetmesh;
 
 	softbody_particles_ = pm.num_softbody_particles_;
 	softbody_indices_ = pm.num_softbody_indices_;
 
-	// Distance
-	uint32_t offsetParticle = particle_manager_.soft_body_.offset_particle;
-	std::unordered_set<SimData::EdgeKey, SimData::EdgeKeyHash> edgeSet;
+	for (uint32_t i = 0; i < pm.softbodies_.size(); i++)
+	{
+		auto& tetmesh = pm.softbodies_[i].tetmesh;
 
-	auto pushEdge = [&](uint32_t i, uint32_t j) {
-		uint32_t a = std::min(i, j);
-		uint32_t b = std::max(i, j);
-		SimData::EdgeKey e{ a, b };
-		if (edgeSet.insert(e).second) {
-			// New edge
-			SimData::Edge c;
-			c.i = a + offsetParticle;
-			c.j = b + offsetParticle;
-			c.rest = length(pm.positions_[c.i] - pm.positions_[c.j]);
-			datas_.edges.push_back(c);
+		uint32_t offsetParticle = particle_manager_.softbodies_[i].offset_particle;
+		std::unordered_set<SimData::EdgeKey, SimData::EdgeKeyHash> edgeSet;
+
+		auto pushEdge = [&](uint32_t i, uint32_t j) {
+			uint32_t a = std::min(i, j);
+			uint32_t b = std::max(i, j);
+			SimData::EdgeKey e{ a, b };
+			if (edgeSet.insert(e).second) {
+				SimData::Edge c;
+				c.i = a + offsetParticle;
+				c.j = b + offsetParticle;
+				c.rest = length(pm.positions_[c.i] - pm.positions_[c.j]);
+				datas_.edges.push_back(c);
+			}
+			};
+
+		for (auto& tet : tetmesh.tets) {
+			uint32_t i0 = tet.x;
+			uint32_t i1 = tet.y;
+			uint32_t i2 = tet.z;
+			uint32_t i3 = tet.w;
+
+			pushEdge(i0, i1);
+			pushEdge(i0, i2);
+			pushEdge(i0, i3);
+			pushEdge(i1, i2);
+			pushEdge(i1, i3);
+			pushEdge(i2, i3);
 		}
-		};
-
-	uint32_t before = datas_.edges.size();
-	for (auto& tet : tetmesh.tets) {
-		uint32_t i0 = tet.x;
-		uint32_t i1 = tet.y;
-		uint32_t i2 = tet.z;
-		uint32_t i3 = tet.w;
-
-		pushEdge(i0, i1);
-		pushEdge(i0, i2);
-		pushEdge(i0, i3);
-		pushEdge(i1, i2);
-		pushEdge(i1, i3);
-		pushEdge(i2, i3);
 	}
-	uint32_t after = datas_.edges.size();
-	datas_.pass_offsets.push_back(after);
-
 	datas_.num_edges = static_cast<uint32_t>(datas_.edges.size());
 
-	datas_.num_volumes = pm.soft_body_.volume_constraints.size();
+	datas_.pass_offsets.push_back(datas_.num_edges);
+
+	datas_.num_volumes = pm.volume_constraints.size();
 }
 
 void SimulationPassGPU::CreateColiiders()
@@ -934,15 +981,17 @@ void SimulationPassGPU::CreateSSBOBuffers()
 	datas_.staging_mapped_.area = datas_.staging_memories_.area.mapMemory(0, datas_.ssbo_size_.area);
 
 	// volume
-	datas_.ssbo_size_.volume = sizeof(SoftBody::Volume) * datas_.num_volumes;
+	datas_.ssbo_size_.volume = sizeof(ParticleManager::Volume) * datas_.num_volumes;
 	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		datas_.ssbo_size_.volume,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-		particle_manager_.soft_body_.volume_constraints,
+		particle_manager_.volume_constraints,
 		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
 		vk::MemoryPropertyFlagBits::eDeviceLocal,
-		datas_.ssbos_.volume, datas_.ssbo_memories_.volume);
+		datas_.ssbos_.volume, datas_.ssbo_memories_.volume,
+		&datas_.staging_.volume, &datas_.staging_memories_.volume);
+	datas_.staging_mapped_.volume = datas_.staging_memories_.volume.mapMemory(0, datas_.ssbo_size_.volume);
 
 	// collider
 	datas_.ssbo_size_.collider = sizeof(Collider) * datas_.num_colliders;

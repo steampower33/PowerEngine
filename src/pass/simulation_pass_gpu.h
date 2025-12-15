@@ -45,14 +45,14 @@ public:
 	void UpdateMousePushConstant(Camera& camera, MouseInteractor& mouseInteractor, glm::vec2 viewportSize);
 	void UpdateComputeUBO(uint32_t currentFrame, ModelManager& model);
 
-	void RecordComputeCloth(uint32_t currentFrame, vku::TestScene& testScene);
+	void RecordCompute(uint32_t currentFrame, vku::TestScene& testScene);
 
 	void ClearCpuTime();
 	void CalculateGpuTime();
 
 	void CopySimDatas(const vk::raii::CommandBuffer& cmd);
 	void ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene);
-	void CopyModelDatas(const vk::raii::CommandBuffer& cmd);
+	void CopyColliders(const vk::raii::CommandBuffer& cmd);
 
 	std::vector<vk::raii::CommandBuffer> cmds_;
 

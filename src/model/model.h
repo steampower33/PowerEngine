@@ -5,6 +5,7 @@ class PassManager;
 struct Vertex;
 struct Camera;
 class TextureManager;
+class ModelLoader;
 
 #include "model_data.h"
 #include "vulkan_utils.h"
@@ -46,26 +47,28 @@ public:
 	bool checker_board_enable_ = false;
 	bool movable_ = false;
 	bool render_ = true;
-	bool shape_collision_update_ = false;
-	bool capsule_collision_update_ = false;
 
 	ModelType model_type_;
 	ShapeColliderType shape_collision_type_;
-	bool collider_render_ = false;
-	bool collider_simulation_ = false;
 
 	std::string name_;
 	glm::vec4 albedo_{ 0.0f };
 
-	Mesh mesh_;
-	std::vector<Node> node_;
-	std::vector<Skin> skin_;
-	std::vector<AnimationClip> animations_;
+	std::unique_ptr<ModelLoader> model_loader_;
+
 	int   current_clip_ = 0;
 	float current_time_ = 0.0f; // second
 
+	bool do_animation = false;
+
+	bool shape_collision_update_ = false;
+	bool shape_collision_render_ = false;
+	bool shape_collision_collide_ = true;
 	std::vector<Collider> shape_colliders_;
 
+	bool capsule_collision_update_ = false;
+	bool capsule_collision_render_ = false;
+	bool capsule_collision_collide_ = false;
 	std::vector<CapsuleColliderDef> collider_defs_;
 	std::vector<Collider> capsule_colliders_;
 
@@ -100,14 +103,7 @@ public:
 	} factors_;
 
 private:
-	void LoadModel(const std::string& modelPath, vku::VertexIncludeInfo& vertexIncludeInfo, TextureManager& textureManager, float scale);
-	template<typename T>
-	std::vector<T> ReadAccessor(const tinygltf::Model& model, int accessorIndex);
-	void ParseMesh(const tinygltf::Model& model, vku::VertexIncludeInfo& vertexIncludeInfo, float scale);
-	void ParseNodes(const tinygltf::Model& model);
 	void UpdateWorldTransforms(std::vector<Node>& nodes, int nodeIndex, const glm::mat4& parent);
-	void ParseSkins(const tinygltf::Model& model);
-	void ParseAnimations(const tinygltf::Model& model);
 	void SetupShapeColliders();
 	void SetupCapsuleColliders();
 };

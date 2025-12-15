@@ -232,7 +232,7 @@ void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera, bool paused
 	ImGui::SetNextWindowSize(sceneGuiSize);
 	if (ImGui::Begin("Scene", nullptr, wf))
 	{
-		SetTestSceneGUI(row, pass_manager_.test_scene_);
+		SetTestSceneGUI(row);
 	}
 	ImGui::End();
 
@@ -245,10 +245,10 @@ void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera, bool paused
 		SetCameraGUI(row, camera);
 		SetRenderingGUI(row);
 
-		SetModelsGUI(row, model_manager_.models_, pass_manager_.particle_manager_->clothes_);
+		SetModelsGUI(row);
 
 		if (pass_manager_.cpu_or_gpu_ == vku::CpuOrGpu::GPU)
-			SetSimulationGUI(row, *pass_manager_.sim_pass_gpu_, targetSimFPS, simDt, paused);
+			SetSimulationGUI(row, targetSimFPS, simDt, paused);
 
 	}
 	ImGui::End();
@@ -262,7 +262,7 @@ void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera, bool paused
 	{
 		SetStatGUI(row);
 
-		SetTimeingGUI(row, *pass_manager_.sim_pass_gpu_);
+		SetTimeingGUI(row);
 	}
 	ImGui::End();
 
@@ -317,8 +317,10 @@ void GUI::DisplayKernelTiming(const std::string name, std::unordered_map<std::st
 	}
 }
 
-template<typename RowFn, typename Models, typename Clothes>
-void GUI::SetModelsGUI(RowFn&& row, Models& models, Clothes& clothes) {
+template<typename RowFn>
+void GUI::SetModelsGUI(RowFn&& row)
+{
+
 	auto row3 = [&](const char* label, auto&& drawControl, auto&& drawExtra)
 		{
 			ImGui::TableNextRow();
@@ -370,6 +372,10 @@ void GUI::SetModelsGUI(RowFn&& row, Models& models, Clothes& clothes) {
 				ImGui::EndPopup();
 			}
 		};
+
+	auto& models = model_manager_.models_;
+	auto& clothes = pass_manager_.particle_manager_->clothes_;
+	auto& softbodies = pass_manager_.particle_manager_->softbodies_;
 
 	if (ImGui::CollapsingHeader("Objects", ImGuiTreeNodeFlags_DefaultOpen))
 	{
@@ -431,6 +437,16 @@ void GUI::SetModelsGUI(RowFn&& row, Models& models, Clothes& clothes) {
 						row("CheckerBoard", [&] { ImGui::Checkbox("##CheckerBoard", &model->checker_board_enable_); });
 						row("Movable", [&] { ImGui::Checkbox("##Movable", &model->movable_); });
 						row("Render", [&] { ImGui::Checkbox("##Render", &model->render_); });
+
+						row("ShapeRender", [&] { ImGui::Checkbox("##ShapeRender", &model->shape_collision_render_); });
+						row("ShapeCollide", [&] { model->shape_collision_update_ = ImGui::Checkbox("##ShapeCollide", &model->shape_collision_collide_); });
+
+						if (model->model_type_ == ModelType::SKINNED)
+						{
+							row("Animation", [&] { ImGui::Checkbox("##Animation", &model->do_animation); });
+							row("CapsuleRender", [&] { ImGui::Checkbox("##CapsuleRender", &model->capsule_collision_render_); });
+							row("CapsuleCollide", [&] { model->capsule_collision_update_ = ImGui::Checkbox("##CapsuleCollide", &model->capsule_collision_collide_); });
+						}
 						ImGui::EndTable();
 					}
 
@@ -513,13 +529,89 @@ void GUI::SetModelsGUI(RowFn&& row, Models& models, Clothes& clothes) {
 		}
 		ImGui::EndChild();
 		ImGui::Unindent();
+
+		ImGui::SeparatorText("Softbody");
+		ImGui::Indent();
+		ImGui::BeginChild("Softbody", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+
+		for (auto& softbody : softbodies)
+		{
+			if (ImGui::TreeNode(softbody.name.c_str()))
+			{
+				{
+					ImGui::SeparatorText("Factor");
+					ImGui::Indent();
+					ImGui::BeginChild("Factor", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+					if (ImGui::BeginTable("Factor", 2,
+						ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+					{
+						row("Albedo", [&] { ImGui::DragFloat3("##Albedo", &softbody.ubo_data.albedo[0], 0.1f, 0.0f, 1.0f); });
+						row("Meltallic", [&] { ImGui::DragFloat("##Meltallic", &softbody.ubo_data.metallic_factor, 0.1f, 0.0f, 1.0f); });
+						row("Roughness", [&] { ImGui::DragFloat("##Roughness", &softbody.ubo_data.roughness_factor, 0.1f, 0.0f, 1.0f); });
+						row("AO", [&] { ImGui::DragFloat("##AO", &softbody.ubo_data.ao_factor, 0.1f, 0.0f, 1.0f); });
+						row("Height", [&] { ImGui::DragFloat("##Height", &softbody.ubo_data.height_factor, 0.001f, 0.0f, 1.0f); });
+						row("Coat", [&] { ImGui::DragFloat("##Coat", &softbody.ubo_data.coat_factor, 0.001f, 0.0f, 1.0f); });
+						row("CoatRoughness", [&] { ImGui::DragFloat("##CoatRoughness", &softbody.ubo_data.coat_roughness_factor, 0.001f, 0.0f, 1.0f); });
+						row("Fuzz", [&] { ImGui::DragFloat("##Fuzz", &softbody.ubo_data.fuzz_factor, 0.001f, 0.0f, 1.0f); });
+						row("FuzzRoughness", [&] { ImGui::DragFloat("##FuzzRoughness", &softbody.ubo_data.fuzz_roughness_factor, 0.001f, 0.0f, 1.0f); });
+						row("TileUV", [&] { ImGui::DragFloat2("##TileUV", &softbody.ubo_data.tile_uv[0], 1.0f, 0.0f, 100.0f); });
+
+						ImGui::EndTable();
+					}
+					ImGui::EndChild();
+					ImGui::Unindent();
+				}
+
+				auto checkEnable = [&](const char* label, uint32_t& enable) {
+					bool check = enable; ImGui::Checkbox(label, &check); enable = check;
+					};
+
+				{
+					ImGui::SeparatorText("Enable");
+					ImGui::Indent();
+					ImGui::BeginChild("Enable", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+					if (ImGui::BeginTable("Enable", 3,
+						ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+					{
+						row3("Albedo",
+							[&] { checkEnable("##Albedo", softbody.ubo_data.albedo_enable); },
+							[&] { selectPopUp("Select##Albedo", softbody.ubo_data.albedo_idx); });
+						row3("Meltallic",
+							[&] { checkEnable("##Meltallic", softbody.ubo_data.metallic_enable); },
+							[&] { selectPopUp("Select##Meltallic", softbody.ubo_data.metallic_idx); });
+						row3("Normal",
+							[&] { checkEnable("##Normal", softbody.ubo_data.normal_enable); },
+							[&] { selectPopUp("Select##Normal", softbody.ubo_data.normal_idx); });
+						row3("Roughtness",
+							[&] { checkEnable("##Roughtness", softbody.ubo_data.roughness_enable); },
+							[&] { selectPopUp("Select##Roughtness", softbody.ubo_data.roughness_idx); });
+						row3("AO",
+							[&] { checkEnable("##AO", softbody.ubo_data.ao_enable); },
+							[&] { selectPopUp("Select##AO", softbody.ubo_data.ao_idx); });
+						row3("Height",
+							[&] { checkEnable("##Height", softbody.ubo_data.height_enable); },
+							[&] { selectPopUp("Select##Height", softbody.ubo_data.height_idx); });
+						ImGui::EndTable();
+					}
+					ImGui::EndChild();
+					ImGui::Unindent();
+				}
+
+				ImGui::TreePop();
+			}
+
+		}
+		ImGui::EndChild();
+		ImGui::Unindent();
 	}
 
 }
 
 template<typename RowFn>
-void GUI::SetTimeingGUI(RowFn&& row, SimulationPassGPU& sim)
+void GUI::SetTimeingGUI(RowFn&& row)
 {
+	auto& sim = *pass_manager_.sim_pass_gpu_;
+
 	auto& labels = sim.labels_;
 	auto& labelToTime = sim.label_time_;
 	auto& labelToAvgTime = sim.label_avg_time_;
@@ -552,9 +644,11 @@ void GUI::SetTimeingGUI(RowFn&& row, SimulationPassGPU& sim)
 	}
 }
 
-template<typename RowFn, typename Sim>
-void GUI::SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& simDt, bool& paused)
+template<typename RowFn>
+void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool& paused)
 {
+	auto& sim = *pass_manager_.sim_pass_gpu_;
+
 	if (ImGui::CollapsingHeader("Simulation", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		auto& pm = *pass_manager_.particle_manager_;
@@ -589,7 +683,7 @@ void GUI::SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& s
 		ImGui::Unindent();
 
 		ImGui::SeparatorText("SimulationFactors");
-		if (ImGui::TreeNode("ClothSimulationFactors"))
+		if (ImGui::TreeNode("Cloth"))
 		{
 			ImGui::SeparatorText("SolverConfig");
 			ImGui::Indent();
@@ -660,7 +754,7 @@ void GUI::SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& s
 			ImGui::TreePop();
 		}
 
-		if (ImGui::TreeNode("SoftbodySimulationFactors"))
+		if (ImGui::TreeNode("Softbody"))
 		{
 			ImGui::SeparatorText("SolverConfig");
 			ImGui::Indent();
@@ -710,9 +804,11 @@ void GUI::SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& s
 	}
 }
 
-template<typename RowFn, typename Scene>
-void GUI::SetTestSceneGUI(RowFn&& row, Scene& scene)
+template<typename RowFn>
+void GUI::SetTestSceneGUI(RowFn&& row)
 {
+	auto& scene = pass_manager_.test_scene_;
+
 	ImVec2 buttonSize = ImVec2(ImGui::GetContentRegionAvail().x, 0);
 	if (ImGui::Button("SphereCollision", buttonSize))
 	{

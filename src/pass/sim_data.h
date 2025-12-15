@@ -40,7 +40,6 @@ struct SimData {
 	static_assert(sizeof(Edge) == 16, "Edge must be 16 bytes");
 	std::vector<Edge> edges;
 	std::vector<uint32_t> pass_offsets;  // cloth + softbody
-	std::vector<std::pair<uint32_t, uint32_t>> passes;
 
 	uint32_t num_colors = 0;
 
@@ -247,7 +246,7 @@ struct SimData {
 				colorOffset[currentColor] = i;
 			}
 
-			Edge e;
+			Edge e{};
 			e.i = s.i;
 			e.j = s.j;
 			e.rest = s.rest;
@@ -280,7 +279,7 @@ struct SimData {
 
 			float restDot = glm::dot(e1, e2);
 
-			SimData::Shear c;
+			SimData::Shear c{};
 			c.i0 = i0;
 			c.i1 = i1;
 			c.i2 = i2;
@@ -358,7 +357,7 @@ struct SimData {
 
 			float restAngle = ComputeRestBendAngle(i1, i2, i3, i4, positions);
 
-			Bend bc;
+			Bend bc{};
 			bc.i0 = i1;
 			bc.i1 = i2;
 			bc.i2 = i3;
@@ -393,7 +392,7 @@ struct SimData {
 
 			glm::vec3 nHat = (restArea > 0.0f) ? (restNormal / (2.0f * restArea)) : glm::vec3(0, 1, 0);
 
-			Area area;
+			Area area{};
 			area.i0 = i0;
 			area.i1 = i1;
 			area.i2 = i2;
@@ -409,19 +408,18 @@ struct SimData {
 
 	void ResetConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices)
 	{
-		// Edge - Stretch, Diagonal
+		// Edge
 		{
-			//uint32_t idx = 0;
-			//for (int p = 0; p < pass_offsets.size(); ++p) {
-			//	for (auto [i, j] : passes[p]) {
-			//		glm::vec3 pi = glm::vec3(positions[i]);
-			//		glm::vec3 pj = glm::vec3(positions[j]);
-			//		float rest = glm::length(pj - pi);
-			//		edges[idx].rest = rest;
-			//		edges[idx].lambda = 0.0f;
-			//		idx++;
-			//	}
-			//}
+			for (auto& edge : edges) {
+				int i = edge.i;
+				int j = edge.j;
+
+				glm::vec3 pi = glm::vec3(positions[i]);
+				glm::vec3 pj = glm::vec3(positions[j]);
+				float rest = glm::length(pj - pi);
+				edge.rest = rest;
+				edge.lambda = 0.0f;
+			}
 		}
 
 		// Shear
@@ -438,6 +436,14 @@ struct SimData {
 			for (int i = 0; i < num_bends; i++)
 			{
 				bends[i].lambda = 0.0f;
+			}
+		}
+
+		// Area
+		{
+			for (int i = 0; i < num_areas; i++)
+			{
+				areas[i].lambda = 0.0f;
 			}
 		}
 
@@ -491,6 +497,7 @@ struct SimData {
 		vk::raii::Buffer bend{ nullptr };
 		vk::raii::Buffer area{ nullptr };
 		vk::raii::Buffer collider{ nullptr };
+		vk::raii::Buffer volume{ nullptr };
 	} staging_;
 
 	struct StagingMemory {
@@ -499,6 +506,7 @@ struct SimData {
 		vk::raii::DeviceMemory bend{ nullptr };
 		vk::raii::DeviceMemory area{ nullptr };
 		vk::raii::DeviceMemory collider{ nullptr };
+		vk::raii::DeviceMemory volume{ nullptr };
 	} staging_memories_;
 
 	struct StagingMapped {
@@ -507,5 +515,6 @@ struct SimData {
 		void* bend{ nullptr };
 		void* area{ nullptr };
 		void* collider{ nullptr };
+		void* volume{ nullptr };
 	} staging_mapped_;
 };

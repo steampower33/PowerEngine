@@ -65,6 +65,8 @@ void main()
     {
         Collider col = colliders[i];
 
+        if (col.do_collide == 0u) continue;
+
         vec3 p0   = col.p0;
         float rad = col.radius + sim.thickness;
         vec3 p1   = col.p1;

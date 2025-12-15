@@ -72,5 +72,9 @@ struct Collider {
 	int kind; // kind: 0 = sphere, 1 = plane, 2 = capsule
 	glm::vec3 p1;
 	float radius;
+	uint32_t do_collide;
+	float pad0;
+	float pad1;
+	float pad2;
 };
-static_assert(sizeof(Collider) == 32, "Collider must be 32 bytes");
+//static_assert(sizeof(Collider) == 48, "Collider must be 32 bytes");

@@ -46,14 +46,14 @@ public:
 
 	template<typename RowFn>
 	void SetRenderingGUI(RowFn&& row);
-	template<typename RowFn, typename Models, typename ClothUBO>
-	void SetModelsGUI(RowFn&& row, Models& models, ClothUBO& clothUBO);
 	template<typename RowFn>
-	void SetTimeingGUI(RowFn&& row, SimulationPassGPU& sim);
-	template<typename RowFn, typename Sim>
-	void SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& simDt, bool& paused);
-	template<typename RowFn, typename Scene>
-	void SetTestSceneGUI(RowFn&& row, Scene& scene);
+	void SetModelsGUI(RowFn&& row);
+	template<typename RowFn>
+	void SetTimeingGUI(RowFn&& row);
+	template<typename RowFn>
+	void SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool& paused);
+	template<typename RowFn>
+	void SetTestSceneGUI(RowFn&& row);
 	template<typename RowFn>
 	void SetStatGUI(RowFn&& row);
 	template<typename RowFn>

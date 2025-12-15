@@ -509,6 +509,7 @@ namespace vku
 				"', got '" + got + "'");
 	}
 
+
 	inline TetMesh LoadGmshMsh2(const std::string& path)
 	{
 		std::ifstream in(path);

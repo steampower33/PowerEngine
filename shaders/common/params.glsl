@@ -141,6 +141,10 @@ struct Collider {
     int kind; // 0 = sphere, 1 = plane, 2 = capsule
     vec3 p1;
     float radius;
+    uint do_collide;
+    float pad0;
+    float pad1;
+    float pad2;
 };
 layout(std430, set = 1, binding = 25) buffer Colliders { Collider colliders[]; };
 
