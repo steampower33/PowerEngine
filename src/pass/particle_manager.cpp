@@ -13,26 +13,15 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager)
 	{
 		Cloth cloth{};
 
-		cloth.spacing = default_cloth_spacing_;
-		cloth.gsm = 0.2f;
-		cloth.cloth_size = glm::vec2(1.0f, 1.0f);
-		cloth.nx = (uint32_t)std::round(cloth.cloth_size.x / cloth.spacing);
-		cloth.ny = (uint32_t)std::round(cloth.cloth_size.y / cloth.spacing);
-		cloth.nx1 = cloth.nx + 1;
-		cloth.ny1 = cloth.ny + 1;
-
-		cloth.color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+		cloth.name = "Dress";
+		cloth.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
 
 		cloth.origin = glm::vec3(0.0f, 1.0f, 0.0f);
 		cloth.angle_deg = 0.0f;
 		cloth.axis = glm::vec3(0, 1, 0);
 
-		cloth.num_particle = cloth.nx1 * cloth.ny1;
-
-		//SetPlaneCloth(cloth);
-
 		//Mesh mesh = GeometryGenerator::MakeCapsule(0.5f, 0.5f, 1.0f, 5);
-		SetClothFromMesh(cloth, modelManager.cloth_->mesh_);
+		SetClothFromMesh(cloth, modelManager.dress_->mesh_);
 
 		clothes_.push_back(cloth);
 	}
@@ -40,13 +29,10 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager)
 	{
 		Cloth cloth{};
 
+		cloth.name = "2x2 Cloth";
 		cloth.spacing = default_cloth_spacing_;
 		cloth.gsm = 0.2f;
-		cloth.cloth_size = glm::vec2(1.0f, 1.0f);
-		cloth.nx = (uint32_t)std::round(cloth.cloth_size.x / cloth.spacing);
-		cloth.ny = (uint32_t)std::round(cloth.cloth_size.y / cloth.spacing);
-		cloth.nx1 = cloth.nx + 1;
-		cloth.ny1 = cloth.ny + 1;
+		cloth.cloth_size = glm::vec2(2.0f, 2.0f);
 
 		cloth.color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
 
@@ -64,13 +50,10 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager)
 	{
 		Cloth cloth{};
 
+		cloth.name = "1x1 Cloth";
 		cloth.spacing = default_cloth_spacing_;
 		cloth.gsm = 0.2f;
 		cloth.cloth_size = glm::vec2(1.0f, 1.0f);
-		cloth.nx = (uint32_t)std::round(cloth.cloth_size.x / cloth.spacing);
-		cloth.ny = (uint32_t)std::round(cloth.cloth_size.y / cloth.spacing);
-		cloth.nx1 = cloth.nx + 1;
-		cloth.ny1 = cloth.ny + 1;
 
 		cloth.color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
 
@@ -85,7 +68,9 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager)
 		clothes_.push_back(cloth);
 	}
 
-	SetSoftbody("assets/sphere.msh");
+	{
+		SetSoftbody("assets/sphere.msh");
+	}
 
 	vku::CreateIndexBuffer(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_, indices_, index_buffer_, index_buffer_memory_);
 
@@ -108,6 +93,12 @@ ParticleManager::~ParticleManager()
 
 void ParticleManager::SetPlaneCloth(Cloth& cloth)
 {
+	cloth.type = Cloth::Type::PLANE;
+	cloth.nx = (uint32_t)std::round(cloth.cloth_size.x / cloth.spacing);
+	cloth.ny = (uint32_t)std::round(cloth.cloth_size.y / cloth.spacing);
+	cloth.nx1 = cloth.nx + 1;
+	cloth.ny1 = cloth.ny + 1;
+
 	const int nx = cloth.nx;
 	const int ny = cloth.ny;
 	const int nx1 = cloth.nx1;
@@ -226,17 +217,10 @@ void ParticleManager::SetPlaneCloth(Cloth& cloth)
 
 void ParticleManager::SetClothFromMesh(Cloth& cloth, Mesh& mesh)
 {
-	const int nx = cloth.nx;
-	const int ny = cloth.ny;
-	const int nx1 = cloth.nx1;
-	const int ny1 = cloth.ny1;
+	cloth.type = Cloth::Type::MESH;
 
 	cloth.offset_particle = num_cloth_particles_;
 	cloth.offset_indices = num_cloth_indices_;
-
-	auto vid = [&](int x, int y) { return cloth.offset_particle + uint32_t(y * nx1 + x); };
-
-	const uint32_t N = nx1 * ny1;
 
 	float angle_rad = glm::radians(cloth.angle_deg);
 	glm::mat4 R = glm::rotate(glm::mat4(1.0f), angle_rad, glm::normalize(cloth.axis));
@@ -329,8 +313,6 @@ void ParticleManager::SetClothFromMesh(Cloth& cloth, Mesh& mesh)
 	num_cloth_particles_ = positions_.size();
 	num_cloth_indices_ = indices_.size();
 
-
-
 	object_cnt_++;
 }
 
@@ -417,7 +399,7 @@ void ParticleManager::SetSoftbody(std::string path)
 	object_cnt_++;
 }
 
-void ParticleManager::Reset(Cloth& cloth)
+void ParticleManager::ResetPlaneCloth(Cloth& cloth)
 {
 	const int nxCells = cloth.nx;
 	const int nyCells = cloth.ny;

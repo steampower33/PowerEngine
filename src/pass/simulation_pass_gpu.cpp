@@ -519,7 +519,7 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 
 		for (auto& cloth : pm.clothes_)
 		{
-			pm.Reset(cloth);
+			pm.ResetPlaneCloth(cloth);
 		}
 		datas_.ResetConstraints(pm.positions_, pm.indices_);
 
@@ -529,10 +529,10 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 	{
 		testScene.pinnedCorner = false;
 
-		pm.Reset(pm.clothes_[1]);
+		pm.ResetPlaneCloth(pm.clothes_[1]);
 
 		auto& cloth = pm.clothes_[2];
-		pm.Reset(cloth);
+		pm.ResetPlaneCloth(cloth);
 		pm.inverse_masses_[cloth.offset_particle] = 0.0f;
 		pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
 		datas_.ResetConstraints(pm.positions_, pm.indices_);
@@ -545,7 +545,7 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 
 		for (auto& cloth : pm.clothes_)
 		{
-			pm.Reset(cloth);
+			pm.ResetPlaneCloth(cloth);
 			pm.inverse_masses_[cloth.offset_particle] = 0.0f;
 			pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
 		}
@@ -561,7 +561,7 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 		{
 			cloth.angle_deg = 90.0f;
 			cloth.axis = glm::vec3(1, 0, 0);
-			pm.Reset(cloth);
+			pm.ResetPlaneCloth(cloth);
 			cloth.angle_deg = 0.0f;
 		}
 		datas_.ResetConstraints(pm.positions_, pm.indices_);

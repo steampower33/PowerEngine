@@ -22,6 +22,6 @@ public:
 	static constexpr uint32_t kMaxModels = 8;
 	std::vector<std::unique_ptr<Model>> models_;
 	std::unique_ptr<Model> debug_capsule_;
-	std::unique_ptr<Model> cloth_;
+	std::unique_ptr<Model> dress_;
 	//std::unique_ptr<Skybox> skybox_;
 };

@@ -245,7 +245,7 @@ void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera, bool paused
 		SetCameraGUI(row, camera);
 		SetRenderingGUI(row);
 
-		SetModelsGUI(row, model_manager_.models_, pass_manager_.graphics_pass_->ubo_datas_.cloth);
+		SetModelsGUI(row, model_manager_.models_, pass_manager_.particle_manager_->clothes_);
 
 		if (pass_manager_.cpu_or_gpu_ == vku::CpuOrGpu::GPU)
 			SetSimulationGUI(row, *pass_manager_.sim_pass_gpu_, targetSimFPS, simDt, paused);
@@ -317,8 +317,8 @@ void GUI::DisplayKernelTiming(const std::string name, std::unordered_map<std::st
 	}
 }
 
-template<typename RowFn, typename Models, typename ClothUBO>
-void GUI::SetModelsGUI(RowFn&& row, Models& models, ClothUBO& clothUBO) {
+template<typename RowFn, typename Models, typename Clothes>
+void GUI::SetModelsGUI(RowFn&& row, Models& models, Clothes& clothes) {
 	auto row3 = [&](const char* label, auto&& drawControl, auto&& drawExtra)
 		{
 			ImGui::TableNextRow();
@@ -410,22 +410,22 @@ void GUI::SetModelsGUI(RowFn&& row, Models& models, ClothUBO& clothUBO) {
 					if (ImGui::BeginTable("Enable", 3,
 						ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 					{
-						row3("Albedo", 
-							[&] {ImGui::Checkbox("##Albedo", &model->texture_enable_.albedo);},
+						row3("Albedo",
+							[&] {ImGui::Checkbox("##Albedo", &model->texture_enable_.albedo); },
 							[&] { selectPopUp("Select##Albedo", model->texture_idx_.albedo); });
-						row3("Meltallic", 
+						row3("Meltallic",
 							[&] { ImGui::Checkbox("##Meltallic", &model->texture_enable_.metallic); },
 							[&] { selectPopUp("Select##Meltallic", model->texture_idx_.metallic); });
-						row3("Normal", 
+						row3("Normal",
 							[&] { ImGui::Checkbox("##Normal", &model->texture_enable_.normal); },
 							[&] { selectPopUp("Select##Normal", model->texture_idx_.normal); });
-						row3("Roughtness", 
+						row3("Roughtness",
 							[&] { ImGui::Checkbox("##Roughness", &model->texture_enable_.roughness); },
 							[&] { selectPopUp("Select##Roughness", model->texture_idx_.roughness); });
-						row3("AO", 
+						row3("AO",
 							[&] { ImGui::Checkbox("##AO", &model->texture_enable_.ao); },
 							[&] { selectPopUp("Select##AO", model->texture_idx_.ao); });
-						row3("Height", 
+						row3("Height",
 							[&] { ImGui::Checkbox("##Height", &model->texture_enable_.height); },
 							[&] { selectPopUp("Select##Height", model->texture_idx_.height); });
 						row("CheckerBoard", [&] { ImGui::Checkbox("##CheckerBoard", &model->checker_board_enable_); });
@@ -442,79 +442,78 @@ void GUI::SetModelsGUI(RowFn&& row, Models& models, ClothUBO& clothUBO) {
 			}
 		}
 
-		if (ImGui::TreeNode("ClothModel"))
+		ImGui::SeparatorText("Cloth");
+		ImGui::Indent();
+		ImGui::BeginChild("Cloth", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+		for (auto& cloth : clothes)
 		{
+			if (ImGui::TreeNode(cloth.name.c_str()))
 			{
-				ImGui::SeparatorText("Factor");
-				ImGui::Indent();
-				ImGui::BeginChild("Factor", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
-				if (ImGui::BeginTable("Factor", 2,
-					ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 				{
-					row("Albedo", [&] { ImGui::DragFloat3("##Albedo", &clothUBO.albedo[0], 0.1f, 0.0f, 1.0f); });
-					row("Meltallic", [&] { ImGui::DragFloat("##Meltallic", &clothUBO.metallic_factor, 0.1f, 0.0f, 1.0f); });
-					row("Roughness", [&] { ImGui::DragFloat("##Roughness", &clothUBO.roughness_factor, 0.1f, 0.0f, 1.0f); });
-					row("AO", [&] { ImGui::DragFloat("##AO", &clothUBO.ao_factor, 0.1f, 0.0f, 1.0f); });
-					row("Height", [&] { ImGui::DragFloat("##Height", &clothUBO.height_factor, 0.001f, 0.0f, 1.0f); });
-					row("Coat", [&] { ImGui::DragFloat("##Coat", &clothUBO.coat_factor, 0.001f, 0.0f, 1.0f); });
-					row("CoatRoughness", [&] { ImGui::DragFloat("##CoatRoughness", &clothUBO.coat_roughness_factor, 0.001f, 0.0f, 1.0f); });
-					row("Fuzz", [&] { ImGui::DragFloat("##Fuzz", &clothUBO.fuzz_factor, 0.001f, 0.0f, 1.0f); });
-					row("FuzzRoughness", [&] { ImGui::DragFloat("##FuzzRoughness", &clothUBO.fuzz_roughness_factor, 0.001f, 0.0f, 1.0f); });
-					row("TileUV", [&] { ImGui::DragFloat2("##TileUV", &clothUBO.tile_uv[0], 1.0f, 0.0f, 100.0f); });
+					ImGui::SeparatorText("Factor");
+					ImGui::Indent();
+					ImGui::BeginChild("Factor", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+					if (ImGui::BeginTable("Factor", 2,
+						ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+					{
+						row("Albedo", [&] { ImGui::DragFloat3("##Albedo", &cloth.ubo_data.albedo[0], 0.1f, 0.0f, 1.0f); });
+						row("Meltallic", [&] { ImGui::DragFloat("##Meltallic", &cloth.ubo_data.metallic_factor, 0.1f, 0.0f, 1.0f); });
+						row("Roughness", [&] { ImGui::DragFloat("##Roughness", &cloth.ubo_data.roughness_factor, 0.1f, 0.0f, 1.0f); });
+						row("AO", [&] { ImGui::DragFloat("##AO", &cloth.ubo_data.ao_factor, 0.1f, 0.0f, 1.0f); });
+						row("Height", [&] { ImGui::DragFloat("##Height", &cloth.ubo_data.height_factor, 0.001f, 0.0f, 1.0f); });
+						row("Coat", [&] { ImGui::DragFloat("##Coat", &cloth.ubo_data.coat_factor, 0.001f, 0.0f, 1.0f); });
+						row("CoatRoughness", [&] { ImGui::DragFloat("##CoatRoughness", &cloth.ubo_data.coat_roughness_factor, 0.001f, 0.0f, 1.0f); });
+						row("Fuzz", [&] { ImGui::DragFloat("##Fuzz", &cloth.ubo_data.fuzz_factor, 0.001f, 0.0f, 1.0f); });
+						row("FuzzRoughness", [&] { ImGui::DragFloat("##FuzzRoughness", &cloth.ubo_data.fuzz_roughness_factor, 0.001f, 0.0f, 1.0f); });
+						row("TileUV", [&] { ImGui::DragFloat2("##TileUV", &cloth.ubo_data.tile_uv[0], 1.0f, 0.0f, 100.0f); });
 
-					ImGui::EndTable();
+						ImGui::EndTable();
+					}
+					ImGui::EndChild();
+					ImGui::Unindent();
 				}
-				ImGui::EndChild();
-				ImGui::Unindent();
-			}
 
-			auto checkEnable = [&](const char* label, uint32_t& enable) {
-				bool check = enable; ImGui::Checkbox(label, &check); enable = check;
-				};
+				auto checkEnable = [&](const char* label, uint32_t& enable) {
+					bool check = enable; ImGui::Checkbox(label, &check); enable = check;
+					};
 
-			{
-				ImGui::SeparatorText("Enable");
-				ImGui::Indent();
-				ImGui::BeginChild("Enable", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
-				if (ImGui::BeginTable("Enable", 3,
-					ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 				{
-					row3("Albedo",
-						[&] { checkEnable("##Albedo", clothUBO.albedo_enable); },
-						[&] { selectPopUp("Select##Albedo", clothUBO.albedo_idx); });
-					row3("Meltallic",
-						[&] { checkEnable("##Meltallic", clothUBO.metallic_enable); },
-						[&] { selectPopUp("Select##Meltallic", clothUBO.metallic_idx); });
-					row3("Normal",
-						[&] { checkEnable("##Normal", clothUBO.normal_enable); },
-						[&] { selectPopUp("Select##Normal", clothUBO.normal_idx); });
-					row3("Roughtness",
-						[&] { checkEnable("##Roughtness", clothUBO.roughness_enable); },
-						[&] { selectPopUp("Select##Roughtness", clothUBO.roughness_idx); });
-					row3("AO",
-						[&] { checkEnable("##AO", clothUBO.ao_enable); },
-						[&] { selectPopUp("Select##AO", clothUBO.ao_idx); });
-					row3("Height",
-						[&] { checkEnable("##Height", clothUBO.height_enable); },
-						[&] { selectPopUp("Select##Height", clothUBO.height_idx); });
-					ImGui::EndTable();
+					ImGui::SeparatorText("Enable");
+					ImGui::Indent();
+					ImGui::BeginChild("Enable", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+					if (ImGui::BeginTable("Enable", 3,
+						ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+					{
+						row3("Albedo",
+							[&] { checkEnable("##Albedo", cloth.ubo_data.albedo_enable); },
+							[&] { selectPopUp("Select##Albedo", cloth.ubo_data.albedo_idx); });
+						row3("Meltallic",
+							[&] { checkEnable("##Meltallic", cloth.ubo_data.metallic_enable); },
+							[&] { selectPopUp("Select##Meltallic", cloth.ubo_data.metallic_idx); });
+						row3("Normal",
+							[&] { checkEnable("##Normal", cloth.ubo_data.normal_enable); },
+							[&] { selectPopUp("Select##Normal", cloth.ubo_data.normal_idx); });
+						row3("Roughtness",
+							[&] { checkEnable("##Roughtness", cloth.ubo_data.roughness_enable); },
+							[&] { selectPopUp("Select##Roughtness", cloth.ubo_data.roughness_idx); });
+						row3("AO",
+							[&] { checkEnable("##AO", cloth.ubo_data.ao_enable); },
+							[&] { selectPopUp("Select##AO", cloth.ubo_data.ao_idx); });
+						row3("Height",
+							[&] { checkEnable("##Height", cloth.ubo_data.height_enable); },
+							[&] { selectPopUp("Select##Height", cloth.ubo_data.height_idx); });
+						ImGui::EndTable();
+					}
+					ImGui::EndChild();
+					ImGui::Unindent();
 				}
-				ImGui::EndChild();
-				ImGui::Unindent();
+
+				ImGui::TreePop();
 			}
-
-			ImGui::TreePop();
 		}
-
-		if (ImGui::TreeNode("SkinnedModel"))
-		{
-			ImGui::Checkbox("SkinnedModelRender", &pass_manager_.graphics_pass_->skinned_model_render_);
-			ImGui::Checkbox("DebugCapsuleRender", &pass_manager_.graphics_pass_->debug_capsule_render_);
-
-			ImGui::TreePop();
-		}
+		ImGui::EndChild();
+		ImGui::Unindent();
 	}
-
 
 }
 
@@ -614,13 +613,11 @@ void GUI::SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& s
 			if (ImGui::BeginTable("Stiffness", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
-				row("StretchStiffness", [&] { ImGui::DragFloat("##StretchStiffness", &sim.ubo_.datas.sim_params.stretch_stiffness, 1e-2f, 0.0f, 100.0f, "%.3f"); });
-				row("SoftbodyStretchStiffness", [&] { ImGui::DragFloat("##SoftbodyStretchStiffness", &sim.ubo_.datas.sim_params.softbody_stretch_stiffness, 1e-2f, 0.0f, 100.0f, "%.1f"); });
-				row("SoftbodyVolumeStiffness", [&] { ImGui::DragFloat("##SoftbodyVolumeStiffness", &sim.ubo_.datas.sim_params.volume_stiffness, 1e-2f, 0.0f, 100.0f, "%.1f"); });
-				row("ShearStiffness", [&] { ImGui::DragFloat("##ShearStiffness", &sim.ubo_.datas.sim_params.shear_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
-				row("BendStiffness", [&] { ImGui::DragFloat("##BendStiffness", &sim.ubo_.datas.sim_params.bend_stiffness, 1e-3f, 0.0f, 2.0f, "%.3f"); });
-				row("AreaStiffness", [&] { ImGui::DragFloat("##AreaStiffness", &sim.ubo_.datas.sim_params.area_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
-				row("SelfCollisionStiffness", [&] { ImGui::DragFloat("##SelfCollisionStiffness", &sim.ubo_.datas.sim_params.self_collision_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
+				row("Stretch", [&] { ImGui::DragFloat("##StretchStiffness", &sim.ubo_.datas.sim_params.stretch_stiffness, 1e-2f, 0.0f, 100.0f, "%.3f"); });
+				row("Shear", [&] { ImGui::DragFloat("##ShearStiffness", &sim.ubo_.datas.sim_params.shear_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
+				row("Bend", [&] { ImGui::DragFloat("##BendStiffness", &sim.ubo_.datas.sim_params.bend_stiffness, 1e-3f, 0.0f, 2.0f, "%.3f"); });
+				row("Area", [&] { ImGui::DragFloat("##AreaStiffness", &sim.ubo_.datas.sim_params.area_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
+				row("SelfCollision", [&] { ImGui::DragFloat("##SelfCollision", &sim.ubo_.datas.sim_params.self_collision_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
 				ImGui::EndTable();
 			}
 			ImGui::EndChild();
@@ -633,10 +630,6 @@ void GUI::SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& s
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
 				row("Stretch", [&] { ImGui::DragFloat("##Stretch", &sim.datas_.compliance.stretch,
-					1e-9f, 0.0f, 1.0f, "%.9f"); });
-				row("SoftbodyStretch", [&] { ImGui::DragFloat("##SoftbodyStretch", &sim.datas_.compliance.softbody_stretch,
-					1e-9f, 0.0f, 1.0f, "%.9f"); });
-				row("SoftbodyVolume", [&] { ImGui::DragFloat("##SoftbodyVolume", &sim.datas_.compliance.softbody_volume,
 					1e-9f, 0.0f, 1.0f, "%.9f"); });
 				row("Shear", [&] { ImGui::DragFloat("##Shear", &sim.datas_.compliance.shear
 					, 1e-9f, 0.0f, 1.0f, "%.9f"); });

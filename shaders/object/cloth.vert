@@ -8,7 +8,9 @@ layout(set = 0, binding = 0) uniform UBO {
     mat4 proj;
 } ubo;
 
-layout(set = 1, binding = 0) uniform Cloth {
+layout(set = 1, binding = 0) uniform Model {
+    mat4x4 model;
+
     vec4 albedo;
 
     int albedo_idx;
@@ -25,7 +27,7 @@ layout(set = 1, binding = 0) uniform Cloth {
     float height_factor;
     float coat_factor;
     float coat_roughness_factor;
-    
+
     float fuzz_factor;
     float fuzz_roughness_factor;
     vec2 tile_uv;
@@ -38,8 +40,8 @@ layout(set = 1, binding = 0) uniform Cloth {
     uint ao_enable;
     uint height_enable;
     uint checker_board_enable;
-    uint p0;
-} cloth;
+    uint p2;
+} model;
 
 layout(set=1, binding=1, std430) readonly buffer Positions { vec4 pos[]; };
 layout(set=1, binding=2, std430) readonly buffer Normals { vec4 normals[]; };
@@ -63,7 +65,7 @@ void main() {
     uint vid_no_offset = (vid - pc.offset_particle);
     uint x = vid_no_offset % nx1;
     uint y = vid_no_offset / ny1;
-    out_uv = vec2(float(x) / float(nx1 - 1.0), float(y) / float(ny1 - 1.0)) * cloth.tile_uv;
+    out_uv = vec2(float(x) / float(nx1 - 1.0), float(y) / float(ny1 - 1.0)) * model.tile_uv;
 
     out_world_normal = normals[vid].xyz;
     

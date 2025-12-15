@@ -1,12 +1,12 @@
 #ifndef PARAMS_GLSL
 #define PARAMS_GLSL
 
-layout(set = 0, binding = 0) uniform GlobalUBO {
+layout(set = 0, binding = 0) uniform Global {
     mat4x4 view;
     mat4x4 proj;
 } global;
 
-layout(set = 1, binding = 0) uniform ObjectUBO {
+layout(set = 1, binding = 0) uniform Model {
     mat4x4 model;
 
     vec4 albedo;
@@ -28,8 +28,7 @@ layout(set = 1, binding = 0) uniform ObjectUBO {
 
     float fuzz_factor;
     float fuzz_roughness_factor;
-    float p0;
-    float p1;
+    vec2 tile_uv;
 
     uint albedo_enable;
     uint metallic_enable;
@@ -40,7 +39,7 @@ layout(set = 1, binding = 0) uniform ObjectUBO {
     uint height_enable;
     uint checker_board_enable;
     uint p2;
-} object;
+} model;
 
 layout(set = 2, binding = 0) uniform sampler2D tex[];
 

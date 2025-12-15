@@ -51,6 +51,8 @@ public:
 
 	ModelType model_type_;
 	ShapeColliderType shape_collision_type_;
+	bool collider_render_ = false;
+	bool collider_simulation_ = false;
 
 	std::string name_;
 	glm::vec4 albedo_{ 0.0f };

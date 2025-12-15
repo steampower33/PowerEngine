@@ -57,3 +57,5 @@ constexpr bool enableValidationLayers = true;
 #include <tiny_gltf.h>
 
 #include <ktx.h>
+
+#include "ubo_data.h"

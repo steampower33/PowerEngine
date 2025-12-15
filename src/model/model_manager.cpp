@@ -47,8 +47,9 @@ ModelManager::ModelManager(Context& context, TextureManager& textureManager)
 		std::string filename = "assets/walking.glb";
 		std::unique_ptr<Model> model = std::make_unique<Model>(filename, vku::VertexIncludeInfo{ true, true, true, true, true }, context, textureManager, initPos, angleQuat, initColor, initRadius, true, "Walking", 1.0f, ShapeColliderType::NONE, ModelType::SKINNED);
 		model->movable_ = false;
+		model->render_ = false;
 
-		models_.push_back(std::move(model));
+		models_.emplace_back(std::move(model));
 	}
 
 	{
@@ -57,9 +58,10 @@ ModelManager::ModelManager(Context& context, TextureManager& textureManager)
 		glm::vec3 initPos = glm::vec3(0.0f, 1.0f, 1.0f);
 		glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
 		float initRadius = 1.0f;
-		debug_capsule_ = std::make_unique<Model>(capsule, vku::VertexIncludeInfo{ true, true, true, false, false }, context, initPos, angleQuat, initColor, initRadius, true, "DebugCapsule", ShapeColliderType::CAPSULE, ModelType::SHAPE);
-		debug_capsule_->render_ = false;
+		std::unique_ptr<Model> model = std::make_unique<Model>(capsule, vku::VertexIncludeInfo{ true, true, true, false, false }, context, initPos, angleQuat, initColor, initRadius, true, "DebugCapsule", ShapeColliderType::CAPSULE, ModelType::SHAPE);
+		model->render_ = false;
 
+		debug_capsule_ = std::move(model);
 		//models_.emplace_back(std::move(model));
 	}
 
@@ -70,9 +72,9 @@ ModelManager::ModelManager(Context& context, TextureManager& textureManager)
 		float initRadius = 1.0f;
 
 		std::string filename = "assets/cloth.glb";
-		std::unique_ptr<Model> model = std::make_unique<Model>(filename, vku::VertexIncludeInfo{ true, true, true, false, false }, context, textureManager, initPos, angleQuat, initColor, initRadius, true, "Cloth Model", 1.0f, ShapeColliderType::NONE, ModelType::SHAPE);
+		std::unique_ptr<Model> model = std::make_unique<Model>(filename, vku::VertexIncludeInfo{ true, true, true, false, false }, context, textureManager, initPos, angleQuat, initColor, initRadius, true, "Dress", 1.0f, ShapeColliderType::NONE, ModelType::SHAPE);
 
-		cloth_ = std::move(model);
+		dress_ = std::move(model);
 		//models_.push_back(std::move(model));
 	}
 

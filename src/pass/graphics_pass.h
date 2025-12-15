@@ -25,124 +25,18 @@ public:
 	
 	void CalculateGpuTime();
 
-	bool skinned_model_render_ = false;
-	bool debug_capsule_render_ = true;
-
-	struct UBOData {
-		struct Global {
-			glm::mat4 view;
-			glm::mat4 proj;
-		} global;
-		static_assert(sizeof(UBOData::Global) % 16 == 0, "std140 must be 16-byte aligned.");
-
-		struct Model {
-			glm::mat4 model;
-
-			glm::vec4 albedo_use;
-
-			int albedo_idx = -1;
-			int metallic_idx = -1;
-			int normal_idx = -1;
-			int roughness_idx = -1;
-
-			int ao_idx = -1;
-			int height_idx = -1;
-			float metallic_factor = 0.0f;
-			float roughness_factor = 0.0f;
-
-			float ao_factor = 0.0f;
-			float height_factor = 0.0f;
-			float coat_factor = 0.0f;
-			float coat_roughness_factor = 0.0f;
-
-			float fuzz_factor = 0.0f;
-			float fuzz_roughness_factor = 0.0f;
-			float p0;
-			float p1;
-
-			uint32_t albedo_enable = 0;
-			uint32_t metallic_enable = 0;
-			uint32_t normal_enable = 0;
-			uint32_t roughness_enable = 0;
-
-			uint32_t ao_enable = 0;
-			uint32_t height_enable = 0;
-			uint32_t checker_board_enable = 0;
-			uint32_t p2;
-		} model;
-		static_assert(sizeof(UBOData::Model) % 16 == 0, "std140 must be 16-byte aligned.");
-
-		struct Light {
-			glm::mat4 invViewProj{};
-			glm::vec4 cameraPos{};
-
-			glm::vec3 position{ 0.0f, 5.0f, 5.0f };
-			float intensity = 50.0f;
-
-			glm::vec3 direction{ 0.0f, -1.0f, -1.0f };
-			float inner = 0.0f;
-
-			float outer = 90.0f;
-			uint32_t light_enable = 0;
-			uint32_t pbr_enable = 1;
-			float exposure = 0.8f;
-
-			int ggx_brdf_idx = 0;
-			int charlie_brdf_idx = 0;
-			int sheen_e_brdf_idx = 0;
-			int p0;
-		} light;
-		static_assert(sizeof(UBOData::Light) % 16 == 0, "std140 must be 16-byte aligned.");
-
-		struct SkyBox {
-			int env_idx = 0;
-			int specular_idx = 0;
-			int diffuse_idx = 0;
-			uint32_t specular_mip_levels = 0;
-		} skybox;
-		static_assert(sizeof(UBOData::SkyBox) % 16 == 0, "std140 must be 16-byte aligned.");
-
-		struct Cloth {
-			glm::vec4 albedo{ 1.0f, 1.0f, 1.0f, 0.0f };
-
-			int albedo_idx = -1;
-			int metallic_idx = -1;
-			int normal_idx = -1;
-			int roughness_idx = -1;
-
-			int ao_idx = -1;
-			int height_idx = -1;
-			float metallic_factor = 0.0f;
-			float roughness_factor = 1.0f;
-
-			float ao_factor = 1.0f;
-			float height_factor = 0.0f;
-			float coat_factor = 0.0f;
-			float coat_roughness_factor = 0.0f;
-
-			float fuzz_factor = 0.0f;
-			float fuzz_roughness_factor = 0.0f;
-			glm::vec2 tile_uv {1.0f, 1.0f};
-
-			uint32_t albedo_enable = 0;
-			uint32_t metallic_enable = 0;
-			uint32_t normal_enable = 0;
-			uint32_t roughness_enable = 0;
-
-			uint32_t ao_enable = 0;
-			uint32_t height_enable = 0;
-			uint32_t checker_board_enable = 0;
-			uint32_t p2;
-		} cloth;
-		static_assert(sizeof(Cloth) % 16 == 0, "std140 must be 16-byte aligned.");
-
-	} ubo_datas_;
-
 	std::vector<vk::raii::CommandBuffer> cmds_;
 
 	vku::PolygonMode polygon_mode_ = vku::PolygonMode::SOLID;
 
 	float pass_total_time_ = 0.0f;
+
+	struct UBOData {
+		ubo_data::Global global;
+		ubo_data::Light light;
+		ubo_data::SkyBox skybox;
+		ubo_data::Model model;
+	} ubo_datas_;
 
 private:
 	Context& context_;

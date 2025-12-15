@@ -42,7 +42,7 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera, bool
 		ubo_datas_.global.view = camera.View();
 		ubo_datas_.global.proj = camera.Proj(swapchain_.swapchain_extent_.width, swapchain_.swapchain_extent_.height);
 
-		std::memcpy(dst, &ubo_datas_.global, sizeof(UBOData::Global));
+		std::memcpy(dst, &ubo_datas_.global, sizeof(ubo_data::Global));
 	}
 
 	// Light
@@ -52,7 +52,7 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera, bool
 
 		const uint32_t lightOffset = static_cast<uint32_t>(currentFrame * ubo_size_.light);
 		auto* dst = static_cast<std::byte*>(ubo_mapped_.light) + lightOffset;
-		std::memcpy(dst, &ubo_datas_.light, sizeof(UBOData::Light));
+		std::memcpy(dst, &ubo_datas_.light, sizeof(ubo_data::Light));
 	}
 
 	// Skybox
@@ -89,14 +89,21 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera, bool
 			ubo_datas_.skybox.specular_mip_levels = tm.tex_env_[tm.skybox_index_.night_specular]->mip_levels_;
 		}
 
-		std::memcpy(dst, &ubo_datas_.skybox, sizeof(UBOData::SkyBox));
+		std::memcpy(dst, &ubo_datas_.skybox, sizeof(ubo_data::SkyBox));
 	}
 
 	{
-		const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_size_.cloth);
-		auto* dst = static_cast<std::byte*>(ubo_mapped_.cloth) + baseOffset;
+		auto& pm = particle_manager_;
 
-		std::memcpy(dst, &ubo_datas_.cloth, sizeof(UBOData::Cloth));
+		const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * pm.clothes_.size() * ubo_size_.cloth);
+		auto* base = static_cast<std::byte*>(ubo_mapped_.cloth) + baseOffset;
+
+		for (uint32_t i = 0; i < pm.clothes_.size(); i++)
+		{
+			auto* dst = base + ubo_size_.cloth * i;
+			std::memcpy(dst, &pm.clothes_[i].ubo_data, ubo_size_.cloth);
+		}
+			
 	}
 
 	// Model UBO
@@ -112,7 +119,7 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera, bool
 			auto* dst = static_cast<std::byte*>(ubo_mapped_.model) + modelOff;
 
 			ubo_datas_.model.model = model.world_;
-			ubo_datas_.model.albedo_use = model.albedo_;
+			ubo_datas_.model.albedo = model.albedo_;
 
 			ubo_datas_.model.albedo_idx = model.texture_idx_.albedo;
 			ubo_datas_.model.metallic_idx = model.texture_idx_.metallic;
@@ -140,7 +147,7 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera, bool
 
 			std::memcpy(dst, &ubo_datas_.model, ubo_size_.model);
 
-			if (model.model_type_ == ModelType::SKINNED && !paused)
+			if (!paused && model.model_type_ == ModelType::SKINNED)
 			{
 				auto& jm = model.skin_[0].jointMatrices;       // std::vector<glm::mat4>
 
@@ -156,8 +163,6 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera, bool
 			}
 		}
 	}
-
-
 }
 
 // ============================
@@ -331,7 +336,7 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 				cmd.bindIndexBuffer(*model.mesh_.index_buffer, 0, vk::IndexType::eUint32);
 				cmd.drawIndexed(model.mesh_.indices_count, 1, 0, 0, 0);
 			}
-			else if (model.model_type_ == ModelType::SKINNED && skinned_model_render_)
+			else if (model.model_type_ == ModelType::SKINNED && model.render_)
 			{
 				if (polygon_mode_ == vku::PolygonMode::SOLID)
 					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.skinned_model_solid);
@@ -383,64 +388,60 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 				cmd.drawIndexed(model.mesh_.indices_count, 1, 0, 0, 0);
 			}
 
-		}
-	}
+			if (!model.collider_render_) continue;
 
-	// Debug Capsule
-	if (debug_capsule_render_)
-	{
-		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.debug_capsule);
+			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.debug_capsule);
 
-		// Global Set
-		cmd.bindDescriptorSets(
-			vk::PipelineBindPoint::eGraphics,
-			pipeline_layouts_.debug_capsule,
-			0,
-			{ *sets_.global },
-			{ globalOffset }
-		);
-
-		auto& debugCapsuleModel = model_manager_.debug_capsule_;
-
-		cmd.bindVertexBuffers(0, { debugCapsuleModel->mesh_.vertex_buffer }, { 0 });
-		cmd.bindIndexBuffer(*debugCapsuleModel->mesh_.index_buffer, 0, vk::IndexType::eUint32);
-		
-		for (const auto& inst : model_manager_.models_[model_manager_.models_.size() - 1]->capsule_colliders_) {
-			glm::vec3 p0 = inst.p0;
-			glm::vec3 p1 = inst.p1;
-			float r = inst.radius;
-
-			glm::vec3 center = 0.5f * (p0 + p1);
-			glm::vec3 seg = p1 - p0;
-			float len = glm::length(seg);
-			if (len < 1e-4f) continue;
-
-			glm::vec3 dir = seg / len;
-			glm::quat q = glm::rotation(glm::vec3(0, 1, 0), dir);
-
-			glm::mat4 R = glm::mat4_cast(q);
-			glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3(r, len, r));
-			//glm::mat4 T = glm::translate(glm::mat4(1.0f), center);
-			//glm::mat4 T = glm::translate(glm::translate(glm::mat4(1.0f), glm::vec3(-2.0f, 0.0f, 0.0f)), center);
-			glm::mat4 T = glm::translate(model_manager_.models_[model_manager_.models_.size() - 1]->world_, center);
-			glm::mat4 M = T * R * S;
-
-			struct DebugPushConst {
-				glm::mat4 model;
-				glm::vec4 color;
-			} pc;
-
-			pc.model = M;
-			pc.color = glm::vec4(1, 0, 0, 1);
-
-			cmd.pushConstants<DebugPushConst>(
-				*pipeline_layouts_.debug_capsule,
-				vk::ShaderStageFlagBits::eVertex,
+			// Global Set
+			cmd.bindDescriptorSets(
+				vk::PipelineBindPoint::eGraphics,
+				pipeline_layouts_.debug_capsule,
 				0,
-				pc);
-			cmd.drawIndexed(debugCapsuleModel->mesh_.indices_count, 1, 0, 0, 0);
+				{ *sets_.global },
+				{ globalOffset }
+			);
+
+			auto& debugCapsuleModel = model_manager_.debug_capsule_;
+
+			cmd.bindVertexBuffers(0, { debugCapsuleModel->mesh_.vertex_buffer }, { 0 });
+			cmd.bindIndexBuffer(*debugCapsuleModel->mesh_.index_buffer, 0, vk::IndexType::eUint32);
+
+			for (const auto& inst : model_manager_.models_[model_manager_.models_.size() - 1]->capsule_colliders_) {
+				glm::vec3 p0 = inst.p0;
+				glm::vec3 p1 = inst.p1;
+				float r = inst.radius;
+
+				glm::vec3 center = 0.5f * (p0 + p1);
+				glm::vec3 seg = p1 - p0;
+				float len = glm::length(seg);
+				if (len < 1e-4f) continue;
+
+				glm::vec3 dir = seg / len;
+				glm::quat q = glm::rotation(glm::vec3(0, 1, 0), dir);
+
+				glm::mat4 R = glm::mat4_cast(q);
+				glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3(r, len, r));
+				//glm::mat4 T = glm::translate(glm::mat4(1.0f), center);
+				//glm::mat4 T = glm::translate(glm::translate(glm::mat4(1.0f), glm::vec3(-2.0f, 0.0f, 0.0f)), center);
+				glm::mat4 T = glm::translate(model_manager_.models_[model_manager_.models_.size() - 1]->world_, center);
+				glm::mat4 M = T * R * S;
+
+				struct DebugPushConst {
+					glm::mat4 model;
+					glm::vec4 color;
+				} pc;
+
+				pc.model = M;
+				pc.color = glm::vec4(1, 0, 0, 1);
+
+				cmd.pushConstants<DebugPushConst>(
+					*pipeline_layouts_.debug_capsule,
+					vk::ShaderStageFlagBits::eVertex,
+					0,
+					pc);
+				cmd.drawIndexed(debugCapsuleModel->mesh_.indices_count, 1, 0, 0, 0);
+			}
 		}
-		
 	}
 
 	// Cloth
@@ -461,15 +462,6 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 			{ globalOffset }
 		);
 
-		const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * ubo_size_.cloth);
-		cmd.bindDescriptorSets(
-			vk::PipelineBindPoint::eGraphics,
-			pipeline_layouts_.cloth,
-			1,
-			{ *sets_.cloth },
-			{ baseOffset }
-		);
-
 		// Tex
 		cmd.bindDescriptorSets(
 			vk::PipelineBindPoint::eGraphics,
@@ -481,9 +473,19 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 
 		cmd.bindIndexBuffer(*pm.index_buffer_, 0, vk::IndexType::eUint32);
 
+		const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * pm.clothes_.size() * ubo_size_.cloth);
 		for (uint32_t i = 0; i < pm.clothes_.size(); i++)
 		{
 			auto& cloth = pm.clothes_[i];
+
+			const uint32_t dst = baseOffset + ubo_size_.cloth * i;
+			cmd.bindDescriptorSets(
+				vk::PipelineBindPoint::eGraphics,
+				pipeline_layouts_.cloth,
+				1,
+				{ *sets_.cloth },
+				{ dst }
+			);
 
 			push_constants_.cloth_render.color = cloth.color;
 			push_constants_.cloth_render.nx1 = cloth.nx1;
@@ -717,7 +719,6 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 
 	frame_counter_++;
 }
-
 
 void GraphicsPass::CalculateGpuTime()
 {
@@ -973,7 +974,7 @@ void GraphicsPass::CreateUniformBuffers()
 		ubo_mapped_.global = nullptr;
 
 		auto limits = context_.physical_device_.getProperties().limits;
-		ubo_size_.global = (sizeof(UBOData::Global) + limits.minUniformBufferOffsetAlignment - 1)
+		ubo_size_.global = (sizeof(ubo_data::Global) + limits.minUniformBufferOffsetAlignment - 1)
 			& ~(limits.minUniformBufferOffsetAlignment - 1);
 		vk::DeviceSize totalSize = ubo_size_.global * MAX_FRAMES_IN_FLIGHT;
 
@@ -992,7 +993,7 @@ void GraphicsPass::CreateUniformBuffers()
 		ubo_mapped_.model = nullptr;
 
 		auto limits = context_.physical_device_.getProperties().limits;
-		ubo_size_.model = (sizeof(UBOData::Model) + limits.minUniformBufferOffsetAlignment - 1)
+		ubo_size_.model = (sizeof(ubo_data::Model) + limits.minUniformBufferOffsetAlignment - 1)
 			& ~(limits.minUniformBufferOffsetAlignment - 1);
 		vk::DeviceSize totalSize = ubo_size_.model * MAX_FRAMES_IN_FLIGHT * model_manager_.kMaxModels;
 
@@ -1011,7 +1012,7 @@ void GraphicsPass::CreateUniformBuffers()
 		ubo_mapped_.light = nullptr;
 
 		auto limits = context_.physical_device_.getProperties().limits;
-		ubo_size_.light = (sizeof(UBOData::Light) + limits.minUniformBufferOffsetAlignment - 1)
+		ubo_size_.light = (sizeof(ubo_data::Light) + limits.minUniformBufferOffsetAlignment - 1)
 			& ~(limits.minUniformBufferOffsetAlignment - 1);
 		vk::DeviceSize totalSize = ubo_size_.light * MAX_FRAMES_IN_FLIGHT;
 
@@ -1034,7 +1035,7 @@ void GraphicsPass::CreateUniformBuffers()
 		ubo_mapped_.skybox = nullptr;
 
 		auto limits = context_.physical_device_.getProperties().limits;
-		ubo_size_.skybox = (sizeof(UBOData::SkyBox) + limits.minUniformBufferOffsetAlignment - 1)
+		ubo_size_.skybox = (sizeof(ubo_data::SkyBox) + limits.minUniformBufferOffsetAlignment - 1)
 			& ~(limits.minUniformBufferOffsetAlignment - 1);
 		vk::DeviceSize totalSize = ubo_size_.skybox * MAX_FRAMES_IN_FLIGHT;
 
@@ -1064,9 +1065,9 @@ void GraphicsPass::CreateUniformBuffers()
 		ubo_mapped_.cloth = nullptr;
 
 		auto limits = context_.physical_device_.getProperties().limits;
-		ubo_size_.cloth = (sizeof(UBOData::Cloth) + limits.minUniformBufferOffsetAlignment - 1)
+		ubo_size_.cloth = (sizeof(ubo_data::Model) + limits.minUniformBufferOffsetAlignment - 1)
 			& ~(limits.minUniformBufferOffsetAlignment - 1);
-		vk::DeviceSize totalSize = ubo_size_.cloth * MAX_FRAMES_IN_FLIGHT;
+		vk::DeviceSize totalSize = particle_manager_.clothes_.size() * ubo_size_.cloth * MAX_FRAMES_IN_FLIGHT;
 
 		vk::raii::Buffer buffer({});
 		vk::raii::DeviceMemory bufferMem({});

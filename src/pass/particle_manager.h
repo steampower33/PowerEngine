@@ -6,6 +6,8 @@ class ModelManager;
 
 struct Cloth
 {
+	std::string name;
+
 	float spacing;
 	float gsm;
 	glm::vec2 cloth_size;
@@ -24,10 +26,19 @@ struct Cloth
 
 	uint32_t num_particle;
 	uint32_t num_indices;
+
+	ubo_data::Model ubo_data;
+
+	enum Type {
+		PLANE,
+		MESH
+	} type;
 };
 
 struct SoftBody
 {
+	std::string name;
+
 	vku::TetMesh tetmesh;
 
 	float density;
@@ -54,6 +65,8 @@ struct SoftBody
 		float p2;
 	};
 	std::vector<Volume> volume_constraints;
+
+	ubo_data::Model ubo_data;
 };
 
 class ParticleManager
@@ -69,7 +82,7 @@ public:
 	void SetPlaneCloth(Cloth& cloth);
 	void SetClothFromMesh(Cloth& cloth, Mesh& mesh);
 	void SetSoftbody(std::string path);
-	void Reset(Cloth& cloth);
+	void ResetPlaneCloth(Cloth& cloth);
 
 	Context& context_;
 

@@ -3,7 +3,8 @@
 #extension GL_KHR_vulkan_glsl : enable
 #extension GL_EXT_nonuniform_qualifier : require
 
-layout(set = 1, binding = 0) uniform Cloth {
+layout(set = 1, binding = 0) uniform Model {
+    mat4x4 model;
 
     vec4 albedo;
 
@@ -34,8 +35,8 @@ layout(set = 1, binding = 0) uniform Cloth {
     uint ao_enable;
     uint height_enable;
     uint checker_board_enable;
-    uint p0;
-} cloth;
+    uint p2;
+} model;
 
 layout(set = 2, binding = 0) uniform sampler2D tex[];
 
@@ -47,19 +48,19 @@ layout(location = 1) out vec4 out_normal_rough;
 layout(location = 2) out vec2 out_height_ao;
 layout(location = 3) out vec4 out_cozz_fuzz;
 
-layout(push_constant) uniform ClothPC { vec4 color; uint nx1; uint ny1; uint p0; float p1; } pc;
+layout(push_constant) uniform PushConstant { vec4 color; uint nx1; uint ny1; uint p0; float p1; } pc;
 
 void main() {
 
-    vec4 albedo    = (cloth.albedo_enable == 0u || cloth.albedo_idx == -1) ? pc.color : texture(tex[nonuniformEXT(cloth.albedo_idx)], in_uv);
+    vec4 albedo    = (model.albedo_enable == 0u || model.albedo_idx == -1) ? pc.color : texture(tex[nonuniformEXT(model.albedo_idx)], in_uv);
     vec3 normal  = (!gl_FrontFacing) ? -in_world_normal : in_world_normal;
-    float metallic = (cloth.metallic_enable == 0u || cloth.metallic_idx == -1) ? cloth.metallic_factor : texture(tex[nonuniformEXT(cloth.metallic_idx)], in_uv).r;
-    float roughness = (cloth.roughness_enable == 0u || cloth.roughness_idx == -1) ? cloth.roughness_factor : texture(tex[nonuniformEXT(cloth.roughness_idx)], in_uv).r;
-    float ao       = (cloth.ao_enable == 0u || cloth.ao_idx == -1) ? cloth.ao_factor : texture(tex[nonuniformEXT(cloth.ao_idx)], in_uv).r;
-    float height   = (cloth.height_enable == 0u || cloth.height_idx == -1) ? cloth.height_factor : texture(tex[nonuniformEXT(cloth.height_idx)], in_uv).r;
+    float metallic = (model.metallic_enable == 0u || model.metallic_idx == -1) ? model.metallic_factor : texture(tex[nonuniformEXT(model.metallic_idx)], in_uv).r;
+    float roughness = (model.roughness_enable == 0u || model.roughness_idx == -1) ? model.roughness_factor : texture(tex[nonuniformEXT(model.roughness_idx)], in_uv).r;
+    float ao       = (model.ao_enable == 0u || model.ao_idx == -1) ? model.ao_factor : texture(tex[nonuniformEXT(model.ao_idx)], in_uv).r;
+    float height   = (model.height_enable == 0u || model.height_idx == -1) ? model.height_factor : texture(tex[nonuniformEXT(model.height_idx)], in_uv).r;
 
     out_albedo_metal = vec4(albedo.xyz, metallic);
     out_normal_rough = vec4(normal * 0.5 + 0.5, roughness); // [-1,1] -> [0,1]
     out_height_ao = vec2(height, ao);
-    out_cozz_fuzz = vec4(cloth.coat_factor, cloth.coat_roughness_factor, cloth.fuzz_factor, cloth.fuzz_roughness_factor);
+    out_cozz_fuzz = vec4(model.coat_factor, model.coat_roughness_factor, model.fuzz_factor, model.fuzz_roughness_factor);
 }
