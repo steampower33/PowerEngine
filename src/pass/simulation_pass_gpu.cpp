@@ -133,8 +133,6 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 
 	auto& pm = particle_manager_;
 
-	uint32_t groupsCloth = ceil_div(cloth_particles_, 256);
-	//uint32_t groupsSoftbody = ceil_div(softbody_particles_, 256);
 	uint32_t groupsTotal = ceil_div(total_particles_, 256);
 
 	for (uint32_t step = 0; step < datas_.substeps; step++)
@@ -561,17 +559,6 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 		pm.inverse_masses_[cloth.offset_particle + (cloth.ny1 - 1) * cloth.nx1 + cloth.nx1 - 1] = 0.0f;
 		datas_.ResetConstraints(pm.positions_, pm.indices_);
 
-		float height = 4.0f;
-		for (auto& s : pm.softbodies_)
-		{
-			s.render = true;
-			s.origin = glm::vec3(0.0f, height, 0.0f);
-
-			pm.ResetSoftbody(s);
-
-			height += 1.0f;
-		}
-
 		pm.ResetVolumeConstraint();
 
 		CopySimDatas(cmd);
@@ -580,11 +567,15 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 	{
 		testScene.topPinnedCorner = false;
 
+		float height = 4.0f;
 		for (auto& cloth : pm.clothes_)
 		{
+			cloth.origin = glm::vec3(0.0f, height, 0.0f);
 			pm.ResetCloth(cloth);
 			pm.inverse_masses_[cloth.offset_particle] = 0.0f;
 			pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
+
+			height -= 0.1f;
 		}
 		datas_.ResetConstraints(pm.positions_, pm.indices_);
 
@@ -596,12 +587,16 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 	{
 		testScene.selfCollision = false;
 
+		float height = 10.0f;
 		for (auto& cloth : pm.clothes_)
 		{
+			cloth.origin = glm::vec3(0.0f, height, 0.0f);
 			cloth.angle_deg = 90.0f;
 			cloth.axis = glm::vec3(1, 0, 0);
 			pm.ResetCloth(cloth);
 			cloth.angle_deg = 0.0f;
+
+			height -= cloth.cloth_size.y * 1.5f;
 		}
 		datas_.ResetConstraints(pm.positions_, pm.indices_);
 

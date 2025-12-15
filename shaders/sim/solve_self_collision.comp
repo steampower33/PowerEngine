@@ -52,6 +52,8 @@ void main()
 
     uint object_i = collision_masks[i].object_id;
 
+    float stiffness = sim.self_collision_stiffness;
+
     for (uint k = 0; k < maxN; ++k)
     {
         uint idx = base + k;
@@ -66,6 +68,12 @@ void main()
 
         bool sameSoftbody = same && (collision_masks[j].object_type == TYPE_SOFTBODY);
         if (sameSoftbody) continue;
+        
+        if (collision_masks[j].object_type == TYPE_SOFTBODY)
+        {
+            r *= 2.0;
+            stiffness = 80.0;
+        }
 
         float compliance  = same ? pc.solve.compliance : 0.0;
         float mu          = same ? sim.neighbor_friction : sim.friction;
@@ -98,8 +106,8 @@ void main()
         dLambda = lambda_new - lambda_old;
         neighbor_lambdas[idx] = lambda_new;
 
-        vec3 corr_i =  wi * dLambda * n * sim.self_collision_stiffness;
-        vec3 corr_j = -wj * dLambda * n * sim.self_collision_stiffness;
+        vec3 corr_i =  wi * dLambda * n * stiffness;
+        vec3 corr_j = -wj * dLambda * n * stiffness;
 
         vec3 disp_i = xi - pxi;
         vec3 disp_j = xj - pxj;

@@ -110,22 +110,23 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, T
 		SetSoftbody("assets/sphere.msh", softbody);
 	}
 
-	{
-		SoftBody softbody;
+	//{
+	//	SoftBody softbody;
 
-		softbody.name = "softbody2";
-		softbody.origin = glm::vec3(2.0f, 2.0f, 0.0f);
-		softbody.render = true;
-		SetSoftbody("assets/sphere.msh", softbody);
-	}
-	{
-		SoftBody softbody;
+	//	softbody.name = "softbody2";
+	//	softbody.origin = glm::vec3(2.0f, 2.0f, 0.0f);
+	//	softbody.render = true;
+	//	SetSoftbody("assets/sphere.msh", softbody);
+	//}
+	//
+	//{
+	//	SoftBody softbody;
 
-		softbody.name = "softbody3";
-		softbody.origin = glm::vec3(2.0f, 3.0f, 0.0f);
-		softbody.render = true;
-		SetSoftbody("assets/sphere.msh", softbody);
-	}
+	//	softbody.name = "softbody3";
+	//	softbody.origin = glm::vec3(2.0f, 3.0f, 0.0f);
+	//	softbody.render = true;
+	//	SetSoftbody("assets/sphere.msh", softbody);
+	//}
 
 	vku::CreateIndexBuffer(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_, indices_, index_buffer_, index_buffer_memory_);
 
@@ -380,7 +381,7 @@ void ParticleManager::SetClothFromMesh(Cloth& cloth)
 void ParticleManager::SetSoftbody(std::string path, SoftBody& softbody)
 {
 	softbody.tetmesh = vku::LoadGmshMsh2(path.c_str());
-	softbody.density = 10.0f;
+	softbody.density = 0.5f;
 	softbody.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
 
 	softbody.offset_particle = positions_.size();
