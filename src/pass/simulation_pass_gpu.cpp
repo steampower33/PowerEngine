@@ -529,14 +529,12 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 	{
 		testScene.pinnedCorner = false;
 
-		for (auto& cloth : pm.clothes_)
-		{
-			pm.Reset(cloth);
-			pm.inverse_masses_[cloth.offset_particle] = 0.0f;
-			pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
-			pm.inverse_masses_[cloth.offset_particle + (cloth.nx1 * (cloth.ny1 - 1))] = 0.0f;
-			pm.inverse_masses_[cloth.offset_particle + (cloth.nx1 * (cloth.ny1 - 1)) + cloth.nx1 - 1] = 0.0f;
-		}
+		pm.Reset(pm.clothes_[1]);
+
+		auto& cloth = pm.clothes_[2];
+		pm.Reset(cloth);
+		pm.inverse_masses_[cloth.offset_particle] = 0.0f;
+		pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
 		datas_.ResetConstraints(pm.positions_, pm.indices_);
 
 		CopySimDatas(cmd);

@@ -16,26 +16,18 @@ void accumulate_delta(uint i, vec3 corr, uint count)
     atomicAdd(delta_count[i], count);
 }
 
-vec3 compute_friction(vec3 correction_disp, vec3 rel_vel, float mu)
+vec3 coulomb_dt_rel(vec3 rel_disp, vec3 n, float dn_mag, float mu)
 {
-    vec3 friction = vec3(0.0);
-    float correction_length = length(correction_disp);
+    if (mu <= 0.0 || dn_mag <= 0.0) return vec3(0.0);
 
-    if (mu <= 0.0 || correction_length <= 0.0)
-        return friction;
+    vec3 t = rel_disp - n * dot(rel_disp, n);
+    float tlen = length(t);
+    if (tlen < 1e-6) return vec3(0.0);
 
-    vec3 n = correction_disp / correction_length;
+    float max_t = mu * dn_mag;
 
-    vec3 tan_vel = rel_vel - n * dot(rel_vel, n);
-    float tan_length = length(tan_vel);
-    if (tan_length < 1e-6)
-        return friction;
-        
-    float max_tanLength = correction_length * mu;
-    float scale = min(max_tanLength / tan_length, 1.0);
-
-    friction = -tan_vel * scale;
-    return friction;
+    float s = min(1.0, max_t / tlen);
+    return -t * s;
 }
 
 void main()
@@ -44,12 +36,13 @@ void main()
     if (i >= sim.num_particles) return;
 
     float wi = w[i];
-    vec3  xi = xp[i].xyz;
-    vec3  pxi = x[i].xyz;
+    if (wi == 0.0) return;
+
+    vec3 xi  = xp[i].xyz;
+    vec3 pxi = x[i].xyz;
 
     uint maxN = sim.max_neighbors;
     float r   = sim.collision_radius;
-
     uint base = i * maxN;
 
     float dt = sim.dt;
@@ -63,76 +56,66 @@ void main()
     {
         uint idx = base + k;
         uint j   = neighbors[idx];
+        if (j == 0xFFFFFFFFu) break;
 
-        if (j == 0xFFFFFFFFu)
-            break;
-            
+        float wj = w[j];
+        if (wj == 0.0) continue;
+
         uint object_j = collision_masks[j].object_id;
-
         bool same = (object_i == object_j);
 
         bool bothSoftbody = same && (collision_masks[j].object_type == TYPE_SOFTBODY);
-
         if (bothSoftbody) continue;
 
-        float compliance = same ? pc.solve.compliance : 0.0;
-        float mu         = same ? sim.neighbor_friction : 0.0;
+        float compliance  = same ? pc.solve.compliance : 0.0;
+        float mu          = same ? sim.neighbor_friction : sim.friction;
         float alpha_tilde = compliance / (dt * dt);
 
-        float wj = w[j];
-        if (wi + wj == 0.0)
-            continue;
-
-        vec3 xj = xp[j].xyz;
+        vec3 xj  = xp[j].xyz;
         vec3 pxj = x[j].xyz;
 
-        vec3 d  = xi - xj;
+        vec3 d = xi - xj;
         float d2 = dot(d, d);
-        if (d2 < 1e-12)
-            continue;
+        if (d2 < 1e-12) continue;
 
         float dist = sqrt(d2);
-
         float C = dist - r;
-
-        if (C >= 0.0)
-            continue;
+        if (C >= 0.0) continue;
 
         vec3 n = d / dist;
-
         float wsum = wi + wj;
+        if (wsum <= 0.0) continue;
 
-        float lambda_old = neighbor_lambdas[idx];
+        float lambda_old = same ? neighbor_lambdas[idx] : 0.0;
 
         float denom = wsum + alpha_tilde;
-        if (denom < 1e-8)
-            continue;
+        if (denom < 1e-8) denom = 1e-8;
 
         float rhs = C + alpha_tilde * lambda_old;
         float dLambda = -rhs / denom;
-        float lambda_new = lambda_old + dLambda;
 
+        float lambda_new = max(0.0, lambda_old + dLambda);
+        dLambda = lambda_new - lambda_old;
         neighbor_lambdas[idx] = lambda_new;
 
         vec3 corr_i =  wi * dLambda * n * sim.self_collision_stiffness;
         vec3 corr_j = -wj * dLambda * n * sim.self_collision_stiffness;
 
-        vec3 vel_i = xi - pxi;
-        vec3 vel_j = xj - pxj;
-        vec3 relVel = vel_i - vel_j;
+        vec3 disp_i = xi - pxi;
+        vec3 disp_j = xj - pxj;
+        vec3 rel_disp = disp_i - disp_j;
 
-        vec3 commma_i = (wi > 0.0) ? (corr_i / wi) : vec3(0.0);
-        vec3 friction_i = compute_friction(commma_i, relVel, mu);
+        float dn_mag = abs(dot(corr_i - corr_j, n));
 
-        if (wi > 0.0) {
-            delta_i += corr_i + wi * friction_i;
-            count_i += 1u;
-        }
+        vec3 dt_rel = coulomb_dt_rel(rel_disp, n, dn_mag, mu);
 
-        if (wj > 0.0) {
-            vec3 delta_j = corr_j - wj * friction_i;
-            accumulate_delta(j, delta_j, 1u);
-        }
+        vec3 fric_i =  (wi / wsum) * dt_rel;
+        vec3 fric_j = -(wj / wsum) * dt_rel;
+
+        delta_i += (corr_i + fric_i);
+        count_i += 1u;
+
+        accumulate_delta(j, (corr_j + fric_j), 1u);
     }
 
     if (count_i > 0u) {
