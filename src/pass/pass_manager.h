@@ -24,7 +24,7 @@ public:
 	PassManager& operator=(PassManager&& rhs) = delete;
 	~PassManager();
 
-	void Update(Camera& camera, MouseInteractor& mouseInteractor, ModelManager& modelManager);
+	void Update(Camera& camera, MouseInteractor& mouseInteractor, ModelManager& modelManager, bool paused);
 	void Draw(std::unique_ptr<GUI>& gui, bool paused);
 
 	vku::CpuOrGpu cpu_or_gpu_ = vku::CpuOrGpu::GPU;

@@ -44,7 +44,7 @@ public:
 	
 	int vulkan_thumbnail_index_ = 0;
 
-	const char* create_keywords_[10] = {
+	const char* create_keywords_[14] = {
 		"color",
 		"albedo",
 		"metallic",
@@ -55,6 +55,10 @@ public:
 		"height",
 		"displacement",
 		"lut",
+		"sheen",
+		"coat",
+		"fuzz",
+		"orm"
 	};
 
 	std::unordered_map<std::string, std::vector<uint32_t>> keyword_index_;

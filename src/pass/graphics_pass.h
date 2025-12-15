@@ -19,7 +19,7 @@ public:
 	GraphicsPass& operator=(GraphicsPass&& rhs) = delete;
 	~GraphicsPass();
 
-	void UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera);
+	void UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera, bool paused);
 	void RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t currentFrame, vku::CpuOrGpu cpuOrGpu);
 	void CreateDepthResources();
 	

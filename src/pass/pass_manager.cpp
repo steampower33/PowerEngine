@@ -26,9 +26,14 @@ PassManager::PassManager(GLFWwindow* glfwWindow, Context& context, Swapchain& sw
 	graphics_pass_ = std::make_unique<GraphicsPass>(context, swapchain, textureManager, modelManager, *particle_manager_);
 }
 
-void PassManager::Update(Camera& camera, MouseInteractor& mouseInteractor, ModelManager& modelManager)
+void PassManager::Update(Camera& camera, MouseInteractor& mouseInteractor, ModelManager& modelManager, bool paused)
 {
-	modelManager.Update();
+	if (!paused)
+	{
+		modelManager.Update();
+	}
+
+	graphics_pass_->UpdateGraphicsUBO(current_frame_, camera, paused);
 
 	if (cpu_or_gpu_ == vku::CpuOrGpu::CPU)
 	{
@@ -43,7 +48,6 @@ void PassManager::Update(Camera& camera, MouseInteractor& mouseInteractor, Model
 		sim_pass_gpu_->UpdateMousePushConstant(camera, mouseInteractor, glm::vec2(swapchain_.swapchain_extent_.width, swapchain_.swapchain_extent_.height));
 	}
 
-	graphics_pass_->UpdateGraphicsUBO(current_frame_, camera);
 }
 
 void PassManager::Draw(std::unique_ptr<GUI>& gui, bool paused)

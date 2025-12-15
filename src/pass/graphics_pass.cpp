@@ -32,7 +32,7 @@ GraphicsPass::~GraphicsPass()
 }
 
 // Very Naive Method
-void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera)
+void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera, bool paused)
 {
 	// Global UBO
 	{
@@ -43,64 +43,6 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera)
 		ubo_datas_.global.proj = camera.Proj(swapchain_.swapchain_extent_.width, swapchain_.swapchain_extent_.height);
 
 		std::memcpy(dst, &ubo_datas_.global, sizeof(UBOData::Global));
-	}
-
-	// Model UBO
-	{
-		const uint32_t baseModelOffset = static_cast<uint32_t>(currentFrame * ubo_size_.model * model_manager_.kMaxModels);
-		for (uint32_t i = 0; i < model_manager_.models_.size(); i++)
-		{
-			auto& model = *model_manager_.models_[i];
-
-			if (!model.render_) continue;
-
-			const uint32_t modelOff = baseModelOffset + i * static_cast<uint32_t>(ubo_size_.model);
-			auto* dst = static_cast<std::byte*>(ubo_mapped_.model) + modelOff;
-
-			ubo_datas_.model.model = model.world_;
-			ubo_datas_.model.albedo_use = model.albedo_;
-
-			ubo_datas_.model.albedo_idx = model.texture_idx_.albedo;
-			ubo_datas_.model.metallic_idx = model.texture_idx_.metallic;
-			ubo_datas_.model.normal_idx = model.texture_idx_.normal;
-			ubo_datas_.model.roughness_idx = model.texture_idx_.roughness;
-			ubo_datas_.model.ao_idx = model.texture_idx_.ao;
-			ubo_datas_.model.height_idx = model.texture_idx_.height;
-
-			ubo_datas_.model.metallic_factor = model.factors_.metallic;
-			ubo_datas_.model.roughness_factor = model.factors_.roughness;
-			ubo_datas_.model.ao_factor = model.factors_.ao;
-			ubo_datas_.model.coat_factor = model.factors_.coat;
-			ubo_datas_.model.coat_roughness_factor = model.factors_.coat_roughness;
-			ubo_datas_.model.fuzz_factor = model.factors_.fuzz;
-			ubo_datas_.model.fuzz_roughness_factor = model.factors_.fuzz_roughness;
-
-			ubo_datas_.model.albedo_enable = model.texture_enable_.albedo;
-			ubo_datas_.model.metallic_enable = model.texture_enable_.metallic;
-			ubo_datas_.model.normal_enable = model.texture_enable_.normal;
-			ubo_datas_.model.roughness_enable = model.texture_enable_.roughness;
-			ubo_datas_.model.ao_enable = model.texture_enable_.ao;
-			ubo_datas_.model.height_enable = model.texture_enable_.height;
-
-			ubo_datas_.model.checker_board_enable = model.checker_board_enable_;
-
-			std::memcpy(dst, &ubo_datas_.model, ubo_size_.model);
-
-			if (model.model_type_ == ModelType::SKINNED)
-			{
-				auto& jm = model.skin_[0].jointMatrices;       // std::vector<glm::mat4>
-
-				const uint32_t skinnedModelOff =
-					static_cast<uint32_t>(currentFrame * ubo_size_.skinned_model);
-				auto* dst = static_cast<std::byte*>(ubo_mapped_.skinned_model) + skinnedModelOff;
-
-				size_t boneCount = jm.size();
-
-				size_t copySize = boneCount * sizeof(glm::mat4);
-
-				std::memcpy(dst, jm.data(), copySize);
-			}
-		}
 	}
 
 	// Light
@@ -156,6 +98,65 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera)
 
 		std::memcpy(dst, &ubo_datas_.cloth, sizeof(UBOData::Cloth));
 	}
+
+	// Model UBO
+	{
+		const uint32_t baseModelOffset = static_cast<uint32_t>(currentFrame * ubo_size_.model * model_manager_.kMaxModels);
+		for (uint32_t i = 0; i < model_manager_.models_.size(); i++)
+		{
+			auto& model = *model_manager_.models_[i];
+
+			if (!model.render_) continue;
+
+			const uint32_t modelOff = baseModelOffset + i * static_cast<uint32_t>(ubo_size_.model);
+			auto* dst = static_cast<std::byte*>(ubo_mapped_.model) + modelOff;
+
+			ubo_datas_.model.model = model.world_;
+			ubo_datas_.model.albedo_use = model.albedo_;
+
+			ubo_datas_.model.albedo_idx = model.texture_idx_.albedo;
+			ubo_datas_.model.metallic_idx = model.texture_idx_.metallic;
+			ubo_datas_.model.normal_idx = model.texture_idx_.normal;
+			ubo_datas_.model.roughness_idx = model.texture_idx_.roughness;
+			ubo_datas_.model.ao_idx = model.texture_idx_.ao;
+			ubo_datas_.model.height_idx = model.texture_idx_.height;
+
+			ubo_datas_.model.metallic_factor = model.factors_.metallic;
+			ubo_datas_.model.roughness_factor = model.factors_.roughness;
+			ubo_datas_.model.ao_factor = model.factors_.ao;
+			ubo_datas_.model.coat_factor = model.factors_.coat;
+			ubo_datas_.model.coat_roughness_factor = model.factors_.coat_roughness;
+			ubo_datas_.model.fuzz_factor = model.factors_.fuzz;
+			ubo_datas_.model.fuzz_roughness_factor = model.factors_.fuzz_roughness;
+
+			ubo_datas_.model.albedo_enable = model.texture_enable_.albedo;
+			ubo_datas_.model.metallic_enable = model.texture_enable_.metallic;
+			ubo_datas_.model.normal_enable = model.texture_enable_.normal;
+			ubo_datas_.model.roughness_enable = model.texture_enable_.roughness;
+			ubo_datas_.model.ao_enable = model.texture_enable_.ao;
+			ubo_datas_.model.height_enable = model.texture_enable_.height;
+
+			ubo_datas_.model.checker_board_enable = model.checker_board_enable_;
+
+			std::memcpy(dst, &ubo_datas_.model, ubo_size_.model);
+
+			if (model.model_type_ == ModelType::SKINNED && !paused)
+			{
+				auto& jm = model.skin_[0].jointMatrices;       // std::vector<glm::mat4>
+
+				const uint32_t skinnedModelOff =
+					static_cast<uint32_t>(currentFrame * ubo_size_.skinned_model);
+				auto* dst = static_cast<std::byte*>(ubo_mapped_.skinned_model) + skinnedModelOff;
+
+				size_t boneCount = jm.size();
+
+				size_t copySize = boneCount * sizeof(glm::mat4);
+
+				std::memcpy(dst, jm.data(), copySize);
+			}
+		}
+	}
+
 
 }
 

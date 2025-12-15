@@ -124,7 +124,7 @@ void GUI::SetStyle()
 	style.FrameRounding = 4.0f;
 	style.GrabRounding = 4.0f;
 	style.ScrollbarRounding = 4.0f;
-	style.FontScaleMain = 1.5f * swapchain_.swapchain_extent_.width / 2560.0f;
+	style.FontScaleMain = 1.6f * swapchain_.swapchain_extent_.width / 2560.0f;
 
 	ImVec4* colors = style.Colors;
 
@@ -531,9 +531,9 @@ void GUI::SetTimeingGUI(RowFn&& row, SimulationPassGPU& sim)
 		if (ImGui::BeginTable("Timing", 4))//,  ImGuiTableFlags_BordersOuter))
 		{
 			ImGui::TableSetupColumn("Kernel", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-			ImGui::TableSetupColumn("Time (ms)", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-			ImGui::TableSetupColumn("Avg (ms)", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-			ImGui::TableSetupColumn("%", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+			ImGui::TableSetupColumn("Time (ms)", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+			ImGui::TableSetupColumn("Avg (ms)", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+			ImGui::TableSetupColumn("%", ImGuiTableColumnFlags_WidthFixed, 100.0f);
 			ImGui::TableHeadersRow();
 
 			for (uint32_t i = 0; i < labels.size() - 1; i++)
@@ -579,6 +579,8 @@ void GUI::SetSimulationGUI(RowFn&& row, Sim& sim, float& targetSimFPS, double& s
 			row("RelaxationFactor", [&] { ImGui::DragFloat("##RelaxationFactor", &sim.ubo_.datas.sim_params.relaxation_factor, 0.1f, 0.0f, 1.0f); });
 			row("Thickness", [&] { ImGui::DragFloat("##Thickness", &sim.ubo_.datas.sim_params.thickness, 0.001f, 0.0f, 1.0f, "%.3f"); });
 			row("Friction", [&] { ImGui::DragFloat("##Friction", &sim.ubo_.datas.sim_params.friction, 0.001f, 0.0f, 1.0f, "%.3f"); });
+			row("CollideCompliance", [&] { ImGui::DragFloat("##CollideCompliance", &sim.datas_.compliance.collide,
+				1e-9f, 0.0f, 1.0f, "%.9f"); });
 			row("NeighborFriction", [&] { ImGui::DragFloat("##NeighborFriction", &sim.ubo_.datas.sim_params.neighbor_friction, 0.1f, 0.0f, 10.0f, "%.1f"); });
 			row("MaxNeighbors", [&] { int maxNeighbors = sim.ubo_.datas.sim_params.max_neighbors;  ImGui::DragInt("##MaxNeighbors", &maxNeighbors, 1, 0, 20); sim.ubo_.datas.sim_params.max_neighbors = maxNeighbors; });
 			row("MaxSpeed", [&] { ImGui::DragFloat("##MaxSpeed", &sim.ubo_.datas.sim_params.max_speed, 0.1f, sim.ubo_.datas.sim_params.max_speed, sim.ubo_.datas.sim_params.max_speed, "%.1f"); });

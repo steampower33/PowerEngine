@@ -20,20 +20,19 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager)
 		cloth.ny = (uint32_t)std::round(cloth.cloth_size.y / cloth.spacing);
 		cloth.nx1 = cloth.nx + 1;
 		cloth.ny1 = cloth.ny + 1;
-		cloth.height = 2.0f;
 
 		cloth.color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
 
-		cloth.origin = glm::vec3(-1.0f, 0.0f, 0.0f);
+		cloth.origin = glm::vec3(0.0f, 1.0f, 0.0f);
 		cloth.angle_deg = 0.0f;
 		cloth.axis = glm::vec3(0, 1, 0);
 
 		cloth.num_particle = cloth.nx1 * cloth.ny1;
 
-		SetPlaneCloth(cloth);
+		//SetPlaneCloth(cloth);
 
 		//Mesh mesh = GeometryGenerator::MakeCapsule(0.5f, 0.5f, 1.0f, 5);
-		//SetClothFromMesh(cloth, modelManager.cloth_->mesh_);
+		SetClothFromMesh(cloth, modelManager.cloth_->mesh_);
 
 		clothes_.push_back(cloth);
 	}
@@ -48,11 +47,10 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager)
 		cloth.ny = (uint32_t)std::round(cloth.cloth_size.y / cloth.spacing);
 		cloth.nx1 = cloth.nx + 1;
 		cloth.ny1 = cloth.ny + 1;
-		cloth.height = 3.0f;
 
 		cloth.color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
 
-		cloth.origin = glm::vec3(-1.0f, 0.0f, 0.0f);
+		cloth.origin = glm::vec3(-1.0f, 2.0f, 0.0f);
 		cloth.angle_deg = 0.0f;
 		cloth.axis = glm::vec3(0, 1, 0);
 
@@ -73,11 +71,10 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager)
 		cloth.ny = (uint32_t)std::round(cloth.cloth_size.y / cloth.spacing);
 		cloth.nx1 = cloth.nx + 1;
 		cloth.ny1 = cloth.ny + 1;
-		cloth.height = 4.0f;
 
 		cloth.color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
 
-		cloth.origin = glm::vec3(-1.0f, 0.0f, 0.0f);
+		cloth.origin = glm::vec3(-1.0f, 3.0f, 0.0f);
 		cloth.angle_deg = 0.0f;
 		cloth.axis = glm::vec3(0, 1, 0);
 
@@ -137,7 +134,7 @@ void ParticleManager::SetPlaneCloth(Cloth& cloth)
 
 			glm::vec3 rotated = glm::vec3(R * local);
 
-			glm::vec3 worldPos = cloth.origin + rotated + glm::vec3(0.0f, cloth.height, 0.0f);
+			glm::vec3 worldPos = cloth.origin + rotated;
 
 			positions_.push_back(glm::vec4(worldPos, 1.0f));
 			velocities_.push_back(glm::vec4(0));
@@ -251,7 +248,7 @@ void ParticleManager::SetClothFromMesh(Cloth& cloth, Mesh& mesh)
 
 		glm::vec3 rotated = glm::vec3(R * local);
 
-		glm::vec3 worldPos = cloth.origin + rotated + glm::vec3(0.0f, cloth.height, 0.0f);
+		glm::vec3 worldPos = cloth.origin + rotated;
 
 		positions_.push_back(glm::vec4(worldPos, 1.0f));
 		velocities_.push_back(glm::vec4(0));
@@ -331,6 +328,8 @@ void ParticleManager::SetClothFromMesh(Cloth& cloth, Mesh& mesh)
 
 	num_cloth_particles_ = positions_.size();
 	num_cloth_indices_ = indices_.size();
+
+
 
 	object_cnt_++;
 }
@@ -445,7 +444,7 @@ void ParticleManager::Reset(Cloth& cloth)
 
 			glm::vec3 rotated = glm::vec3(R * local);
 
-			glm::vec3 worldPos = cloth.origin + rotated + glm::vec3(0.0f, cloth.height, 0.0f);
+			glm::vec3 worldPos = cloth.origin + rotated;
 
 			positions_[id] = { worldPos, 0.0f };
 			velocities_[id] = glm::vec4(0.0f);

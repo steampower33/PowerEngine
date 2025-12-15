@@ -13,7 +13,6 @@ struct Cloth
 	uint32_t ny;
 	uint32_t nx1;
 	uint32_t ny1;
-	float height;
 	glm::vec4 color;
 
 	glm::vec3 origin;

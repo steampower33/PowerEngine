@@ -432,6 +432,14 @@ void SimulationPassGPU::RecordComputeCloth(uint32_t currentFrame, vku::TestScene
 		// Collide SDF
 		TS(timestamp_steps_);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.collide_sdf);
+
+		push_constants_.solve.compliance = datas_.compliance.collide;
+		cmd.pushConstants<PushConstant::Solve>(
+			*pipeline_layouts_.common,
+			vk::ShaderStageFlagBits::eCompute,
+			0,
+			push_constants_.solve);
+
 		cmd.dispatch(groupsTotal, 1, 1);
 		TS(timestamp_steps_);
 

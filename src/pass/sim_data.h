@@ -13,6 +13,7 @@ struct SimData {
 		float bend = 1.0f;
 		float area = 1.0f;
 		float self_collision = 1e-9f;
+		float collide = 1e-9f;
 	} compliance;
 
 	struct Beta {

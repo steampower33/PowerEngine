@@ -34,7 +34,7 @@ void Renderer::Update(Camera& camera, MouseInteractor& mouse_interactor, float d
 {
 	gui_->Update(targetSimFPS, simDt, camera, paused);
 
-	pass_manager_->Update(camera, mouse_interactor, *model_manager_);
+	pass_manager_->Update(camera, mouse_interactor, *model_manager_, paused);
 
 	mouse_interactor.Update(camera, glm::vec2(swapchain_->swapchain_extent_.width, swapchain_->swapchain_extent_.height), model_manager_->models_);
 }
