@@ -102,7 +102,7 @@ layout(std430, set = 1, binding = 10) buffer Bends { Bend  bends[]; };
 
 struct GrabState {
     uint id;
-    uint dist_bits;
+    uint t_bits;
     float t;
 };
 layout(std430, set = 1, binding = 11) buffer GrabStates { GrabState grab_state[]; };

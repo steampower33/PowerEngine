@@ -545,7 +545,9 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 	{
 		testScene.pinnedCorner = false;
 
+		pm.clothes_[0].origin = glm::vec3(0.0f, 5.0f, 0.0f);
 		pm.ResetCloth(pm.clothes_[0]);
+		pm.clothes_[1].origin = glm::vec3(0.0f, 4.0f, 0.0f);
 		pm.ResetCloth(pm.clothes_[1]);
 
 		auto& cloth = pm.clothes_[2];
@@ -567,7 +569,7 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 	{
 		testScene.topPinnedCorner = false;
 
-		float height = 4.0f;
+		float height = 3.0f;
 		for (auto& cloth : pm.clothes_)
 		{
 			cloth.origin = glm::vec3(0.0f, height, 0.0f);
@@ -948,7 +950,7 @@ void SimulationPassGPU::CreateSSBOBuffers()
 	// grab_counter
 	struct GrabState {
 		uint32_t id = 0;
-		uint32_t dist_bits = 0;
+		uint32_t t_bits = 0;
 		float	 t = 0.0f;
 	};
 	std::vector<GrabState> grabState(1);

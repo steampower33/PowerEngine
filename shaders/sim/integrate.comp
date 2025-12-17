@@ -11,10 +11,10 @@ const uint MOUSE_MODE_DRAG   = 2u;
 
 void mouse_select_pass(uint i, vec3 pos)
 {
-    if (pc.mouse.select_mode == MOUSE_MODE_NONE)
-    {
-        grab_state[0].id = 0xFFFFFFFFu;
-        grab_state[0].dist_bits = 0xFFFFFFFFu;
+    if (pc.mouse.select_mode == MOUSE_MODE_NONE) {
+        grab_state[0].id       = 0xFFFFFFFFu;
+        grab_state[0].t_bits   = 0xFFFFFFFFu;
+        return;
     }
 
     if (pc.mouse.select_mode != MOUSE_MODE_SELECT)
@@ -24,20 +24,21 @@ void mouse_select_pass(uint i, vec3 pos)
     vec3 dir = pc.mouse.ray_dir;
 
     vec3 v = pos - o;
-    float t = max(dot(v, dir), 0.0);
+    float t = dot(v, dir);
+    if (t <= 0.0) return;
+
     vec3 c = o + t * dir;
     float dist2 = dot(pos - c, pos - c);
 
     float r = pc.mouse.radius;
     if (dist2 > r * r) return;
 
-    uint distBits = floatBitsToUint(dist2);
+    uint tBits = floatBitsToUint(t);
 
-    uint old = atomicMin(grab_state[0].dist_bits, distBits);
-
-    if (distBits < old) {
+    uint old = atomicMin(grab_state[0].t_bits, tBits);
+    if (tBits < old) {
         grab_state[0].id = i;
-        grab_state[0].t = t;
+        grab_state[0].t  = t;
     }
 }
 
