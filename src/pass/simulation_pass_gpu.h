@@ -62,7 +62,7 @@ public:
 	struct SolverConfig {
 		bool stretch = true;
 		bool shear = true;
-		bool bend = true;
+		bool bend = false;
 		bool area = true;
 		bool self_collision = true;
 
@@ -87,7 +87,7 @@ public:
 		+ 1;
 	float pass_total_time_ = 0.0f;
 
-	std::array<std::string, 18> labels_ = { "Intergrate", "ClearLambdas", "HashBuild", "RadixSort", "BuildCell", "BuildNeighbor", "SolveStretch", "SolveSoftbodyStretch", "SolveSoftbodyVolume", "SolveShear", "SolveBend", "SolveArea", "SolveSelfCollision", "ApplyDeltas", "CollideSdf", "Update", "CalculateNormals", "Total" };
+	std::array<std::string, 18> labels_ = { "Intergrate", "ClearLambdas", "HashBuild", "RadixSort", "BuildCell", "BuildNeighbor", "SolveStretch", "SolveShear", "SolveBend", "SolveArea", "SolveSoftbodyStretch", "SolveSoftbodyVolume","SolveSelfCollision", "ApplyDeltas", "CollideSdf", "Update", "CalculateNormals", "Total" };
 	std::unordered_map<std::string, double> label_time_;
 	std::unordered_map<std::string, double> label_avg_time_;
 	uint32_t time_count_ = 0;

@@ -295,50 +295,6 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 			}
 			TS(timestamp_steps_);
 
-			// solve_softbody_stretch
-			TS(timestamp_steps_);
-			if (solver_config_.softbody_stretch)
-			{
-				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_softbody_stretch);
-
- 				uint32_t base = datas_.pass_offsets[datas_.num_colors];
-				uint32_t count = datas_.pass_offsets[datas_.num_colors + 1] - datas_.pass_offsets[datas_.num_colors];
-				if (!count) continue;
-
-				push_constants_.solve.base = base;
-				push_constants_.solve.count = count;
-				push_constants_.solve.compliance = datas_.compliance.softbody_stretch;
-
-				cmd.pushConstants<PushConstant::Solve>(
-					*pipeline_layouts_.common,
-					vk::ShaderStageFlagBits::eCompute,
-					0,
-					push_constants_.solve);
-
-				uint32_t groupsSoftbodyStretch = ceil_div(count, 256);
-				cmd.dispatch(groupsSoftbodyStretch, 1, 1);
-			}
-			TS(timestamp_steps_);
-
-			// solve_softbody_volume
-			TS(timestamp_steps_);
-			if (solver_config_.softbody_volume)
-			{
-				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_softbody_volume);
-
-				push_constants_.solve.compliance = datas_.compliance.softbody_volume;
-
-				cmd.pushConstants<PushConstant::Solve>(
-					*pipeline_layouts_.common,
-					vk::ShaderStageFlagBits::eCompute,
-					0,
-					push_constants_.solve);
-
-				uint32_t groupsSoftbodyVolume = ceil_div(datas_.num_volumes, 256);
-				cmd.dispatch(groupsSoftbodyVolume, 1, 1);
-			}
-			TS(timestamp_steps_);
-
 			// Solve Shear
 			TS(timestamp_steps_);
 			if (solver_config_.shear)
@@ -396,6 +352,50 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 
 				uint32_t group = (count + 256 - 1) / 256;
 				cmd.dispatch(group, 1, 1);
+			}
+			TS(timestamp_steps_);
+
+			// solve_softbody_stretch
+			TS(timestamp_steps_);
+			if (solver_config_.softbody_stretch)
+			{
+				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_softbody_stretch);
+
+				uint32_t base = datas_.pass_offsets[datas_.num_colors];
+				uint32_t count = datas_.pass_offsets[datas_.num_colors + 1] - datas_.pass_offsets[datas_.num_colors];
+				if (!count) continue;
+
+				push_constants_.solve.base = base;
+				push_constants_.solve.count = count;
+				push_constants_.solve.compliance = datas_.compliance.softbody_stretch;
+
+				cmd.pushConstants<PushConstant::Solve>(
+					*pipeline_layouts_.common,
+					vk::ShaderStageFlagBits::eCompute,
+					0,
+					push_constants_.solve);
+
+				uint32_t groupsSoftbodyStretch = ceil_div(count, 256);
+				cmd.dispatch(groupsSoftbodyStretch, 1, 1);
+			}
+			TS(timestamp_steps_);
+
+			// solve_softbody_volume
+			TS(timestamp_steps_);
+			if (solver_config_.softbody_volume)
+			{
+				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_softbody_volume);
+
+				push_constants_.solve.compliance = datas_.compliance.softbody_volume;
+
+				cmd.pushConstants<PushConstant::Solve>(
+					*pipeline_layouts_.common,
+					vk::ShaderStageFlagBits::eCompute,
+					0,
+					push_constants_.solve);
+
+				uint32_t groupsSoftbodyVolume = ceil_div(datas_.num_volumes, 256);
+				cmd.dispatch(groupsSoftbodyVolume, 1, 1);
 			}
 			TS(timestamp_steps_);
 
@@ -828,6 +828,7 @@ void SimulationPassGPU::CreateSoftBodyConstraintDatas()
 		}
 	}
 	datas_.num_edges = static_cast<uint32_t>(datas_.edges.size());
+	datas_.num_softbody_edges = datas_.num_edges - datas_.num_cloth_edges;
 
 	datas_.pass_offsets.push_back(datas_.num_edges);
 
@@ -1560,11 +1561,11 @@ void SimulationPassGPU::CalculateGpuTime()
 	float tBuildCell = 0.0f;
 	float tBuildNeighbor = 0.0f;
 	float tSolveStretch = 0.0f;
-	float tSolveSoftbodyStretch = 0.0f;
-	float tSolveSoftbodyVolume = 0.0f;
 	float tSolveShear = 0.0f;
 	float tSolveBend = 0.0f;
 	float tSolveArea = 0.0f;
+	float tSolveSoftbodyStretch = 0.0f;
+	float tSolveSoftbodyVolume = 0.0f;
 	float tSolveSelfCollision = 0.0f;
 	float tApplyDeltas = 0.0f;
 	float tCollideSdf = 0.0f;
@@ -1591,17 +1592,17 @@ void SimulationPassGPU::CalculateGpuTime()
 		for (uint32_t it = 0; it < datas_.iterations; it++)
 		{
 			tSolveStretch += delta_ms(iterBase + it * tsCnt + 0, iterBase + it * tsCnt + 1);
-			tSolveSoftbodyStretch += delta_ms(iterBase + it * tsCnt + 2, iterBase + it * tsCnt + 3);
-			tSolveSoftbodyVolume += delta_ms(iterBase + it * tsCnt + 4, iterBase + it * tsCnt + 5);
-			tSolveShear += delta_ms(iterBase + it * tsCnt + 6, iterBase + it * tsCnt + 7);
-			tSolveBend += delta_ms(iterBase + it * tsCnt + 8, iterBase + it * tsCnt + 9);
-			tSolveArea += delta_ms(iterBase + it * tsCnt + 10, iterBase + it * tsCnt + 11);
+			tSolveShear += delta_ms(iterBase + it * tsCnt + 2, iterBase + it * tsCnt + 3);
+			tSolveBend += delta_ms(iterBase + it * tsCnt + 4, iterBase + it * tsCnt + 5);
+			tSolveArea += delta_ms(iterBase + it * tsCnt + 6, iterBase + it * tsCnt + 7);
+			tSolveSoftbodyStretch += delta_ms(iterBase + it * tsCnt + 8, iterBase + it * tsCnt + 9);
+			tSolveSoftbodyVolume += delta_ms(iterBase + it * tsCnt + 10, iterBase + it * tsCnt + 11);
 			tSolveSelfCollision += delta_ms(iterBase + it * tsCnt + 12, iterBase + it * tsCnt + 13);
 			tApplyDeltas += delta_ms(iterBase + it * tsCnt + 14, iterBase + it * tsCnt + 15);
 		}
 		afterIteration = iterBase + datas_.iterations * tsCnt;
 
-		tCollideSdf += delta_ms(afterIteration, afterIteration + 1);
+		tCollideSdf += delta_ms(afterIteration + 0, afterIteration + 1);
 		tUpdate += delta_ms(afterIteration + 2, afterIteration + 3);
 	}
 	uint32_t afterSubstep = afterIteration + slots_collide_update_;
@@ -1630,14 +1631,14 @@ void SimulationPassGPU::CalculateGpuTime()
 		label_time_[labels_[c++]] = tBuildCell;
 		label_time_[labels_[c++]] = tBuildNeighbor;
 		label_time_[labels_[c++]] = tSolveStretch;
-		label_time_[labels_[c++]] = tSolveSoftbodyStretch;
-		label_time_[labels_[c++]] = tSolveSoftbodyVolume;
 		label_time_[labels_[c++]] = tSolveShear;
 		label_time_[labels_[c++]] = tSolveBend;
 		label_time_[labels_[c++]] = tSolveArea;
+		label_time_[labels_[c++]] = tSolveSoftbodyStretch;
+		label_time_[labels_[c++]] = tSolveSoftbodyVolume;
 		label_time_[labels_[c++]] = tSolveSelfCollision;
-		label_time_[labels_[c++]] = tCollideSdf;
 		label_time_[labels_[c++]] = tApplyDeltas;
+		label_time_[labels_[c++]] = tCollideSdf;
 		label_time_[labels_[c++]] = tUpdate;
 		label_time_[labels_[c++]] = tCalculateNormals;
 		label_time_[labels_[c++]] = total;
@@ -1652,14 +1653,14 @@ void SimulationPassGPU::CalculateGpuTime()
 		label_avg_time_[labels_[c++]] += tBuildCell;
 		label_avg_time_[labels_[c++]] += tBuildNeighbor;
 		label_avg_time_[labels_[c++]] += tSolveStretch;
-		label_avg_time_[labels_[c++]] += tSolveSoftbodyStretch;
-		label_avg_time_[labels_[c++]] += tSolveSoftbodyVolume;
 		label_avg_time_[labels_[c++]] += tSolveShear;
 		label_avg_time_[labels_[c++]] += tSolveBend;
 		label_avg_time_[labels_[c++]] += tSolveArea;
+		label_avg_time_[labels_[c++]] += tSolveSoftbodyStretch;
+		label_avg_time_[labels_[c++]] += tSolveSoftbodyVolume;
 		label_avg_time_[labels_[c++]] += tSolveSelfCollision;
-		label_avg_time_[labels_[c++]] += tCollideSdf;
 		label_avg_time_[labels_[c++]] += tApplyDeltas;
+		label_avg_time_[labels_[c++]] += tCollideSdf;
 		label_avg_time_[labels_[c++]] += tUpdate;
 		label_avg_time_[labels_[c++]] += tCalculateNormals;
 		label_avg_time_[labels_[c++]] += total;

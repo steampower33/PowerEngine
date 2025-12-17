@@ -118,8 +118,8 @@ void main()
 
             // On planes only: blend in dn_total to suppress long-term creep.
             if (kind == 1) {
-                dn = mix(dn_total, dn_corr, 0.9);                 // tune: 0.7~0.95
-                dn = min(dn, dn_corr * 4.0 + 1e-6);              // optional cap to avoid over-sticking
+                dn = mix(dn_total, dn_corr, 0.9);     // tune: 0.7~0.95
+                dn = min(dn, dn_corr * 4.0 + 1e-6);   // optional cap to avoid over-sticking
             }
 
             // --- Collider-specific friction (simple heuristic using sim.friction as base) ---

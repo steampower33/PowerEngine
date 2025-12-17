@@ -27,6 +27,9 @@ struct SimData {
 	uint32_t num_volumes = 0;
 	uint32_t num_colliders = 0;
 
+	uint32_t num_cloth_edges = 0;
+	uint32_t num_softbody_edges = 0;
+
 	float frame_dt = 60.0f;
 	int substeps = 10;
 	int iterations = 4;
@@ -257,7 +260,7 @@ struct SimData {
 
 		pass_offsets = std::move(colorOffset);
 
-		num_edges = static_cast<uint32_t>(edges.size());
+		num_cloth_edges = static_cast<uint32_t>(edges.size());
 	}
 
 	void BuildShearConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices)

@@ -929,17 +929,59 @@ void GUI::SetStatGUI(RowFn&& row)
 	auto& pm = *pass_manager_.particle_manager_;
 	auto& d = pass_manager_.sim_pass_gpu_->datas_;
 
-	if (ImGui::BeginTable("Stat", 2, ImGuiTableFlags_BordersInnerV))
+	if (ImGui::CollapsingHeader("Stat"))
 	{
-		row("NumParticles", [&] { ImGui::Text("%u", pm.total_particles_); });
-		row("NumEdges", [&] { ImGui::Text("%u", d.num_edges); });
-		row("NumShears", [&] { ImGui::Text("%u", d.num_shears); });
-		row("NumBends", [&] { ImGui::Text("%u", d.num_bends); });
-		row("NumAreas", [&] { ImGui::Text("%u", d.num_areas); });
 
-		ImGui::EndTable();
+		ImGui::SeparatorText("Cloth");
+		ImGui::Indent();
+		ImGui::BeginChild("Cloth", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+		if (ImGui::BeginTable("Stat", 2, ImGuiTableFlags_BordersInnerV))
+		{
+			row("NumParticles", [&] { ImGui::Text("%u", pm.num_cloth_particles_); });
+			row("NumEdges", [&] { ImGui::Text("%u", d.num_cloth_edges); });
+			row("NumShears", [&] { ImGui::Text("%u", d.num_shears); });
+			row("NumBends", [&] { ImGui::Text("%u", d.num_bends); });
+			row("NumAreas", [&] { ImGui::Text("%u", d.num_areas); });
+
+			ImGui::EndTable();
+		}
+
+		ImGui::EndChild();
+		ImGui::Unindent();
+
+		ImGui::SeparatorText("Softbody");
+		ImGui::Indent();
+		ImGui::BeginChild("Softbody", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+		if (ImGui::BeginTable("Stat", 2, ImGuiTableFlags_BordersInnerV))
+		{
+			row("NumParticles", [&] { ImGui::Text("%u", pm.num_softbody_particles_); });
+			row("NumEdges", [&] { ImGui::Text("%u", d.num_softbody_edges); });
+			row("NumVolumes", [&] { ImGui::Text("%u", d.num_volumes); });
+
+			ImGui::EndTable();
+		}
+
+		ImGui::EndChild();
+		ImGui::Unindent();
+
+		ImGui::SeparatorText("Total");
+		ImGui::Indent();
+		ImGui::BeginChild("Total", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+		if (ImGui::BeginTable("Stat", 2, ImGuiTableFlags_BordersInnerV))
+		{
+			row("NumParticles", [&] { ImGui::Text("%u", pm.total_particles_); });
+			row("NumEdges", [&] { ImGui::Text("%u", d.num_edges); });
+			row("NumShears", [&] { ImGui::Text("%u", d.num_shears); });
+			row("NumBends", [&] { ImGui::Text("%u", d.num_bends); });
+			row("NumAreas", [&] { ImGui::Text("%u", d.num_areas); });
+			row("NumVolumes", [&] { ImGui::Text("%u", d.num_volumes); });
+
+			ImGui::EndTable();
+		}
+
+		ImGui::EndChild();
+		ImGui::Unindent();
 	}
-
 }
 
 template<typename RowFn>
