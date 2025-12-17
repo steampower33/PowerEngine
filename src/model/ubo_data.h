@@ -12,15 +12,15 @@ namespace ubo_data {
 		glm::mat4 invViewProj{};
 		glm::vec4 cameraPos{};
 
-		glm::vec3 position{ 0.0f, 5.0f, 5.0f };
-		float intensity = 50.0f;
+		glm::vec3 position{ 0.0f, 10.0f, 5.0f };
+		float intensity = 200.0f;
 
 		glm::vec3 direction{ 0.0f, -1.0f, -1.0f };
 		float inner = 0.0f;
 
 		float outer = 90.0f;
-		uint32_t light_enable = 0;
-		uint32_t pbr_enable = 1;
+		uint32_t light_enable = 1;
+		uint32_t pbr_enable = 0;
 		float exposure = 0.8f;
 
 		int ggx_brdf_idx = 0;
@@ -43,19 +43,19 @@ namespace ubo_data {
 		glm::vec4 albedo{ 1.0f, 1.0f, 1.0f, 0.0f };
 
 		int albedo_idx = -1;
-		int metallic_idx = -1;
 		int normal_idx = -1;
-		int roughness_idx = -1;
-
-		int ao_idx = -1;
-		int height_idx = -1;
 		int arm_idx = -1;
+		int ao_idx = -1;
+
+		int roughness_idx = -1;
+		int metallic_idx = -1;
+		int height_idx = -1;
 		int coat_idx = -1;
 
 		int fuzz_idx = -1;
-		float metallic_factor = 0.0f;
-		float roughness_factor = 1.0f;
 		float ao_factor = 1.0f;
+		float roughness_factor = 1.0f;
+		float metallic_factor = 0.0f;
 
 		float height_factor = 0.0f;
 		float coat_factor = 0.0f;
@@ -64,13 +64,13 @@ namespace ubo_data {
 
 		float fuzz_roughness_factor = 0.0f;
 		uint32_t albedo_enable = 0;
-		uint32_t metallic_enable = 0;
 		uint32_t normal_enable = 0;
-
-		uint32_t roughness_enable = 0;
-		uint32_t ao_enable = 0;
-		uint32_t height_enable = 0;
 		uint32_t arm_enable = 0;
+
+		uint32_t ao_enable = 0;
+		uint32_t roughness_enable = 0;
+		uint32_t metallic_enable = 0;
+		uint32_t height_enable = 0;
 
 		uint32_t coat_enable = 0;
 		uint32_t fuzz_enable = 0;

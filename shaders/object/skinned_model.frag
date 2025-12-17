@@ -23,10 +23,34 @@ layout(location = 3) out vec4 out_cozz_fuzz;
 void main() {
     vec4 albedo    = (model.albedo_enable == 0u || model.albedo_idx == -1) ? vec4(model.albedo.xyz, 0.0): texture(tex[nonuniformEXT(model.albedo_idx)], in_uv);
     vec3 normalTS  = in_normal_world;
-    float metallic = (model.metallic_enable == 0u || model.metallic_idx == -1) ? model.metallic_factor : texture(tex[nonuniformEXT(model.metallic_idx)], in_uv).r;
-    float rough    = (model.roughness_enable == 0u || model.roughness_idx == -1) ? model.roughness_factor : texture(tex[nonuniformEXT(model.roughness_idx)], in_uv).r;
-    float ao       = (model.ao_enable == 0u || model.ao_idx == -1) ? model.ao_factor : texture(tex[nonuniformEXT(model.ao_idx)], in_uv).r;
+
+    float ao = 0.0, roughness = 0.0, metallic = 0.0;
+    if (model.arm_enable == 1u && model.arm_idx != -1)
+    {
+        vec4 arm = texture(tex[nonuniformEXT(model.arm_idx)], in_uv);
+        ao = arm.r;
+        roughness = arm.g;
+        metallic = arm.b;
+    }
+    else
+    {
+        ao       = (model.ao_enable == 0u || model.ao_idx == -1) ? model.ao_factor : texture(tex[nonuniformEXT(model.ao_idx)], in_uv).r;
+        roughness = (model.roughness_enable == 0u || model.roughness_idx == -1) ? model.roughness_factor : texture(tex[nonuniformEXT(model.roughness_idx)], in_uv).r;
+        metallic = (model.metallic_enable == 0u || model.metallic_idx == -1) ? model.metallic_factor : texture(tex[nonuniformEXT(model.metallic_idx)], in_uv).r;
+    }
     float height   = (model.height_enable == 0u || model.height_idx == -1) ? model.height_factor : texture(tex[nonuniformEXT(model.height_idx)], in_uv).r;
+
+    if (model.normal_enable == 1u && model.normal_idx != -1)
+    {
+        vec3 normal = texture(tex[nonuniformEXT(model.normal_idx)], in_uv).xyz * 2.0 - 1.0;
+
+        vec3 N = in_normal_world;
+        vec3 T = normalize(in_tangent_world - dot(in_tangent_world, N) * N);
+        vec3 B = cross(N, T);
+        
+        mat3x3 TBN = mat3x3(T, B, N);
+        normalTS = normalize(normal * TBN);
+    }
 
     if (model.checker_board_enable == 1u)
     {
@@ -38,7 +62,7 @@ void main() {
     out_albedo_metal = vec4(albedo.xyz, metallic);
 
     vec3 n = normalize(normalTS);
-    out_normal_rough = vec4(n * 0.5 + 0.5, rough);
+    out_normal_rough = vec4(n * 0.5 + 0.5, roughness);
     
     out_height_ao = vec2(height, ao);
     out_cozz_fuzz = vec4(model.coat_factor, model.coat_roughness_factor, model.fuzz_factor, model.fuzz_roughness_factor);

@@ -25,9 +25,21 @@ void main() {
 
     vec4 albedo    = (model.albedo_enable == 0u || model.albedo_idx == -1) ? pc.color : texture(tex[nonuniformEXT(model.albedo_idx)], in_uv);
     vec3 normal  = (!gl_FrontFacing) ? -in_world_normal : in_world_normal;
-    float metallic = (model.metallic_enable == 0u || model.metallic_idx == -1) ? model.metallic_factor : texture(tex[nonuniformEXT(model.metallic_idx)], in_uv).r;
-    float roughness = (model.roughness_enable == 0u || model.roughness_idx == -1) ? model.roughness_factor : texture(tex[nonuniformEXT(model.roughness_idx)], in_uv).r;
-    float ao       = (model.ao_enable == 0u || model.ao_idx == -1) ? model.ao_factor : texture(tex[nonuniformEXT(model.ao_idx)], in_uv).r;
+    
+    float ao = 0.0, roughness = 0.0, metallic = 0.0;
+    if (model.arm_enable == 1u && model.arm_idx != -1)
+    {
+        vec4 arm = texture(tex[nonuniformEXT(model.arm_idx)], in_uv);
+        ao = arm.r;
+        roughness = arm.g;
+        metallic = arm.b;
+    }
+    else
+    {
+        ao       = (model.ao_enable == 0u || model.ao_idx == -1) ? model.ao_factor : texture(tex[nonuniformEXT(model.ao_idx)], in_uv).r;
+        roughness = (model.roughness_enable == 0u || model.roughness_idx == -1) ? model.roughness_factor : texture(tex[nonuniformEXT(model.roughness_idx)], in_uv).r;
+        metallic = (model.metallic_enable == 0u || model.metallic_idx == -1) ? model.metallic_factor : texture(tex[nonuniformEXT(model.metallic_idx)], in_uv).r;
+    }
     float height   = (model.height_enable == 0u || model.height_idx == -1) ? model.height_factor : texture(tex[nonuniformEXT(model.height_idx)], in_uv).r;
 
     out_albedo_metal = vec4(albedo.xyz, metallic);
