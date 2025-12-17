@@ -30,9 +30,9 @@ void Renderer::WaitIdle()
 	context_->WaitIdle();
 }
 
-void Renderer::Update(Camera& camera, MouseInteractor& mouse_interactor, float dt, float& targetSimFPS, double& simDt, bool& paused)
+void Renderer::Update(Camera& camera, MouseInteractor& mouse_interactor, float dt, float& targetSimFPS, double& simDt, bool& paused, bool& pauseEachframe)
 {
-	gui_->Update(targetSimFPS, simDt, camera, paused);
+	gui_->Update(targetSimFPS, simDt, camera, paused, pauseEachframe);
 
 	pass_manager_->Update(camera, mouse_interactor, *model_manager_, paused);
 

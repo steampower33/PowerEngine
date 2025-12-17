@@ -196,7 +196,7 @@ void GUI::SetStyle()
 	style.SeparatorTextBorderSize = 2.0f;
 }
 
-void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera, bool paused)
+void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera, bool& paused, bool& pauseEachframe)
 {
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
@@ -248,7 +248,7 @@ void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera, bool paused
 		SetModelsGUI(row);
 
 		if (pass_manager_.cpu_or_gpu_ == vku::CpuOrGpu::GPU)
-			SetSimulationGUI(row, targetSimFPS, simDt, paused);
+			SetSimulationGUI(row, targetSimFPS, simDt, paused, pauseEachframe);
 
 	}
 	ImGui::End();
@@ -657,7 +657,7 @@ void GUI::SetTimeingGUI(RowFn&& row)
 }
 
 template<typename RowFn>
-void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool& paused)
+void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool& paused, bool& pauseEachframe)
 {
 	auto& sim = *pass_manager_.sim_pass_gpu_;
 
@@ -673,7 +673,8 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 		if (ImGui::BeginTable("Parameter", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
-			row("Pause(Spacebar)", [&] { ImGui::Checkbox("##Pause", &paused); });
+			row("Pause(X)", [&] { ImGui::Checkbox("##Pause", &paused); });
+			row("PauseEachframe(Z,X)", [&] { ImGui::Checkbox("##PauseEachframe", &pauseEachframe); });
 			row("TargetSimFPS", [&] { ImGui::DragFloat("##TargetSimFPS", &targetSimFPS, 1.0f, 30.0f, 1000.0f); simDt = 1.0 / static_cast<double>(targetSimFPS); });
 			row("1 / FrameDt", [&] { ImGui::DragFloat("##FrameDt", &sim.datas_.frame_dt, 1.0f, 60.0f, 240.0f); });
 			row("Substeps", [&] { ImGui::DragInt("##Substeps", &sim.datas_.substeps, 1, 1, 40); });

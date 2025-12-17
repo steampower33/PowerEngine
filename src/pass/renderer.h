@@ -20,7 +20,7 @@ public:
 	~Renderer();
 
 	void WaitIdle();
-	void Update(Camera& camera, MouseInteractor& mouse_interactor, float dt, float& targetSimFPS, double& simDt, bool& paused);
+	void Update(Camera& camera, MouseInteractor& mouse_interactor, float dt, float& targetSimFPS, double& simDt, bool& paused, bool& pauseEachframe);
 	void Draw(bool paused);
 
 private:

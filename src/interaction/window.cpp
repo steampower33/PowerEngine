@@ -66,10 +66,12 @@ void Window::mainloop()
 		if (sim_accum_ >= sim_dt_) {
 			sim_accum_ -= sim_dt_;
 
-			renderer_->Update(*camera_, *mouse_interactor_, frameDt, target_sim_fps_, sim_dt_, paused_);
+			renderer_->Update(*camera_, *mouse_interactor_, frameDt, target_sim_fps_, sim_dt_, paused_, pause_eachframe_);
 
 			renderer_->Draw(paused_);
 
+			if (pause_eachframe_)
+				paused_ = true;
 		}
 	}
 
@@ -262,12 +264,21 @@ void Window::ProcessKeyboard(float dt) {
 		//if (glfwGetKey(glfw_window_, GLFW_KEY_DOWN) == GLFW_PRESS) camera_->pitch = glm::clamp(camera_->pitch - pitchSpeed * dt, -89.0f, 89.0f);
 	}
 
-	// Space
-	if (glfwGetKey(glfw_window_, GLFW_KEY_SPACE) == GLFW_PRESS)
+	// X
+	if (glfwGetKey(glfw_window_, GLFW_KEY_X) == GLFW_PRESS)
 	{
 		if (key_timeout_ < 0.0f)
 		{
 			paused_ = !paused_;
+			key_timeout_ = 0.2f;
+		}
+	}
+	// Z
+	if (glfwGetKey(glfw_window_, GLFW_KEY_Z) == GLFW_PRESS)
+	{
+		if (key_timeout_ < 0.0f)
+		{
+			pause_eachframe_ = !pause_eachframe_;
 			key_timeout_ = 0.2f;
 		}
 	}

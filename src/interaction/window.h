@@ -46,6 +46,7 @@ private:
     bool first_mouse_ = true;
 
     bool paused_ = false;
+    bool pause_eachframe_ = false;
     float key_timeout_ = 0.2f;
 
     float target_sim_fps_ = 144.0f;

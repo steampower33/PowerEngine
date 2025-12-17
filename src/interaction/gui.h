@@ -41,7 +41,7 @@ public:
 	std::vector<std::pair<std::string, VkDescriptorSet>> imgui_id_;
 
 	void SetStyle();
-	void Update(float& targetSimFPS, double& simDt, Camera& camera, bool paused);
+	void Update(float& targetSimFPS, double& simDt, Camera& camera, bool& paused, bool& pauseEachframe);
 	void DisplayKernelTiming(const std::string name, std::unordered_map<std::string, double>& labelToTime, std::unordered_map<std::string, double>& labelToAvgTime, bool autoColor = true);
 
 	template<typename RowFn>
@@ -51,7 +51,7 @@ public:
 	template<typename RowFn>
 	void SetTimeingGUI(RowFn&& row);
 	template<typename RowFn>
-	void SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool& paused);
+	void SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool& paused, bool& pauseEachframe);
 	template<typename RowFn>
 	void SetTestSceneGUI(RowFn&& row);
 	template<typename RowFn>
