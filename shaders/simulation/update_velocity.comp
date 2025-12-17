@@ -1,5 +1,6 @@
 #version 460
-#include "../common/params.glsl"
+
+#include "../common/simulation_common.glsl"
 
 layout(local_size_x = 256) in;
 void main() {

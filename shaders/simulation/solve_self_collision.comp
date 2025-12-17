@@ -1,7 +1,7 @@
 #version 460
 #extension GL_EXT_shader_atomic_float : require
 
-#include "../common/params.glsl"
+#include "../common/simulation_common.glsl"
 
 #define TYPE_CLOTH 0
 #define TYPE_SOFTBODY 1

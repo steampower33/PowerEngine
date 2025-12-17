@@ -184,20 +184,20 @@ set(OBJECT_RENDER_SHADERS
 compile_glsl_shaders(object_render_shaders_target SOURCES ${OBJECT_RENDER_SHADERS})
 
 set(SIMULATION_SHADERS 
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/clear_lambdas.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/integrate.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_stretch.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_shear.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_bend.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_area.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_softbody_stretch.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_softbody_volume.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/solve_self_collision.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/apply_deltas.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/collide_sdf.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/update_velocity.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/tri_normal.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/sim/vertex_normal.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/clear_lambdas.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/integrate.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/solve_stretch.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/solve_shear.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/solve_bend.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/solve_area.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/solve_softbody_stretch.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/solve_softbody_volume.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/solve_self_collision.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/apply_deltas.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/collide_sdf.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/update_velocity.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/tri_normal.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/vertex_normal.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/hash/build_hash.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/hash/build_cell.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/hash/build_neighbor.comp

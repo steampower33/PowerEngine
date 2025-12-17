@@ -44,7 +44,7 @@ public:
 	
 	int vulkan_thumbnail_index_ = 0;
 
-	const char* create_keywords_[14] = {
+	std::vector<std::string> create_keywords_ = {
 		"color",
 		"albedo",
 		"metallic",
@@ -58,7 +58,11 @@ public:
 		"sheen",
 		"coat",
 		"fuzz",
-		"orm"
+		"orm",
+		"arm",
+		"diff",
+		"nor",
+		"ior"
 	};
 
 	std::unordered_map<std::string, std::vector<uint32_t>> keyword_index_;
@@ -90,7 +94,7 @@ public:
 	void ConvertFileToKtx(const std::string& folderPath);
 	bool IsRightTextureName(const std::string& name);
 	void CreateKtxFromFile(const std::filesystem::path& pngPath, const std::filesystem::path& ktxPath);
-	int CreateTexture(std::string path, std::string keyword, bool isCubemap = false);
+	int CreateTexture(std::string path, std::string keyword, bool isCubemap = false, bool afterInit = false);
 
 private:
 	void CreateSetLayouts();

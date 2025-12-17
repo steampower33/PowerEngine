@@ -3,40 +3,13 @@
 #extension GL_KHR_vulkan_glsl : enable
 #extension GL_EXT_nonuniform_qualifier : require
 
-layout(set = 1, binding = 0) uniform Model {
-    mat4x4 model;
+#include "../common/render_common.glsl"
 
-    vec4 albedo;
+layout(set = 1, binding = 0, std140) uniform ModelBlock {
+    Model model;
+};
 
-    int albedo_idx;
-    int metallic_idx;
-    int normal_idx;
-    int roughness_idx;
-
-    int ao_idx;
-    int height_idx;
-    float metallic_factor;
-    float roughness_factor;
-
-    float ao_factor;
-    float height_factor;
-    float coat_factor;
-    float coat_roughness_factor;
-
-    float fuzz_factor;
-    float fuzz_roughness_factor;
-    vec2 tile_uv;
-
-    uint albedo_enable;
-    uint metallic_enable;
-    uint normal_enable;
-    uint roughness_enable;
-
-    uint ao_enable;
-    uint height_enable;
-    uint checker_board_enable;
-    uint p2;
-} model;
+layout(set = 2, binding = 0) uniform sampler2D tex[];
 
 layout(location = 0) in vec3 in_color;
 layout(location = 1) in vec3 in_world_normal;

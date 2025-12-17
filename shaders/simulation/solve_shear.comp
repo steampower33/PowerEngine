@@ -1,7 +1,7 @@
 #version 460
 #extension GL_EXT_shader_atomic_float : require
 
-#include "../common/params.glsl"
+#include "../common/simulation_common.glsl"
 
 layout(local_size_x = 256) in;
 
@@ -15,13 +15,13 @@ void accumulate_delta(uint i, vec3 corr)
 
 void main() {
     uint gid  = gl_GlobalInvocationID.x;
-    if (gid >= sim.num_areas) return;
+    if (gid >= sim.num_shears) return;
 
-    Area area = areas[gid];
+    Shear s = shears[gid];
 
-    uint i0 = area.i0;
-    uint i1 = area.i1;
-    uint i2 = area.i2;
+    uint i0 = s.i0;
+    uint i1 = s.i1;
+    uint i2 = s.i2;
 
     float w0 = w[i0];
     float w1 = w[i1];
@@ -41,35 +41,36 @@ void main() {
     vec3 e1 = x1 - x0;
     vec3 e2 = x2 - x0;
 
-    float a = 0.5f * dot(cross(e1, e2), area.rest_normal);
-    float C = a - area.rest_area;
+    float dot_now = dot(e1, e2);
+    float C = dot_now - s.rest_dot;
 
-    vec3 g1 = 0.5f * cross(area.rest_normal, e2);
-    vec3 g2 = 0.5f * cross(e1, area.rest_normal);
-    vec3 g0 = -g1 - g2;
-    
+    vec3 grad0 = -(e1 + e2);
+    vec3 grad1 =  e2;
+    vec3 grad2 =  e1;
 
     float dt = sim.dt;
+
     float alpha_tilde = pc.solve.compliance / (dt * dt);
-    
-    float wsum_grad = w0 * dot(g0, g0) +
-                  w1 * dot(g1, g1) +
-                  w2 * dot(g2, g2);
+
+    float wsum_grad =
+        w0 * dot(grad0, grad0) +
+        w1 * dot(grad1, grad1) +
+        w2 * dot(grad2, grad2);
 
     float denom = wsum_grad + alpha_tilde;
     if (denom < 1e-8) return;
 
-    float lambda_old = area.lambda;
+    float lambda_old = s.lambda;
     float rhs = C + alpha_tilde * lambda_old;
 
     float dLambda = -rhs / denom;
     float lambda_new = lambda_old + dLambda;
 
-    areas[gid].lambda = lambda_new;
+    shears[gid].lambda = lambda_new;
 
-    vec3 corr0 = w0 * dLambda * g0 * sim.area_stiffness;
-    vec3 corr1 = w1 * dLambda * g1 * sim.area_stiffness;
-    vec3 corr2 = w2 * dLambda * g2 * sim.area_stiffness;
+    vec3 corr0 = w0 * dLambda * grad0 * sim.shear_stiffness;
+    vec3 corr1 = w1 * dLambda * grad1 * sim.shear_stiffness;
+    vec3 corr2 = w2 * dLambda * grad2 * sim.shear_stiffness;
 
     accumulate_delta(i0, corr0);
     accumulate_delta(i1, corr1);

@@ -3,7 +3,12 @@
 #extension GL_KHR_vulkan_glsl : enable
 #extension GL_EXT_nonuniform_qualifier : require
 
-#include "../common/model_common.glsl"
+#include "../common/render_common.glsl"
+
+layout(set = 1, binding = 0, std140) uniform ModelBlock {
+    Model model;
+};
+layout(set = 2, binding = 0) uniform sampler2D tex[];
 
 layout(location = 0) in vec2 in_uv;
 layout(location = 1) in vec3 in_normal_world;

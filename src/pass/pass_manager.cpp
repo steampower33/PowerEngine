@@ -161,7 +161,6 @@ void PassManager::Draw(std::unique_ptr<GUI>& gui, bool paused)
 		queue.submit(submitInfo, *in_flight_fences_[frame]);
 	}
 
-
 	{
 		vk::Semaphore waitSem = *image_render_finished_[imageIndex];
 

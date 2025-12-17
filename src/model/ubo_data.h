@@ -49,27 +49,37 @@ namespace ubo_data {
 
 		int ao_idx = -1;
 		int height_idx = -1;
+		int arm_idx = -1;
+		int coat_idx = -1;
+
+		int fuzz_idx = -1;
 		float metallic_factor = 0.0f;
 		float roughness_factor = 1.0f;
-
 		float ao_factor = 1.0f;
+
 		float height_factor = 0.0f;
 		float coat_factor = 0.0f;
 		float coat_roughness_factor = 0.0f;
-
 		float fuzz_factor = 0.0f;
-		float fuzz_roughness_factor = 0.0f;
-		glm::vec2 tile_uv{ 1.0f, 1.0f };
 
+		float fuzz_roughness_factor = 0.0f;
 		uint32_t albedo_enable = 0;
 		uint32_t metallic_enable = 0;
 		uint32_t normal_enable = 0;
-		uint32_t roughness_enable = 0;
 
+		uint32_t roughness_enable = 0;
 		uint32_t ao_enable = 0;
 		uint32_t height_enable = 0;
+		uint32_t arm_enable = 0;
+
+		uint32_t coat_enable = 0;
+		uint32_t fuzz_enable = 0;
 		uint32_t checker_board_enable = 0;
-		uint32_t p2;
+		uint32_t p0;
+
+		glm::vec2 tile_uv{ 1.0f, 1.0f };
+		float p1;
+		float p2;
 	};
 	static_assert(sizeof(Model) % 16 == 0, "std140 must be 16-byte aligned.");
 }

@@ -1,5 +1,5 @@
-#ifndef PARAMS_GLSL
-#define PARAMS_GLSL
+#ifndef SIMULATION_COMMON
+#define SIMULATION_COMMON
 
 struct Solve {
     uint base;

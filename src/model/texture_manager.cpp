@@ -10,8 +10,10 @@ TextureManager::TextureManager(Context& context)
 	: context_(context)
 {
 	{
-		ConvertFileToKtx("assets/lut");
-		ConvertFileToKtx("assets/SheenCloth");
+		ConvertFileToKtx("assets/");
+		//ConvertFileToKtx("assets/lut");
+		//ConvertFileToKtx("assets/SheenCloth");
+		//ConvertFileToKtx("assets/velour_velvet");
 	}
 
 	{
@@ -60,7 +62,7 @@ bool TextureManager::IsRightTextureName(const std::string& name)
 	std::transform(lower.begin(), lower.end(), lower.begin(),
 		[](unsigned char c) { return std::tolower(c); });
 
-	for (const char* kw : create_keywords_) {
+	for (std::string kw : create_keywords_) {
 		if (lower.find(kw) != std::string::npos) {
 			return true;
 		}
@@ -77,31 +79,43 @@ void TextureManager::ConvertFileToKtx(const std::string& folderPath)
 		throw std::runtime_error("Folder does not exist or is not a directory: " + folderPath);
 	}
 
-	for (const auto& entry : fs::directory_iterator(folder)) {
-		if (!entry.is_regular_file()) continue;
+	fs::directory_options opts = fs::directory_options::skip_permission_denied;
 
-		fs::path pngPath = entry.path();
-		if (pngPath.extension() != ".png" &&
-			pngPath.extension() != ".jpg")
+	std::error_code ec;
+	for (fs::recursive_directory_iterator it(folder, opts, ec), end; it != end; it.increment(ec))
+	{
+		if (ec) { ec.clear(); continue; }
+
+		const auto& entry = *it;
+
+		if (!entry.is_regular_file(ec)) { ec.clear(); continue; }
+
+		fs::path srcPath = entry.path();
+		auto ext = srcPath.extension().string();
+
+		std::transform(ext.begin(), ext.end(), ext.begin(),
+			[](unsigned char c) { return (char)std::tolower(c); });
+
+		if (ext != ".png" && ext != ".jpg" && ext != ".jpeg")
 			continue;
 
-		const std::string filename = pngPath.filename().string();
-		if (!IsRightTextureName(filename)) {
+		const std::string filename = srcPath.filename().string();
+		if (!IsRightTextureName(filename))
 			continue;
-		}
 
-		fs::path ktxPath = pngPath;
+		fs::path ktxPath = srcPath;
 		ktxPath.replace_extension(".ktx2");
 
-		if (fs::exists(ktxPath)) {
+		if (fs::exists(ktxPath, ec) && !ec) {
 			std::cout << "[KTX] exists, skip: " << ktxPath.string() << std::endl;
 			continue;
 		}
+		ec.clear();
 
-		std::cout << "[KTX] create: " << pngPath.string()
+		std::cout << "[KTX] create: " << srcPath.string()
 			<< " -> " << ktxPath.string() << std::endl;
 
-		CreateKtxFromFile(pngPath, ktxPath);
+		CreateKtxFromFile(srcPath, ktxPath);
 	}
 }
 
@@ -154,7 +168,7 @@ void TextureManager::CreateKtxFromFile(const fs::path& pngPath, const fs::path& 
 	cmd += "\"" + pngPath.string() + "\" "
 		"\"" + ktxPath.string() + "\"";
 
-	std::cout << "[KTX] " << cmd << std::endl;
+	//std::cout << "[KTX] " << cmd << std::endl;
 
 	int result = std::system(cmd.c_str());
 	if (result != 0) {
@@ -163,7 +177,7 @@ void TextureManager::CreateKtxFromFile(const fs::path& pngPath, const fs::path& 
 }
 
 
-int TextureManager::CreateTexture(std::string path, std::string findWord, bool isCubemap)
+int TextureManager::CreateTexture(std::string path, std::string findWord, bool isCubemap, bool afterInit)
 {
 	auto CreateTexture = [&](std::string path, std::string filename)
 		{
@@ -199,7 +213,29 @@ int TextureManager::CreateTexture(std::string path, std::string findWord, bool i
 		std::for_each(filename.begin(), filename.end(), [](auto& c) {c = tolower(c); });
 		if (filename.find(findWord) != std::string::npos)
 		{
-			return CreateTexture(parentPath, filename);
+			uint32_t idx = CreateTexture(parentPath, filename);
+
+			if (afterInit)
+			{
+				vk::DescriptorImageInfo info{
+					.sampler = *tex2d_[idx]->texture_sampler_,
+					.imageView = *tex2d_[idx]->texture_image_view_,
+					.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
+				};
+
+				vk::WriteDescriptorSet w{
+					.dstSet = *sets_.tex2d,
+					.dstBinding = 0,
+					.dstArrayElement = idx,
+					.descriptorCount = 1,
+					.descriptorType = vk::DescriptorType::eCombinedImageSampler,
+					.pImageInfo = &info
+				};
+
+				context_.device_.updateDescriptorSets(w, {});
+			}
+
+			return idx;
 		}
 
 	}

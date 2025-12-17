@@ -16,7 +16,7 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, T
 	//{
 	//	Cloth cloth{};
 
-	//	cloth.name = "Dress";
+	//	cloth.name = "Cloth Model";
 	//	cloth.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
 
 	//	cloth.origin = glm::vec3(0.0f, 1.0f, 0.0f);
@@ -25,7 +25,7 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, T
 
 	//	
 	//	ModelLoader modelLoader;
-	//	std::string filename = "assets/cloth.glb";
+	//	std::string filename = "assets/velour_velvet/velour_velvet_1k.gltf";
 	//	modelLoader.LoadModel(filename, vku::VertexIncludeInfo{ true, true, true, false, false }, textureManager, 1.0f);
 
 	//	cloth.vertices = std::move(modelLoader.mesh_.vertices);
@@ -52,6 +52,11 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, T
 		cloth.num_particle = cloth.nx1 * cloth.ny1;
 
 		cloth.render = true;
+
+		cloth.ubo_data.albedo_enable = 1;
+		cloth.ubo_data.albedo_idx = textureManager.CreateTexture("assets/textures", "diff", false, true);
+		cloth.ubo_data.normal_enable = 1;
+		cloth.ubo_data.normal_idx = textureManager.CreateTexture("assets/textures", "nor", false, true);
 
 		SetPlaneCloth(cloth);
 
