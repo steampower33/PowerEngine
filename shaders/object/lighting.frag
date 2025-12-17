@@ -112,6 +112,18 @@ vec3 fresnel_schlick(float cosTheta, vec3 F0)
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
+float V_Neubelt(float NdotV, float NdotL)
+{
+    return 1.0 / (4.0 * (NdotL + NdotV - NdotL * NdotV + 1e-5));
+}
+
+float F_Sheen(float LdotH)
+{
+    float x = 1.0 - LdotH;
+    float x2 = x * x;
+    return x2 * x2 * x; // (1 - L¡¤H)^5
+}
+
 void main()
 {
     float depth = texture(depth_tex, in_uv).r;
@@ -171,7 +183,7 @@ void main()
 
         vec3 R = reflect(-V, N);
 
-        float max_mip = float(skybox.specular_mip_levels);
+        float max_mip = float(skybox.specular_mip_levels - 1);
 
         float lod_base = roughness * max_mip;
         vec3 prefiltered_base = textureLod(env_tex[nonuniformEXT(skybox.radiance_idx)], R, lod_base).rgb;
@@ -191,14 +203,14 @@ void main()
 
             vec3 F0_coat = vec3(0.04);
 
-            float lod_coat = coat_roughness_factor * max_mip;
+            float lod_coat = coat_roughness * max_mip;
             vec3 prefiltered_coat = textureLod(
                 env_tex[nonuniformEXT(skybox.radiance_idx)], R, lod_coat
             ).rgb;
 
             vec2 brdf_coat = texture(
                 tex[nonuniformEXT(light.ggx_brdf_idx)],
-                vec2(n_dot_v, coat_roughness_factor)
+                vec2(n_dot_v, coat_roughness)
             ).rg;
 
             vec3 F_coat = fresnel_schlick_roughness(n_dot_v, F0_coat, coat_roughness_factor);
@@ -317,9 +329,15 @@ void main()
             float fuzz_rough = clamp(fuzz_roughness_factor, 0.0, 1.0);
             
             float D_fuzz = D_Charlie(n_dot_h, fuzz_rough);
+            
+            float Vis = V_Neubelt(n_dot_v, n_dot_l);
+            
+            float l_dot_h = clamp(dot(L, H), 0.0, 1.0);
+            float F_sheen = F_Sheen(l_dot_h);
+            
             vec3 fuzz_color = mix(vec3(1.0), albedo, 0.5);
 
-            vec3 spec_brdf_fuzz = D_fuzz * fuzz_color;
+            vec3 spec_brdf_fuzz = D_fuzz * Vis * F_sheen * fuzz_color;
 
             direct_fuzz = spec_brdf_fuzz * n_dot_l
                               * light.intensity * attenuation * spot

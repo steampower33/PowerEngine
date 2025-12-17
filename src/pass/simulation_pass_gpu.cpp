@@ -855,7 +855,7 @@ void SimulationPassGPU::CreateSSBOBuffers()
 
 	uint32_t N = total_particles_;
 	uint32_t tableSize = N;
-	uint32_t maxNeighbors = 20;
+	uint32_t maxNeighbors = 16;
 	ubo_.datas.sim_params.num_tables = tableSize;
 	ubo_.datas.sim_params.cell_size = pm.default_cloth_spacing_;
 	ubo_.datas.sim_params.collision_radius = ubo_.datas.sim_params.cell_size;

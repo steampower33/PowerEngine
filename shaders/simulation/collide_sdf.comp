@@ -91,34 +91,64 @@ void main()
             if (C < 0.0) 
                 n = normal_capsule(x_work, p0, p1);
         }
-
-        if (C < 0.0) {
+        
+        const float STATIC_V_THRESH = 0.12;
+        if (C < 0.0)
+        {
+            // --- Normal (penetration) correction (XPBD-ish) ---
             float denom = w_i + alpha_tilde;
-            if (denom < 1e-8) denom = 1e-8;
+            denom = max(denom, 1e-8);
 
             float dlambda = w_i / denom;
 
             vec3 corr_n = (-C) * dlambda * n;
             x_work += corr_n;
-            vec3 d = x_work - x0;
 
-            float dn = dot(d, n);
-            if (dn < 0.0) dn = 0.0;
-            vec3 d_n = dn * n;
-            vec3 d_t = d - d_n;
+            // --- Decompose total displacement into normal/tangent ---
+            vec3  d = x_work - x0;
+            float dn_total = max(dot(d, n), 0.0);
+            vec3  d_n = dn_total * n;
+            vec3  d_t = d - d_n;
+            float lt  = length(d_t);
 
-            float lt = length(d_t);
+            // --- Friction "normal magnitude" proxy ---
+            // corr_n-based dn reduces sticking/jitter on curved surfaces.
+            float dn_corr = max(dot(corr_n, n), 0.0);
+            float dn = dn_corr;
 
-            float max_t = sim.friction * dn;
+            // On planes only: blend in dn_total to suppress long-term creep.
+            if (kind == 1) {
+                dn = mix(dn_total, dn_corr, 0.9);                 // tune: 0.7~0.95
+                dn = min(dn, dn_corr * 4.0 + 1e-6);              // optional cap to avoid over-sticking
+            }
 
-            if (lt <= max_t) {
+            // --- Collider-specific friction (simple heuristic using sim.friction as base) ---
+            // Plane: strong static + moderate kinetic.
+            // Sphere/capsule: no static, low kinetic (easy sliding).
+            float mu_s = (kind == 1) ? sim.friction : 0.0;
+            float mu_k = (kind == 1) ? (sim.friction * 0.75) : (sim.friction * 0.12);
+
+            // --- Static friction only when nearly stopped (plane only) ---
+            bool want_static = false;
+            if (kind == 1) {
+                vec3 v_pred = d / dt;
+                vec3 v_t = v_pred - dot(v_pred, n) * n;          // tangential predicted velocity
+                want_static = (length(v_t) < STATIC_V_THRESH);
+            }
+
+            if (want_static && lt <= mu_s * dn)
+            {
+                // Static friction: fully cancel tangential displacement (stick)
                 x_work -= d_t;
-            } else if (lt > 1e-6) {
-                d_t *= (max_t / lt);
+            }
+            else if (lt > 1e-6)
+            {
+                // Kinetic friction: reduce tangential displacement by mu_k * dn (more stable than "clamp to mu*dn")
+                float new_lt = max(0.0, lt - mu_k * dn);
+                d_t *= (new_lt / lt);
                 x_work = x0 + d_n + d_t;
             }
         }
-
     }
 
     xp[id] = vec4(x_work, xp[id].w);
