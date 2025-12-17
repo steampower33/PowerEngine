@@ -104,7 +104,6 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera, bool
 			auto* dst = base + ubo_size_.cloth * i;
 			std::memcpy(dst, &pm.clothes_[i].ubo_data, ubo_size_.cloth);
 		}
-			
 	}
 
 	// Model UBO
@@ -119,34 +118,9 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera, bool
 			const uint32_t modelOff = baseModelOffset + i * static_cast<uint32_t>(ubo_size_.model);
 			auto* dst = static_cast<std::byte*>(ubo_mapped_.model) + modelOff;
 
-			ubo_datas_.model.model = model.world_;
-			ubo_datas_.model.albedo = model.albedo_;
+			model.ubo_data.world = model.world_;
 
-			ubo_datas_.model.albedo_idx = model.texture_idx_.albedo;
-			ubo_datas_.model.metallic_idx = model.texture_idx_.metallic;
-			ubo_datas_.model.normal_idx = model.texture_idx_.normal;
-			ubo_datas_.model.roughness_idx = model.texture_idx_.roughness;
-			ubo_datas_.model.ao_idx = model.texture_idx_.ao;
-			ubo_datas_.model.height_idx = model.texture_idx_.height;
-
-			ubo_datas_.model.metallic_factor = model.factors_.metallic;
-			ubo_datas_.model.roughness_factor = model.factors_.roughness;
-			ubo_datas_.model.ao_factor = model.factors_.ao;
-			ubo_datas_.model.coat_factor = model.factors_.coat;
-			ubo_datas_.model.coat_roughness_factor = model.factors_.coat_roughness;
-			ubo_datas_.model.fuzz_factor = model.factors_.fuzz;
-			ubo_datas_.model.fuzz_roughness_factor = model.factors_.fuzz_roughness;
-
-			ubo_datas_.model.albedo_enable = model.texture_enable_.albedo;
-			ubo_datas_.model.metallic_enable = model.texture_enable_.metallic;
-			ubo_datas_.model.normal_enable = model.texture_enable_.normal;
-			ubo_datas_.model.roughness_enable = model.texture_enable_.roughness;
-			ubo_datas_.model.ao_enable = model.texture_enable_.ao;
-			ubo_datas_.model.height_enable = model.texture_enable_.height;
-
-			ubo_datas_.model.checker_board_enable = model.checker_board_enable_;
-
-			std::memcpy(dst, &ubo_datas_.model, ubo_size_.model);
+			std::memcpy(dst, &model.ubo_data, ubo_size_.model);
 
 			if (model.model_type_ == ModelType::SKINNED)
 			{

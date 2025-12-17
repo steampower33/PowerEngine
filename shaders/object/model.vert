@@ -17,9 +17,9 @@ layout(location = 3) out vec3 out_tangent_world;
 
 void main() 
 {
-    vec4 world_pos = model.model * vec4(in_pos, 1.0);
+    vec4 world_pos = model.world * vec4(in_pos, 1.0);
 
-    mat3 normal_mat = transpose(inverse(mat3(model.model)));
+    mat3 normal_mat = transpose(inverse(mat3(model.world)));
     out_normal_world = normalize(normal_mat * in_normal);
 
     if (model.height_enable == 1u)
@@ -32,5 +32,5 @@ void main()
 
     out_pos_world = world_pos.xyz;
     out_uv = in_uv;
-    out_tangent_world = (model.model * vec4(in_tangent, 0.0)).xyz;
+    out_tangent_world = (model.world * vec4(in_tangent, 0.0)).xyz;
 }

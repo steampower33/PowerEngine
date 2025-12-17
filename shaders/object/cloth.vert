@@ -9,7 +9,7 @@ layout(set = 0, binding = 0) uniform UBO {
 } ubo;
 
 layout(set = 1, binding = 0) uniform Model {
-    mat4x4 model;
+    mat4x4 world;
 
     vec4 albedo;
 

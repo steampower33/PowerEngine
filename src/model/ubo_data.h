@@ -39,7 +39,7 @@ namespace ubo_data {
 	static_assert(sizeof(SkyBox) % 16 == 0, "std140 must be 16-byte aligned.");
 
 	struct Model {
-		glm::mat4 model;
+		glm::mat4 world;
 		glm::vec4 albedo{ 1.0f, 1.0f, 1.0f, 0.0f };
 
 		int albedo_idx = -1;

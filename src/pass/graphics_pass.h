@@ -35,7 +35,6 @@ public:
 		ubo_data::Global global;
 		ubo_data::Light light;
 		ubo_data::SkyBox skybox;
-		ubo_data::Model model;
 	} ubo_datas_;
 
 private:

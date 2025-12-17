@@ -32,9 +32,7 @@ ModelManager::ModelManager(Context& context, TextureManager& textureManager)
 		glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
 		float initRadius = 1.0f;
 		std::unique_ptr<Model> model = std::make_unique<Model>(mesh, vku::VertexIncludeInfo{ true, true, true, false, false }, context, initPos, angleQuat, initColor, initRadius, false, "BottomPlane", ShapeColliderType::PLANE, ModelType::SHAPE);
-		model->factors_.roughness = 1.0f;
-		model->factors_.metallic = 0.0f;
-		model->checker_board_enable_ = true;
+		model->ubo_data.checker_board_enable = true;
 
 		models_.emplace_back(std::move(model));
 	}

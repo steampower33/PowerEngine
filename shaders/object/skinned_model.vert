@@ -34,9 +34,9 @@ void main()
     vec3 skinnedNormal = mat3(skinMat) * in_normal;
     vec3 skinnedTangent = mat3(skinMat) * in_tangent;
 
-    vec4 worldPos      = model.model * skinnedPos;
-    vec3 worldNormal   = normalize(mat3(model.model) * skinnedNormal);
-    vec3 worldTangent  = normalize(mat3(model.model) * skinnedTangent);
+    vec4 worldPos      = model.world * skinnedPos;
+    vec3 worldNormal   = normalize(mat3(model.world) * skinnedNormal);
+    vec3 worldTangent  = normalize(mat3(model.world) * skinnedTangent);
 
     gl_Position = global.proj * global.view * worldPos;
 

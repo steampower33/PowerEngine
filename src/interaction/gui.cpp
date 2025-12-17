@@ -339,7 +339,7 @@ void GUI::SetModelsGUI(RowFn&& row)
 		};
 
 
-	auto selectPopUp = [&](const char* label, int& idx)
+	auto SelectPopUp = [&](const char* label, int& idx)
 		{
 			if (ImGui::Button(label))
 				ImGui::OpenPopup(label);
@@ -373,6 +373,10 @@ void GUI::SetModelsGUI(RowFn&& row)
 			}
 		};
 
+	auto CheckEnable = [&](const char* label, uint32_t& enable) {
+		bool check = enable; ImGui::Checkbox(label, &check); enable = check;
+		};
+
 	auto& models = model_manager_.models_;
 	auto& clothes = pass_manager_.particle_manager_->clothes_;
 	auto& softbodies = pass_manager_.particle_manager_->softbodies_;
@@ -381,6 +385,8 @@ void GUI::SetModelsGUI(RowFn&& row)
 	{
 		for (auto& model : models)
 		{
+			auto& ubo = model->ubo_data;
+
 			if (ImGui::TreeNode(model->name_.c_str()))
 			{
 				{
@@ -392,15 +398,15 @@ void GUI::SetModelsGUI(RowFn&& row)
 						ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 					{
 
-						row("Albedo", [&] { ImGui::DragFloat3("##Albedo", &model->albedo_[0], 0.1f, 0.0f, 1.0f); });
-						row("Meltallic", [&] { ImGui::DragFloat("##Meltallic", &model->factors_.metallic, 0.1f, 0.0f, 1.0f); });
-						row("Roughness", [&] { ImGui::DragFloat("##Roughness", &model->factors_.roughness, 0.1f, 0.0f, 1.0f); });
-						row("AO", [&] { ImGui::DragFloat("##AO", &model->factors_.ao, 0.1f, 0.0f, 1.0f); });
-						row("Height", [&] { ImGui::DragFloat("##Height", &model->factors_.height, 0.001f, 0.0f, 1.0f); });
-						row("Coat", [&] { ImGui::DragFloat("##Coat", &model->factors_.coat, 0.001f, 0.0f, 1.0f); });
-						row("CoatRoughness", [&] { ImGui::DragFloat("##CoatRoughness", &model->factors_.coat_roughness, 0.001f, 0.0f, 1.0f); });
-						row("Fuzz", [&] { ImGui::DragFloat("##Fuzz", &model->factors_.fuzz, 0.001f, 0.0f, 1.0f); });
-						row("FuzzRoughness", [&] { ImGui::DragFloat("##FuzzRoughness", &model->factors_.fuzz_roughness, 0.001f, 0.0f, 1.0f); });
+						row("Albedo", [&] { ImGui::DragFloat3("##Albedo", &ubo.albedo[0], 0.1f, 0.0f, 1.0f); });
+						row("Meltallic", [&] { ImGui::DragFloat("##Meltallic", &ubo.metallic_factor, 0.1f, 0.0f, 1.0f); });
+						row("Roughness", [&] { ImGui::DragFloat("##Roughness", &ubo.roughness_factor, 0.1f, 0.0f, 1.0f); });
+						row("AO", [&] { ImGui::DragFloat("##AO", &ubo.ao_factor, 0.1f, 0.0f, 1.0f); });
+						row("Height", [&] { ImGui::DragFloat("##Height", &ubo.height_factor, 0.001f, 0.0f, 1.0f); });
+						row("Coat", [&] { ImGui::DragFloat("##Coat", &ubo.coat_factor, 0.001f, 0.0f, 1.0f); });
+						row("CoatRoughness", [&] { ImGui::DragFloat("##CoatRoughness", &ubo.coat_roughness_factor, 0.001f, 0.0f, 1.0f); });
+						row("Fuzz", [&] { ImGui::DragFloat("##Fuzz", &ubo.fuzz_factor, 0.001f, 0.0f, 1.0f); });
+						row("FuzzRoughness", [&] { ImGui::DragFloat("##FuzzRoughness", &ubo.fuzz_roughness_factor, 0.001f, 0.0f, 1.0f); });
 						ImGui::EndTable();
 					}
 					ImGui::EndChild();
@@ -417,24 +423,24 @@ void GUI::SetModelsGUI(RowFn&& row)
 						ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 					{
 						row3("Albedo",
-							[&] {ImGui::Checkbox("##Albedo", &model->texture_enable_.albedo); },
-							[&] { selectPopUp("Select##Albedo", model->texture_idx_.albedo); });
+							[&] { CheckEnable("##Albedo", ubo.albedo_enable); },
+							[&] { SelectPopUp("Select##Albedo", ubo.albedo_idx); });
 						row3("Meltallic",
-							[&] { ImGui::Checkbox("##Meltallic", &model->texture_enable_.metallic); },
-							[&] { selectPopUp("Select##Meltallic", model->texture_idx_.metallic); });
+							[&] { CheckEnable("##Meltallic", ubo.metallic_enable); },
+							[&] { SelectPopUp("Select##Meltallic", ubo.metallic_idx); });
 						row3("Normal",
-							[&] { ImGui::Checkbox("##Normal", &model->texture_enable_.normal); },
-							[&] { selectPopUp("Select##Normal", model->texture_idx_.normal); });
+							[&] { CheckEnable("##Normal", ubo.normal_enable); },
+							[&] { SelectPopUp("Select##Normal", ubo.normal_idx); });
 						row3("Roughtness",
-							[&] { ImGui::Checkbox("##Roughness", &model->texture_enable_.roughness); },
-							[&] { selectPopUp("Select##Roughness", model->texture_idx_.roughness); });
+							[&] { CheckEnable("##Roughness", ubo.roughness_enable); },
+							[&] { SelectPopUp("Select##Roughness", ubo.roughness_idx); });
 						row3("AO",
-							[&] { ImGui::Checkbox("##AO", &model->texture_enable_.ao); },
-							[&] { selectPopUp("Select##AO", model->texture_idx_.ao); });
+							[&] { CheckEnable("##AO", ubo.ao_enable); },
+							[&] { SelectPopUp("Select##AO", ubo.ao_idx); });
 						row3("Height",
-							[&] { ImGui::Checkbox("##Height", &model->texture_enable_.height); },
-							[&] { selectPopUp("Select##Height", model->texture_idx_.height); });
-						row("CheckerBoard", [&] { ImGui::Checkbox("##CheckerBoard", &model->checker_board_enable_); });
+							[&] { CheckEnable("##Height", ubo.height_enable); },
+							[&] { SelectPopUp("Select##Height", ubo.height_idx); });
+						row("CheckerBoard", [&] { CheckEnable("##CheckerBoard", ubo.checker_board_enable); });
 						row("Movable", [&] { ImGui::Checkbox("##Movable", &model->movable_); });
 						row("Render", [&] { ImGui::Checkbox("##Render", &model->render_); });
 
@@ -489,9 +495,6 @@ void GUI::SetModelsGUI(RowFn&& row)
 					ImGui::Unindent();
 				}
 
-				auto checkEnable = [&](const char* label, uint32_t& enable) {
-					bool check = enable; ImGui::Checkbox(label, &check); enable = check;
-					};
 
 				{
 					ImGui::SeparatorText("Enable");
@@ -501,23 +504,23 @@ void GUI::SetModelsGUI(RowFn&& row)
 						ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 					{
 						row3("Albedo",
-							[&] { checkEnable("##Albedo", cloth.ubo_data.albedo_enable); },
-							[&] { selectPopUp("Select##Albedo", cloth.ubo_data.albedo_idx); });
+							[&] { CheckEnable("##Albedo", cloth.ubo_data.albedo_enable); },
+							[&] { SelectPopUp("Select##Albedo", cloth.ubo_data.albedo_idx); });
 						row3("Meltallic",
-							[&] { checkEnable("##Meltallic", cloth.ubo_data.metallic_enable); },
-							[&] { selectPopUp("Select##Meltallic", cloth.ubo_data.metallic_idx); });
+							[&] { CheckEnable("##Meltallic", cloth.ubo_data.metallic_enable); },
+							[&] { SelectPopUp("Select##Meltallic", cloth.ubo_data.metallic_idx); });
 						row3("Normal",
-							[&] { checkEnable("##Normal", cloth.ubo_data.normal_enable); },
-							[&] { selectPopUp("Select##Normal", cloth.ubo_data.normal_idx); });
+							[&] { CheckEnable("##Normal", cloth.ubo_data.normal_enable); },
+							[&] { SelectPopUp("Select##Normal", cloth.ubo_data.normal_idx); });
 						row3("Roughtness",
-							[&] { checkEnable("##Roughtness", cloth.ubo_data.roughness_enable); },
-							[&] { selectPopUp("Select##Roughtness", cloth.ubo_data.roughness_idx); });
+							[&] { CheckEnable("##Roughtness", cloth.ubo_data.roughness_enable); },
+							[&] { SelectPopUp("Select##Roughtness", cloth.ubo_data.roughness_idx); });
 						row3("AO",
-							[&] { checkEnable("##AO", cloth.ubo_data.ao_enable); },
-							[&] { selectPopUp("Select##AO", cloth.ubo_data.ao_idx); });
+							[&] { CheckEnable("##AO", cloth.ubo_data.ao_enable); },
+							[&] { SelectPopUp("Select##AO", cloth.ubo_data.ao_idx); });
 						row3("Height",
-							[&] { checkEnable("##Height", cloth.ubo_data.height_enable); },
-							[&] { selectPopUp("Select##Height", cloth.ubo_data.height_idx); });
+							[&] { CheckEnable("##Height", cloth.ubo_data.height_enable); },
+							[&] { SelectPopUp("Select##Height", cloth.ubo_data.height_idx); });
 						ImGui::EndTable();
 					}
 					ImGui::EndChild();
@@ -575,22 +578,22 @@ void GUI::SetModelsGUI(RowFn&& row)
 					{
 						row3("Albedo",
 							[&] { checkEnable("##Albedo", softbody.ubo_data.albedo_enable); },
-							[&] { selectPopUp("Select##Albedo", softbody.ubo_data.albedo_idx); });
+							[&] { SelectPopUp("Select##Albedo", softbody.ubo_data.albedo_idx); });
 						row3("Meltallic",
 							[&] { checkEnable("##Meltallic", softbody.ubo_data.metallic_enable); },
-							[&] { selectPopUp("Select##Meltallic", softbody.ubo_data.metallic_idx); });
+							[&] { SelectPopUp("Select##Meltallic", softbody.ubo_data.metallic_idx); });
 						row3("Normal",
 							[&] { checkEnable("##Normal", softbody.ubo_data.normal_enable); },
-							[&] { selectPopUp("Select##Normal", softbody.ubo_data.normal_idx); });
+							[&] { SelectPopUp("Select##Normal", softbody.ubo_data.normal_idx); });
 						row3("Roughtness",
 							[&] { checkEnable("##Roughtness", softbody.ubo_data.roughness_enable); },
-							[&] { selectPopUp("Select##Roughtness", softbody.ubo_data.roughness_idx); });
+							[&] { SelectPopUp("Select##Roughtness", softbody.ubo_data.roughness_idx); });
 						row3("AO",
 							[&] { checkEnable("##AO", softbody.ubo_data.ao_enable); },
-							[&] { selectPopUp("Select##AO", softbody.ubo_data.ao_idx); });
+							[&] { SelectPopUp("Select##AO", softbody.ubo_data.ao_idx); });
 						row3("Height",
 							[&] { checkEnable("##Height", softbody.ubo_data.height_enable); },
-							[&] { selectPopUp("Select##Height", softbody.ubo_data.height_idx); });
+							[&] { SelectPopUp("Select##Height", softbody.ubo_data.height_idx); });
 						ImGui::EndTable();
 					}
 					ImGui::EndChild();

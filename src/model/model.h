@@ -44,7 +44,6 @@ public:
 	glm::quat rotation_{ 1.0f, 0.0f, 0.0f, 0.0f };
 	glm::vec3 scale_{ 1.0f, 1.0f, 1.0f };
 	float radius_ = 1.0f;
-	bool checker_board_enable_ = false;
 	bool movable_ = false;
 	bool render_ = true;
 
@@ -72,35 +71,7 @@ public:
 	std::vector<CapsuleColliderDef> collider_defs_;
 	std::vector<Collider> capsule_colliders_;
 
-	struct TextureIdx {
-		int albedo = -1;
-		int metallic = -1;
-		int normal = -1;
-		int roughness = -1;
-		int ao = -1;
-		int height = -1;
-		int emissive = -1;
-	} texture_idx_;
-
-	struct TextureEnable {
-		bool albedo = 0;
-		bool metallic = 0;
-		bool normal = 0;
-		bool roughness = 0;
-		bool ao = 0;
-		bool height = 0;
-	} texture_enable_;
-
-	struct Factor {
-		float metallic = 0.0f;
-		float roughness = 1.0f;
-		float ao = 1.0f;
-		float height = 0.0f;
-		float coat = 0.0f;
-		float coat_roughness = 0.0f;
-		float fuzz = 0.0f;
-		float fuzz_roughness = 0.0f;
-	} factors_;
+	ubo_data::Model ubo_data;
 
 private:
 	void UpdateWorldTransforms(std::vector<Node>& nodes, int nodeIndex, const glm::mat4& parent);
