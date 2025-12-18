@@ -23,6 +23,7 @@ GraphicsPass::GraphicsPass(Context& context, Swapchain& swapchain, TextureManage
 	CreateUniformBuffers();
 	CreateGeometryBuffers();
 	CreateDepthResources();
+	CreateShadowResources();
 	CreateDescriptorSets();
 	CreateGraphicsPipelines();
 }
@@ -1509,6 +1510,14 @@ void GraphicsPass::CreateDepthResources() {
 	depth_image_view_ = vku::CreateImageView(context_.device_, depth_image_, depthFormat, vk::ImageAspectFlagBits::eDepth, 1);
 }
 
+void GraphicsPass::CreateShadowResources()
+{
+	vk::Format format = vk::Format::eD32Sfloat;
+
+	vku::CreateImage(context_.physical_device_, context_.device_, 1024, 1024, 1, vk::SampleCountFlagBits::e1, format, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled, vk::MemoryPropertyFlagBits::eDeviceLocal, shadow_image_, shadow_image_memory_);
+	shadow_image_view_ = vku::CreateImageView(context_.device_, shadow_image_, format, vk::ImageAspectFlagBits::eDepth, 1);
+}
+
 void GraphicsPass::CreateGraphicsPipelines()
 {
 	vk::PipelineInputAssemblyStateCreateInfo inputAssembly{
@@ -2184,6 +2193,96 @@ void GraphicsPass::CreateGraphicsPipelines()
 		};
 		rasterizer.polygonMode = vk::PolygonMode::eLine;
 		pipelines_.debug_capsule = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+	}
 
+	// Shadow
+	{
+
+		// Shader
+		auto vertCode = vku::ReadFile("shaders/spv/shadow.vert.spv");
+		auto fragCode = vku::ReadFile("shaders/spv/shadow.frag.spv");
+
+		vk::raii::ShaderModule vertModule = vku::CreateShaderModule(context_.device_, vertCode);
+		vk::raii::ShaderModule fragModule = vku::CreateShaderModule(context_.device_, fragCode);
+
+		vk::PipelineShaderStageCreateInfo vertStage{
+			.stage = vk::ShaderStageFlagBits::eVertex,
+			.module = *vertModule,
+			.pName = "main"
+		};
+		vk::PipelineShaderStageCreateInfo fragStage{
+			.stage = vk::ShaderStageFlagBits::eFragment,
+			.module = *fragModule,
+			.pName = "main"
+		};
+		std::array<vk::PipelineShaderStageCreateInfo, 2> stages{ vertStage, fragStage };
+
+		// Vectex Input
+		auto vdesc = Vertex::GetInputDescription(vku::VertexIncludeInfo{ true, false, false, false, false });
+
+		vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
+		vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(vdesc.bindings.size());
+		vertexInputInfo.pVertexBindingDescriptions = vdesc.bindings.data();
+		vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(vdesc.attributes.size());
+		vertexInputInfo.pVertexAttributeDescriptions = vdesc.attributes.data();
+
+		// Pipeline Layout
+		std::array<vk::DescriptorSetLayout, 2> setLayouts(
+			*set_layouts_.shadow,
+			*set_layouts_.model
+		);
+
+		vk::PushConstantRange pcRange{
+			.stageFlags = vk::ShaderStageFlagBits::eVertex,
+			.offset = 0,
+			.size = static_cast<uint32_t>(sizeof(glm::mat4))
+		};
+
+		vk::PipelineDepthStencilStateCreateInfo shadowDepthStencil{
+			.depthTestEnable = vk::True,
+			.depthWriteEnable = vk::True,
+			.depthCompareOp = vk::CompareOp::eLess,
+			.depthBoundsTestEnable = vk::False,
+			.stencilTestEnable = vk::False,
+		};
+
+		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
+			.setLayoutCount = setLayouts.size(),
+			.pSetLayouts = setLayouts.data(),
+			.pushConstantRangeCount = 1,
+			.pPushConstantRanges = &pcRange
+		};
+		pipeline_layouts_.shadow = vk::raii::PipelineLayout(context_.device_, pipelineLayoutInfo);
+
+		vk::PipelineRasterizationStateCreateInfo rasterizer{
+			.depthClampEnable = vk::False,
+			.rasterizerDiscardEnable = vk::False,
+			.polygonMode = vk::PolygonMode::eFill,
+			.cullMode = vk::CullModeFlagBits::eBack,
+			.frontFace = vk::FrontFace::eCounterClockwise,
+			.depthBiasEnable = vk::True,
+			.lineWidth = 1.0f,
+		};
+
+		// Pipeline
+		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
+		  {
+			.stageCount = 2,
+			.pStages = stages.data(),
+			.pVertexInputState = &vertexInputInfo,
+			.pInputAssemblyState = &inputAssembly,
+			.pViewportState = &viewportState,
+			.pRasterizationState = &rasterizer,
+			.pMultisampleState = &multisampling,
+			.pDepthStencilState = &shadowDepthStencil,
+			.pColorBlendState = &colorBlending,
+			.pDynamicState = &dynamicState,
+			.layout = pipeline_layouts_.shadow,
+			.renderPass = nullptr },
+		  {
+			  .depthAttachmentFormat = depthFormat}
+		};
+		rasterizer.polygonMode = vk::PolygonMode::eLine;
+		pipelines_.shadow = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 	}
 }

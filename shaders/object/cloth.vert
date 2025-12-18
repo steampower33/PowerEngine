@@ -39,8 +39,8 @@ void main() {
 
     out_world_normal = normals[vid].xyz;
     
-//    float height = (cloth.height_enable == 0u) ? cloth.height_factor : texture(tex[nonuniformEXT(cloth.height_idx)], out_uv).r;
-//    p += N * height * cloth.height_factor;
+//    float height = (model.height_enable == 0u) ? model.height_factor : texture(tex[nonuniformEXT(model.height_idx)], out_uv).r;
+//    p += out_world_normal * height * model.height_factor;
 
     gl_Position = global.proj * global.view * vec4(p, 1.0);
 }

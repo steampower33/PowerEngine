@@ -57,8 +57,11 @@ ModelManager::ModelManager(Context& context, TextureManager& textureManager)
 	//	glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
 	//	float initRadius = 1.0f;
 
-	//	std::string filename = "assets/velour_velvet/velour_velvet_1k.gltf";
-	//	std::unique_ptr<Model> model = std::make_unique<Model>(filename, vku::VertexIncludeInfo{ true, true, true, false, false }, context, textureManager, initPos, angleQuat, initColor, initRadius, true, "Cloth Model", 1.0f, ShapeColliderType::NONE, ModelType::SHAPE);
+	//	Mesh mesh = GeometryGenerator::MakeBox(10.0f);
+	//	std::reverse(mesh.indices.begin(), mesh.indices.end());
+
+	//	std::unique_ptr<Model> model = std::make_unique<Model>(mesh, vku::VertexIncludeInfo{ true, true, true, false, false }, context, initPos, angleQuat, initColor, initRadius, true, "Box", ShapeColliderType::NONE, ModelType::SHAPE);
+	//	model->movable_ = false;
 
 	//	models_.emplace_back(std::move(model));
 	//}

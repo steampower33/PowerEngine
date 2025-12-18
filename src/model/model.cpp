@@ -9,8 +9,8 @@
 
 #include "model.h"
 
-Model::Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, TextureManager& textureManager, glm::vec3 initPos, glm::quat initRotation, glm::vec4 initColor, float initRadius, bool moveble, std::string name, float scale, ShapeColliderType colliderType, ModelType modelType)
-	: albedo_(initColor), movable_(moveble), name_(name), radius_(initRadius), shape_collision_type_(colliderType), model_type_(modelType)
+Model::Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, TextureManager& textureManager, glm::vec3 initPos, glm::quat initRotation, glm::vec4 initColor, float initRadius, bool movable, std::string name, float scale, ShapeColliderType colliderType, ModelType modelType)
+	: albedo_(initColor), movable_(movable), name_(name), radius_(initRadius), shape_collision_type_(colliderType), model_type_(modelType)
 {
 	model_loader_ = std::make_unique<ModelLoader>();
 
@@ -36,8 +36,8 @@ Model::Model(std::string& modelPath, vku::VertexIncludeInfo vertexIncludeInfo, C
 	ApplyTransform(glm::vec3(1.0f), initRotation, initPos);
 }
 
-Model::Model(Mesh& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, glm::vec3 initPos, glm::quat initRotation, glm::vec4 initColor, float initRadius, bool moveble, std::string name, ShapeColliderType colliderType, ModelType modelType)
-	: albedo_(initColor), movable_(moveble), name_(name), radius_(initRadius), shape_collision_type_(colliderType), model_type_(modelType)
+Model::Model(Mesh& meshData, vku::VertexIncludeInfo vertexIncludeInfo, Context& context, glm::vec3 initPos, glm::quat initRotation, glm::vec4 initColor, float initRadius, bool movable, std::string name, ShapeColliderType colliderType, ModelType modelType)
+	: albedo_(initColor), movable_(movable), name_(name), radius_(initRadius), shape_collision_type_(colliderType), model_type_(modelType)
 {
 	model_loader_ = std::make_unique<ModelLoader>();
 	model_loader_->mesh_ = std::move(meshData);

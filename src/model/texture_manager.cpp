@@ -11,9 +11,6 @@ TextureManager::TextureManager(Context& context)
 {
 	{
 		ConvertFileToKtx("assets/");
-		//ConvertFileToKtx("assets/lut");
-		//ConvertFileToKtx("assets/SheenCloth");
-		//ConvertFileToKtx("assets/velour_velvet");
 	}
 
 	{
@@ -36,12 +33,6 @@ TextureManager::TextureManager(Context& context)
 		brdf_index_.ggx = CreateTexture("assets/lut", "ggx", false);
 		brdf_index_.charlie = CreateTexture("assets/lut", "charlie", false);
 		brdf_index_.sheen_e = CreateTexture("assets/lut", "sheen_e", false);
-	}
-
-	{
-		keyword_index_[kAlbedoKeyword].push_back(CreateTexture("assets/SheenCloth", "color", false));
-		keyword_index_[kNormalKeyword].push_back(CreateTexture("assets/SheenCloth", "normal", false));
-		keyword_index_[kSheenKeyword].push_back(CreateTexture("assets/SheenCloth", "sheen", false));
 	}
 
 	cnt_tex2d_ = tex2d_.size();

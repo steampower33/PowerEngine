@@ -7,7 +7,7 @@ struct SimUBO {
 
 			float dt = 0.0f;
 			float thickness = 0.004f;
-			float friction = 0.9f;
+			float friction = 1.0f;
 			float max_speed;
 			
 			float global_damping = 2.0f;

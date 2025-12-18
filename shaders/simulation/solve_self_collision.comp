@@ -72,11 +72,10 @@ void main()
         if (collision_masks[j].object_type == TYPE_SOFTBODY)
         {
             r *= 2.0;
-            stiffness = 80.0;
         }
 
         float compliance  = same ? pc.solve.compliance : 0.0;
-        float mu          = same ? sim.neighbor_friction : sim.friction;
+        float mu          = same ? sim.neighbor_friction : 1.0;
         float alpha_tilde = compliance / (dt * dt);
 
         vec3 xj  = xp[j].xyz;

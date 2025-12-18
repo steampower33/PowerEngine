@@ -65,8 +65,6 @@ public:
 		"ior"
 	};
 
-	std::unordered_map<std::string, std::vector<uint32_t>> keyword_index_;
-
 	struct BrdfIndex {
 		int ggx = -1;
 		int charlie = -1;

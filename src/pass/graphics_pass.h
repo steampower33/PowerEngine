@@ -22,6 +22,7 @@ public:
 	void UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera, bool paused);
 	void RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t currentFrame, vku::CpuOrGpu cpuOrGpu);
 	void CreateDepthResources();
+	void CreateShadowResources();
 	
 	void CalculateGpuTime();
 
@@ -81,6 +82,7 @@ private:
 		vk::raii::Buffer cloth{ nullptr };
 		vk::raii::Buffer softbody{ nullptr };
 		vk::raii::Buffer skinned_model{ nullptr };
+		vk::raii::Buffer shadow{ nullptr };
 	} ubos_;
 
 	struct UBOMemory {
@@ -91,6 +93,7 @@ private:
 		vk::raii::DeviceMemory cloth{ nullptr };
 		vk::raii::DeviceMemory softbody{ nullptr };
 		vk::raii::DeviceMemory skinned_model{ nullptr };
+		vk::raii::DeviceMemory shadow{ nullptr };
 	} ubo_memories_;
 
 	struct UBOMapped {
@@ -101,6 +104,7 @@ private:
 		void* cloth{ nullptr };
 		void* softbody{ nullptr };
 		void* skinned_model{ nullptr };
+		void* shadow{ nullptr };
 	} ubo_mapped_;
 
 	struct UBOSize {
@@ -111,6 +115,7 @@ private:
 		vk::DeviceSize cloth;
 		vk::DeviceSize softbody;
 		vk::DeviceSize skinned_model;
+		vk::DeviceSize shadow;
 	} ubo_size_;
 
 	struct SetLayout {
@@ -121,6 +126,7 @@ private:
 		vk::raii::DescriptorSetLayout cloth{ nullptr };
 		vk::raii::DescriptorSetLayout softbody{ nullptr };
 		vk::raii::DescriptorSetLayout skinned_model{ nullptr };
+		vk::raii::DescriptorSetLayout shadow{ nullptr };
 	} set_layouts_;
 
 	struct Set {
@@ -131,6 +137,7 @@ private:
 		vk::raii::DescriptorSet cloth{ nullptr };
 		vk::raii::DescriptorSet softbody{ nullptr };
 		vk::raii::DescriptorSet skinned_model{ nullptr };
+		vk::raii::DescriptorSet shadow{ nullptr };
 	} sets_;
 
 	struct PipelineLayout {
@@ -141,6 +148,7 @@ private:
 		vk::raii::PipelineLayout softbody{ nullptr };
 		vk::raii::PipelineLayout skinned_model{ nullptr };
 		vk::raii::PipelineLayout debug_capsule{ nullptr };
+		vk::raii::PipelineLayout shadow{ nullptr };
 	} pipeline_layouts_;
 
 	struct Pipeline {
@@ -163,6 +171,8 @@ private:
 		vk::raii::Pipeline skinned_model_point{ nullptr };
 
 		vk::raii::Pipeline debug_capsule{ nullptr };
+
+		vk::raii::Pipeline shadow{ nullptr };
 	} pipelines_;
 
 	struct GeometryBuffer {
@@ -193,6 +203,10 @@ private:
 	vk::raii::Image depth_image_ = nullptr;
 	vk::raii::DeviceMemory depth_image_memory_ = nullptr;
 	vk::raii::ImageView depth_image_view_ = nullptr;
+
+	vk::raii::Image shadow_image_ = nullptr;
+	vk::raii::DeviceMemory shadow_image_memory_ = nullptr;
+	vk::raii::ImageView shadow_image_view_ = nullptr;
 
 private:
 	void CreateCommandBuffers();

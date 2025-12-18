@@ -62,7 +62,7 @@ void main() {
         vec2 uv = in_pos_world.xz * 0.5;
         ivec2 cell = ivec2(floor(uv));
         int c = (cell.x + cell.y) & 1;
-        albedo.xyz = (c == 0) ? vec3(0.85, 0.85, 0.85) : vec3(0.35, 0.35, 0.35);
+        albedo.xyz = (c == 0) ? vec3(0.85) : vec3(0.35);
     }
     out_albedo_metal = vec4(albedo.xyz, metallic);
 

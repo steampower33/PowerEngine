@@ -151,7 +151,7 @@ void main()
 
     vec3 camera_pos = light.camera_pos.xyz;
     vec3 N = normal;
-    vec3 color = albedo;
+    vec3 color = vec3(0.0);
 
     if (light.pbr_enable == 1u)
     {
@@ -252,9 +252,8 @@ void main()
 
         float exposure = light.exposure;
         ibl *= exposure;
-        ibl  = tonemap_aces(ibl);
 
-        color = ibl;
+        color += ibl;
     }
     
     if (light.light_enable == 1u)
@@ -349,8 +348,8 @@ void main()
         }
         
         vec3 direct = direct_base + direct_coat + direct_fuzz;
-        color = tonemap_aces(direct);
+        color += direct;
     }
 
-    out_color = vec4(color, 1.0);
+    out_color = vec4(tonemap_aces(color), 1.0);
 }

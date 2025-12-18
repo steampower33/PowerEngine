@@ -60,6 +60,10 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, T
 		cloth.ubo_data.normal_idx = textureManager.CreateTexture(base, "nor", false, true);
 		cloth.ubo_data.arm_enable = 1;
 		cloth.ubo_data.arm_idx = textureManager.CreateTexture(base, "arm", false, true);
+		cloth.ubo_data.fuzz_factor = 0.1f;
+		cloth.ubo_data.fuzz_roughness_factor = 1.0f;
+
+		cloth.ubo_data.tile_uv = cloth.cloth_size;
 
 		SetPlaneCloth(cloth);
 
@@ -90,6 +94,10 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, T
 		cloth.ubo_data.normal_idx = textureManager.CreateTexture(base, "nor", false, true);
 		cloth.ubo_data.arm_enable = 1;
 		cloth.ubo_data.arm_idx = textureManager.CreateTexture(base, "arm", false, true);
+		cloth.ubo_data.fuzz_factor = 0.1f;
+		cloth.ubo_data.fuzz_roughness_factor = 1.0f;
+
+		cloth.ubo_data.tile_uv = cloth.cloth_size;
 
 		SetPlaneCloth(cloth);
 
@@ -120,6 +128,10 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, T
 		cloth.ubo_data.normal_idx = textureManager.CreateTexture(base, "nor", false, true);
 		cloth.ubo_data.arm_enable = 1;
 		cloth.ubo_data.arm_idx = textureManager.CreateTexture(base, "arm", false, true);
+		cloth.ubo_data.fuzz_factor = 0.1f;
+		cloth.ubo_data.fuzz_roughness_factor = 1.0f;
+
+		cloth.ubo_data.tile_uv = cloth.cloth_size;
 
 		SetPlaneCloth(cloth);
 
