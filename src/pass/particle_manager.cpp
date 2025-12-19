@@ -534,9 +534,9 @@ void ParticleManager::ResetCloth(Cloth& cloth)
 
 				glm::vec3 worldPos = cloth.origin + rotated;
 
-				positions_[id] = { worldPos, 0.0f };
+				positions_[id] = { worldPos, 1.0f };
 				velocities_[id] = glm::vec4(0.0f);
-				pred_positions_[id] = { worldPos, 0.0f };
+				pred_positions_[id] = { worldPos, 1.0f };
 			}
 		}
 	}
@@ -607,8 +607,9 @@ void ParticleManager::ResetSoftbody(SoftBody& softbody)
 {
 	for (uint32_t i = 0; i < softbody.tetmesh.positions.size(); i++)
 	{
-		glm::vec4 pos = glm::vec4(softbody.tetmesh.positions[i], 1.0f) + glm::vec4(softbody.origin, 0.0f);
+		glm::vec4 pos = glm::vec4(softbody.tetmesh.positions[i] + softbody.origin, 1.0f);
 		positions_[softbody.offset_particle + i] = pos;
+		pred_positions_[softbody.offset_particle + i] = pos;
 	}
 }
 

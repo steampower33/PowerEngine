@@ -36,7 +36,14 @@ public:
 		ubo_data::Global global;
 		ubo_data::Light light;
 		ubo_data::SkyBox skybox;
+		ubo_data::Shadow shadow;
 	} ubo_datas_;
+
+	vk::raii::Image shadow_image_ = nullptr;
+	vk::raii::DeviceMemory shadow_image_memory_ = nullptr;
+	vk::raii::ImageView shadow_image_view_ = nullptr;
+	vk::raii::Sampler shadow_sampler = nullptr;
+	vk::Extent2D shadow_extent_{ 2048, 2048 };
 
 private:
 	Context& context_;
@@ -74,6 +81,14 @@ private:
 
 	} push_constants_;
 
+	struct ShadowMap {
+		glm::mat4 light_view_proj;
+		uint32_t is_vertex_ssbo;
+		float p0;
+		float p1;
+		float p2;
+	} shadow_map;
+
 	struct UBO {
 		vk::raii::Buffer global{ nullptr };
 		vk::raii::Buffer model{ nullptr };
@@ -82,7 +97,6 @@ private:
 		vk::raii::Buffer cloth{ nullptr };
 		vk::raii::Buffer softbody{ nullptr };
 		vk::raii::Buffer skinned_model{ nullptr };
-		vk::raii::Buffer shadow{ nullptr };
 	} ubos_;
 
 	struct UBOMemory {
@@ -93,7 +107,6 @@ private:
 		vk::raii::DeviceMemory cloth{ nullptr };
 		vk::raii::DeviceMemory softbody{ nullptr };
 		vk::raii::DeviceMemory skinned_model{ nullptr };
-		vk::raii::DeviceMemory shadow{ nullptr };
 	} ubo_memories_;
 
 	struct UBOMapped {
@@ -104,7 +117,6 @@ private:
 		void* cloth{ nullptr };
 		void* softbody{ nullptr };
 		void* skinned_model{ nullptr };
-		void* shadow{ nullptr };
 	} ubo_mapped_;
 
 	struct UBOSize {
@@ -115,7 +127,6 @@ private:
 		vk::DeviceSize cloth;
 		vk::DeviceSize softbody;
 		vk::DeviceSize skinned_model;
-		vk::DeviceSize shadow;
 	} ubo_size_;
 
 	struct SetLayout {
@@ -204,9 +215,6 @@ private:
 	vk::raii::DeviceMemory depth_image_memory_ = nullptr;
 	vk::raii::ImageView depth_image_view_ = nullptr;
 
-	vk::raii::Image shadow_image_ = nullptr;
-	vk::raii::DeviceMemory shadow_image_memory_ = nullptr;
-	vk::raii::ImageView shadow_image_view_ = nullptr;
 
 private:
 	void CreateCommandBuffers();

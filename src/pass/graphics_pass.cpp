@@ -49,8 +49,20 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera, bool
 
 	// Light
 	{
-		ubo_datas_.light.cameraPos = glm::vec4(camera.position, 0.0f);
-		ubo_datas_.light.invViewProj = glm::inverse(ubo_datas_.global.proj * ubo_datas_.global.view);
+		ubo_datas_.light.camera_pos = glm::vec4(camera.position, 0.0f);
+		ubo_datas_.light.inv_view_proj = glm::inverse(ubo_datas_.global.proj * ubo_datas_.global.view);
+
+		glm::vec3 dir = glm::normalize(ubo_datas_.light.direction);
+		glm::vec3 up = (std::abs(dir.y) > 0.99f) ? glm::vec3(0, 0, 1) : glm::vec3(0, 1, 0);
+		glm::mat4 lightView = glm::lookAt(ubo_datas_.light.position,
+			ubo_datas_.light.position + dir,
+			up);
+
+		glm::mat4 lightProj = glm::perspectiveRH_ZO(glm::radians(90.0f), 1.0f, 0.1f, 1000.0f);
+		lightProj[1][1] *= -1.0f;
+
+		ubo_datas_.light.light_view_proj = lightProj * lightView;
+		ubo_datas_.light.shadow_map_inv_size = glm::vec2(1.0f / float(shadow_extent_.width), 1.0f / float(shadow_extent_.height));
 
 		const uint32_t lightOffset = static_cast<uint32_t>(currentFrame * ubo_size_.light);
 		auto* dst = static_cast<std::byte*>(ubo_mapped_.light) + lightOffset;
@@ -136,7 +148,7 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera, bool
 				{
 					model.UpdateCapsuleCollidersFromBones();
 				}
-				
+
 				auto& jm = model.model_loader_->skin_[0].jointMatrices;
 
 				const uint32_t skinnedModelOff =
@@ -151,6 +163,7 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera, bool
 			}
 		}
 	}
+
 }
 
 // ============================
@@ -169,7 +182,6 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 	{
 		auto& pm = particle_manager_;
 		vku::CopyStagingToSSBO(cmd, sizeof(glm::vec4) * pm.clothes_[0].num_particle, pm.staging_mapped_.position, pm.positions_, pm.staging_.position, pm.ssbos_.position,
-			vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
 			vk::PipelineStageFlagBits2::eVertexShader, vk::AccessFlagBits2::eShaderStorageRead);
 	}
 
@@ -182,7 +194,138 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 
 	cmd.resetQueryPool(*timestamp_pool_, 0, slots);
 
-	TS(timestamp_steps_); // Start
+	TS(timestamp_steps_);
+
+	// shadow depth only
+	{
+		const bool first = first_frame_;
+
+		const vk::ImageLayout oldLayout = first
+			? vk::ImageLayout::eUndefined
+			: vk::ImageLayout::eShaderReadOnlyOptimal;
+
+		const vk::PipelineStageFlags2 srcStage = first
+			? vk::PipelineStageFlagBits2::eTopOfPipe
+			: vk::PipelineStageFlagBits2::eFragmentShader;
+
+		const vk::AccessFlags2 srcAccess = first
+			? vk::AccessFlags2{}
+		: vk::AccessFlagBits2::eShaderSampledRead;
+
+		vku::TransitionImageLayoutCustom(
+			shadow_image_,
+			cmd,
+			oldLayout,
+			vk::ImageLayout::eDepthAttachmentOptimal,
+			srcAccess,
+			vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+			srcStage,
+			vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
+			vk::ImageAspectFlagBits::eDepth
+		);
+
+		vk::RenderingAttachmentInfo depthAttachmentInfo = {
+			.imageView = shadow_image_view_,
+			.imageLayout = vk::ImageLayout::eDepthAttachmentOptimal,
+			.loadOp = vk::AttachmentLoadOp::eClear,
+			.storeOp = vk::AttachmentStoreOp::eStore, // IMPORTANT: must store for sampling later
+			.clearValue = vk::ClearDepthStencilValue(1.0f, 0),
+		};
+
+		vk::RenderingInfo renderingInfo = {
+			.renderArea = {
+				.offset = { 0, 0 },
+				.extent = shadow_extent_,
+			},
+			.layerCount = 1,
+			.pDepthAttachment = &depthAttachmentInfo
+		};
+
+		cmd.beginRendering(renderingInfo);
+
+		vk::Viewport vp(
+			0.0f,
+			0.0f,
+			shadow_extent_.width,
+			shadow_extent_.height,
+			0.0f, 1.0f
+		);
+
+		cmd.setViewport(0, vp);
+		cmd.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), shadow_extent_));
+
+		//cmd.setDepthBias(/*constant=*/1.25f, /*clamp=*/0.0f, /*slope=*/1.75f);
+
+		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.shadow);
+
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			pipeline_layouts_.shadow,
+			1,
+			{ *sets_.shadow },
+			{  }
+		);
+
+		shadow_map.light_view_proj = ubo_datas_.light.light_view_proj;
+		shadow_map.is_vertex_ssbo = 0u;
+		cmd.pushConstants<ShadowMap>(
+			*pipeline_layouts_.shadow,
+			vk::ShaderStageFlagBits::eVertex,
+			0,
+			shadow_map);
+
+		const uint32_t baseObjectOffset = static_cast<uint32_t>(currentFrame * ubo_size_.model * model_manager_.kMaxModels);
+		for (uint32_t i = 0; i < model_manager_.models_.size(); i++)
+		{
+			auto& model = *model_manager_.models_[i];
+
+			if (!model.render_) continue;
+
+			uint32_t objectOffset = baseObjectOffset + i * static_cast<uint32_t>(ubo_size_.model);
+
+			// Model set
+			cmd.bindDescriptorSets(
+				vk::PipelineBindPoint::eGraphics,
+				pipeline_layouts_.shadow,
+				0,
+				{ *sets_.model },
+				{ objectOffset }
+			);
+
+			cmd.bindVertexBuffers(0, { model.model_loader_->mesh_.vertex_buffer }, { 0 });
+			cmd.bindIndexBuffer(*model.model_loader_->mesh_.index_buffer, 0, vk::IndexType::eUint32);
+			cmd.drawIndexed(model.model_loader_->mesh_.indices_count, 1, 0, 0, 0);
+		}
+
+		{
+
+			shadow_map.is_vertex_ssbo = 1u;
+			cmd.pushConstants<ShadowMap>(
+				*pipeline_layouts_.shadow,
+				vk::ShaderStageFlagBits::eVertex,
+				0,
+				shadow_map);
+
+			cmd.bindIndexBuffer(*pm.index_buffer_, 0, vk::IndexType::eUint32);
+			cmd.drawIndexed(pm.num_cloth_indices_ + pm.num_softbody_indices_, 1, 0, 0, 0);
+		}
+
+		cmd.endRendering();
+
+		{
+			vku::TransitionImageLayoutCustom(
+				shadow_image_,
+				cmd,
+				vk::ImageLayout::eDepthAttachmentOptimal,
+				vk::ImageLayout::eShaderReadOnlyOptimal,
+				vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+				vk::AccessFlagBits2::eShaderSampledRead,
+				vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
+				vk::PipelineStageFlagBits2::eFragmentShader,
+				vk::ImageAspectFlagBits::eDepth
+			);
+		}
+	}
 
 	auto toShaderWrite = [&](vk::raii::Image& img) {
 		vku::TransitionImageLayoutCustom(
@@ -332,7 +475,6 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.skinned_model_wireframe);
 				else if (polygon_mode_ == vku::PolygonMode::POINT)
 					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.skinned_model_point);
-
 
 				// Global Set
 				cmd.bindDescriptorSets(
@@ -811,7 +953,7 @@ void GraphicsPass::CreateDescriptorSetLayout()
 		set_layouts_.model = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
 	}
 
-	// Light UBO + G-buffers
+	// Light UBO + G-buffers + Shadow Depth Only Buffer
 	{
 		std::array layoutBindings{
 			vk::DescriptorSetLayoutBinding(
@@ -855,11 +997,18 @@ void GraphicsPass::CreateDescriptorSetLayout()
 				1,
 				vk::ShaderStageFlagBits::eFragment,
 				nullptr
-			)
+			),
+			vk::DescriptorSetLayoutBinding(
+				6,
+				vk::DescriptorType::eCombinedImageSampler,
+				1,
+				vk::ShaderStageFlagBits::eFragment,
+				nullptr
+			),
 		};
 
 		counts_.ubo += 1;
-		counts_.sampler += 5;
+		counts_.sampler += 6;
 		counts_.layout += 1;
 
 		vk::DescriptorSetLayoutCreateInfo layoutInfo{
@@ -898,7 +1047,7 @@ void GraphicsPass::CreateDescriptorSetLayout()
 			vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eStorageBuffer,        1, vk::ShaderStageFlagBits::eVertex },
 			vk::DescriptorSetLayoutBinding{2, vk::DescriptorType::eStorageBuffer,        1, vk::ShaderStageFlagBits::eVertex }
 		};
-		counts_.ubo_dynamic += 1;
+		counts_.ubo_dynamic += particle_manager_.clothes_.size() * MAX_FRAMES_IN_FLIGHT;
 		counts_.sb += 2;
 		counts_.layout += 1;
 
@@ -913,7 +1062,7 @@ void GraphicsPass::CreateDescriptorSetLayout()
 			vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eStorageBuffer,        1, vk::ShaderStageFlagBits::eVertex },
 			vk::DescriptorSetLayoutBinding{2, vk::DescriptorType::eStorageBuffer,        1, vk::ShaderStageFlagBits::eVertex },
 		};
-		counts_.ubo_dynamic += 1;
+		counts_.ubo_dynamic += particle_manager_.softbodies_.size() * MAX_FRAMES_IN_FLIGHT;
 		counts_.sb += 2;
 		counts_.layout += 1;
 
@@ -940,6 +1089,18 @@ void GraphicsPass::CreateDescriptorSetLayout()
 			.pBindings = layoutBindings.data()
 		};
 		set_layouts_.skinned_model = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
+	}
+
+	// Shadow
+	{
+		std::array layoutBindings{
+			vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eStorageBuffer,        1, vk::ShaderStageFlagBits::eVertex },
+		};
+		counts_.sb += 1;
+		counts_.layout += 1;
+
+		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
+		set_layouts_.shadow = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
 	}
 }
 
@@ -1177,7 +1338,7 @@ void GraphicsPass::CreateDescriptorSets()
 		context_.device_.updateDescriptorSets(descriptorWrites, {});
 	}
 
-	// Lighting G-buffers
+	// Lighting
 	{
 		vk::DescriptorSetAllocateInfo allocInfo{
 			.descriptorPool = *descriptor_pool_,
@@ -1216,6 +1377,12 @@ void GraphicsPass::CreateDescriptorSets()
 		vk::DescriptorImageInfo depthImageInfo{
 			.sampler = *geometry_buffers_.sampler,
 			.imageView = *depth_image_view_,
+			.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
+		};
+
+		vk::DescriptorImageInfo shadowDepthOnlyInfo{
+			.sampler = *shadow_sampler,
+			.imageView = *shadow_image_view_,
 			.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
 		};
 
@@ -1267,7 +1434,15 @@ void GraphicsPass::CreateDescriptorSets()
 				.descriptorCount = 1,
 				.descriptorType = vk::DescriptorType::eCombinedImageSampler,
 				.pImageInfo = &depthImageInfo
-			}
+			},
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.lighting,
+				.dstBinding = 6,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eCombinedImageSampler,
+				.pImageInfo = &shadowDepthOnlyInfo
+			},
 		};
 
 		context_.device_.updateDescriptorSets(descriptorWrites, {});
@@ -1415,6 +1590,32 @@ void GraphicsPass::CreateDescriptorSets()
 		};
 		context_.device_.updateDescriptorSets(descriptorWrites, {});
 	}
+
+	// Shadow
+	{
+		vk::DescriptorSetAllocateInfo allocInfo{
+			.descriptorPool = *descriptor_pool_,
+			.descriptorSetCount = 1,
+			.pSetLayouts = &*set_layouts_.shadow
+		};
+
+		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
+		sets_.shadow = std::move(sets.front());
+
+		vk::DescriptorBufferInfo positions(particle_manager_.ssbos_.position, 0, VK_WHOLE_SIZE);
+
+		std::array descriptorWrites{
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.shadow,
+				.dstBinding = 0,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &positions
+			},
+		};
+		context_.device_.updateDescriptorSets(descriptorWrites, {});
+	}
 }
 
 void GraphicsPass::CreateGeometryBuffers()
@@ -1514,8 +1715,22 @@ void GraphicsPass::CreateShadowResources()
 {
 	vk::Format format = vk::Format::eD32Sfloat;
 
-	vku::CreateImage(context_.physical_device_, context_.device_, 1024, 1024, 1, vk::SampleCountFlagBits::e1, format, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled, vk::MemoryPropertyFlagBits::eDeviceLocal, shadow_image_, shadow_image_memory_);
+	vku::CreateImage(context_.physical_device_, context_.device_, shadow_extent_.width, shadow_extent_.height, 1, vk::SampleCountFlagBits::e1, format, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled, vk::MemoryPropertyFlagBits::eDeviceLocal, shadow_image_, shadow_image_memory_);
 	shadow_image_view_ = vku::CreateImageView(context_.device_, shadow_image_, format, vk::ImageAspectFlagBits::eDepth, 1);
+
+	vk::SamplerCreateInfo samplerInfo{
+		.magFilter = vk::Filter::eLinear,
+		.minFilter = vk::Filter::eLinear,
+		.mipmapMode = vk::SamplerMipmapMode::eNearest,
+		.addressModeU = vk::SamplerAddressMode::eClampToEdge,
+		.addressModeV = vk::SamplerAddressMode::eClampToEdge,
+		.addressModeW = vk::SamplerAddressMode::eClampToEdge,
+		.compareEnable = vk::True,
+		.compareOp = vk::CompareOp::eLessOrEqual,
+		.minLod = 0.0f,
+		.maxLod = 0.0f,
+	};
+	shadow_sampler = vk::raii::Sampler(context_.device_, samplerInfo);
 }
 
 void GraphicsPass::CreateGraphicsPipelines()
@@ -2200,25 +2415,18 @@ void GraphicsPass::CreateGraphicsPipelines()
 
 		// Shader
 		auto vertCode = vku::ReadFile("shaders/spv/shadow.vert.spv");
-		auto fragCode = vku::ReadFile("shaders/spv/shadow.frag.spv");
 
 		vk::raii::ShaderModule vertModule = vku::CreateShaderModule(context_.device_, vertCode);
-		vk::raii::ShaderModule fragModule = vku::CreateShaderModule(context_.device_, fragCode);
 
 		vk::PipelineShaderStageCreateInfo vertStage{
 			.stage = vk::ShaderStageFlagBits::eVertex,
 			.module = *vertModule,
 			.pName = "main"
 		};
-		vk::PipelineShaderStageCreateInfo fragStage{
-			.stage = vk::ShaderStageFlagBits::eFragment,
-			.module = *fragModule,
-			.pName = "main"
-		};
-		std::array<vk::PipelineShaderStageCreateInfo, 2> stages{ vertStage, fragStage };
+		std::array<vk::PipelineShaderStageCreateInfo, 1> stages{ vertStage };
 
 		// Vectex Input
-		auto vdesc = Vertex::GetInputDescription(vku::VertexIncludeInfo{ true, false, false, false, false });
+		auto vdesc = Vertex::GetInputDescription(vku::VertexIncludeInfo{ false, false, false, false, false });
 
 		vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
 		vertexInputInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(vdesc.bindings.size());
@@ -2228,20 +2436,20 @@ void GraphicsPass::CreateGraphicsPipelines()
 
 		// Pipeline Layout
 		std::array<vk::DescriptorSetLayout, 2> setLayouts(
-			*set_layouts_.shadow,
-			*set_layouts_.model
+			*set_layouts_.model,
+			*set_layouts_.shadow
 		);
 
 		vk::PushConstantRange pcRange{
 			.stageFlags = vk::ShaderStageFlagBits::eVertex,
 			.offset = 0,
-			.size = static_cast<uint32_t>(sizeof(glm::mat4))
+			.size = static_cast<uint32_t>(sizeof(ShadowMap))
 		};
 
 		vk::PipelineDepthStencilStateCreateInfo shadowDepthStencil{
 			.depthTestEnable = vk::True,
 			.depthWriteEnable = vk::True,
-			.depthCompareOp = vk::CompareOp::eLess,
+			.depthCompareOp = vk::CompareOp::eLessOrEqual,
 			.depthBoundsTestEnable = vk::False,
 			.stencilTestEnable = vk::False,
 		};
@@ -2258,16 +2466,23 @@ void GraphicsPass::CreateGraphicsPipelines()
 			.depthClampEnable = vk::False,
 			.rasterizerDiscardEnable = vk::False,
 			.polygonMode = vk::PolygonMode::eFill,
-			.cullMode = vk::CullModeFlagBits::eBack,
+			.cullMode = vk::CullModeFlagBits::eNone,
 			.frontFace = vk::FrontFace::eCounterClockwise,
 			.depthBiasEnable = vk::True,
 			.lineWidth = 1.0f,
 		};
 
+		vk::PipelineRenderingCreateInfo renderingInfo{
+			.colorAttachmentCount = 0,
+			.pColorAttachmentFormats = nullptr,
+			.depthAttachmentFormat = depthFormat,
+			.stencilAttachmentFormat = vk::Format::eUndefined
+		};
+
 		// Pipeline
 		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
 		  {
-			.stageCount = 2,
+			.stageCount = 1,
 			.pStages = stages.data(),
 			.pVertexInputState = &vertexInputInfo,
 			.pInputAssemblyState = &inputAssembly,
@@ -2275,14 +2490,15 @@ void GraphicsPass::CreateGraphicsPipelines()
 			.pRasterizationState = &rasterizer,
 			.pMultisampleState = &multisampling,
 			.pDepthStencilState = &shadowDepthStencil,
-			.pColorBlendState = &colorBlending,
+			.pColorBlendState = nullptr,
 			.pDynamicState = &dynamicState,
 			.layout = pipeline_layouts_.shadow,
-			.renderPass = nullptr },
+			.renderPass = nullptr
+			},
 		  {
-			  .depthAttachmentFormat = depthFormat}
+			  renderingInfo
+		  }
 		};
-		rasterizer.polygonMode = vk::PolygonMode::eLine;
 		pipelines_.shadow = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 	}
 }

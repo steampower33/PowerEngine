@@ -64,7 +64,61 @@ void Context::CreateInstance() {
 		.ppEnabledLayerNames = requiredLayers.data(),
 		.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size()),
 		.ppEnabledExtensionNames = requiredExtensions.data() };
-	instance_ = vk::raii::Instance(context, createInfo);
+
+	if (enableValidationLayers)
+	{
+		createInfo.enabledLayerCount = static_cast<uint32_t>(validation_layers.size());
+		createInfo.ppEnabledLayerNames = validation_layers.data();
+	}
+
+	// --- Validation features (sync validation, best practices, etc.) ---
+	vk::ValidationFeaturesEXT vfe{};
+	std::vector<vk::ValidationFeatureEnableEXT> enables;
+
+	if (enableValidationLayers)
+	{
+		enables = {
+			vk::ValidationFeatureEnableEXT::eSynchronizationValidation,
+			vk::ValidationFeatureEnableEXT::eBestPractices,
+			// vk::ValidationFeatureEnableEXT::eGpuAssisted,                  // optional (slow)
+			// vk::ValidationFeatureEnableEXT::eGpuAssistedReserveBindingSlot // optional (descriptor indexing helping)
+		};
+		vfe.setEnabledValidationFeatures(enables);
+	}
+
+	// Optional: capture validation messages during vkCreateInstance as well
+	vk::DebugUtilsMessengerCreateInfoEXT dbgCreateInfo{};
+	if (enableValidationLayers)
+	{
+		dbgCreateInfo = vk::DebugUtilsMessengerCreateInfoEXT{
+			.messageSeverity =
+				vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
+				vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+				vk::DebugUtilsMessageSeverityFlagBitsEXT::eError,
+			.messageType =
+				vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
+				vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
+				vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation,
+			.pfnUserCallback = DebugCallback
+		};
+	}
+
+	// Chain: InstanceCreateInfo -> ValidationFeatures -> DebugCreateInfo
+	vk::StructureChain<
+		vk::InstanceCreateInfo,
+		vk::ValidationFeaturesEXT,
+		vk::DebugUtilsMessengerCreateInfoEXT
+	> chain{ createInfo, vfe, dbgCreateInfo };
+
+	if (!enableValidationLayers)
+	{
+		// If validation is off, don't rely on the chain extras
+		instance_ = vk::raii::Instance(context, createInfo);
+	}
+	else
+	{
+		instance_ = vk::raii::Instance(context, chain.get<vk::InstanceCreateInfo>());
+	}
 }
 
 std::vector<const char*> Context::GetRequiredExtensions() {

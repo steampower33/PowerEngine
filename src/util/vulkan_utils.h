@@ -446,6 +446,19 @@ namespace vku
 		);
 	}
 
+	inline void ssboVertRtoCompW(
+		const vk::raii::CommandBuffer& cmd,
+		const vk::Buffer& buffer)
+	{
+		BufferBarrier2(
+			cmd, buffer, 0, VK_WHOLE_SIZE,
+			vk::PipelineStageFlagBits2::eVertexShader | vk::PipelineStageFlagBits2::eFragmentShader,
+			vk::AccessFlagBits2::eShaderStorageRead,
+			vk::PipelineStageFlagBits2::eComputeShader,
+			vk::AccessFlagBits2::eShaderStorageWrite
+		);
+	}
+
 	inline void Barrier2(
 		const vk::raii::CommandBuffer& cmd,
 		vk::PipelineStageFlags2 srcStage,
@@ -468,31 +481,37 @@ namespace vku
 	}
 
 	template <typename T>
-	inline void CopyStagingToSSBO(const vk::raii::CommandBuffer& cmd, VkDeviceSize size, void* map, std::vector<T>& data, vk::raii::Buffer& staging, vk::raii::Buffer& ssbo, vk::PipelineStageFlagBits2 srcStageMask, vk::AccessFlagBits2 srcAccessMask, vk::PipelineStageFlagBits2 dstStageMask, vk::AccessFlagBits2 dstAccessMask)
+	inline void CopyStagingToSSBO(
+		const vk::raii::CommandBuffer& cmd,
+		VkDeviceSize size,
+		void* mapped,
+		const std::vector<T>& data,
+		const vk::raii::Buffer& staging,
+		const vk::raii::Buffer& ssbo,
+		vk::PipelineStageFlags2 dstStageMask,
+		vk::AccessFlags2 dstAccessMask)
 	{
-		// 1) staging memcpy
-		std::memcpy(map, data.data(), (size_t)size);
-		
-		// 2) copy staging -> device
+		std::memcpy(mapped, data.data(), (size_t)size);
+
 		vk::BufferCopy region{ 0, 0, size };
 		cmd.copyBuffer(*staging, *ssbo, { region });
 
-		// 3) barrier: TRANSFER_WRITE -> VERTEX/SSBO read
 		vk::BufferMemoryBarrier2 b{
-			.srcStageMask = srcStageMask,
-			.srcAccessMask = srcAccessMask,
+			.srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
+			.srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
 			.dstStageMask = dstStageMask,
 			.dstAccessMask = dstAccessMask,
 			.buffer = *ssbo,
 			.offset = 0,
-			.size = size
+			.size = size,
 		};
+
 		vk::DependencyInfo dep{
 			.bufferMemoryBarrierCount = 1,
-			.pBufferMemoryBarriers = &b
+			.pBufferMemoryBarriers = &b,
 		};
-		cmd.pipelineBarrier2(dep);
 
+		cmd.pipelineBarrier2(dep);
 	}
 
 	struct TetMesh

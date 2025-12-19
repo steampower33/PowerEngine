@@ -30,6 +30,7 @@ SimulationPassGPU::SimulationPassGPU(Context& context, Swapchain& swapchain, Par
 	CreateColiiders();
 	CreateSSBOBuffers();
 	CreateDescriptorSets();
+	CreateComputePipelineLayouts();
 	CreateComputePipelines();
 	CreateVrdxSorter();
 }
@@ -101,6 +102,9 @@ void SimulationPassGPU::UpdateComputeUBO(uint32_t currentFrame, ModelManager& mo
 void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene)
 {
 	auto& cmd = cmds_[currentFrame];
+	auto& pmSSBO = particle_manager_.ssbos_;
+	auto& dSSBO = datas_.ssbos_;
+	auto& pm = particle_manager_;
 
 	cmd.reset();
 	cmd.begin({});
@@ -126,12 +130,7 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 		{ simparamOffset }
 	);
 
-	auto& pmSSBO = particle_manager_.ssbos_;
-	auto& dSSBO = datas_.ssbos_;
-
 	auto ceil_div = [](uint32_t n, uint32_t d) { return (n + d - 1) / d; };
-
-	auto& pm = particle_manager_;
 
 	uint32_t groupsTotal = ceil_div(total_particles_, 256);
 
@@ -140,11 +139,12 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 		// Integrate
 		TS(timestamp_steps_);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.integrate);
-		cmd.pushConstants<PushConstant::MouseInteract>(
+		cmd.pushConstants<PushConstant>(
 			*pipeline_layouts_.common,
 			vk::ShaderStageFlagBits::eCompute,
-			sizeof(PushConstant::Solve),
-			push_constants_.mouse_interact);
+			0,
+			push_constants_);
+
 		cmd.dispatch(groupsTotal, 1, 1);
 		TS(timestamp_steps_);
 		vku::ssboCompWtoCompRW(cmd, pm.ssbos_.pred_position);
@@ -210,15 +210,33 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 
 			if (solver_config_.self_collision)
 			{
+
 				uint32_t fillValue = 0xFFFFFFFF;
 				uint32_t offset = 0;
-				uint64_t size = VK_WHOLE_SIZE; // 전체 채우기
+				uint64_t size = VK_WHOLE_SIZE;
+
+				vku::BufferBarrier2(cmd, pmSSBO.start, offset, particle_manager_.ssbo_size_.start,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+					vk::PipelineStageFlagBits2::eClear,
+					vk::AccessFlagBits2::eTransferWrite);
+				vku::BufferBarrier2(cmd, pmSSBO.end, offset, particle_manager_.ssbo_size_.end,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+					vk::PipelineStageFlagBits2::eClear,
+					vk::AccessFlagBits2::eTransferWrite);
 
 				cmd.fillBuffer(pmSSBO.start, offset, size, fillValue);
 				cmd.fillBuffer(pmSSBO.end, offset, size, fillValue);
 
-				vku::Barrier2(cmd,
-					vk::PipelineStageFlagBits2::eTransfer,
+				vku::BufferBarrier2(cmd, pmSSBO.start, offset, particle_manager_.ssbo_size_.start,
+					vk::PipelineStageFlagBits2::eClear,
+					vk::AccessFlagBits2::eTransferWrite,
+					vk::PipelineStageFlagBits2::eComputeShader,
+					vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+
+				vku::BufferBarrier2(cmd, pmSSBO.end, offset, particle_manager_.ssbo_size_.end,
+					vk::PipelineStageFlagBits2::eClear,
 					vk::AccessFlagBits2::eTransferWrite,
 					vk::PipelineStageFlagBits2::eComputeShader,
 					vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
@@ -282,11 +300,11 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 					push_constants_.solve.compliance = datas_.compliance.stretch;
 					push_constants_.solve.beta = datas_.beta.stretch;
 
-					cmd.pushConstants<PushConstant::Solve>(
+					cmd.pushConstants<PushConstant>(
 						*pipeline_layouts_.common,
 						vk::ShaderStageFlagBits::eCompute,
 						0,
-						push_constants_.solve);
+						push_constants_);
 
 					uint32_t groups = (count + 256 - 1) / 256;
 					cmd.dispatch(groups, 1, 1);
@@ -302,11 +320,11 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_shear);
 
 				push_constants_.solve.compliance = datas_.compliance.shear;
-				cmd.pushConstants<PushConstant::Solve>(
+				cmd.pushConstants<PushConstant>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute,
 					0,
-					push_constants_.solve);
+					push_constants_);
 
 				uint32_t groupsShear = ceil_div(datas_.num_shears, 256);
 				cmd.dispatch(groupsShear, 1, 1);
@@ -323,11 +341,11 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 				push_constants_.solve.base = base;
 				push_constants_.solve.count = count;
 				push_constants_.solve.compliance = datas_.compliance.bend;
-				cmd.pushConstants<PushConstant::Solve>(
+				cmd.pushConstants<PushConstant>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute,
 					0,
-					push_constants_.solve);
+					push_constants_);
 
 				uint32_t group = (count + 256 - 1) / 256;
 				cmd.dispatch(group, 1, 1);
@@ -344,11 +362,11 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 				push_constants_.solve.base = base;
 				push_constants_.solve.count = count;
 				push_constants_.solve.compliance = datas_.compliance.area;
-				cmd.pushConstants<PushConstant::Solve>(
+				cmd.pushConstants<PushConstant>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute,
 					0,
-					push_constants_.solve);
+					push_constants_);
 
 				uint32_t group = (count + 256 - 1) / 256;
 				cmd.dispatch(group, 1, 1);
@@ -368,12 +386,11 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 				push_constants_.solve.base = base;
 				push_constants_.solve.count = count;
 				push_constants_.solve.compliance = datas_.compliance.softbody_stretch;
-
-				cmd.pushConstants<PushConstant::Solve>(
+				cmd.pushConstants<PushConstant>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute,
 					0,
-					push_constants_.solve);
+					push_constants_);
 
 				uint32_t groupsSoftbodyStretch = ceil_div(count, 256);
 				cmd.dispatch(groupsSoftbodyStretch, 1, 1);
@@ -387,12 +404,11 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_softbody_volume);
 
 				push_constants_.solve.compliance = datas_.compliance.softbody_volume;
-
-				cmd.pushConstants<PushConstant::Solve>(
+				cmd.pushConstants<PushConstant>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute,
 					0,
-					push_constants_.solve);
+					push_constants_);
 
 				uint32_t groupsSoftbodyVolume = ceil_div(datas_.num_volumes, 256);
 				cmd.dispatch(groupsSoftbodyVolume, 1, 1);
@@ -405,11 +421,11 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_self_collision);
 				push_constants_.solve.compliance = datas_.compliance.self_collision;
-				cmd.pushConstants<PushConstant::Solve>(
+				cmd.pushConstants<PushConstant>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute,
 					0,
-					push_constants_.solve);
+					push_constants_);
 				cmd.dispatch(groupsTotal, 1, 1);
 			}
 			TS(timestamp_steps_);
@@ -432,11 +448,11 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.collide_sdf);
 
 		push_constants_.solve.compliance = datas_.compliance.collide;
-		cmd.pushConstants<PushConstant::Solve>(
+		cmd.pushConstants<PushConstant>(
 			*pipeline_layouts_.common,
 			vk::ShaderStageFlagBits::eCompute,
 			0,
-			push_constants_.solve);
+			push_constants_);
 
 		cmd.dispatch(groupsTotal, 1, 1);
 		TS(timestamp_steps_);
@@ -478,41 +494,23 @@ void SimulationPassGPU::CopySimDatas(const vk::raii::CommandBuffer& cmd)
 {
 	auto& pm = particle_manager_;
 
-	vku::CopyStagingToSSBO(cmd, pm.ssbo_size_.position, pm.staging_mapped_.position, pm.positions_, pm.staging_.position, pm.ssbos_.position,
-		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
-		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+	vku::CopyStagingToSSBO(cmd, pm.ssbo_size_.position, pm.staging_mapped_.position, pm.positions_, pm.staging_.position, pm.ssbos_.position, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
 
-	vku::CopyStagingToSSBO(cmd, pm.ssbo_size_.pred_position, pm.staging_mapped_.pred_position, pm.pred_positions_, pm.staging_.pred_position, pm.ssbos_.pred_position,
-		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
-		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+	vku::CopyStagingToSSBO(cmd, pm.ssbo_size_.pred_position, pm.staging_mapped_.pred_position, pm.pred_positions_, pm.staging_.pred_position, pm.ssbos_.pred_position, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
 
-	vku::CopyStagingToSSBO(cmd, pm.ssbo_size_.velocity, pm.staging_mapped_.velocity, pm.velocities_, pm.staging_.velocity, pm.ssbos_.velocity,
-		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
-		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+	vku::CopyStagingToSSBO(cmd, pm.ssbo_size_.velocity, pm.staging_mapped_.velocity, pm.velocities_, pm.staging_.velocity, pm.ssbos_.velocity, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
 
-	vku::CopyStagingToSSBO(cmd, pm.ssbo_size_.inverse_mass, pm.staging_mapped_.inverse_mass, pm.inverse_masses_, pm.staging_.inverse_mass, pm.ssbos_.inverse_mass,
-		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
-		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+	vku::CopyStagingToSSBO(cmd, pm.ssbo_size_.inverse_mass, pm.staging_mapped_.inverse_mass, pm.inverse_masses_, pm.staging_.inverse_mass, pm.ssbos_.inverse_mass, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
 
-	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.edge, datas_.staging_mapped_.edge, datas_.edges, datas_.staging_.edge, datas_.ssbos_.edge,
-		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
-		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.edge, datas_.staging_mapped_.edge, datas_.edges, datas_.staging_.edge, datas_.ssbos_.edge, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
 
-	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.shear, datas_.staging_mapped_.shear, datas_.shears, datas_.staging_.shear, datas_.ssbos_.shear,
-		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
-		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.shear, datas_.staging_mapped_.shear, datas_.shears, datas_.staging_.shear, datas_.ssbos_.shear, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
 
-	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.bend, datas_.staging_mapped_.bend, datas_.bends, datas_.staging_.bend, datas_.ssbos_.bend,
-		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
-		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.bend, datas_.staging_mapped_.bend, datas_.bends, datas_.staging_.bend, datas_.ssbos_.bend, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
 
-	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.area, datas_.staging_mapped_.area, datas_.areas, datas_.staging_.area, datas_.ssbos_.area,
-		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
-		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.area, datas_.staging_mapped_.area, datas_.areas, datas_.staging_.area, datas_.ssbos_.area, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
 
-	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.volume, datas_.staging_mapped_.volume, pm.volume_constraints, datas_.staging_.volume, datas_.ssbos_.volume,
-		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
-		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.volume, datas_.staging_mapped_.volume, pm.volume_constraints, datas_.staging_.volume, datas_.ssbos_.volume, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
 }
 
 void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene)
@@ -642,7 +640,6 @@ void SimulationPassGPU::CopyColliders(const vk::raii::CommandBuffer& cmd)
 	}
 
 	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.collider, datas_.staging_mapped_.collider, datas_.colliders, datas_.staging_.collider, datas_.ssbos_.collider,
-		vk::PipelineStageFlagBits2::eTransfer, vk::AccessFlagBits2::eTransferWrite,
 		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
 }
 
@@ -1297,7 +1294,7 @@ void SimulationPassGPU::CreateDescriptorSets()
 	}
 }
 
-void SimulationPassGPU::CreateComputePipelines()
+void SimulationPassGPU::CreateComputePipelineLayouts()
 {
 	// common pipeline layout
 	{
@@ -1320,6 +1317,10 @@ void SimulationPassGPU::CreateComputePipelines()
 		};
 		pipeline_layouts_.common = vk::raii::PipelineLayout(context_.device_, pipelineLayoutInfo);
 	}
+}
+
+void SimulationPassGPU::CreateComputePipelines()
+{
 
 	// clear_lambdas
 	{

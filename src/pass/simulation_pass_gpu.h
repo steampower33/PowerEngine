@@ -173,6 +173,7 @@ private:
 	void CreateColiiders();
 	void CreateSSBOBuffers();
 	void CreateDescriptorSets();
+	void CreateComputePipelineLayouts();
 	void CreateComputePipelines();
 	void CreateVrdxSorter();
 };

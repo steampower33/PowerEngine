@@ -104,6 +104,16 @@ GUI::GUI(GLFWwindow* glfwWindow, Context& context, Swapchain& swapchain, Texture
 			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		) });
 	}
+
+
+	VkImageView view = static_cast<VkImageView>(*pass_manager_.graphics_pass_->shadow_image_view_);
+	VkSampler  sampler = static_cast<VkSampler>(*pass_manager_.graphics_pass_->shadow_sampler);
+
+	imgui_id_.push_back(std::pair{ "Shadow", ImGui_ImplVulkan_AddTexture(
+		sampler,
+		view,
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+	) });
 }
 
 GUI::~GUI()
@@ -265,6 +275,13 @@ void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera, bool& pause
 		SetTimeingGUI(row);
 	}
 	ImGui::End();
+
+	//if (ImGui::Begin("ShadowBuffer", nullptr))
+	//{
+	//	auto& id = imgui_id_[imgui_id_.size() - 1];
+	//	ImGui::ImageButton(id.first.c_str(), id.second, ImVec2(128, 128));
+	//}
+	//ImGui::End();
 
 	//ImGui::ShowDemoWindow();
 
@@ -571,7 +588,7 @@ void GUI::SetModelsGUI(RowFn&& row)
 					ImGui::Unindent();
 				}
 
-				auto checkEnable = [&](const char* label, uint32_t& enable) {
+				auto CheckEnable = [&](const char* label, uint32_t& enable) {
 					bool check = enable; ImGui::Checkbox(label, &check); enable = check;
 					};
 
@@ -583,25 +600,25 @@ void GUI::SetModelsGUI(RowFn&& row)
 						ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 					{
 						row3("Albedo",
-							[&] { checkEnable("##Albedo", softbody.ubo_data.albedo_enable); },
+							[&] { CheckEnable("##Albedo", softbody.ubo_data.albedo_enable); },
 							[&] { SelectPopUp("Select##Albedo", softbody.ubo_data.albedo_idx); });
 						row3("Normal",
-							[&] { checkEnable("##Normal", softbody.ubo_data.normal_enable); },
+							[&] { CheckEnable("##Normal", softbody.ubo_data.normal_enable); },
 							[&] { SelectPopUp("Select##Normal", softbody.ubo_data.normal_idx); });
 						row3("ARM",
-							[&] { checkEnable("##ARM", softbody.ubo_data.arm_enable); },
+							[&] { CheckEnable("##ARM", softbody.ubo_data.arm_enable); },
 							[&] { SelectPopUp("Select##ARM", softbody.ubo_data.arm_idx); });
 						row3("AO",
-							[&] { checkEnable("##AO", softbody.ubo_data.ao_enable); },
+							[&] { CheckEnable("##AO", softbody.ubo_data.ao_enable); },
 							[&] { SelectPopUp("Select##AO", softbody.ubo_data.ao_idx); });
 						row3("Roughtness",
-							[&] { checkEnable("##Roughtness", softbody.ubo_data.roughness_enable); },
+							[&] { CheckEnable("##Roughtness", softbody.ubo_data.roughness_enable); },
 							[&] { SelectPopUp("Select##Roughtness", softbody.ubo_data.roughness_idx); });
 						row3("Meltallic",
-							[&] { checkEnable("##Meltallic", softbody.ubo_data.metallic_enable); },
+							[&] { CheckEnable("##Meltallic", softbody.ubo_data.metallic_enable); },
 							[&] { SelectPopUp("Select##Meltallic", softbody.ubo_data.metallic_idx); });
 						row3("Height",
-							[&] { checkEnable("##Height", softbody.ubo_data.height_enable); },
+							[&] { CheckEnable("##Height", softbody.ubo_data.height_enable); },
 							[&] { SelectPopUp("Select##Height", softbody.ubo_data.height_idx); });
 						ImGui::EndTable();
 					}
@@ -855,6 +872,10 @@ void GUI::SetRenderingGUI(RowFn&& row)
 		auto& gp = *pass_manager_.graphics_pass_;
 		auto& tm = texture_manager_;
 
+		auto CheckEnable = [&](const char* label, uint32_t& enable) {
+			bool check = enable; ImGui::Checkbox(label, &check); enable = check;
+			};
+
 		ImGui::SeparatorText("PolygonMode");
 		ImGui::Indent();
 		ImGui::BeginChild("PolygonMode", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
@@ -873,12 +894,27 @@ void GUI::SetRenderingGUI(RowFn&& row)
 		if (ImGui::BeginTable("SpotLight", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
-			row("Enable", [&] { bool enable = gp.ubo_datas_.light.light_enable; ImGui::Checkbox("##Enable", &enable); gp.ubo_datas_.light.light_enable = enable; });
+			row("Enable", [&] { CheckEnable("##Enable", gp.ubo_datas_.light.light_enable); });
 			row("Pos", [&] { ImGui::DragFloat3("##Pos", &gp.ubo_datas_.light.position[0], 0.1f); });
 			row("Dir", [&] { ImGui::DragFloat3("##Dir", &gp.ubo_datas_.light.direction[0], 0.1f); });
 			row("Inner", [&] { ImGui::DragFloat("##Inner", &gp.ubo_datas_.light.inner, 0.1f); });
 			row("Outer", [&] { ImGui::DragFloat("##Outer", &gp.ubo_datas_.light.outer, 0.1f); });
 			row("Intensity", [&] { ImGui::DragFloat("##Intensity", &gp.ubo_datas_.light.intensity, 0.1f, 0.0f, 10000.0f); });
+
+			ImGui::EndTable();
+		}
+		ImGui::EndChild();
+		ImGui::Unindent();
+
+		ImGui::SeparatorText("Shadow");
+		ImGui::Indent();
+		ImGui::BeginChild("Shadow", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+
+		if (ImGui::BeginTable("Shadow", 2,
+			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+		{
+			row("Enable", [&] { CheckEnable("##Enable", gp.ubo_datas_.light.shadow_enable); });
+			row("Strength", [&] { ImGui::DragFloat("##Strength", &gp.ubo_datas_.light.shadow_strength, 0.1f, 0.0f, 1.0f); });
 
 			ImGui::EndTable();
 		}
@@ -891,7 +927,7 @@ void GUI::SetRenderingGUI(RowFn&& row)
 		if (ImGui::BeginTable("PBR", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
-			row("Enable", [&] { bool enable = gp.ubo_datas_.light.pbr_enable; ImGui::Checkbox("##Enable", &enable); gp.ubo_datas_.light.pbr_enable = enable; });
+			row("Enable", [&] { CheckEnable("##Enable", gp.ubo_datas_.light.pbr_enable); });
 			row("Exposure", [&] { ImGui::DragFloat("##Exposure", &gp.ubo_datas_.light.exposure, 0.1f, 0.0f, 2.0f); });
 			ImGui::EndTable();
 		}

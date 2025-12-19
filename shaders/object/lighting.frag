@@ -4,19 +4,28 @@
 
 layout(set = 0, binding = 0) uniform LightUBO {
     mat4 inv_view_proj;
+
     vec4 camera_pos;
     vec3 position;
     float intensity;
+
     vec3 direction;
     float inner;
+
     float outer;
     uint light_enable;
     uint pbr_enable;
     float exposure;
+
     int ggx_brdf_idx;
     int charlie_brdf_idx;
     int sheen_e_brdf_idx;
     int p0;
+
+    mat4 light_view_proj;
+    vec2 shadow_map_inv_size;
+    float shadow_strength;
+    uint shadow_enable;
 } light;
 
 layout(set = 0, binding = 1) uniform sampler2D albedo_metal;
@@ -24,6 +33,7 @@ layout(set = 0, binding = 2) uniform sampler2D normal_rough;
 layout(set = 0, binding = 3) uniform sampler2D height_ao;
 layout(set = 0, binding = 4) uniform sampler2D cozz_fuzz;
 layout(set = 0, binding = 5) uniform sampler2D depth_tex;
+layout(set = 0, binding = 6) uniform sampler2DShadow shadow_map;
 
 layout(set = 1, binding = 0) uniform SkyboxUBO {
     int env_idx;
@@ -122,6 +132,34 @@ float F_Sheen(float LdotH)
     float x = 1.0 - LdotH;
     float x2 = x * x;
     return x2 * x2 * x; // (1 - L¡¤H)^5
+}
+
+float apply_shadow_strength(float s, float shadowStrength)
+{
+    return mix(1.0, s, shadowStrength);
+}
+
+float shadow_PCF(vec3 world_pos, vec3 world_normal)
+{
+    vec4 lp = light.light_view_proj * vec4(world_pos, 1.0);
+    vec3 ndc = lp.xyz / lp.w;
+
+    vec2 uv = ndc.xy * 0.5 + 0.5;
+    float z = ndc.z; // ZO assumed
+
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 1.0;
+
+    float bias = 0.001;
+    z -= bias;
+
+    vec2 texel = light.shadow_map_inv_size;
+
+    float sum = 0.0;
+    for (int y=-2; y<=2; ++y)
+    for (int x=-2; x<=2; ++x)
+        sum += texture(shadow_map, vec3(uv + vec2(x,y)*texel, z));
+
+    return sum / 25.0;
 }
 
 void main()
@@ -348,7 +386,14 @@ void main()
         }
         
         vec3 direct = direct_base + direct_coat + direct_fuzz;
-        color += direct;
+
+        float s = 1.0;
+        if (light.shadow_enable == 1u)
+        {
+            s = shadow_PCF(world_pos, N);
+            s = apply_shadow_strength(s, light.shadow_strength);
+        }
+        color += direct * s;
     }
 
     out_color = vec4(tonemap_aces(color), 1.0);

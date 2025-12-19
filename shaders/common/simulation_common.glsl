@@ -24,7 +24,6 @@ layout(push_constant) uniform PushConstant {
     MouseInteract mouse;
 } pc;
 
-
 layout(std140, set = 0, binding = 0) uniform SimParams {
     vec4 gravity;
 

@@ -9,8 +9,8 @@ namespace ubo_data {
 	static_assert(sizeof(Global) % 16 == 0, "std140 must be 16-byte aligned.");
 
 	struct Light {
-		glm::mat4 invViewProj{};
-		glm::vec4 cameraPos{};
+		glm::mat4 inv_view_proj{};
+		glm::vec4 camera_pos{};
 
 		glm::vec3 position{ 0.0f, 10.0f, 5.0f };
 		float intensity = 200.0f;
@@ -27,6 +27,11 @@ namespace ubo_data {
 		int charlie_brdf_idx = 0;
 		int sheen_e_brdf_idx = 0;
 		int p0;
+
+		glm::mat4 light_view_proj;
+		glm::vec2 shadow_map_inv_size;
+		float shadow_strength = 0.5f;
+		uint32_t shadow_enable = 1;
 	};
 	static_assert(sizeof(Light) % 16 == 0, "std140 must be 16-byte aligned.");
 
@@ -39,7 +44,7 @@ namespace ubo_data {
 	static_assert(sizeof(SkyBox) % 16 == 0, "std140 must be 16-byte aligned.");
 
 	struct Model {
-		glm::mat4 world;
+		glm::mat4 world{};
 		glm::vec4 albedo{ 1.0f, 1.0f, 1.0f, 0.0f };
 
 		int albedo_idx = -1;
@@ -82,4 +87,9 @@ namespace ubo_data {
 		float p2;
 	};
 	static_assert(sizeof(Model) % 16 == 0, "std140 must be 16-byte aligned.");
+
+	struct Shadow {
+		glm::mat4 light_view_proj;
+	};
+	static_assert(sizeof(Shadow) % 16 == 0, "std140 must be 16-byte aligned.");
 }
