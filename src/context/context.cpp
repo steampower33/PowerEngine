@@ -106,7 +106,7 @@ void Context::CreateInstance() {
 				vk::ValidationFeatureEnableEXT::eSynchronizationValidation,
 				vk::ValidationFeatureEnableEXT::eBestPractices,
 				vk::ValidationFeatureEnableEXT::eGpuAssisted,
-				//vk::ValidationFeatureEnableEXT::eGpuAssistedReserveBindingSlot // optional (descriptor indexing helping
+				vk::ValidationFeatureEnableEXT::eGpuAssistedReserveBindingSlot
 			};
 		}
 	}

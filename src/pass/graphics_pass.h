@@ -137,7 +137,7 @@ private:
 		vk::raii::DescriptorSetLayout cloth{ nullptr };
 		vk::raii::DescriptorSetLayout softbody{ nullptr };
 		vk::raii::DescriptorSetLayout skinned_model{ nullptr };
-		vk::raii::DescriptorSetLayout shadow{ nullptr };
+		vk::raii::DescriptorSetLayout shadow_particle{ nullptr };
 	} set_layouts_;
 
 	struct Set {
@@ -148,7 +148,7 @@ private:
 		vk::raii::DescriptorSet cloth{ nullptr };
 		vk::raii::DescriptorSet softbody{ nullptr };
 		vk::raii::DescriptorSet skinned_model{ nullptr };
-		vk::raii::DescriptorSet shadow{ nullptr };
+		vk::raii::DescriptorSet shadow_particle{ nullptr };
 	} sets_;
 
 	struct PipelineLayout {
@@ -159,7 +159,8 @@ private:
 		vk::raii::PipelineLayout softbody{ nullptr };
 		vk::raii::PipelineLayout skinned_model{ nullptr };
 		vk::raii::PipelineLayout debug_capsule{ nullptr };
-		vk::raii::PipelineLayout shadow{ nullptr };
+		vk::raii::PipelineLayout shadow_model{ nullptr };
+		vk::raii::PipelineLayout shadow_particle{ nullptr };
 	} pipeline_layouts_;
 
 	struct Pipeline {
@@ -183,7 +184,8 @@ private:
 
 		vk::raii::Pipeline debug_capsule{ nullptr };
 
-		vk::raii::Pipeline shadow{ nullptr };
+		vk::raii::Pipeline shadow_model{ nullptr };
+		vk::raii::Pipeline shadow_particle{ nullptr };
 	} pipelines_;
 
 	struct GeometryBuffer {

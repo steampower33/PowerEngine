@@ -45,7 +45,7 @@ public:
 		NORMAL,
 		FOCUS
 	};
-	DebugMode debug_mode_ = DebugMode::FOCUS;
+	DebugMode debug_mode_ = DebugMode::NORMAL;
 
 	static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback_ErrorOnly(
 		vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
