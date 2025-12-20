@@ -959,25 +959,57 @@ void GUI::SetRenderingGUI(RowFn&& row)
 template<typename RowFn>
 void GUI::SetStatGUI(RowFn&& row)
 {
+
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 	ImGui::Text("Avr %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
 	auto& pm = *pass_manager_.particle_manager_;
 	auto& d = pass_manager_.sim_pass_gpu_->datas_;
+	auto& gpuSim = pass_manager_.sim_pass_gpu_;
 
+	auto row3 = [&](const char* label, auto&& drawControl, auto&& drawExtra)
+		{
+			ImGui::TableNextRow();
+
+			ImGui::TableSetColumnIndex(0);
+			ImGui::AlignTextToFramePadding();
+			ImGui::TextUnformatted(label);
+
+			ImGui::TableSetColumnIndex(1);
+			ImGui::SetNextItemWidth(-FLT_MIN);
+			drawControl();
+
+			ImGui::TableSetColumnIndex(2);
+			ImGui::SetNextItemWidth(-FLT_MIN);
+			drawExtra();
+		};
+
+	float columnSize = swapchain_.swapchain_extent_.width * 0.25f * 0.25f;
 	if (ImGui::CollapsingHeader("Stat"))
 	{
-
 		ImGui::SeparatorText("Cloth");
 		ImGui::Indent();
 		ImGui::BeginChild("Cloth", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
-		if (ImGui::BeginTable("Stat", 2, ImGuiTableFlags_BordersInnerV))
+		if (ImGui::BeginTable("Stat", 3, ImGuiTableFlags_BordersInnerV))
 		{
-			row("NumParticles", [&] { ImGui::Text("%u", pm.num_cloth_particles_); });
-			row("NumEdges", [&] { ImGui::Text("%u", d.num_cloth_edges); });
-			row("NumShears", [&] { ImGui::Text("%u", d.num_shears); });
-			row("NumBends", [&] { ImGui::Text("%u", d.num_bends); });
-			row("NumAreas", [&] { ImGui::Text("%u", d.num_areas); });
+			ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, columnSize);
+			ImGui::TableSetupColumn("Count", ImGuiTableColumnFlags_WidthFixed, columnSize);
+			ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, columnSize);
+			ImGui::TableHeadersRow();
+
+			row("NumParticles",
+				[&] { ImGui::Text("%u", pm.num_cloth_particles_); });
+			row3("NumEdges", 
+				[&] { ImGui::Text("%u", d.num_cloth_edges); },
+				[&] { std::string str = gpuSim->solver_config_.stretch ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
+			row3("NumShears", 
+				[&] { ImGui::Text("%u", d.num_shears); },
+				[&] { std::string str = gpuSim->solver_config_.shear ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
+			row3("NumBends", 
+				[&] { ImGui::Text("%u", d.num_bends); },
+				[&] { std::string str = gpuSim->solver_config_.bend ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
+			row3("NumAreas", [&] { ImGui::Text("%u", d.num_areas); },
+				[&] { std::string str = gpuSim->solver_config_.area ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
 
 			ImGui::EndTable();
 		}
@@ -988,11 +1020,18 @@ void GUI::SetStatGUI(RowFn&& row)
 		ImGui::SeparatorText("Softbody");
 		ImGui::Indent();
 		ImGui::BeginChild("Softbody", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
-		if (ImGui::BeginTable("Stat", 2, ImGuiTableFlags_BordersInnerV))
+		if (ImGui::BeginTable("Stat", 3, ImGuiTableFlags_BordersInnerV))
 		{
+			ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, columnSize);
+			ImGui::TableSetupColumn("Count", ImGuiTableColumnFlags_WidthFixed, columnSize);
+			ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, columnSize);
+			ImGui::TableHeadersRow();
+
 			row("NumParticles", [&] { ImGui::Text("%u", pm.num_softbody_particles_); });
-			row("NumEdges", [&] { ImGui::Text("%u", d.num_softbody_edges); });
-			row("NumVolumes", [&] { ImGui::Text("%u", d.num_volumes); });
+			row3("NumEdges", [&] { ImGui::Text("%u", d.num_softbody_edges); },
+				[&] { std::string str = gpuSim->solver_config_.softbody_stretch ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
+			row3("NumVolumes", [&] { ImGui::Text("%u", d.num_volumes); },
+				[&] { std::string str = gpuSim->solver_config_.softbody_volume ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
 
 			ImGui::EndTable();
 		}
@@ -1005,6 +1044,9 @@ void GUI::SetStatGUI(RowFn&& row)
 		ImGui::BeginChild("Total", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
 		if (ImGui::BeginTable("Stat", 2, ImGuiTableFlags_BordersInnerV))
 		{
+			ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, columnSize);
+			ImGui::TableSetupColumn("Count", ImGuiTableColumnFlags_WidthFixed, columnSize);
+			ImGui::TableHeadersRow();
 			row("NumParticles", [&] { ImGui::Text("%u", pm.total_particles_); });
 			row("NumEdges", [&] { ImGui::Text("%u", d.num_edges); });
 			row("NumShears", [&] { ImGui::Text("%u", d.num_shears); });
