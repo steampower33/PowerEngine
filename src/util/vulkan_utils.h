@@ -42,6 +42,20 @@ namespace vku
 		POINT
 	};
 
+	inline void SetDebugName(
+		vk::raii::Device& device,
+		vk::ObjectType type,
+		uint64_t handle,
+		const char* name)
+	{
+		vk::DebugUtilsObjectNameInfoEXT info{
+			.objectType = type,
+			.objectHandle = handle,
+			.pObjectName = name
+		};
+		device.setDebugUtilsObjectNameEXT(info);
+	}
+
 	inline vk::SampleCountFlagBits GetMaxUsableSampleCount(vk::PhysicalDeviceProperties physicalDeviceProperties) {
 		vk::SampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts & physicalDeviceProperties.limits.framebufferDepthSampleCounts;
 		if (counts & vk::SampleCountFlagBits::e64) { return vk::SampleCountFlagBits::e64; }
@@ -319,6 +333,7 @@ namespace vku
 
 	template <typename T>
 	inline void CreateSSBO(
+		std::string name,
 		vk::raii::PhysicalDevice& physicalDevice,
 		vk::raii::Device& device,
 		vk::raii::Queue& queue,
@@ -363,10 +378,21 @@ namespace vku
 		ssbo = std::move(shaderStorageBufferTemp);
 		ssboMem = std::move(shaderStorageBufferTempMemory);
 
+		SetDebugName(device, vk::ObjectType::eBuffer,
+			(uint64_t)(VkBuffer)(*ssbo),
+			name.c_str());
+
 		if (optStagingBuf && optStagingMem) {
+			name += "Staging";
+			SetDebugName(device, vk::ObjectType::eBuffer,
+				(uint64_t)(VkBuffer)(*stagingBuffer),
+				name.c_str());
+
 			*optStagingBuf = std::move(stagingBuffer);
 			*optStagingMem = std::move(stagingBufferMemory);
+
 		}
+
 	}
 
 	inline void BufferBarrier2(
@@ -488,29 +514,56 @@ namespace vku
 		const std::vector<T>& data,
 		const vk::raii::Buffer& staging,
 		const vk::raii::Buffer& ssbo,
-		vk::PipelineStageFlags2 dstStageMask,
-		vk::AccessFlags2 dstAccessMask)
+		// Optional: previous usage of ssbo before overwriting (set to eNone if not needed)
+		vk::PipelineStageFlags2 prevStageMask,
+		vk::AccessFlags2        prevAccessMask,
+		// Next usage of ssbo after the copy
+		vk::PipelineStageFlags2 nextStageMask,
+		vk::AccessFlags2        nextAccessMask,
+		VkDeviceSize            dstOffset = 0,
+		VkDeviceSize            srcOffset = 0)
 	{
-		std::memcpy(mapped, data.data(), (size_t)size);
+		// --- CPU write into mapped staging memory ---
+		// NOTE: If staging memory is NOT HOST_COHERENT, you must vkFlushMappedMemoryRanges here.
+		std::memcpy(mapped, data.data(), static_cast<size_t>(size));
 
-		vk::BufferCopy region{ 0, 0, size };
+		// --- Optional pre-barrier: previous shader usage -> copy overwrite ---
+		// Use eCopy (or eAllTransfer) because vkCmdCopyBuffer is categorized as COPY in sync2.
+		if (prevStageMask != vk::PipelineStageFlagBits2::eNone) {
+			vk::BufferMemoryBarrier2 pre{
+				.srcStageMask = prevStageMask,
+				.srcAccessMask = prevAccessMask,
+				.dstStageMask = vk::PipelineStageFlagBits2::eCopy,
+				.dstAccessMask = vk::AccessFlagBits2::eTransferWrite,
+				.buffer = *ssbo,
+				.offset = dstOffset,
+				.size = size
+			};
+			vk::DependencyInfo dep{
+				.bufferMemoryBarrierCount = 1,
+				.pBufferMemoryBarriers = &pre
+			};
+			cmd.pipelineBarrier2(dep);
+		}
+
+		// --- Copy: staging -> ssbo ---
+		vk::BufferCopy region{ srcOffset, dstOffset, size };
 		cmd.copyBuffer(*staging, *ssbo, { region });
 
-		vk::BufferMemoryBarrier2 b{
-			.srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
+		// --- Post-barrier: copy write -> next shader usage ---
+		vk::BufferMemoryBarrier2 post{
+			.srcStageMask = vk::PipelineStageFlagBits2::eCopy,
 			.srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
-			.dstStageMask = dstStageMask,
-			.dstAccessMask = dstAccessMask,
+			.dstStageMask = nextStageMask,
+			.dstAccessMask = nextAccessMask,
 			.buffer = *ssbo,
-			.offset = 0,
-			.size = size,
+			.offset = dstOffset,
+			.size = size
 		};
-
 		vk::DependencyInfo dep{
 			.bufferMemoryBarrierCount = 1,
-			.pBufferMemoryBarriers = &b,
+			.pBufferMemoryBarriers = &post
 		};
-
 		cmd.pipelineBarrier2(dep);
 	}
 
@@ -674,5 +727,6 @@ namespace vku
 
 		return mesh;
 	}
+
 }
 

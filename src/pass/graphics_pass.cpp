@@ -182,7 +182,10 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 	{
 		auto& pm = particle_manager_;
 		vku::CopyStagingToSSBO(cmd, sizeof(glm::vec4) * pm.clothes_[0].num_particle, pm.staging_mapped_.position, pm.positions_, pm.staging_.position, pm.ssbos_.position,
-			vk::PipelineStageFlagBits2::eVertexShader, vk::AccessFlagBits2::eShaderStorageRead);
+			vk::PipelineStageFlagBits2::eVertexShader,
+			vk::AccessFlagBits2::eShaderStorageRead,
+			vk::PipelineStageFlagBits2::eVertexShader,
+			vk::AccessFlagBits2::eShaderStorageRead);
 	}
 
 	timestamp_steps_ = 0;

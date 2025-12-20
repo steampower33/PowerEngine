@@ -141,7 +141,7 @@ void PassManager::Draw(std::unique_ptr<GUI>& gui, bool paused)
 			*image_available_[frame]
 		};
 		vk::PipelineStageFlags waitStages[] = {
-			vk::PipelineStageFlagBits::eColorAttachmentOutput
+			vk::PipelineStageFlagBits::eTopOfPipe
 		};
 		vk::Semaphore signalSems[] = {
 			*image_render_finished_[imageIndex]

@@ -35,13 +35,40 @@ public:
 
 	void WaitIdle();
 
+#ifdef NDEBUG
+	bool enableValidationLayers = false;
+#else
+	bool enableValidationLayers = true;
+#endif
+
+	enum DebugMode {
+		NORMAL,
+		FOCUS
+	};
+	DebugMode debug_mode_ = DebugMode::FOCUS;
+
+	static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback_ErrorOnly(
+		vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
+		vk::DebugUtilsMessageTypeFlagsEXT type,
+		const vk::DebugUtilsMessengerCallbackDataEXT* cb,
+		void* userData
+	);
+	static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback_Focus(
+		vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
+		vk::DebugUtilsMessageTypeFlagsEXT type,
+		const vk::DebugUtilsMessengerCallbackDataEXT* cb,
+		void* userData
+	);
+
 private:
 	void CreateInstance();
 	std::vector<const char*> GetRequiredExtensions();
-	void SetupDebugMessenger();
-	static VKAPI_ATTR vk::Bool32 VKAPI_CALL DebugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type, const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void*);
+
+
 	void CreateSurface();
 	void PickPhysicalDevice();
 	void CreateLogicalDevice();
 	void CreateCommandPool();
+
+
 };

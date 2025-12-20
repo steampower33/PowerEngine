@@ -5,7 +5,6 @@ Context::Context(GLFWwindow* glfwWindow, uint32_t width, uint32_t height)
 	: glfw_window_(glfwWindow)
 {
 	CreateInstance();
-	SetupDebugMessenger();
 	CreateSurface();
 	PickPhysicalDevice();
 	CreateLogicalDevice();
@@ -74,34 +73,45 @@ void Context::CreateInstance() {
 	// --- Validation features (sync validation, best practices, etc.) ---
 	vk::ValidationFeaturesEXT vfe{};
 	std::vector<vk::ValidationFeatureEnableEXT> enables;
+	vk::DebugUtilsMessengerCreateInfoEXT dbgCreateInfo{};
 
 	if (enableValidationLayers)
 	{
 		enables = {
-			vk::ValidationFeatureEnableEXT::eSynchronizationValidation,
-			vk::ValidationFeatureEnableEXT::eBestPractices,
-			// vk::ValidationFeatureEnableEXT::eGpuAssisted,                  // optional (slow)
-			// vk::ValidationFeatureEnableEXT::eGpuAssistedReserveBindingSlot // optional (descriptor indexing helping)
+			vk::ValidationFeatureEnableEXT::eSynchronizationValidation
 		};
-		vfe.setEnabledValidationFeatures(enables);
-	}
 
-	// Optional: capture validation messages during vkCreateInstance as well
-	vk::DebugUtilsMessengerCreateInfoEXT dbgCreateInfo{};
-	if (enableValidationLayers)
-	{
 		dbgCreateInfo = vk::DebugUtilsMessengerCreateInfoEXT{
 			.messageSeverity =
-				vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
-				vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
 				vk::DebugUtilsMessageSeverityFlagBitsEXT::eError,
 			.messageType =
 				vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
-				vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
-				vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation,
-			.pfnUserCallback = DebugCallback
+				vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance
 		};
+
+		if (debug_mode_ == DebugMode::NORMAL)
+		{
+			dbgCreateInfo.pfnUserCallback = &DebugCallback_ErrorOnly;
+		}
+		else if (debug_mode_ == DebugMode::FOCUS)
+		{
+			dbgCreateInfo.pfnUserCallback = &DebugCallback_Focus;
+			dbgCreateInfo.messageSeverity |=
+				vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
+				vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning;
+			dbgCreateInfo.messageType |=
+				vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation;
+
+			enables = {
+				vk::ValidationFeatureEnableEXT::eSynchronizationValidation,
+				vk::ValidationFeatureEnableEXT::eBestPractices,
+				vk::ValidationFeatureEnableEXT::eGpuAssisted,
+				//vk::ValidationFeatureEnableEXT::eGpuAssistedReserveBindingSlot // optional (descriptor indexing helping
+			};
+		}
 	}
+
+	vfe.setEnabledValidationFeatures(enables);
 
 	// Chain: InstanceCreateInfo -> ValidationFeatures -> DebugCreateInfo
 	vk::StructureChain<
@@ -133,25 +143,102 @@ std::vector<const char*> Context::GetRequiredExtensions() {
 	return extensions;
 }
 
-void Context::SetupDebugMessenger() {
-	if (!enableValidationLayers) return;
+VKAPI_ATTR VkBool32 VKAPI_CALL Context::DebugCallback_ErrorOnly(
+	vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
+	vk::DebugUtilsMessageTypeFlagsEXT type,
+	const vk::DebugUtilsMessengerCallbackDataEXT* cb,
+	void* userData)
+{
+	(void)type; (void)userData;
 
-	vk::DebugUtilsMessageSeverityFlagsEXT severityFlags(vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
-	vk::DebugUtilsMessageTypeFlagsEXT    messageTypeFlags(vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
-	vk::DebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfoEXT{
-		.messageSeverity = severityFlags,
-		.messageType = messageTypeFlags,
-		.pfnUserCallback = &DebugCallback
-	};
-	debug_messenger_ = instance_.createDebugUtilsMessengerEXT(debugUtilsMessengerCreateInfoEXT);
-}
-
-VKAPI_ATTR vk::Bool32 VKAPI_CALL Context::DebugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severity, vk::DebugUtilsMessageTypeFlagsEXT type, const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void*) {
-	if (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eError || severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning) {
-		std::cerr << "validation layer: type " << to_string(type) << " msg: " << pCallbackData->pMessage << std::endl;
+	if (!(severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eError)) {
+		return VK_FALSE;
 	}
 
-	return vk::False;
+	const char* msg = (cb && cb->pMessage) ? cb->pMessage : "(null)";
+	std::cerr << "[Vulkan][ERROR] " << msg << "\n";
+	return VK_FALSE;
+}
+
+static bool ContainsAny(std::string_view s, std::initializer_list<std::string_view> keys) {
+	for (auto k : keys) {
+		if (!k.empty() && s.find(k) != std::string_view::npos) return true;
+	}
+	return false;
+}
+
+VKAPI_ATTR VkBool32 VKAPI_CALL Context::DebugCallback_Focus(
+	vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
+	vk::DebugUtilsMessageTypeFlagsEXT type,
+	const vk::DebugUtilsMessengerCallbackDataEXT* cb,
+	void* userData)
+{
+	(void)type; (void)userData;
+
+	const char* cmsg = (cb && cb->pMessage) ? cb->pMessage : "(null)";
+	std::string_view msg(cmsg);
+
+	auto isError = (severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
+	auto isWarning = (severity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning);
+
+	// Errors: always print
+	// Warnings: print only if message looks like synchronization-related
+	if (isWarning && !isError) {
+		// Common sync-validation fingerprints
+		const bool looksSync =
+			ContainsAny(msg, {
+				"hazard",
+				"SYNC-",
+				"synchronization",
+				"WRITE_AFTER_READ",
+				"WRITE_AFTER_WRITE",
+				"READ_AFTER_WRITE",
+				"VkSemaphoreSubmitInfo",
+				"pipelineBarrier",
+				"vkCmdPipelineBarrier",
+				"vkCmdPipelineBarrier2",
+				"vkQueueSubmit"
+				});
+
+		if (!looksSync) {
+			return VK_FALSE; // Drop non-sync warnings to keep logs clean
+		}
+	}
+
+	// Optional: filter out noisy best-practices stuff even if it slips in
+	if (!isError) {
+		if (msg.find("should be sub-allocated") != std::string_view::npos) return VK_FALSE;
+		if (msg.find("pipeline cache") != std::string_view::npos) return VK_FALSE;
+		if (msg.find("deprecated extension") != std::string_view::npos) return VK_FALSE;
+	}
+
+	// De-duplicate messages
+	static std::unordered_map<size_t, uint32_t> seen;
+	const size_t h = std::hash<std::string_view>{}(msg);
+	uint32_t& count = seen[h];
+	count++;
+	if (count > 1) {
+		return VK_FALSE; // print only once
+	}
+
+	if (isError)  std::cerr << "[Vulkan][ERROR] " << cmsg << "\n";
+	else          std::cerr << "[Vulkan][WARNING] " << cmsg << "\n";
+
+	// Print objects only for errors (and for sync warnings if you want)
+	if (cb && cb->objectCount > 0 && cb->pObjects) {
+		if (isError /*|| true if you want objects for sync warnings too */) {
+			for (uint32_t i = 0; i < cb->objectCount; ++i) {
+				const auto& obj = cb->pObjects[i];
+				std::cerr
+					<< "  - object[" << i << "] type=" << VkObjectType(obj.objectType)
+					<< " handle=0x" << std::hex << obj.objectHandle << std::dec
+					<< " name=" << (obj.pObjectName ? obj.pObjectName : "(null)")
+					<< "\n";
+			}
+		}
+	}
+
+	return VK_FALSE;
 }
 
 void Context::CreateSurface() {
@@ -170,7 +257,7 @@ void Context::PickPhysicalDevice() {
 		[&](auto const& device)
 		{
 			// Check if the device supports the Vulkan 1.3 API version
-			bool supportsVulkan1_3 = device.getProperties().apiVersion >= VK_API_VERSION_1_3;
+			bool supportsVulkan1_3 = device.getProperties().apiVersion >= VK_API_VERSION_1_4;
 
 			// Check if any of the queue families support graphics operations
 			auto queueFamilies = device.getQueueFamilyProperties();
@@ -266,7 +353,7 @@ void Context::CreateLogicalDevice() {
 				.samplerAnisotropy = vk::True,
 			},
 		},
-		// 1: Vulkan 1.3
+		// 1: Vulkan 1.4
 		{
 			.synchronization2 = vk::True,
 			.dynamicRendering = vk::True

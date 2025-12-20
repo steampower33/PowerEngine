@@ -639,7 +639,7 @@ void ParticleManager::CreateSSBO()
 
 	// position
 	ssbo_size_.position = sizeof(glm::vec4) * total_particles_;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Position", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.position,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -652,7 +652,7 @@ void ParticleManager::CreateSSBO()
 
 	// Pred Position
 	ssbo_size_.pred_position = sizeof(glm::vec4) * total_particles_;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Pred Position", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.pred_position,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -665,7 +665,7 @@ void ParticleManager::CreateSSBO()
 
 	// velocity
 	ssbo_size_.velocity = sizeof(glm::vec4) * total_particles_;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Velocity", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.velocity,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -678,7 +678,7 @@ void ParticleManager::CreateSSBO()
 
 	// inverse mass
 	ssbo_size_.inverse_mass = sizeof(float) * total_particles_;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Inverse Mass", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.inverse_mass,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -691,7 +691,7 @@ void ParticleManager::CreateSSBO()
 
 	// particle_hash
 	ssbo_size_.particle_hash = sizeof(uint32_t) * total_particles_;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Particle Hash", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.particle_hash,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -702,7 +702,7 @@ void ParticleManager::CreateSSBO()
 
 	// particle_indice
 	ssbo_size_.sorted_indice = sizeof(uint32_t) * total_particles_;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Particle Indice", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.sorted_indice,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -713,7 +713,7 @@ void ParticleManager::CreateSSBO()
 
 	// start
 	ssbo_size_.start = sizeof(uint32_t) * tableSize;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Start", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.start,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -724,7 +724,7 @@ void ParticleManager::CreateSSBO()
 
 	// end
 	ssbo_size_.end = sizeof(uint32_t) * tableSize;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("End", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.end,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -735,7 +735,7 @@ void ParticleManager::CreateSSBO()
 
 	// neighbor
 	ssbo_size_.neighbor = sizeof(uint32_t) * num_neighbors_;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Neighbor", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.neighbor,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -746,7 +746,7 @@ void ParticleManager::CreateSSBO()
 
 	// neighbor_lambda
 	ssbo_size_.neighbor_lambda = sizeof(float) * num_neighbors_;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Neighbor Lambda", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.neighbor_lambda,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -757,7 +757,7 @@ void ParticleManager::CreateSSBO()
 
 	// index
 	ssbo_size_.index = sizeof(uint32_t) * total_indices_;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Index", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.index,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -768,7 +768,7 @@ void ParticleManager::CreateSSBO()
 
 	// normals
 	ssbo_size_.normal = sizeof(glm::vec4) * total_particles_;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Normal", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.normal,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -780,7 +780,7 @@ void ParticleManager::CreateSSBO()
 	// tri_normals
 	tri_normals_.resize(total_tries_, glm::vec4(0.0f));
 	ssbo_size_.tri_normals = sizeof(glm::vec4) * total_tries_;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Tri Normal", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.tri_normals,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -791,7 +791,7 @@ void ParticleManager::CreateSSBO()
 
 	// vertex_tri_offsets
 	ssbo_size_.vertex_tri_offsets = sizeof(uint32_t) * vertex_tri_offsets_.size();
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Vertex Tri Offset", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.vertex_tri_offsets,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -802,7 +802,7 @@ void ParticleManager::CreateSSBO()
 
 	// vertex_tri_indices
 	ssbo_size_.vertex_tri_indices = sizeof(uint32_t) * vertex_tri_indices_.size();
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Vertex Tri Indices", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.vertex_tri_indices,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -813,7 +813,7 @@ void ParticleManager::CreateSSBO()
 
 	// object_ids_
 	ssbo_size_.collision_masks_ = sizeof(ColiisiotnMask) * collision_masks_.size();
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Object Id", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.collision_masks_,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,

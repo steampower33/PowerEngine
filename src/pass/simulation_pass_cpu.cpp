@@ -28,6 +28,7 @@ void SimulationPassCPU::CopyDataToGPU(uint32_t currentFrmae)
 	cmd.begin({});
 
 	vku::CopyStagingToSSBO(cmd, pm.ssbo_size_.position, pm.staging_mapped_.position, pm.positions_, pm.staging_.position, pm.ssbos_.position,
+		vk::PipelineStageFlagBits2::eVertexShader, vk::AccessFlagBits2::eShaderStorageRead,
 		vk::PipelineStageFlagBits2::eVertexShader, vk::AccessFlagBits2::eShaderStorageRead);
 
 	cmd.end();

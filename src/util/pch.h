@@ -44,12 +44,6 @@ inline const std::vector<const char*> validation_layers = {
     "VK_LAYER_KHRONOS_validation"
 };
 
-#ifdef NDEBUG
-constexpr bool enableValidationLayers = false;
-#else
-constexpr bool enableValidationLayers = true;
-#endif
-
 #include "imgui.h"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_vulkan.h"

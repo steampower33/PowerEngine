@@ -184,11 +184,16 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 			}
 			TS(timestamp_steps_);
 
-			vku::Barrier2(cmd,
+			vku::BufferBarrier2(
+				cmd,
+				radix_.storage_buffer,
+				0,
+				VK_WHOLE_SIZE,
 				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageWrite,
-				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+				vk::PipelineStageFlagBits2::eAllTransfer,
+				vk::AccessFlagBits2::eTransferWrite
+			);
 
 			TS(timestamp_steps_);
 			if (solver_config_.self_collision)
@@ -202,15 +207,10 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 				);
 			}
 			TS(timestamp_steps_);
-			vku::Barrier2(cmd,
-				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageWrite,
-				vk::PipelineStageFlagBits2::eComputeShader,
-				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+
 
 			if (solver_config_.self_collision)
 			{
-
 				uint32_t fillValue = 0xFFFFFFFF;
 				uint32_t offset = 0;
 				uint64_t size = VK_WHOLE_SIZE;
@@ -494,23 +494,59 @@ void SimulationPassGPU::CopySimDatas(const vk::raii::CommandBuffer& cmd)
 {
 	auto& pm = particle_manager_;
 
-	vku::CopyStagingToSSBO(cmd, pm.ssbo_size_.position, pm.staging_mapped_.position, pm.positions_, pm.staging_.position, pm.ssbos_.position, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+	vku::CopyStagingToSSBO(cmd, pm.ssbo_size_.position, pm.staging_mapped_.position, pm.positions_, pm.staging_.position, pm.ssbos_.position,
+		vk::PipelineStageFlagBits2::eComputeShader,
+		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+		vk::PipelineStageFlagBits2::eComputeShader,
+		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
-	vku::CopyStagingToSSBO(cmd, pm.ssbo_size_.pred_position, pm.staging_mapped_.pred_position, pm.pred_positions_, pm.staging_.pred_position, pm.ssbos_.pred_position, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+	vku::CopyStagingToSSBO(cmd, pm.ssbo_size_.pred_position, pm.staging_mapped_.pred_position, pm.pred_positions_, pm.staging_.pred_position, pm.ssbos_.pred_position,
+		vk::PipelineStageFlagBits2::eComputeShader,
+		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+		vk::PipelineStageFlagBits2::eComputeShader,
+		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
-	vku::CopyStagingToSSBO(cmd, pm.ssbo_size_.velocity, pm.staging_mapped_.velocity, pm.velocities_, pm.staging_.velocity, pm.ssbos_.velocity, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+	vku::CopyStagingToSSBO(cmd, pm.ssbo_size_.velocity, pm.staging_mapped_.velocity, pm.velocities_, pm.staging_.velocity, pm.ssbos_.velocity,
+		vk::PipelineStageFlagBits2::eComputeShader,
+		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+		vk::PipelineStageFlagBits2::eComputeShader,
+		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
-	vku::CopyStagingToSSBO(cmd, pm.ssbo_size_.inverse_mass, pm.staging_mapped_.inverse_mass, pm.inverse_masses_, pm.staging_.inverse_mass, pm.ssbos_.inverse_mass, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+	vku::CopyStagingToSSBO(cmd, pm.ssbo_size_.inverse_mass, pm.staging_mapped_.inverse_mass, pm.inverse_masses_, pm.staging_.inverse_mass, pm.ssbos_.inverse_mass,
+		vk::PipelineStageFlagBits2::eComputeShader,
+		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+		vk::PipelineStageFlagBits2::eComputeShader,
+		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
-	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.edge, datas_.staging_mapped_.edge, datas_.edges, datas_.staging_.edge, datas_.ssbos_.edge, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.edge, datas_.staging_mapped_.edge, datas_.edges, datas_.staging_.edge, datas_.ssbos_.edge,
+		vk::PipelineStageFlagBits2::eComputeShader,
+		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+		vk::PipelineStageFlagBits2::eComputeShader,
+		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
-	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.shear, datas_.staging_mapped_.shear, datas_.shears, datas_.staging_.shear, datas_.ssbos_.shear, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.shear, datas_.staging_mapped_.shear, datas_.shears, datas_.staging_.shear, datas_.ssbos_.shear,
+		vk::PipelineStageFlagBits2::eComputeShader,
+		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+		vk::PipelineStageFlagBits2::eComputeShader,
+		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
-	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.bend, datas_.staging_mapped_.bend, datas_.bends, datas_.staging_.bend, datas_.ssbos_.bend, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.bend, datas_.staging_mapped_.bend, datas_.bends, datas_.staging_.bend, datas_.ssbos_.bend,
+		vk::PipelineStageFlagBits2::eComputeShader,
+		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+		vk::PipelineStageFlagBits2::eComputeShader,
+		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
-	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.area, datas_.staging_mapped_.area, datas_.areas, datas_.staging_.area, datas_.ssbos_.area, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.area, datas_.staging_mapped_.area, datas_.areas, datas_.staging_.area, datas_.ssbos_.area,
+		vk::PipelineStageFlagBits2::eComputeShader,
+		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+		vk::PipelineStageFlagBits2::eComputeShader,
+		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
-	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.volume, datas_.staging_mapped_.volume, pm.volume_constraints, datas_.staging_.volume, datas_.ssbos_.volume, vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.volume, datas_.staging_mapped_.volume, pm.volume_constraints, datas_.staging_.volume, datas_.ssbos_.volume,
+		vk::PipelineStageFlagBits2::eComputeShader,
+		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+		vk::PipelineStageFlagBits2::eComputeShader,
+		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 }
 
 void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene)
@@ -640,7 +676,11 @@ void SimulationPassGPU::CopyColliders(const vk::raii::CommandBuffer& cmd)
 	}
 
 	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.collider, datas_.staging_mapped_.collider, datas_.colliders, datas_.staging_.collider, datas_.ssbos_.collider,
-		vk::PipelineStageFlagBits2::eComputeShader, vk::AccessFlagBits2::eShaderStorageRead);
+		vk::PipelineStageFlagBits2::eComputeShader,
+		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+		vk::PipelineStageFlagBits2::eComputeShader,
+		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+
 }
 
 void SimulationPassGPU::CreateCommandBuffers()
@@ -864,7 +904,7 @@ void SimulationPassGPU::CreateSSBOBuffers()
 
 	// delta X
 	datas_.ssbo_size_.delta_x = sizeof(float) * N;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Delta X", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		datas_.ssbo_size_.delta_x,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -875,7 +915,7 @@ void SimulationPassGPU::CreateSSBOBuffers()
 
 	// delta Y
 	datas_.ssbo_size_.delta_y = sizeof(float) * N;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Delta Y", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		datas_.ssbo_size_.delta_y,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -886,7 +926,7 @@ void SimulationPassGPU::CreateSSBOBuffers()
 
 	// delta Z
 	datas_.ssbo_size_.delta_z = sizeof(float) * N;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Delta Z", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		datas_.ssbo_size_.delta_z,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -897,7 +937,7 @@ void SimulationPassGPU::CreateSSBOBuffers()
 
 	// delta count
 	datas_.ssbo_size_.delta_count = sizeof(uint32_t) * N;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Delta Count", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		datas_.ssbo_size_.delta_count,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -908,7 +948,7 @@ void SimulationPassGPU::CreateSSBOBuffers()
 
 	// edges
 	datas_.ssbo_size_.edge = sizeof(SimData::Edge) * datas_.num_edges;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Edge", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		datas_.ssbo_size_.edge,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -921,7 +961,7 @@ void SimulationPassGPU::CreateSSBOBuffers()
 
 	// Bend
 	datas_.ssbo_size_.bend = sizeof(SimData::Bend) * datas_.num_bends;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Bend", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		datas_.ssbo_size_.bend,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -934,7 +974,7 @@ void SimulationPassGPU::CreateSSBOBuffers()
 
 	// Shear
 	datas_.ssbo_size_.shear = sizeof(SimData::Shear) * datas_.num_shears;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Shear", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		datas_.ssbo_size_.shear,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -953,7 +993,7 @@ void SimulationPassGPU::CreateSSBOBuffers()
 	};
 	std::vector<GrabState> grabState(1);
 	datas_.ssbo_size_.grab_state = sizeof(GrabState) * grabState.size();
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Grab Counter", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		datas_.ssbo_size_.grab_state,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -964,7 +1004,7 @@ void SimulationPassGPU::CreateSSBOBuffers()
 
 	// Area
 	datas_.ssbo_size_.area = sizeof(SimData::Area) * datas_.num_areas;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Area", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		datas_.ssbo_size_.area,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -977,7 +1017,7 @@ void SimulationPassGPU::CreateSSBOBuffers()
 
 	// volume
 	datas_.ssbo_size_.volume = sizeof(ParticleManager::Volume) * datas_.num_volumes;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Volume", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		datas_.ssbo_size_.volume,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
@@ -990,7 +1030,7 @@ void SimulationPassGPU::CreateSSBOBuffers()
 
 	// collider
 	datas_.ssbo_size_.collider = sizeof(Collider) * datas_.num_colliders;
-	vku::CreateSSBO(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+	vku::CreateSSBO("Collider", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		datas_.ssbo_size_.collider,
 		vk::BufferUsageFlagBits::eTransferSrc,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
