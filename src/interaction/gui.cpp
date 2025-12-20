@@ -105,15 +105,14 @@ GUI::GUI(GLFWwindow* glfwWindow, Context& context, Swapchain& swapchain, Texture
 		) });
 	}
 
+	//VkImageView view = static_cast<VkImageView>(*pass_manager_.graphics_pass_->shadow_image_view_);
+	//VkSampler  sampler = static_cast<VkSampler>(*pass_manager_.graphics_pass_->shadow_sampler);
 
-	VkImageView view = static_cast<VkImageView>(*pass_manager_.graphics_pass_->shadow_image_view_);
-	VkSampler  sampler = static_cast<VkSampler>(*pass_manager_.graphics_pass_->shadow_sampler);
-
-	imgui_id_.push_back(std::pair{ "Shadow", ImGui_ImplVulkan_AddTexture(
-		sampler,
-		view,
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-	) });
+	//imgui_id_.push_back(std::pair{ "Shadow", ImGui_ImplVulkan_AddTexture(
+	//	sampler,
+	//	view,
+	//	VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+	//) });
 }
 
 GUI::~GUI()

@@ -642,8 +642,11 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 	}
 }
 
+// Very Naive Solution
 void SimulationPassGPU::CopyColliders(const vk::raii::CommandBuffer& cmd)
 {
+	bool isCopyToGPU = false;
+
 	uint32_t base = 0;
 	for (uint32_t i = 0; i < model_manager_.models_.size(); i++)
 	{
@@ -652,6 +655,8 @@ void SimulationPassGPU::CopyColliders(const vk::raii::CommandBuffer& cmd)
 		if (model.shape_collision_update_)
 		{
 			model.shape_collision_update_ = false;
+
+			isCopyToGPU = true;
 
 			model.UpdateShapeColliders();
 			
@@ -667,6 +672,8 @@ void SimulationPassGPU::CopyColliders(const vk::raii::CommandBuffer& cmd)
 		{
 			model.capsule_collision_update_ = false;
 
+			isCopyToGPU = true;
+
 			model.UpdateCapsuleCollidersFromBones();
 
 			for (uint32_t j = 0; j < model.capsule_colliders_.size(); j++)
@@ -675,11 +682,14 @@ void SimulationPassGPU::CopyColliders(const vk::raii::CommandBuffer& cmd)
 		base += model.capsule_colliders_.size();
 	}
 
-	vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.collider, datas_.staging_mapped_.collider, datas_.colliders, datas_.staging_.collider, datas_.ssbos_.collider,
-		vk::PipelineStageFlagBits2::eComputeShader,
-		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
-		vk::PipelineStageFlagBits2::eComputeShader,
-		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+	if (isCopyToGPU)
+	{
+		vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.collider, datas_.staging_mapped_.collider, datas_.colliders, datas_.staging_.collider, datas_.ssbos_.collider,
+			vk::PipelineStageFlagBits2::eComputeShader,
+			vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+			vk::PipelineStageFlagBits2::eComputeShader,
+			vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+	}
 
 }
 

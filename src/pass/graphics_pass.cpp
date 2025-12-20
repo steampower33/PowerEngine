@@ -172,11 +172,19 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera, bool
 void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t currentFrame, vku::CpuOrGpu cpuOrGpu)
 {
 	const auto& cmd = cmds_[currentFrame];
-
-	auto& pm = particle_manager_;
-
+	timestamp_steps_ = 0;
+	uint32_t slots = 2;
+	const auto stage = vk::PipelineStageFlagBits2::eComputeShader;
+	auto TS = [&](uint32_t& idx) {
+		cmd.writeTimestamp2(stage, *timestamp_pool_, idx++);
+		};
+	
 	cmd.reset();
 	cmd.begin({});
+
+	cmd.resetQueryPool(*timestamp_pool_, 0, slots);
+
+	TS(timestamp_steps_);
 
 	if (cpuOrGpu == vku::CpuOrGpu::CPU)
 	{
@@ -188,685 +196,36 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 			vk::AccessFlagBits2::eShaderStorageRead);
 	}
 
-	timestamp_steps_ = 0;
-	uint32_t slots = 2;
-	const auto stage = vk::PipelineStageFlagBits2::eComputeShader;
-	auto TS = [&](uint32_t& idx) {
-		cmd.writeTimestamp2(stage, *timestamp_pool_, idx++);
-		};
 
-	cmd.resetQueryPool(*timestamp_pool_, 0, slots);
+	ShadowDepthOnlyPass(cmd, currentFrame);
+	PreMainRenderPass(cmd, currentFrame);
+	MainRenderPass(cmd, currentFrame);
+	PostMainRenderPass(cmd, imageIndex);
+	LightingPass(cmd, imageIndex, currentFrame);
 
-	TS(timestamp_steps_);
-
-	// shadow depth only
 	{
-		const bool first = first_frame_;
-
-		const vk::ImageLayout oldLayout = first
-			? vk::ImageLayout::eUndefined
-			: vk::ImageLayout::eShaderReadOnlyOptimal;
-
-		const vk::PipelineStageFlags2 srcStage = first
-			? vk::PipelineStageFlagBits2::eTopOfPipe
-			: vk::PipelineStageFlagBits2::eFragmentShader;
-
-		const vk::AccessFlags2 srcAccess = first
-			? vk::AccessFlags2{}
-		: vk::AccessFlagBits2::eShaderSampledRead;
-
-		vku::TransitionImageLayoutCustom(
-			shadow_image_,
-			cmd,
-			oldLayout,
-			vk::ImageLayout::eDepthAttachmentOptimal,
-			srcAccess,
-			vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
-			srcStage,
-			vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
-			vk::ImageAspectFlagBits::eDepth
-		);
-
-		vk::RenderingAttachmentInfo depthAttachmentInfo = {
-			.imageView = shadow_image_view_,
-			.imageLayout = vk::ImageLayout::eDepthAttachmentOptimal,
-			.loadOp = vk::AttachmentLoadOp::eClear,
-			.storeOp = vk::AttachmentStoreOp::eStore, // IMPORTANT: must store for sampling later
-			.clearValue = vk::ClearDepthStencilValue(1.0f, 0),
-		};
-
-		vk::RenderingInfo renderingInfo = {
-			.renderArea = {
-				.offset = { 0, 0 },
-				.extent = shadow_extent_,
-			},
-			.layerCount = 1,
-			.pDepthAttachment = &depthAttachmentInfo
-		};
-
-		cmd.beginRendering(renderingInfo);
-
-		vk::Viewport vp(
-			0.0f,
-			0.0f,
-			shadow_extent_.width,
-			shadow_extent_.height,
-			0.0f, 1.0f
-		);
-
-		cmd.setViewport(0, vp);
-		cmd.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), shadow_extent_));
-
-		//cmd.setDepthBias(/*constant=*/1.25f, /*clamp=*/0.0f, /*slope=*/1.75f);
-
-		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.shadow_model);
-
-		shadow_map.light_view_proj = ubo_datas_.light.light_view_proj;
-		shadow_map.is_vertex_ssbo = 0u;
-		cmd.pushConstants<ShadowMap>(
-			*pipeline_layouts_.shadow_model,
-			vk::ShaderStageFlagBits::eVertex,
-			0,
-			shadow_map);
-
-		const uint32_t baseObjectOffset = static_cast<uint32_t>(currentFrame * ubo_size_.model * model_manager_.kMaxModels);
-		for (uint32_t i = 0; i < model_manager_.models_.size(); i++)
-		{
-			auto& model = *model_manager_.models_[i];
-
-			if (!model.render_) continue;
-
-			uint32_t objectOffset = baseObjectOffset + i * static_cast<uint32_t>(ubo_size_.model);
-
-			// Model set
-			cmd.bindDescriptorSets(
-				vk::PipelineBindPoint::eGraphics,
-				pipeline_layouts_.shadow_model,
-				0,
-				{ *sets_.model },
-				{ objectOffset }
-			);
-
-			cmd.bindVertexBuffers(0, { model.model_loader_->mesh_.vertex_buffer }, { 0 });
-			cmd.bindIndexBuffer(*model.model_loader_->mesh_.index_buffer, 0, vk::IndexType::eUint32);
-			cmd.drawIndexed(model.model_loader_->mesh_.indices_count, 1, 0, 0, 0);
-		}
-
-		{
-
-			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.shadow_particle);
-			shadow_map.is_vertex_ssbo = 1u;
-			cmd.pushConstants<ShadowMap>(
-				*pipeline_layouts_.shadow_particle,
-				vk::ShaderStageFlagBits::eVertex,
-				0,
-				shadow_map);
-
-			cmd.bindDescriptorSets(
-				vk::PipelineBindPoint::eGraphics,
-				pipeline_layouts_.shadow_particle,
-				0,
-				{ *sets_.shadow_particle },
-				{  }
-			);
-
-			cmd.bindIndexBuffer(*pm.index_buffer_, 0, vk::IndexType::eUint32);
-			cmd.drawIndexed(pm.num_cloth_indices_ + pm.num_softbody_indices_, 1, 0, 0, 0);
-		}
+		ImDrawData* draw_data = ImGui::GetDrawData();
+		ImGui_ImplVulkan_RenderDrawData(draw_data, *cmd);
 
 		cmd.endRendering();
 
-		{
-			vku::TransitionImageLayoutCustom(
-				shadow_image_,
-				cmd,
-				vk::ImageLayout::eDepthAttachmentOptimal,
-				vk::ImageLayout::eShaderReadOnlyOptimal,
-				vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
-				vk::AccessFlagBits2::eShaderSampledRead,
-				vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
-				vk::PipelineStageFlagBits2::eFragmentShader,
-				vk::ImageAspectFlagBits::eDepth
-			);
-		}
-	}
-
-	auto toShaderWrite = [&](vk::raii::Image& img) {
-		vku::TransitionImageLayoutCustom(
-			img,
+		vku::TransitionImageLayout(
+			swapchain_.swapchain_images_[imageIndex],
 			cmd,
-			first_frame_ ? vk::ImageLayout::eUndefined
-			: vk::ImageLayout::eShaderReadOnlyOptimal,
 			vk::ImageLayout::eColorAttachmentOptimal,
+			vk::ImageLayout::ePresentSrcKHR,
+			vk::AccessFlagBits2::eColorAttachmentWrite,
 			{},
-			vk::AccessFlagBits2::eColorAttachmentWrite,
-			vk::PipelineStageFlagBits2::eTopOfPipe,
 			vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-			vk::ImageAspectFlagBits::eColor
+			vk::PipelineStageFlagBits2::eBottomOfPipe
 		);
-		};
 
-	// G-buffer: Undefined/ShaderReadOnly ¡æ ColorAttachmentOptimal
-	toShaderWrite(geometry_buffers_.albedo_mettalic_image);
-	toShaderWrite(geometry_buffers_.normal_roughness_image);
-	toShaderWrite(geometry_buffers_.height_ao_image);
-	toShaderWrite(geometry_buffers_.coat_fuzz_image);
+		TS(timestamp_steps_);
 
-	vku::TransitionImageLayoutCustom(
-		depth_image_,
-		cmd,
-		first_frame_ ? vk::ImageLayout::eUndefined
-		: vk::ImageLayout::eShaderReadOnlyOptimal,
-		vk::ImageLayout::eDepthAttachmentOptimal,
-		{},
-		vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
-		vk::PipelineStageFlagBits2::eTopOfPipe,
-		vk::PipelineStageFlagBits2::eEarlyFragmentTests,
-		vk::ImageAspectFlagBits::eDepth
-	);
+		cmd.end();
 
-	std::array<vk::RenderingAttachmentInfo, 4> gbufferAttachments;
-
-	auto renderingAttachmentInfo = [&](vk::raii::ImageView& imageView, vk::ClearValue clearColor) {
-		return vk::RenderingAttachmentInfo{
-			.imageView = *imageView,
-			.imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
-			.resolveMode = {},
-			.resolveImageView = {},
-			.resolveImageLayout = {},
-			.loadOp = vk::AttachmentLoadOp::eClear,
-			.storeOp = vk::AttachmentStoreOp::eStore,
-			.clearValue = clearColor
-		};
-		};
-	vk::ClearValue clearColor0 = vk::ClearColorValue(background_color_.r, background_color_.g, background_color_.b, 0.0f); // albedo+metal
-	gbufferAttachments[0] = renderingAttachmentInfo(geometry_buffers_.albedo_mettalic_image_view, clearColor0);
-	vk::ClearValue clearColor1 = vk::ClearColorValue(0.5f, 0.5f, 1.0f, 1.0f); // normal default (0,0,1)
-	gbufferAttachments[1] = renderingAttachmentInfo(geometry_buffers_.normal_roughness_image_view, clearColor1);
-	vk::ClearValue clearColor2 = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f); // height+AO
-	gbufferAttachments[2] = renderingAttachmentInfo(geometry_buffers_.height_ao_image_view, clearColor2);
-	vk::ClearValue clearColor3 = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f); // coat+fuzz
-	gbufferAttachments[3] = renderingAttachmentInfo(geometry_buffers_.coat_fuzz_image_view, clearColor3);
-
-	vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
-	// Depth attachment
-	vk::RenderingAttachmentInfo depthAttachmentInfo = {
-		.imageView = depth_image_view_,
-		.imageLayout = vk::ImageLayout::eDepthAttachmentOptimal,
-		.loadOp = vk::AttachmentLoadOp::eClear,
-		.storeOp = vk::AttachmentStoreOp::eDontCare,
-		.clearValue = clearDepth
-	};
-	vk::RenderingInfo renderingInfo = {
-		.renderArea = {.offset = { 0, 0 },
-		.extent = swapchain_.swapchain_extent_ },
-		.layerCount = 1,
-		.colorAttachmentCount = static_cast<uint32_t>(gbufferAttachments.size()),
-		.pColorAttachments = gbufferAttachments.data(),
-		.pDepthAttachment = &depthAttachmentInfo
-	};
-
-	cmd.beginRendering(renderingInfo);
-
-	vk::Viewport vp(
-		0.0f,
-		0.0f,
-		static_cast<float>(swapchain_.swapchain_extent_.width),
-		static_cast<float>(swapchain_.swapchain_extent_.height),
-		0.0f, 1.0f
-	);
-	cmd.setViewport(0, vp);
-	cmd.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchain_.swapchain_extent_));
-
-	uint32_t globalOffset = static_cast<uint32_t>(currentFrame * ubo_size_.global);
-	const uint32_t baseObjectOffset = static_cast<uint32_t>(currentFrame * ubo_size_.model * model_manager_.kMaxModels);
-
-	// Model
-	{
-		for (uint32_t i = 0; i < model_manager_.models_.size(); i++)
-		{
-			auto& model = *model_manager_.models_[i];
-
-			if (!model.render_) continue;
-
-			uint32_t objectOffset = baseObjectOffset + i * static_cast<uint32_t>(ubo_size_.model);
-
-			if (model.model_type_ == ModelType::SHAPE)
-			{
-				if (polygon_mode_ == vku::PolygonMode::SOLID)
-					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.model_solid);
-				else if (polygon_mode_ == vku::PolygonMode::WIREFRAME)
-					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.model_wireframe);
-				else if (polygon_mode_ == vku::PolygonMode::POINT)
-					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.model_point);
-
-				// Global Set
-				cmd.bindDescriptorSets(
-					vk::PipelineBindPoint::eGraphics,
-					pipeline_layouts_.model,
-					0,
-					{ *sets_.global },
-					{ globalOffset }
-				);
-
-				// Model set
-				cmd.bindDescriptorSets(
-					vk::PipelineBindPoint::eGraphics,
-					pipeline_layouts_.model,
-					1,
-					{ *sets_.model },
-					{ objectOffset }
-				);
-
-				// tex2D
-				cmd.bindDescriptorSets(
-					vk::PipelineBindPoint::eGraphics,
-					pipeline_layouts_.model,
-					2,
-					{ *texture_manager_.sets_.tex2d },
-					{ }
-				);
-
-				cmd.bindVertexBuffers(0, { model.model_loader_->mesh_.vertex_buffer }, { 0 });
-				cmd.bindIndexBuffer(*model.model_loader_->mesh_.index_buffer, 0, vk::IndexType::eUint32);
-				cmd.drawIndexed(model.model_loader_->mesh_.indices_count, 1, 0, 0, 0);
-			}
-			else if (model.model_type_ == ModelType::SKINNED)
-			{
-				if (polygon_mode_ == vku::PolygonMode::SOLID)
-					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.skinned_model_solid);
-				else if (polygon_mode_ == vku::PolygonMode::WIREFRAME)
-					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.skinned_model_wireframe);
-				else if (polygon_mode_ == vku::PolygonMode::POINT)
-					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.skinned_model_point);
-
-				// Global Set
-				cmd.bindDescriptorSets(
-					vk::PipelineBindPoint::eGraphics,
-					pipeline_layouts_.skinned_model,
-					0,
-					{ *sets_.global },
-					{ globalOffset }
-				);
-
-				// Model set
-				cmd.bindDescriptorSets(
-					vk::PipelineBindPoint::eGraphics,
-					pipeline_layouts_.skinned_model,
-					1,
-					{ *sets_.model },
-					{ objectOffset }
-				);
-
-				// tex2D
-				cmd.bindDescriptorSets(
-					vk::PipelineBindPoint::eGraphics,
-					pipeline_layouts_.skinned_model,
-					2,
-					{ *texture_manager_.sets_.tex2d },
-					{ }
-				);
-
-				// Skinned
-				const uint32_t skinnedModelOff = static_cast<uint32_t>(currentFrame * ubo_size_.skinned_model);
-				cmd.bindDescriptorSets(
-					vk::PipelineBindPoint::eGraphics,
-					pipeline_layouts_.skinned_model,
-					3,
-					{ *sets_.skinned_model },
-					{ skinnedModelOff }
-				);
-
-				cmd.bindVertexBuffers(0, { model.model_loader_->mesh_.vertex_buffer }, { 0 });
-				cmd.bindIndexBuffer(*model.model_loader_->mesh_.index_buffer, 0, vk::IndexType::eUint32);
-				cmd.drawIndexed(model.model_loader_->mesh_.indices_count, 1, 0, 0, 0);
-
-				// Debug Capsule
-				if (!model.capsule_collision_render_) continue;
-
-				cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.debug_capsule);
-
-				// Global Set
-				cmd.bindDescriptorSets(
-					vk::PipelineBindPoint::eGraphics,
-					pipeline_layouts_.debug_capsule,
-					0,
-					{ *sets_.global },
-					{ globalOffset }
-				);
-
-				auto& debugCapsuleModel = model_manager_.debug_capsule_;
-
-				cmd.bindVertexBuffers(0, { debugCapsuleModel->model_loader_->mesh_.vertex_buffer }, { 0 });
-				cmd.bindIndexBuffer(*debugCapsuleModel->model_loader_->mesh_.index_buffer, 0, vk::IndexType::eUint32);
-
-				for (const auto& inst : model_manager_.models_[model_manager_.models_.size() - 1]->capsule_colliders_) {
-					glm::vec3 p0 = inst.p0;
-					glm::vec3 p1 = inst.p1;
-					float r = inst.radius;
-
-					glm::vec3 center = 0.5f * (p0 + p1);
-					glm::vec3 seg = p1 - p0;
-					float len = glm::length(seg);
-					if (len < 1e-4f) continue;
-
-					glm::vec3 dir = seg / len;
-					glm::quat q = glm::rotation(glm::vec3(0, 1, 0), dir);
-
-					glm::mat4 R = glm::mat4_cast(q);
-					glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3(r, len, r));
-					//glm::mat4 T = glm::translate(glm::mat4(1.0f), center);
-					//glm::mat4 T = glm::translate(glm::translate(glm::mat4(1.0f), glm::vec3(-2.0f, 0.0f, 0.0f)), center);
-					glm::mat4 T = glm::translate(model_manager_.models_[model_manager_.models_.size() - 1]->world_, center);
-					glm::mat4 M = T * R * S;
-
-					struct DebugPushConst {
-						glm::mat4 model;
-						glm::vec4 color;
-					} pc;
-
-					pc.model = M;
-					pc.color = glm::vec4(1, 0, 0, 1);
-
-					cmd.pushConstants<DebugPushConst>(
-						*pipeline_layouts_.debug_capsule,
-						vk::ShaderStageFlagBits::eVertex,
-						0,
-						pc);
-					cmd.drawIndexed(debugCapsuleModel->model_loader_->mesh_.indices_count, 1, 0, 0, 0);
-				}
-			}
-
-		}
+		frame_counter_++;
 	}
-
-	// Cloth
-	{
-		if (polygon_mode_ == vku::PolygonMode::WIREFRAME)
-			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.cloth_wireframe);
-		else if (polygon_mode_ == vku::PolygonMode::POINT)
-			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.cloth_point);
-		else
-			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.cloth_solid);
-
-		// Global Set
-		cmd.bindDescriptorSets(
-			vk::PipelineBindPoint::eGraphics,
-			pipeline_layouts_.cloth,
-			0,
-			{ *sets_.global },
-			{ globalOffset }
-		);
-
-		// Tex
-		cmd.bindDescriptorSets(
-			vk::PipelineBindPoint::eGraphics,
-			pipeline_layouts_.cloth,
-			2,
-			{ *texture_manager_.sets_.tex2d },
-			{ }
-		);
-
-		cmd.bindIndexBuffer(*pm.index_buffer_, 0, vk::IndexType::eUint32);
-
-		const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * pm.clothes_.size() * ubo_size_.cloth);
-		for (uint32_t i = 0; i < pm.clothes_.size(); i++)
-		{
-			auto& cloth = pm.clothes_[i];
-
-			if (!cloth.render) continue;
-
-			const uint32_t dst = baseOffset + ubo_size_.cloth * i;
-			cmd.bindDescriptorSets(
-				vk::PipelineBindPoint::eGraphics,
-				pipeline_layouts_.cloth,
-				1,
-				{ *sets_.cloth },
-				{ dst }
-			);
-
-			push_constants_.cloth_render.color = cloth.color;
-			push_constants_.cloth_render.nx1 = cloth.nx1;
-			push_constants_.cloth_render.ny1 = cloth.ny1;
-			push_constants_.cloth_render.offset_particle = cloth.offset_particle;
-			cmd.pushConstants<PushConstant::ClothRender>(
-				*pipeline_layouts_.cloth,
-				vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
-				0,
-				push_constants_.cloth_render
-			);
-
-			cmd.drawIndexed(cloth.num_indices, 1, cloth.offset_indices, 0, 0);
-
-			if (cpuOrGpu == vku::CpuOrGpu::CPU)
-			{
-				break;
-			}
-		}
-	}
-
-	// Softbody
-	{
-
-		if (polygon_mode_ == vku::PolygonMode::WIREFRAME)
-			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.softbody_wireframe);
-		else if (polygon_mode_ == vku::PolygonMode::POINT)
-			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.softbody_point);
-		else
-			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.softbody_solid);
-
-		// Global Set
-		cmd.bindDescriptorSets(
-			vk::PipelineBindPoint::eGraphics,
-			pipeline_layouts_.softbody,
-			0,
-			{ *sets_.global },
-			{ globalOffset }
-		);
-
-		cmd.bindIndexBuffer(*pm.index_buffer_, 0, vk::IndexType::eUint32);
-
-		const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * pm.softbodies_.size() * ubo_size_.softbody);
-
-		for (uint32_t i = 0; i < pm.softbodies_.size(); i++)
-		{
-			auto& softbody = pm.softbodies_[i];
-
-			if (!softbody.render) continue;
-
-			const uint32_t offset = baseOffset + i * ubo_size_.softbody;
-			cmd.bindDescriptorSets(
-				vk::PipelineBindPoint::eGraphics,
-				pipeline_layouts_.softbody,
-				1,
-				{ *sets_.softbody },
-				{ offset }
-			);
-
-			push_constants_.softbody.color = pm.softbodies_[i].color;
-			cmd.pushConstants<PushConstant::SoftBody>(
-				*pipeline_layouts_.softbody,
-				vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
-				0,
-				push_constants_.softbody
-			);
-
-			cmd.drawIndexed(pm.softbodies_[i].num_indices, 1, pm.softbodies_[i].offset_indices, 0, 0);
-		}
-	}
-
-	cmd.endRendering();
-
-	auto toShaderRead = [&](vk::raii::Image& img) {
-		vku::TransitionImageLayoutCustom(
-			img,
-			cmd,
-			vk::ImageLayout::eColorAttachmentOptimal,
-			vk::ImageLayout::eShaderReadOnlyOptimal,
-			vk::AccessFlagBits2::eColorAttachmentWrite,
-			vk::AccessFlagBits2::eShaderRead,
-			vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-			vk::PipelineStageFlagBits2::eFragmentShader,
-			vk::ImageAspectFlagBits::eColor
-		);
-		};
-	toShaderRead(geometry_buffers_.albedo_mettalic_image);
-	toShaderRead(geometry_buffers_.normal_roughness_image);
-	toShaderRead(geometry_buffers_.height_ao_image);
-	toShaderRead(geometry_buffers_.coat_fuzz_image);
-
-	vku::TransitionImageLayoutCustom(
-		depth_image_,
-		cmd,
-		vk::ImageLayout::eDepthAttachmentOptimal,
-		vk::ImageLayout::eShaderReadOnlyOptimal,
-		vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
-		vk::AccessFlagBits2::eShaderRead,
-		vk::PipelineStageFlagBits2::eLateFragmentTests,
-		vk::PipelineStageFlagBits2::eFragmentShader,
-		vk::ImageAspectFlagBits::eDepth
-	);
-
-	vku::TransitionImageLayout(
-		swapchain_.swapchain_images_[imageIndex],
-		cmd,
-		vk::ImageLayout::eUndefined,
-		vk::ImageLayout::eColorAttachmentOptimal,
-		{},
-		vk::AccessFlagBits2::eColorAttachmentWrite,
-		vk::PipelineStageFlagBits2::eTopOfPipe,
-		vk::PipelineStageFlagBits2::eColorAttachmentOutput
-	);
-
-	// Lighting pass
-	vk::ClearValue clearColor = vk::ClearColorValue(
-		0.0f, 0.0f, 0.0f, 1.0f);
-
-	vk::RenderingAttachmentInfo colorAttachmentInfo{
-		.imageView = swapchain_.swapchain_image_views_[imageIndex],
-		.imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
-		.resolveMode = {},
-		.resolveImageView = {},
-		.resolveImageLayout = {},
-		.loadOp = vk::AttachmentLoadOp::eClear,
-		.storeOp = vk::AttachmentStoreOp::eStore,
-		.clearValue = clearColor
-	};
-
-	vk::RenderingInfo lightingRenderingInfo{
-		.renderArea = { {0, 0}, swapchain_.swapchain_extent_ },
-		.layerCount = 1,
-		.colorAttachmentCount = 1,
-		.pColorAttachments = &colorAttachmentInfo,
-		.pDepthAttachment = nullptr
-	};
-
-	cmd.beginRendering(lightingRenderingInfo);
-
-	cmd.setViewport(0, vp);
-	cmd.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchain_.swapchain_extent_));
-
-	// --- lighting pipeline bind ---
-	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.lighting);
-
-	uint32_t lightOffset = static_cast<uint32_t>(currentFrame * ubo_size_.light);
-	cmd.bindDescriptorSets(
-		vk::PipelineBindPoint::eGraphics,
-		pipeline_layouts_.lighting,
-		0,
-		{ *sets_.lighting },
-		{ lightOffset }
-	);
-
-	uint32_t skyboxOffset = static_cast<uint32_t>(currentFrame * ubo_size_.skybox);
-	cmd.bindDescriptorSets(
-		vk::PipelineBindPoint::eGraphics,
-		pipeline_layouts_.lighting,
-		1,
-		{ *sets_.skybox },
-		{ skyboxOffset }
-	);
-
-	// tex2D
-	cmd.bindDescriptorSets(
-		vk::PipelineBindPoint::eGraphics,
-		pipeline_layouts_.lighting,
-		2,
-		{ *texture_manager_.sets_.tex2d },
-		{ }
-	);
-
-	// texEnv
-	cmd.bindDescriptorSets(
-		vk::PipelineBindPoint::eGraphics,
-		pipeline_layouts_.lighting,
-		3,
-		{ *texture_manager_.sets_.tex_env },
-		{ }
-	);
-
-	// fullscreen triangle
-	cmd.draw(3, 1, 0, 0);
-
-	//// Skybox
-	//{
-	//	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.skybox);
-
-	//	// Global Set
-	//	cmd.bindDescriptorSets(
-	//		vk::PipelineBindPoint::eGraphics,
-	//		pipeline_layouts_.skybox,
-	//		0,
-	//		{ *sets_.global },
-	//		{ globalOffset }
-	//	);
-
-	//	// Skybox
-	//	uint32_t skyboxOffset = static_cast<uint32_t>(currentFrame * ubo_size_.skybox);
-	//	cmd.bindDescriptorSets(
-	//		vk::PipelineBindPoint::eGraphics,
-	//		pipeline_layouts_.skybox,
-	//		1,
-	//		{ *sets_.skybox },
-	//		{ skyboxOffset }
-	//	);
-
-	//	// texEnv
-	//	cmd.bindDescriptorSets(
-	//		vk::PipelineBindPoint::eGraphics,
-	//		pipeline_layouts_.skybox,
-	//		2,
-	//		{ *sets_.texEnv },
-	//		{ }
-	//	);
-	//	cmd.bindVertexBuffers(0, { model_manager_.skybox_->mesh_data_.vertex_buffer }, { 0 });
-	//	cmd.bindIndexBuffer(*model_manager_.skybox_->mesh_data_.index_buffer, 0, vk::IndexType::eUint32);
-	//	cmd.drawIndexed(model_manager_.skybox_->mesh_data_.indices_count, 1, 0, 0, 0);
-	//}
-
-
-	ImDrawData* draw_data = ImGui::GetDrawData();
-	ImGui_ImplVulkan_RenderDrawData(draw_data, *cmd);
-
-	cmd.endRendering();
-
-	// After rendering, transition the swapchain image to PRESENT_SRC
-	vku::TransitionImageLayout(
-		swapchain_.swapchain_images_[imageIndex],
-		cmd,
-		vk::ImageLayout::eColorAttachmentOptimal,
-		vk::ImageLayout::ePresentSrcKHR,
-		vk::AccessFlagBits2::eColorAttachmentWrite,
-		{},
-		vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-		vk::PipelineStageFlagBits2::eBottomOfPipe
-	);
-
-	TS(timestamp_steps_); // End
-
-	cmd.end();
-
-	frame_counter_++;
 }
 
 void GraphicsPass::CalculateGpuTime()
@@ -2591,4 +1950,631 @@ void GraphicsPass::CreateGraphicsPipelines()
 		};
 		pipelines_.shadow_particle = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 	}
+}
+
+void GraphicsPass::ShadowDepthOnlyPass(const vk::raii::CommandBuffer& cmd, uint32_t currentFrame)
+{
+	const bool first = first_frame_;
+
+	const vk::ImageLayout oldLayout = first
+		? vk::ImageLayout::eUndefined
+		: vk::ImageLayout::eShaderReadOnlyOptimal;
+
+	const vk::PipelineStageFlags2 srcStage = first
+		? vk::PipelineStageFlagBits2::eTopOfPipe
+		: vk::PipelineStageFlagBits2::eFragmentShader;
+
+	const vk::AccessFlags2 srcAccess = first
+		? vk::AccessFlags2{}
+	: vk::AccessFlagBits2::eShaderSampledRead;
+
+	vku::TransitionImageLayoutCustom(
+		shadow_image_,
+		cmd,
+		oldLayout,
+		vk::ImageLayout::eDepthAttachmentOptimal,
+		srcAccess,
+		vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+		srcStage,
+		vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
+		vk::ImageAspectFlagBits::eDepth
+	);
+
+	vk::RenderingAttachmentInfo depthAttachmentInfo = {
+		.imageView = shadow_image_view_,
+		.imageLayout = vk::ImageLayout::eDepthAttachmentOptimal,
+		.loadOp = vk::AttachmentLoadOp::eClear,
+		.storeOp = vk::AttachmentStoreOp::eStore, // IMPORTANT: must store for sampling later
+		.clearValue = vk::ClearDepthStencilValue(1.0f, 0),
+	};
+
+	vk::RenderingInfo renderingInfo = {
+		.renderArea = {
+			.offset = { 0, 0 },
+			.extent = shadow_extent_,
+		},
+		.layerCount = 1,
+		.pDepthAttachment = &depthAttachmentInfo
+	};
+
+	cmd.beginRendering(renderingInfo);
+
+	vk::Viewport vp(
+		0.0f,
+		0.0f,
+		shadow_extent_.width,
+		shadow_extent_.height,
+		0.0f, 1.0f
+	);
+
+	cmd.setViewport(0, vp);
+	cmd.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), shadow_extent_));
+
+	//cmd.setDepthBias(/*constant=*/1.25f, /*clamp=*/0.0f, /*slope=*/1.75f);
+
+	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.shadow_model);
+
+	shadow_map.light_view_proj = ubo_datas_.light.light_view_proj;
+	shadow_map.is_vertex_ssbo = 0u;
+	cmd.pushConstants<ShadowMap>(
+		*pipeline_layouts_.shadow_model,
+		vk::ShaderStageFlagBits::eVertex,
+		0,
+		shadow_map);
+
+	const uint32_t baseObjectOffset = static_cast<uint32_t>(currentFrame * ubo_size_.model * model_manager_.kMaxModels);
+	for (uint32_t i = 0; i < model_manager_.models_.size(); i++)
+	{
+		auto& model = *model_manager_.models_[i];
+
+		if (!model.render_) continue;
+
+		uint32_t objectOffset = baseObjectOffset + i * static_cast<uint32_t>(ubo_size_.model);
+
+		// Model set
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			pipeline_layouts_.shadow_model,
+			0,
+			{ *sets_.model },
+			{ objectOffset }
+		);
+
+		cmd.bindVertexBuffers(0, { model.model_loader_->mesh_.vertex_buffer }, { 0 });
+		cmd.bindIndexBuffer(*model.model_loader_->mesh_.index_buffer, 0, vk::IndexType::eUint32);
+		cmd.drawIndexed(model.model_loader_->mesh_.indices_count, 1, 0, 0, 0);
+	}
+
+	{
+
+		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.shadow_particle);
+		shadow_map.is_vertex_ssbo = 1u;
+		cmd.pushConstants<ShadowMap>(
+			*pipeline_layouts_.shadow_particle,
+			vk::ShaderStageFlagBits::eVertex,
+			0,
+			shadow_map);
+
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			pipeline_layouts_.shadow_particle,
+			0,
+			{ *sets_.shadow_particle },
+			{  }
+		);
+
+		cmd.bindIndexBuffer(*particle_manager_.index_buffer_, 0, vk::IndexType::eUint32);
+		uint32_t totalIndices = particle_manager_.num_cloth_indices_ + particle_manager_.num_softbody_indices_;
+		cmd.drawIndexed(totalIndices, 1, 0, 0, 0);
+	}
+
+	cmd.endRendering();
+
+	{
+		vku::TransitionImageLayoutCustom(
+			shadow_image_,
+			cmd,
+			vk::ImageLayout::eDepthAttachmentOptimal,
+			vk::ImageLayout::eShaderReadOnlyOptimal,
+			vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+			vk::AccessFlagBits2::eShaderSampledRead,
+			vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
+			vk::PipelineStageFlagBits2::eFragmentShader,
+			vk::ImageAspectFlagBits::eDepth
+		);
+	}
+}
+
+void GraphicsPass::PreMainRenderPass(const vk::raii::CommandBuffer& cmd, uint32_t currentFrame)
+{
+
+	auto toShaderWrite = [&](vk::raii::Image& img) {
+		vku::TransitionImageLayoutCustom(
+			img,
+			cmd,
+			first_frame_ ? vk::ImageLayout::eUndefined
+			: vk::ImageLayout::eShaderReadOnlyOptimal,
+			vk::ImageLayout::eColorAttachmentOptimal,
+			{},
+			vk::AccessFlagBits2::eColorAttachmentWrite,
+			vk::PipelineStageFlagBits2::eTopOfPipe,
+			vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+			vk::ImageAspectFlagBits::eColor
+		);
+		};
+
+	// G-buffer: Undefined/ShaderReadOnly ¡æ ColorAttachmentOptimal
+	toShaderWrite(geometry_buffers_.albedo_mettalic_image);
+	toShaderWrite(geometry_buffers_.normal_roughness_image);
+	toShaderWrite(geometry_buffers_.height_ao_image);
+	toShaderWrite(geometry_buffers_.coat_fuzz_image);
+
+	vku::TransitionImageLayoutCustom(
+		depth_image_,
+		cmd,
+		first_frame_ ? vk::ImageLayout::eUndefined
+		: vk::ImageLayout::eShaderReadOnlyOptimal,
+		vk::ImageLayout::eDepthAttachmentOptimal,
+		{},
+		vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+		vk::PipelineStageFlagBits2::eTopOfPipe,
+		vk::PipelineStageFlagBits2::eEarlyFragmentTests,
+		vk::ImageAspectFlagBits::eDepth
+	);
+
+	std::array<vk::RenderingAttachmentInfo, 4> gbufferAttachments;
+
+	auto renderingAttachmentInfo = [&](vk::raii::ImageView& imageView, vk::ClearValue clearColor) {
+		return vk::RenderingAttachmentInfo{
+			.imageView = *imageView,
+			.imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
+			.resolveMode = {},
+			.resolveImageView = {},
+			.resolveImageLayout = {},
+			.loadOp = vk::AttachmentLoadOp::eClear,
+			.storeOp = vk::AttachmentStoreOp::eStore,
+			.clearValue = clearColor
+		};
+		};
+	vk::ClearValue clearColor0 = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f); // albedo+metal
+	gbufferAttachments[0] = renderingAttachmentInfo(geometry_buffers_.albedo_mettalic_image_view, clearColor0);
+	vk::ClearValue clearColor1 = vk::ClearColorValue(0.5f, 0.5f, 1.0f, 1.0f); // normal default (0,0,1)
+	gbufferAttachments[1] = renderingAttachmentInfo(geometry_buffers_.normal_roughness_image_view, clearColor1);
+	vk::ClearValue clearColor2 = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f); // height+AO
+	gbufferAttachments[2] = renderingAttachmentInfo(geometry_buffers_.height_ao_image_view, clearColor2);
+	vk::ClearValue clearColor3 = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f); // coat+fuzz
+	gbufferAttachments[3] = renderingAttachmentInfo(geometry_buffers_.coat_fuzz_image_view, clearColor3);
+
+	vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
+	// Depth attachment
+	vk::RenderingAttachmentInfo depthAttachmentInfo = {
+		.imageView = depth_image_view_,
+		.imageLayout = vk::ImageLayout::eDepthAttachmentOptimal,
+		.loadOp = vk::AttachmentLoadOp::eClear,
+		.storeOp = vk::AttachmentStoreOp::eDontCare,
+		.clearValue = clearDepth
+	};
+	vk::RenderingInfo renderingInfo = {
+		.renderArea = {.offset = { 0, 0 },
+		.extent = swapchain_.swapchain_extent_ },
+		.layerCount = 1,
+		.colorAttachmentCount = static_cast<uint32_t>(gbufferAttachments.size()),
+		.pColorAttachments = gbufferAttachments.data(),
+		.pDepthAttachment = &depthAttachmentInfo
+	};
+
+	cmd.beginRendering(renderingInfo);
+}
+
+void GraphicsPass::MainRenderPass(const vk::raii::CommandBuffer& cmd, uint32_t currentFrame)
+{
+
+	auto& pm = particle_manager_;
+
+	vk::Viewport vp(
+		0.0f,
+		0.0f,
+		static_cast<float>(swapchain_.swapchain_extent_.width),
+		static_cast<float>(swapchain_.swapchain_extent_.height),
+		0.0f, 1.0f
+	);
+	cmd.setViewport(0, vp);
+	cmd.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchain_.swapchain_extent_));
+
+	uint32_t globalOffset = static_cast<uint32_t>(currentFrame * ubo_size_.global);
+	const uint32_t baseObjectOffset = static_cast<uint32_t>(currentFrame * ubo_size_.model * model_manager_.kMaxModels);
+
+	// Model
+	{
+		for (uint32_t i = 0; i < model_manager_.models_.size(); i++)
+		{
+			auto& model = *model_manager_.models_[i];
+
+			if (!model.render_) continue;
+
+			uint32_t objectOffset = baseObjectOffset + i * static_cast<uint32_t>(ubo_size_.model);
+
+			if (model.model_type_ == ModelType::SHAPE)
+			{
+				if (polygon_mode_ == vku::PolygonMode::SOLID)
+					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.model_solid);
+				else if (polygon_mode_ == vku::PolygonMode::WIREFRAME)
+					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.model_wireframe);
+				else if (polygon_mode_ == vku::PolygonMode::POINT)
+					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.model_point);
+
+				// Global Set
+				cmd.bindDescriptorSets(
+					vk::PipelineBindPoint::eGraphics,
+					pipeline_layouts_.model,
+					0,
+					{ *sets_.global },
+					{ globalOffset }
+				);
+
+				// Model set
+				cmd.bindDescriptorSets(
+					vk::PipelineBindPoint::eGraphics,
+					pipeline_layouts_.model,
+					1,
+					{ *sets_.model },
+					{ objectOffset }
+				);
+
+				// tex2D
+				cmd.bindDescriptorSets(
+					vk::PipelineBindPoint::eGraphics,
+					pipeline_layouts_.model,
+					2,
+					{ *texture_manager_.sets_.tex2d },
+					{ }
+				);
+
+				cmd.bindVertexBuffers(0, { model.model_loader_->mesh_.vertex_buffer }, { 0 });
+				cmd.bindIndexBuffer(*model.model_loader_->mesh_.index_buffer, 0, vk::IndexType::eUint32);
+				cmd.drawIndexed(model.model_loader_->mesh_.indices_count, 1, 0, 0, 0);
+			}
+			else if (model.model_type_ == ModelType::SKINNED)
+			{
+				if (polygon_mode_ == vku::PolygonMode::SOLID)
+					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.skinned_model_solid);
+				else if (polygon_mode_ == vku::PolygonMode::WIREFRAME)
+					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.skinned_model_wireframe);
+				else if (polygon_mode_ == vku::PolygonMode::POINT)
+					cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.skinned_model_point);
+
+				// Global Set
+				cmd.bindDescriptorSets(
+					vk::PipelineBindPoint::eGraphics,
+					pipeline_layouts_.skinned_model,
+					0,
+					{ *sets_.global },
+					{ globalOffset }
+				);
+
+				// Model set
+				cmd.bindDescriptorSets(
+					vk::PipelineBindPoint::eGraphics,
+					pipeline_layouts_.skinned_model,
+					1,
+					{ *sets_.model },
+					{ objectOffset }
+				);
+
+				// tex2D
+				cmd.bindDescriptorSets(
+					vk::PipelineBindPoint::eGraphics,
+					pipeline_layouts_.skinned_model,
+					2,
+					{ *texture_manager_.sets_.tex2d },
+					{ }
+				);
+
+				// Skinned
+				const uint32_t skinnedModelOff = static_cast<uint32_t>(currentFrame * ubo_size_.skinned_model);
+				cmd.bindDescriptorSets(
+					vk::PipelineBindPoint::eGraphics,
+					pipeline_layouts_.skinned_model,
+					3,
+					{ *sets_.skinned_model },
+					{ skinnedModelOff }
+				);
+
+				cmd.bindVertexBuffers(0, { model.model_loader_->mesh_.vertex_buffer }, { 0 });
+				cmd.bindIndexBuffer(*model.model_loader_->mesh_.index_buffer, 0, vk::IndexType::eUint32);
+				cmd.drawIndexed(model.model_loader_->mesh_.indices_count, 1, 0, 0, 0);
+
+				// Debug Capsule
+				if (!model.capsule_collision_render_) continue;
+
+				cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.debug_capsule);
+
+				// Global Set
+				cmd.bindDescriptorSets(
+					vk::PipelineBindPoint::eGraphics,
+					pipeline_layouts_.debug_capsule,
+					0,
+					{ *sets_.global },
+					{ globalOffset }
+				);
+
+				auto& debugCapsuleModel = model_manager_.debug_capsule_;
+
+				cmd.bindVertexBuffers(0, { debugCapsuleModel->model_loader_->mesh_.vertex_buffer }, { 0 });
+				cmd.bindIndexBuffer(*debugCapsuleModel->model_loader_->mesh_.index_buffer, 0, vk::IndexType::eUint32);
+
+				for (const auto& inst : model_manager_.models_[model_manager_.models_.size() - 1]->capsule_colliders_) {
+					glm::vec3 p0 = inst.p0;
+					glm::vec3 p1 = inst.p1;
+					float r = inst.radius;
+
+					glm::vec3 center = 0.5f * (p0 + p1);
+					glm::vec3 seg = p1 - p0;
+					float len = glm::length(seg);
+					if (len < 1e-4f) continue;
+
+					glm::vec3 dir = seg / len;
+					glm::quat q = glm::rotation(glm::vec3(0, 1, 0), dir);
+
+					glm::mat4 R = glm::mat4_cast(q);
+					glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3(r, len, r));
+					//glm::mat4 T = glm::translate(glm::mat4(1.0f), center);
+					//glm::mat4 T = glm::translate(glm::translate(glm::mat4(1.0f), glm::vec3(-2.0f, 0.0f, 0.0f)), center);
+					glm::mat4 T = glm::translate(model_manager_.models_[model_manager_.models_.size() - 1]->world_, center);
+					glm::mat4 M = T * R * S;
+
+					struct DebugPushConst {
+						glm::mat4 model;
+						glm::vec4 color;
+					} pc;
+
+					pc.model = M;
+					pc.color = glm::vec4(1, 0, 0, 1);
+
+					cmd.pushConstants<DebugPushConst>(
+						*pipeline_layouts_.debug_capsule,
+						vk::ShaderStageFlagBits::eVertex,
+						0,
+						pc);
+					cmd.drawIndexed(debugCapsuleModel->model_loader_->mesh_.indices_count, 1, 0, 0, 0);
+				}
+			}
+
+		}
+	}
+
+	// Cloth
+	{
+		if (polygon_mode_ == vku::PolygonMode::WIREFRAME)
+			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.cloth_wireframe);
+		else if (polygon_mode_ == vku::PolygonMode::POINT)
+			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.cloth_point);
+		else
+			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.cloth_solid);
+
+		// Global Set
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			pipeline_layouts_.cloth,
+			0,
+			{ *sets_.global },
+			{ globalOffset }
+		);
+
+		// Tex
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			pipeline_layouts_.cloth,
+			2,
+			{ *texture_manager_.sets_.tex2d },
+			{ }
+		);
+
+		cmd.bindIndexBuffer(*pm.index_buffer_, 0, vk::IndexType::eUint32);
+
+		const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * pm.clothes_.size() * ubo_size_.cloth);
+		for (uint32_t i = 0; i < pm.clothes_.size(); i++)
+		{
+			auto& cloth = pm.clothes_[i];
+
+			if (!cloth.render) continue;
+
+			const uint32_t dst = baseOffset + ubo_size_.cloth * i;
+			cmd.bindDescriptorSets(
+				vk::PipelineBindPoint::eGraphics,
+				pipeline_layouts_.cloth,
+				1,
+				{ *sets_.cloth },
+				{ dst }
+			);
+
+			push_constants_.cloth_render.color = cloth.color;
+			push_constants_.cloth_render.nx1 = cloth.nx1;
+			push_constants_.cloth_render.ny1 = cloth.ny1;
+			push_constants_.cloth_render.offset_particle = cloth.offset_particle;
+			cmd.pushConstants<PushConstant::ClothRender>(
+				*pipeline_layouts_.cloth,
+				vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+				0,
+				push_constants_.cloth_render
+			);
+
+			cmd.drawIndexed(cloth.num_indices, 1, cloth.offset_indices, 0, 0);
+		}
+	}
+
+	// Softbody
+	{
+
+		if (polygon_mode_ == vku::PolygonMode::WIREFRAME)
+			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.softbody_wireframe);
+		else if (polygon_mode_ == vku::PolygonMode::POINT)
+			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.softbody_point);
+		else
+			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.softbody_solid);
+
+		// Global Set
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			pipeline_layouts_.softbody,
+			0,
+			{ *sets_.global },
+			{ globalOffset }
+		);
+
+		cmd.bindIndexBuffer(*pm.index_buffer_, 0, vk::IndexType::eUint32);
+
+		const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * pm.softbodies_.size() * ubo_size_.softbody);
+
+		for (uint32_t i = 0; i < pm.softbodies_.size(); i++)
+		{
+			auto& softbody = pm.softbodies_[i];
+
+			if (!softbody.render) continue;
+
+			const uint32_t offset = baseOffset + i * ubo_size_.softbody;
+			cmd.bindDescriptorSets(
+				vk::PipelineBindPoint::eGraphics,
+				pipeline_layouts_.softbody,
+				1,
+				{ *sets_.softbody },
+				{ offset }
+			);
+
+			push_constants_.softbody.color = pm.softbodies_[i].color;
+			cmd.pushConstants<PushConstant::SoftBody>(
+				*pipeline_layouts_.softbody,
+				vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+				0,
+				push_constants_.softbody
+			);
+
+			cmd.drawIndexed(pm.softbodies_[i].num_indices, 1, pm.softbodies_[i].offset_indices, 0, 0);
+		}
+	}
+
+	cmd.endRendering();
+}
+
+void GraphicsPass::PostMainRenderPass(const vk::raii::CommandBuffer& cmd, uint32_t imageIndex)
+{
+	auto toShaderRead = [&](vk::raii::Image& img) {
+		vku::TransitionImageLayoutCustom(
+			img,
+			cmd,
+			vk::ImageLayout::eColorAttachmentOptimal,
+			vk::ImageLayout::eShaderReadOnlyOptimal,
+			vk::AccessFlagBits2::eColorAttachmentWrite,
+			vk::AccessFlagBits2::eShaderRead,
+			vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+			vk::PipelineStageFlagBits2::eFragmentShader,
+			vk::ImageAspectFlagBits::eColor
+		);
+		};
+	toShaderRead(geometry_buffers_.albedo_mettalic_image);
+	toShaderRead(geometry_buffers_.normal_roughness_image);
+	toShaderRead(geometry_buffers_.height_ao_image);
+	toShaderRead(geometry_buffers_.coat_fuzz_image);
+
+	vku::TransitionImageLayoutCustom(
+		depth_image_,
+		cmd,
+		vk::ImageLayout::eDepthAttachmentOptimal,
+		vk::ImageLayout::eShaderReadOnlyOptimal,
+		vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+		vk::AccessFlagBits2::eShaderRead,
+		vk::PipelineStageFlagBits2::eLateFragmentTests,
+		vk::PipelineStageFlagBits2::eFragmentShader,
+		vk::ImageAspectFlagBits::eDepth
+	);
+
+	vku::TransitionImageLayout(
+		swapchain_.swapchain_images_[imageIndex],
+		cmd,
+		vk::ImageLayout::eUndefined,
+		vk::ImageLayout::eColorAttachmentOptimal,
+		{},
+		vk::AccessFlagBits2::eColorAttachmentWrite,
+		vk::PipelineStageFlagBits2::eTopOfPipe,
+		vk::PipelineStageFlagBits2::eColorAttachmentOutput
+	);
+}
+
+void GraphicsPass::LightingPass(const vk::raii::CommandBuffer& cmd, uint32_t imageIndex, uint32_t currentFrame)
+{
+	vk::ClearValue clearColor = vk::ClearColorValue(
+		0.0f, 0.0f, 0.0f, 1.0f);
+
+	vk::RenderingAttachmentInfo colorAttachmentInfo{
+		.imageView = swapchain_.swapchain_image_views_[imageIndex],
+		.imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
+		.resolveMode = {},
+		.resolveImageView = {},
+		.resolveImageLayout = {},
+		.loadOp = vk::AttachmentLoadOp::eClear,
+		.storeOp = vk::AttachmentStoreOp::eStore,
+		.clearValue = clearColor
+	};
+
+	vk::RenderingInfo lightingRenderingInfo{
+		.renderArea = { {0, 0}, swapchain_.swapchain_extent_ },
+		.layerCount = 1,
+		.colorAttachmentCount = 1,
+		.pColorAttachments = &colorAttachmentInfo,
+		.pDepthAttachment = nullptr
+	};
+
+	cmd.beginRendering(lightingRenderingInfo);
+
+	vk::Viewport vp(
+		0.0f,
+		0.0f,
+		static_cast<float>(swapchain_.swapchain_extent_.width),
+		static_cast<float>(swapchain_.swapchain_extent_.height),
+		0.0f, 1.0f
+	);
+	cmd.setViewport(0, vp);
+	cmd.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchain_.swapchain_extent_));
+
+	// --- lighting pipeline bind ---
+	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.lighting);
+
+	uint32_t lightOffset = static_cast<uint32_t>(currentFrame * ubo_size_.light);
+	cmd.bindDescriptorSets(
+		vk::PipelineBindPoint::eGraphics,
+		pipeline_layouts_.lighting,
+		0,
+		{ *sets_.lighting },
+		{ lightOffset }
+	);
+
+	uint32_t skyboxOffset = static_cast<uint32_t>(currentFrame * ubo_size_.skybox);
+	cmd.bindDescriptorSets(
+		vk::PipelineBindPoint::eGraphics,
+		pipeline_layouts_.lighting,
+		1,
+		{ *sets_.skybox },
+		{ skyboxOffset }
+	);
+
+	// tex2D
+	cmd.bindDescriptorSets(
+		vk::PipelineBindPoint::eGraphics,
+		pipeline_layouts_.lighting,
+		2,
+		{ *texture_manager_.sets_.tex2d },
+		{ }
+	);
+
+	// texEnv
+	cmd.bindDescriptorSets(
+		vk::PipelineBindPoint::eGraphics,
+		pipeline_layouts_.lighting,
+		3,
+		{ *texture_manager_.sets_.tex_env },
+		{ }
+	);
+
+	// fullscreen triangle
+	cmd.draw(3, 1, 0, 0);
 }

@@ -98,13 +98,12 @@ void TextureManager::ConvertFileToKtx(const std::string& folderPath)
 		ktxPath.replace_extension(".ktx2");
 
 		if (fs::exists(ktxPath, ec) && !ec) {
-			std::cout << "[KTX] exists, skip: " << ktxPath.string() << std::endl;
+			//std::cout << "[KTX] exists, skip: " << ktxPath.string() << std::endl;
 			continue;
 		}
 		ec.clear();
 
-		std::cout << "[KTX] create: " << srcPath.string()
-			<< " -> " << ktxPath.string() << std::endl;
+		//std::cout << "[KTX] create: " << srcPath.string() << " -> " << ktxPath.string() << std::endl;
 
 		CreateKtxFromFile(srcPath, ktxPath);
 	}
@@ -173,7 +172,7 @@ int TextureManager::CreateTexture(std::string path, std::string findWord, bool i
 	auto CreateTexture = [&](std::string path, std::string filename)
 		{
 			std::string texPath = path + "/" + filename;
-			std::cout << "Load " << texPath << std::endl;
+			//std::cout << "Load " << texPath << std::endl;
 			fs::path p(texPath);
 			std::unique_ptr<Texture> texture = std::make_unique<Texture>(path, filename, context_);
 			if (isCubemap)

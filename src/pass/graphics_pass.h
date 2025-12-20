@@ -39,12 +39,6 @@ public:
 		ubo_data::Shadow shadow;
 	} ubo_datas_;
 
-	vk::raii::Image shadow_image_ = nullptr;
-	vk::raii::DeviceMemory shadow_image_memory_ = nullptr;
-	vk::raii::ImageView shadow_image_view_ = nullptr;
-	vk::raii::Sampler shadow_sampler = nullptr;
-	vk::Extent2D shadow_extent_{ 2048, 2048 };
-
 private:
 	Context& context_;
 	Swapchain& swapchain_;
@@ -211,12 +205,15 @@ private:
 
 	} geometry_buffers_;
 
-	glm::vec3 background_color_ = glm::vec3(glm::pow(214.0f / 255.0f, 2.2f), glm::pow(225.0f / 255.0f, 2.2f), glm::pow(252.0f / 255.0f, 2.2f));
-
 	vk::raii::Image depth_image_ = nullptr;
 	vk::raii::DeviceMemory depth_image_memory_ = nullptr;
 	vk::raii::ImageView depth_image_view_ = nullptr;
 
+	vk::raii::Image shadow_image_ = nullptr;
+	vk::raii::DeviceMemory shadow_image_memory_ = nullptr;
+	vk::raii::ImageView shadow_image_view_ = nullptr;
+	vk::raii::Sampler shadow_sampler = nullptr;
+	vk::Extent2D shadow_extent_{ 2048, 2048 };
 
 private:
 	void CreateCommandBuffers();
@@ -227,4 +224,10 @@ private:
 	void CreateDescriptorSets();
 	void CreateGeometryBuffers();
 	void CreateGraphicsPipelines();
+
+	void ShadowDepthOnlyPass(const vk::raii::CommandBuffer& cmd, uint32_t currentFrame);
+	void PreMainRenderPass(const vk::raii::CommandBuffer& cmd, uint32_t currentFrame);
+	void MainRenderPass(const vk::raii::CommandBuffer& cmd, uint32_t currentFrame);
+	void PostMainRenderPass(const vk::raii::CommandBuffer& cmd, uint32_t imageIndex);
+	void LightingPass(const vk::raii::CommandBuffer& cmd, uint32_t imageIndex, uint32_t currentFrame);
 };

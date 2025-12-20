@@ -229,8 +229,7 @@ struct SimData {
 			vertMask[e.j] |= (1u << color);
 		}
 
-		std::cout << "Stretch edges colored. numColors = "
-			<< (maxColorUsed + 1) << std::endl;
+		//std::cout << "Stretch edges colored. numColors = " << (maxColorUsed + 1) << std::endl;
 
 		std::sort(stretch.begin(), stretch.end(),
 			[](const StretchEdge& a, const StretchEdge& b) {
