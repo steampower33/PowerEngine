@@ -875,6 +875,22 @@ void GUI::SetRenderingGUI(RowFn&& row)
 			bool check = enable; ImGui::Checkbox(label, &check); enable = check;
 			};
 
+		ImGui::SeparatorText("InfiniteGrid");
+		ImGui::Indent();
+		ImGui::BeginChild("InfiniteGrid", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+
+		if (ImGui::BeginTable("SpotLight", 2,
+			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+		{
+			row("Enable", [&] { ImGui::Checkbox("##Enable", &gp.infinite_pass_enable_); });
+
+			ImGui::EndTable();
+		}
+		
+
+		ImGui::EndChild();
+		ImGui::Unindent();
+
 		ImGui::SeparatorText("PolygonMode");
 		ImGui::Indent();
 		ImGui::BeginChild("PolygonMode", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);

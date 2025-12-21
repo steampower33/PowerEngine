@@ -1,31 +1,50 @@
+/*
+    Infinite Grid Shader (Vulkan GLSL 450)
+
+    Inspired by OGLDEV (Etay Meiri) examples/tutorials:
+      Repo: https://github.com/emeiri/ogldev
+      Reference: https://github.com/emeiri/ogldev/blob/master/DemoLITION/Framework/Shaders/GL/infinite_grid.vs
+
+    Notes:
+    - This implementation is written for Vulkan and adapted to this engine's coordinate system,
+      descriptor bindings, and render pipeline.
+*/
+
 #version 450
 #extension GL_KHR_vulkan_glsl : enable
 
-const float grid_size = 1.0;
+const float cell_size = 100.0;
 
-const vec4 positions[4] = vec4[](
-    vec4(-0.5, 0.0,  0.5, 1.0),
-    vec4( 0.5, 0.0,  0.5, 1.0),
-    vec4(-0.5, 0.0, -0.5, 1.0),
-    vec4( 0.5, 0.0, -0.5, 1.0)
+const vec3 pos[4] = vec3[4](
+    vec3(-1.0, 0.0, -1.0),      // bottom left
+    vec3( 1.0, 0.0, -1.0),      // bottom right
+    vec3( 1.0, 0.0,  1.0),      // top right
+    vec3(-1.0, 0.0,  1.0)       // top left
 );
 
-layout(location = 0) out vec2 outCoords;
+const int indices[6] = int[6](0, 2, 1, 2, 0, 3);
 
-layout(set = 0, binding = 0) uniform Global
+layout(set = 0, binding = 0) uniform Grid
 {
     mat4 view;
     mat4 proj;
-} global;
+
+    vec3 camera_pos;
+    float p0;
+} grid;
+
+layout(location = 0) out vec3 out_world_pos;
 
 void main()
 {
     uint id = uint(gl_VertexIndex);
+    int idx = indices[id];
 
-    vec4 world_pos = positions[id];
-    world_pos.xyz *= grid_size;
+    vec3 world_pos = pos[idx] * cell_size;
+    world_pos.x += grid.camera_pos.x;
+    world_pos.z += grid.camera_pos.z;
 
-    gl_Position = global.proj * global.view * world_pos;
+    out_world_pos = world_pos;
 
-    outCoords = world_pos.xz;
+    gl_Position = grid.proj * grid.view * vec4(world_pos, 1.0);
 }

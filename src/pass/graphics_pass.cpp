@@ -164,6 +164,17 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera, bool
 		}
 	}
 
+	// grid
+	{
+		const uint32_t globalOffset = static_cast<uint32_t>(currentFrame * ubo_size_.grid);
+		auto* dst = static_cast<std::byte*>(ubo_mapped_.grid) + globalOffset;
+
+		ubo_datas_.grid.view = camera.View();
+		ubo_datas_.grid.proj = camera.Proj(swapchain_.swapchain_extent_.width, swapchain_.swapchain_extent_.height);
+		ubo_datas_.grid.camera_pos = camera.position;
+
+		std::memcpy(dst, &ubo_datas_.grid, sizeof(ubo_data::Grid));
+	}
 }
 
 // ============================
@@ -196,18 +207,14 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 			vk::AccessFlagBits2::eShaderStorageRead);
 	}
 
-
 	ShadowDepthOnlyPass(cmd, currentFrame);
 	PreMainRenderPass(cmd, currentFrame);
 	MainRenderPass(cmd, currentFrame);
 	PostMainRenderPass(cmd, imageIndex);
 	LightingPass(cmd, imageIndex, currentFrame);
+	InfiniteGridPass(cmd, imageIndex, currentFrame);
 
 	{
-		ImDrawData* draw_data = ImGui::GetDrawData();
-		ImGui_ImplVulkan_RenderDrawData(draw_data, *cmd);
-
-		cmd.endRendering();
 
 		vku::TransitionImageLayout(
 			swapchain_.swapchain_images_[imageIndex],
@@ -465,6 +472,24 @@ void GraphicsPass::CreateDescriptorSetLayout()
 		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
 		set_layouts_.shadow_particle = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
 	}
+
+	// grid
+	{
+		std::array layoutBindings{
+			vk::DescriptorSetLayoutBinding(
+				0,
+				vk::DescriptorType::eUniformBufferDynamic,
+				1,
+				vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+				nullptr
+			)
+		};
+		counts_.ubo_dynamic += 1;
+		counts_.layout += 1;
+
+		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
+		set_layouts_.grid = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
+	}
 }
 
 void GraphicsPass::CreateDescriptorPools() {
@@ -643,6 +668,25 @@ void GraphicsPass::CreateUniformBuffers()
 		ubos_.skinned_model = std::move(buffer);
 		ubo_memories_.skinned_model = std::move(bufferMem);
 		ubo_mapped_.skinned_model = ubo_memories_.skinned_model.mapMemory(0, totalSize);
+	}
+
+	// grid
+	{
+		ubos_.grid.clear();
+		ubo_memories_.grid.clear();
+		ubo_mapped_.grid = nullptr;
+
+		auto limits = context_.physical_device_.getProperties().limits;
+		ubo_size_.grid = (sizeof(ubo_data::Grid) + limits.minUniformBufferOffsetAlignment - 1)
+			& ~(limits.minUniformBufferOffsetAlignment - 1);
+		vk::DeviceSize totalSize = ubo_size_.grid * MAX_FRAMES_IN_FLIGHT;
+
+		vk::raii::Buffer buffer({});
+		vk::raii::DeviceMemory bufferMem({});
+		vku::CreateBuffer(context_.physical_device_, context_.device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
+		ubos_.grid = std::move(buffer);
+		ubo_memories_.grid = std::move(bufferMem);
+		ubo_mapped_.grid = ubo_memories_.grid.mapMemory(0, totalSize);
 	}
 }
 
@@ -979,6 +1023,32 @@ void GraphicsPass::CreateDescriptorSets()
 		};
 		context_.device_.updateDescriptorSets(descriptorWrites, {});
 	}
+
+	// grid
+	{
+		vk::DescriptorSetAllocateInfo allocInfo{
+			.descriptorPool = *descriptor_pool_,
+			.descriptorSetCount = 1,
+			.pSetLayouts = &*set_layouts_.grid
+		};
+
+		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
+		sets_.grid = std::move(sets.front());
+
+		vk::DescriptorBufferInfo gridUboBufferInfo{ *ubos_.grid, 0, ubo_size_.grid };
+
+		std::array descriptorWrites{
+			 vk::WriteDescriptorSet{
+				.dstSet = *sets_.grid,
+				.dstBinding = 0,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
+				.pBufferInfo = &gridUboBufferInfo
+			}
+		};
+		context_.device_.updateDescriptorSets(descriptorWrites, {});
+	}
 }
 
 void GraphicsPass::CreateGeometryBuffers()
@@ -1211,7 +1281,7 @@ void GraphicsPass::CreateGraphicsPipelines()
 		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain =
 		{
 			{
-				.stageCount = 2,
+				.stageCount = stages.size(),
 				.pStages = stages.data(),
 				.pVertexInputState = &vi,
 				.pInputAssemblyState = &ia,
@@ -1335,7 +1405,7 @@ void GraphicsPass::CreateGraphicsPipelines()
 		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain =
 		{
 			{
-				.stageCount = 2,
+				.stageCount = stages.size(),
 				.pStages = stages.data(),
 				.pVertexInputState = &vi,
 				.pInputAssemblyState = &ia,
@@ -1472,7 +1542,7 @@ void GraphicsPass::CreateGraphicsPipelines()
 		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain =
 		{
 			{
-				.stageCount = 2,
+				.stageCount = stages.size(),
 				.pStages = stages.data(),
 				.pVertexInputState = &vi,
 				.pInputAssemblyState = &ia,
@@ -1602,7 +1672,7 @@ void GraphicsPass::CreateGraphicsPipelines()
 		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain =
 		{
 			{
-				.stageCount = 2,
+				.stageCount = stages.size(),
 				.pStages = stages.data(),
 				.pVertexInputState = &vi,
 				.pInputAssemblyState = &ia,
@@ -1742,7 +1812,7 @@ void GraphicsPass::CreateGraphicsPipelines()
 		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain =
 		{
 			{
-				.stageCount = 2,
+				.stageCount = stages.size(),
 				.pStages = stages.data(),
 				.pVertexInputState = &vi,
 				.pInputAssemblyState = &ia,
@@ -1880,7 +1950,7 @@ void GraphicsPass::CreateGraphicsPipelines()
 		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain =
 		{
 			{
-				.stageCount = 2,
+				.stageCount = stages.size(),
 				.pStages = stages.data(),
 				.pVertexInputState = &vi,
 				.pInputAssemblyState = &ia,
@@ -2024,7 +2094,7 @@ void GraphicsPass::CreateGraphicsPipelines()
 		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain =
 		{
 			{
-				.stageCount = 2,
+				.stageCount = stages.size(),
 				.pStages = stages.data(),
 				.pVertexInputState = &vi,
 				.pInputAssemblyState = &ia,
@@ -2152,7 +2222,7 @@ void GraphicsPass::CreateGraphicsPipelines()
 		// Pipeline
 		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
 			{
-				.stageCount = 1,
+				.stageCount = stages.size(),
 				.pStages = stages.data(),
 				.pVertexInputState = &vi,
 				.pInputAssemblyState = &ia,
@@ -2280,7 +2350,7 @@ void GraphicsPass::CreateGraphicsPipelines()
 		// Pipeline
 		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
 			{
-				.stageCount = 1,
+				.stageCount = stages.size(),
 				.pStages = stages.data(),
 				.pVertexInputState = &vi,
 				.pInputAssemblyState = &ia,
@@ -2325,7 +2395,7 @@ void GraphicsPass::CreateGraphicsPipelines()
 		vk::PipelineVertexInputStateCreateInfo vi{};
 
 		vk::PipelineInputAssemblyStateCreateInfo ia{
-			.topology = vk::PrimitiveTopology::eTriangleStrip, // 4 verts = quad
+			.topology = vk::PrimitiveTopology::eTriangleList,
 			.primitiveRestartEnable = vk::False
 		};
 
@@ -2366,13 +2436,13 @@ void GraphicsPass::CreateGraphicsPipelines()
 			vk::ColorComponentFlagBits::eB |
 			vk::ColorComponentFlagBits::eA;
 
-		blendAtt.blendEnable = vk::True;
-		blendAtt.srcColorBlendFactor = vk::BlendFactor::eSrcAlpha;
-		blendAtt.dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
-		blendAtt.colorBlendOp = vk::BlendOp::eAdd;
-		blendAtt.srcAlphaBlendFactor = vk::BlendFactor::eOne;
-		blendAtt.dstAlphaBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
-		blendAtt.alphaBlendOp = vk::BlendOp::eAdd;
+		//blendAtt.blendEnable = vk::True;
+		//blendAtt.srcColorBlendFactor = vk::BlendFactor::eSrcAlpha;
+		//blendAtt.dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
+		//blendAtt.colorBlendOp = vk::BlendOp::eAdd;
+		//blendAtt.srcAlphaBlendFactor = vk::BlendFactor::eOne;
+		//blendAtt.dstAlphaBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
+		//blendAtt.alphaBlendOp = vk::BlendOp::eAdd;
 
 		vk::PipelineColorBlendStateCreateInfo cb{
 			.logicOpEnable = vk::False,
@@ -2391,7 +2461,7 @@ void GraphicsPass::CreateGraphicsPipelines()
 
 		// Pipeline Layout
 		std::array<vk::DescriptorSetLayout, 1> setLayouts(
-			*set_layouts_.global
+			*set_layouts_.grid
 		);
 
 		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
@@ -2412,7 +2482,7 @@ void GraphicsPass::CreateGraphicsPipelines()
 
 		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
 			{
-				.stageCount = 1,
+				.stageCount = stages.size(),
 				.pStages = stages.data(),
 				.pVertexInputState = &vi,
 				.pInputAssemblyState = &ia,
@@ -3058,4 +3128,90 @@ void GraphicsPass::LightingPass(const vk::raii::CommandBuffer& cmd, uint32_t ima
 
 	// fullscreen triangle
 	cmd.draw(3, 1, 0, 0);
+
+	cmd.endRendering();
+}
+
+void GraphicsPass::InfiniteGridPass(const vk::raii::CommandBuffer& cmd, uint32_t imageIndex, uint32_t currentFrame)
+{
+
+	vku::TransitionImageLayoutCustom(
+		depth_image_, cmd,
+		vk::ImageLayout::eShaderReadOnlyOptimal,
+		vk::ImageLayout::eDepthStencilReadOnlyOptimal,
+		vk::AccessFlagBits2::eShaderRead,
+		vk::AccessFlagBits2::eDepthStencilAttachmentRead,
+		vk::PipelineStageFlagBits2::eFragmentShader,
+		vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
+		vk::ImageAspectFlagBits::eDepth
+	);
+
+	vk::RenderingAttachmentInfo colorAttachmentInfo{
+		.imageView = swapchain_.swapchain_image_views_[imageIndex],
+		.imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
+		.resolveMode = {},
+		.resolveImageView = {},
+		.resolveImageLayout = {},
+		.loadOp = vk::AttachmentLoadOp::eLoad,
+		.storeOp = vk::AttachmentStoreOp::eStore,
+	};
+	vk::RenderingAttachmentInfo depthAtt{
+		  .imageView = depth_image_view_,
+		  .imageLayout = vk::ImageLayout::eDepthStencilReadOnlyOptimal,
+		  .loadOp = vk::AttachmentLoadOp::eLoad,
+		  .storeOp = vk::AttachmentStoreOp::eNone,
+	};
+
+	vk::RenderingInfo ri{
+		.renderArea = { {0, 0}, swapchain_.swapchain_extent_ },
+		.layerCount = 1,
+		.colorAttachmentCount = 1,
+		.pColorAttachments = &colorAttachmentInfo,
+		.pDepthAttachment = &depthAtt
+	};
+
+	cmd.beginRendering(ri);
+
+	vk::Viewport vp(
+		0.0f,
+		0.0f,
+		static_cast<float>(swapchain_.swapchain_extent_.width),
+		static_cast<float>(swapchain_.swapchain_extent_.height),
+		0.0f, 1.0f
+	);
+	cmd.setViewport(0, vp);
+	cmd.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapchain_.swapchain_extent_));
+
+	if (infinite_pass_enable_)
+	{
+		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.infinite_grid);
+
+		uint32_t gridOffset = static_cast<uint32_t>(currentFrame * ubo_size_.grid);
+		// grid set
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			pipeline_layouts_.infinite_grid,
+			0,
+			{ *sets_.grid },
+			{ gridOffset }
+		);
+		cmd.draw(6, 1, 0, 0);
+	}
+
+	// ImGUI
+	ImDrawData* draw_data = ImGui::GetDrawData();
+	ImGui_ImplVulkan_RenderDrawData(draw_data, *cmd);
+
+	cmd.endRendering();
+
+	vku::TransitionImageLayoutCustom(
+		depth_image_, cmd,
+		vk::ImageLayout::eDepthStencilReadOnlyOptimal,
+		vk::ImageLayout::eShaderReadOnlyOptimal,
+		vk::AccessFlagBits2::eDepthStencilAttachmentRead,
+		vk::AccessFlagBits2::eShaderRead,
+		vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
+		vk::PipelineStageFlagBits2::eFragmentShader,
+		vk::ImageAspectFlagBits::eDepth
+	);
 }

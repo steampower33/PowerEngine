@@ -37,7 +37,10 @@ public:
 		ubo_data::Light light;
 		ubo_data::SkyBox skybox;
 		ubo_data::Shadow shadow;
+		ubo_data::Grid grid;
 	} ubo_datas_;
+
+	bool infinite_pass_enable_ = false;
 
 private:
 	Context& context_;
@@ -91,6 +94,7 @@ private:
 		vk::raii::Buffer cloth{ nullptr };
 		vk::raii::Buffer softbody{ nullptr };
 		vk::raii::Buffer skinned_model{ nullptr };
+		vk::raii::Buffer grid{ nullptr };
 	} ubos_;
 
 	struct UBOMemory {
@@ -101,6 +105,7 @@ private:
 		vk::raii::DeviceMemory cloth{ nullptr };
 		vk::raii::DeviceMemory softbody{ nullptr };
 		vk::raii::DeviceMemory skinned_model{ nullptr };
+		vk::raii::DeviceMemory grid{ nullptr };
 	} ubo_memories_;
 
 	struct UBOMapped {
@@ -111,6 +116,7 @@ private:
 		void* cloth{ nullptr };
 		void* softbody{ nullptr };
 		void* skinned_model{ nullptr };
+		void* grid{ nullptr };
 	} ubo_mapped_;
 
 	struct UBOSize {
@@ -121,6 +127,7 @@ private:
 		vk::DeviceSize cloth;
 		vk::DeviceSize softbody;
 		vk::DeviceSize skinned_model;
+		vk::DeviceSize grid;
 	} ubo_size_;
 
 	struct SetLayout {
@@ -132,6 +139,7 @@ private:
 		vk::raii::DescriptorSetLayout softbody{ nullptr };
 		vk::raii::DescriptorSetLayout skinned_model{ nullptr };
 		vk::raii::DescriptorSetLayout shadow_particle{ nullptr };
+		vk::raii::DescriptorSetLayout grid{ nullptr };
 	} set_layouts_;
 
 	struct Set {
@@ -143,6 +151,7 @@ private:
 		vk::raii::DescriptorSet softbody{ nullptr };
 		vk::raii::DescriptorSet skinned_model{ nullptr };
 		vk::raii::DescriptorSet shadow_particle{ nullptr };
+		vk::raii::DescriptorSet grid{ nullptr };
 	} sets_;
 
 	struct PipelineLayout {
@@ -233,4 +242,5 @@ private:
 	void MainRenderPass(const vk::raii::CommandBuffer& cmd, uint32_t currentFrame);
 	void PostMainRenderPass(const vk::raii::CommandBuffer& cmd, uint32_t imageIndex);
 	void LightingPass(const vk::raii::CommandBuffer& cmd, uint32_t imageIndex, uint32_t currentFrame);
+	void InfiniteGridPass(const vk::raii::CommandBuffer& cmd, uint32_t imageIndex, uint32_t currentFrame);
 };

@@ -92,4 +92,13 @@ namespace ubo_data {
 		glm::mat4 light_view_proj;
 	};
 	static_assert(sizeof(Shadow) % 16 == 0, "std140 must be 16-byte aligned.");
+
+	struct Grid {
+		glm::mat4 view;
+		glm::mat4 proj;
+
+		glm::vec3 camera_pos;
+		float p0;
+	};
+	static_assert(sizeof(Grid) % 16 == 0, "std140 must be 16-byte aligned.");
 }
