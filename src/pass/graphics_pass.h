@@ -155,6 +155,7 @@ private:
 		vk::raii::PipelineLayout debug_capsule{ nullptr };
 		vk::raii::PipelineLayout shadow_model{ nullptr };
 		vk::raii::PipelineLayout shadow_particle{ nullptr };
+		vk::raii::PipelineLayout infinite_grid{ nullptr };
 	} pipeline_layouts_;
 
 	struct Pipeline {
@@ -180,6 +181,8 @@ private:
 
 		vk::raii::Pipeline shadow_model{ nullptr };
 		vk::raii::Pipeline shadow_particle{ nullptr };
+
+		vk::raii::Pipeline infinite_grid{ nullptr };
 	} pipelines_;
 
 	struct GeometryBuffer {

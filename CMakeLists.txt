@@ -182,6 +182,8 @@ set(OBJECT_RENDER_SHADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/debug_capsule.frag
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/shadow_model.vert
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/shadow_particle.vert
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/infinite_grid.vert
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/object/infinite_grid.frag
 )
 compile_glsl_shaders(object_render_shaders_target SOURCES ${OBJECT_RENDER_SHADERS})
 
