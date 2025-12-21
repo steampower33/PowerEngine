@@ -149,7 +149,7 @@ float shadow_PCF(vec3 world_pos, vec3 world_normal)
 
     if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 1.0;
 
-    float bias = 0.001;
+    float bias = 0.0001;
     z -= bias;
 
     vec2 texel = light.shadow_map_inv_size;
