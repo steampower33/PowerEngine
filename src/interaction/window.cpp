@@ -270,7 +270,7 @@ void Window::ProcessKeyboard(float dt) {
 		if (key_timeout_ < 0.0f)
 		{
 			paused_ = !paused_;
-			key_timeout_ = 0.2f;
+			key_timeout_ = 0.1f;
 		}
 	}
 	// Z
@@ -279,7 +279,7 @@ void Window::ProcessKeyboard(float dt) {
 		if (key_timeout_ < 0.0f)
 		{
 			pause_eachframe_ = !pause_eachframe_;
-			key_timeout_ = 0.2f;
+			key_timeout_ = 0.1f;
 		}
 	}
 

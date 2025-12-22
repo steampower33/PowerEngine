@@ -30,7 +30,6 @@ set_source_files_properties(${IMGUI_SOURCES} PROPERTIES SKIP_PRECOMPILE_HEADERS 
 
 add_subdirectory(external/vulkan_radix_sort)
 
-
 set(CMAKE_PREFIX_PATH "F:/vcpkg/installed/x64-windows" ${CMAKE_PREFIX_PATH})
 
 find_package(Vulkan REQUIRED)

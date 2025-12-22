@@ -22,10 +22,10 @@ namespace vku
 	};
 
 	struct TestScene {
-		bool sphereCollision = false;
-		bool pinnedCorner = false;
-		bool topPinnedCorner = false;
-		bool selfCollision = false;
+		bool sphere_collision = false;
+		bool pinned_corner = false;
+		bool top_pinned_corner = false;
+		bool vertical_drop = false;
 	};
 
 	struct VertexIncludeInfo {

@@ -700,7 +700,7 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 			row("GlobalDamping", [&] { ImGui::DragFloat("##GlobalDamping", &sim.ubo_.datas.sim_params.global_damping, 0.1f, 1.0f, 2.0f); });
 			row("RelaxationFactor", [&] { ImGui::DragFloat("##RelaxationFactor", &sim.ubo_.datas.sim_params.relaxation_factor, 0.1f, 0.0f, 1.0f); });
 			row("Thickness", [&] { ImGui::DragFloat("##Thickness", &sim.ubo_.datas.sim_params.thickness, 0.001f, 0.0f, 1.0f, "%.3f"); });
-			row("Friction", [&] { ImGui::DragFloat("##Friction", &sim.ubo_.datas.sim_params.friction, 0.001f, 0.0f, 1.0f, "%.3f"); });
+			row("Friction", [&] { ImGui::DragFloat("##Friction", &sim.ubo_.datas.sim_params.friction, 0.001f, 0.0f, 1000.0f, "%.3f"); });
 			row("CollideCompliance", [&] { ImGui::DragFloat("##CollideCompliance", &sim.datas_.compliance.collide,
 				1e-9f, 0.0f, 1.0f, "%.9f"); });
 			row("NeighborFriction", [&] { ImGui::DragFloat("##NeighborFriction", &sim.ubo_.datas.sim_params.neighbor_friction, 0.1f, 0.0f, 10.0f, "%.1f"); });
@@ -839,27 +839,25 @@ void GUI::SetTestSceneGUI(RowFn&& row)
 	auto& scene = pass_manager_.test_scene_;
 
 	ImVec2 buttonSize = ImVec2(ImGui::GetContentRegionAvail().x, 0);
-	if (ImGui::Button("SphereCollision", buttonSize))
+	if (ImGui::Button("Sphere Collision", buttonSize))
 	{
-		scene.sphereCollision = true;
+		scene.sphere_collision = true;
 	}
 
-	if (ImGui::Button("PinnedCorner", buttonSize))
+	if (ImGui::Button("Pinned Corner", buttonSize))
 	{
-		scene.pinnedCorner = true;
+		scene.pinned_corner = true;
 	}
 
-	if (ImGui::Button("TopPinnedCorner", buttonSize))
+	if (ImGui::Button("Top Pinned Corner", buttonSize))
 	{
-		scene.topPinnedCorner = true;
+		scene.top_pinned_corner = true;
 	}
 
-	if (ImGui::Button("SelfCollision", buttonSize))
+	if (ImGui::Button("Vertical Drop", buttonSize))
 	{
-		scene.selfCollision = true;
+		scene.vertical_drop = true;
 	}
-
-
 }
 
 template<typename RowFn>

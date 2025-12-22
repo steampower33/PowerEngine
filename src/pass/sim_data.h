@@ -10,8 +10,8 @@ struct SimData {
 		float softbody_stretch = 1e-6f;
 		float softbody_volume = 1e-6f;
 		float shear = 1e-6f;
-		float bend = 1.0f;
-		float area = 1.0f;
+		float bend = 1e-2f;
+		float area = 1e-2f;
 		float self_collision = 1e-9f;
 		float collide = 1e-9f;
 	} compliance;
@@ -133,8 +133,6 @@ struct SimData {
 
 	void BuildStretchConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices, std::vector<Cloth> cloth)
 	{
-		uint32_t offsetIndices = cloth[0].offset_indices;
-
 		uint32_t numIndices = 0;
 		for (auto& c : cloth)
 		{
@@ -158,9 +156,9 @@ struct SimData {
 
 		for (size_t t = 0; t < numTris; ++t)
 		{
-			uint32_t i0 = indices[offsetIndices + 3 * t + 0];
-			uint32_t i1 = indices[offsetIndices + 3 * t + 1];
-			uint32_t i2 = indices[offsetIndices + 3 * t + 2];
+			uint32_t i0 = indices[3 * t + 0];
+			uint32_t i1 = indices[3 * t + 1];
+			uint32_t i2 = indices[3 * t + 2];
 
 			addEdge(i0, i1);
 			addEdge(i1, i2);
@@ -262,9 +260,15 @@ struct SimData {
 		num_cloth_edges = static_cast<uint32_t>(edges.size());
 	}
 
-	void BuildShearConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices)
+	void BuildShearConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices, std::vector<Cloth> cloth)
 	{
-		const size_t numTris = indices.size() / 3;
+		uint32_t numIndices = 0;
+		for (auto& c : cloth)
+		{
+			numIndices += c.num_indices;
+		}
+
+		const size_t numTris = numIndices / 3;
 
 		for (size_t t = 0; t < numTris; ++t)
 		{
@@ -293,7 +297,7 @@ struct SimData {
 		num_shears = static_cast<uint32_t>(shears.size());
 	}
 
-	void BuildBendConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices)
+	void BuildBendConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices, std::vector<Cloth> cloth)
 	{
 		bends.clear();
 
@@ -307,20 +311,28 @@ struct SimData {
 			return k;
 			};
 
-		for (size_t i = 0; i < indices.size(); i += 3)
+		uint32_t numIndices = 0;
+		for (auto& c : cloth)
 		{
-			uint32_t i0 = indices[i];
-			uint32_t i1 = indices[i + 1];
-			uint32_t i2 = indices[i + 2];
+			numIndices += c.num_indices;
+		}
+
+		const size_t numTris = numIndices / 3;
+
+		for (size_t t = 0; t < numTris; ++t)
+		{
+			uint32_t i0 = indices[3 * t + 0];
+			uint32_t i1 = indices[3 * t + 1];
+			uint32_t i2 = indices[3 * t + 2];
 
 			// tri edges: (i0,i1), (i1,i2), (i2,i0)
 			EdgeKey e01 = make_edge(i0, i1);
 			EdgeKey e12 = make_edge(i1, i2);
 			EdgeKey e20 = make_edge(i2, i0);
 
-			TriRef r0{ i, i2 };
-			TriRef r1{ i, i0 };
-			TriRef r2{ i, i1 };
+			TriRef r0{ t, i2 };
+			TriRef r1{ t, i0 };
+			TriRef r2{ t, i1 };
 
 			auto insert_ref = [&](const EdgeKey& e, const TriRef& r)
 				{
@@ -374,13 +386,21 @@ struct SimData {
 	}
 
 
-	void BuildAreaConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices)
+	void BuildAreaConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices, std::vector<Cloth> cloth)
 	{
-		for (size_t i = 0; i < indices.size(); i += 3)
+		uint32_t numIndices = 0;
+		for (auto& c : cloth)
 		{
-			uint32_t i0 = indices[i];
-			uint32_t i1 = indices[i + 1];
-			uint32_t i2 = indices[i + 2];
+			numIndices += c.num_indices;
+		}
+
+		const size_t numTris = numIndices / 3;
+
+		for (size_t t = 0; t < numTris; ++t)
+		{
+			uint32_t i0 = indices[3 * t + 0];
+			uint32_t i1 = indices[3 * t + 1];
+			uint32_t i2 = indices[3 * t + 2];
 
 			glm::vec3 p0 = positions[i0];
 			glm::vec3 p1 = positions[i1];

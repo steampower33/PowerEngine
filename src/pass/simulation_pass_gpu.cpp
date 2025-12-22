@@ -553,9 +553,9 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 {
 	auto& pm = particle_manager_;
 
-	if (testScene.sphereCollision)
+	if (testScene.sphere_collision)
 	{
-		testScene.sphereCollision = false;
+		testScene.sphere_collision = false;
 
 		float height = 5.0f;
 		for (auto& cloth : pm.clothes_)
@@ -575,9 +575,9 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 
 		CopySimDatas(cmd);
 	}
-	else if (testScene.pinnedCorner)
+	else if (testScene.pinned_corner)
 	{
-		testScene.pinnedCorner = false;
+		testScene.pinned_corner = false;
 
 		pm.clothes_[0].origin = glm::vec3(0.0f, 5.0f, 0.0f);
 		pm.ResetCloth(pm.clothes_[0]);
@@ -599,9 +599,9 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 
 		CopySimDatas(cmd);
 	}
-	else if (testScene.topPinnedCorner)
+	else if (testScene.top_pinned_corner)
 	{
-		testScene.topPinnedCorner = false;
+		testScene.top_pinned_corner = false;
 
 		float height = 3.0f;
 		for (auto& cloth : pm.clothes_)
@@ -619,9 +619,9 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 
 		CopySimDatas(cmd);
 	}
-	else if (testScene.selfCollision)
+	else if (testScene.vertical_drop)
 	{
-		testScene.selfCollision = false;
+		testScene.vertical_drop = false;
 
 		float height = 10.0f;
 		for (auto& cloth : pm.clothes_)
@@ -826,11 +826,11 @@ void SimulationPassGPU::CreateClothConstraintDatas()
 
 	datas_.BuildStretchConstraints(pm.positions_, pm.indices_, pm.clothes_);
 
-	datas_.BuildShearConstraints(pm.positions_, pm.indices_);
+	datas_.BuildShearConstraints(pm.positions_, pm.indices_, pm.clothes_);
 
-	datas_.BuildBendConstraints(pm.positions_, pm.indices_);
+	datas_.BuildBendConstraints(pm.positions_, pm.indices_, pm.clothes_);
 
-	datas_.BuildAreaConstraints(pm.positions_, pm.indices_);
+	datas_.BuildAreaConstraints(pm.positions_, pm.indices_, pm.clothes_);
 }
 
 void SimulationPassGPU::CreateSoftBodyConstraintDatas()
