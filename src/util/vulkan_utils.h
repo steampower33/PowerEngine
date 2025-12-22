@@ -26,6 +26,7 @@ namespace vku
 		bool pinned_corner = false;
 		bool top_pinned_corner = false;
 		bool vertical_drop = false;
+		bool wind = false;
 	};
 
 	struct VertexIncludeInfo {

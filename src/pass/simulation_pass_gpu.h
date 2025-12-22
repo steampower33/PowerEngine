@@ -140,8 +140,9 @@ public:
 	} pipeline_layouts_;
 
 	struct Pipeline {
-		vk::raii::Pipeline clear_lambdas{ nullptr };
+		vk::raii::Pipeline wind{ nullptr };
 		vk::raii::Pipeline integrate{ nullptr };
+		vk::raii::Pipeline clear_lambdas{ nullptr };
 		vk::raii::Pipeline solve_stretch{ nullptr };
 		vk::raii::Pipeline solve_softbody_stretch{ nullptr };
 		vk::raii::Pipeline solve_softbody_volume{ nullptr };

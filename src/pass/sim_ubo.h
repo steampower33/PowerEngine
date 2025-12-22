@@ -40,6 +40,11 @@ struct SimUBO {
 			float softbody_stretch_stiffness = 20.0f;
 			float p1;
 
+			uint32_t wind_enable = true;
+			float wind_force = 1.0f;
+			float p2;
+			float p3;
+
 		} sim_params;
 		static_assert(sizeof(SimParams) % 16 == 0, "std140 must be 16-byte aligned.");
 	} datas;

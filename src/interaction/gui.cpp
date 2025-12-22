@@ -677,6 +677,10 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 {
 	auto& sim = *pass_manager_.sim_pass_gpu_;
 
+	auto CheckEnable = [&](const char* label, uint32_t& enable) {
+		bool check = enable; ImGui::Checkbox(label, &check); enable = check;
+		};
+
 	if (ImGui::CollapsingHeader("Simulation", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		auto& pm = *pass_manager_.particle_manager_;
@@ -695,8 +699,8 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 			row("1 / FrameDt", [&] { ImGui::DragFloat("##FrameDt", &sim.datas_.frame_dt, 1.0f, 60.0f, 240.0f); });
 			row("Substeps", [&] { ImGui::DragInt("##Substeps", &sim.datas_.substeps, 1, 1, 40); });
 			row("Iterations", [&] { ImGui::DragInt("##Iterations", &sim.datas_.iterations, 1, 1, 40); });
-			row("BroadphaseInterval", [&] { ImGui::DragInt("##BroadphaseInterval", &sim.broadphase_interval_, 1.0f, 0.0f, sim.datas_.substeps); });
-			row("NarrowphaseInterval", [&] { ImGui::DragInt("##NarrowphaseInterval", &sim.narrowphase_interval_, 1.0f, 0.0f, sim.datas_.iterations); });
+			row("BroadphaseInterval", [&] { ImGui::DragInt("##BroadphaseInterval", &sim.broadphase_interval_, 1, 1, sim.datas_.substeps); });
+			row("NarrowphaseInterval", [&] { ImGui::DragInt("##NarrowphaseInterval", &sim.narrowphase_interval_, 1, 1, sim.datas_.iterations); });
 			row("GlobalDamping", [&] { ImGui::DragFloat("##GlobalDamping", &sim.ubo_.datas.sim_params.global_damping, 0.1f, 1.0f, 2.0f); });
 			row("RelaxationFactor", [&] { ImGui::DragFloat("##RelaxationFactor", &sim.ubo_.datas.sim_params.relaxation_factor, 0.1f, 0.0f, 1.0f); });
 			row("Thickness", [&] { ImGui::DragFloat("##Thickness", &sim.ubo_.datas.sim_params.thickness, 0.001f, 0.0f, 1.0f, "%.3f"); });
@@ -704,8 +708,22 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 			row("CollideCompliance", [&] { ImGui::DragFloat("##CollideCompliance", &sim.datas_.compliance.collide,
 				1e-9f, 0.0f, 1.0f, "%.9f"); });
 			row("NeighborFriction", [&] { ImGui::DragFloat("##NeighborFriction", &sim.ubo_.datas.sim_params.neighbor_friction, 0.1f, 0.0f, 10.0f, "%.1f"); });
-			row("MaxNeighbors", [&] { int maxNeighbors = sim.ubo_.datas.sim_params.max_neighbors;  ImGui::DragInt("##MaxNeighbors", &maxNeighbors, 1, 0, 20); sim.ubo_.datas.sim_params.max_neighbors = maxNeighbors; });
+			row("MaxNeighbors", [&] { int maxNeighbors = sim.ubo_.datas.sim_params.max_neighbors;  ImGui::DragInt("##MaxNeighbors", &maxNeighbors, 1, 0, 16); sim.ubo_.datas.sim_params.max_neighbors = maxNeighbors; });
 			row("MaxSpeed", [&] { ImGui::DragFloat("##MaxSpeed", &sim.ubo_.datas.sim_params.max_speed, 0.1f, sim.ubo_.datas.sim_params.max_speed, sim.ubo_.datas.sim_params.max_speed, "%.1f"); });
+			ImGui::EndTable();
+		}
+		ImGui::EndChild();
+		ImGui::Unindent();
+
+		ImGui::SeparatorText("Wind");
+		ImGui::Indent();
+		ImGui::BeginChild("Wind", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+		if (ImGui::BeginTable("Wind", 2,
+			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+		{
+			row("Wind Enable", [&] { CheckEnable("##Wind Enable", sim.ubo_.datas.sim_params.wind_enable); });
+			row("Wind Force", [&] { ImGui::DragFloat("##Wind Force", &sim.ubo_.datas.sim_params.wind_force, 1e-3f, 0.0f, 100.0f, "%.3f"); });
+
 			ImGui::EndTable();
 		}
 		ImGui::EndChild();
@@ -857,6 +875,11 @@ void GUI::SetTestSceneGUI(RowFn&& row)
 	if (ImGui::Button("Vertical Drop", buttonSize))
 	{
 		scene.vertical_drop = true;
+	}
+
+	if (ImGui::Button("Wind", buttonSize))
+	{
+		scene.wind = true;
 	}
 }
 

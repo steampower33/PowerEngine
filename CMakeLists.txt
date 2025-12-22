@@ -187,8 +187,9 @@ set(OBJECT_RENDER_SHADERS
 compile_glsl_shaders(object_render_shaders_target SOURCES ${OBJECT_RENDER_SHADERS})
 
 set(SIMULATION_SHADERS 
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/clear_lambdas.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/wind.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/integrate.comp
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/clear_lambdas.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/solve_stretch.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/solve_shear.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/solve_bend.comp

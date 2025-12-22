@@ -133,9 +133,16 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 	auto ceil_div = [](uint32_t n, uint32_t d) { return (n + d - 1) / d; };
 
 	uint32_t groupsTotal = ceil_div(total_particles_, 256);
+	uint32_t groupsTri = ceil_div((total_indices_) / 3, 256u);
 
 	for (uint32_t step = 0; step < datas_.substeps; step++)
 	{
+		// Wind
+		//TS(timestamp_steps_);
+		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.wind);
+		cmd.dispatch(groupsTri, 1, 1);
+		//TS(timestamp_steps_);
+
 		// Integrate
 		TS(timestamp_steps_);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.integrate);
@@ -365,11 +372,11 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 				cmd.pushConstants<PushConstant>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute,
-					0,
-					push_constants_);
+						0,
+						push_constants_);
 
-				uint32_t group = (count + 256 - 1) / 256;
-				cmd.dispatch(group, 1, 1);
+						uint32_t group = (count + 256 - 1) / 256;
+						cmd.dispatch(group, 1, 1);
 			}
 			TS(timestamp_steps_);
 
@@ -465,8 +472,6 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 	}
 
 	// Calculate Normals
-	uint32_t groupsTri = ceil_div((total_indices_) / 3, 256u);
-
 	TS(timestamp_steps_);
 	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.tri_normal);
 	cmd.dispatch(groupsTri, 1, 1);
@@ -632,7 +637,30 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 			pm.ResetCloth(cloth);
 			cloth.angle_deg = 0.0f;
 
-			height -= cloth.cloth_size.y * 1.5f;
+			height -= (cloth.cloth_size.y + 1.0f);
+		}
+		datas_.ResetConstraints(pm.positions_, pm.indices_);
+
+		pm.ResetVolumeConstraint();
+
+		CopySimDatas(cmd);
+	}
+	else if (testScene.wind)
+	{
+		testScene.wind = false;
+
+		float height = 8.0f;
+		for (auto& cloth : pm.clothes_)
+		{
+			cloth.origin = glm::vec3(0.0f, height, 0.0f);
+			//cloth.angle_deg = 90.0f;
+			//cloth.axis = glm::vec3(1, 0, 0);
+			pm.ResetCloth(cloth);
+			cloth.angle_deg = 0.0f;
+			pm.inverse_masses_[cloth.offset_particle] = 0.0f;
+			pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
+
+			height -= (cloth.cloth_size.y + 1.0f);
 		}
 		datas_.ResetConstraints(pm.positions_, pm.indices_);
 
@@ -1371,6 +1399,15 @@ void SimulationPassGPU::CreateComputePipelineLayouts()
 
 void SimulationPassGPU::CreateComputePipelines()
 {
+	// wind
+	{
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context_.device_, vku::ReadFile("shaders/spv/wind.comp.spv"));
+
+		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
+
+		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
+		pipelines_.wind = vk::raii::Pipeline(context_.device_, nullptr, pipelineInfo);
+	}
 
 	// clear_lambdas
 	{
