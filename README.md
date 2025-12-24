@@ -74,6 +74,8 @@ for each frame:
   Recompute normals (tri → vertex)
 ```
 
+---
+
 ## Rendering
 
 The renderer is primarily for **simulation visualization & debugging** (not a full game renderer).
@@ -98,6 +100,7 @@ The renderer is primarily for **simulation visualization & debugging** (not a fu
   - [x] PCF filtering
   - [ ] Cascaded Shadow Maps (CSM)
 
+---
 
 ## Dependencies
 
@@ -116,6 +119,8 @@ The renderer is primarily for **simulation visualization & debugging** (not a fu
   - GLFW, KTX-Software, fmt
   
 > Note : Check out [THIRD_PARTY_NOTICES.md](https://github.com/steampower33/PowerEngine/blob/master/THIRD_PARTY_NOTICES.md)
+
+---
 
 ## Quick Start
 
@@ -137,6 +142,8 @@ cmake --build build --config Release
 
 ```
 
+---
+
 ## References
 - [Müller+07] Müller et al., *Position Based Dynamics*, 2007. DOI: https://doi.org/10.1016/j.jvcir.2007.01.005
 - [Müller+14] Müller et al., *Strain Based Dynamics*, 2014. DOI: https://doi.org/10.2312/sca.20141133
@@ -146,6 +153,8 @@ cmake --build build --config Release
 - [OpenPBR](https://github.com/AcademySoftwareFoundation/OpenPBR?utm_source=chatgpt.com)
 - [Khronos Vulkan® Tutorial](https://docs.vulkan.org/tutorial/latest/00_Introduction.html)
 - [Ten Minute Physics](https://matthias-research.github.io/pages/tenMinutePhysics/index.html?utm_source=chatgpt.com)
+
+---
 
 ## Acknowledgements
 - README structure inspired by: [Velvet](https://github.com/vitalight/Velvet/tree/master) (vitalight/Velvet), [elasty](https://github.com/yuki-koyama/elasty?tab=readme-ov-file) (yuki-koyama/elasty)
