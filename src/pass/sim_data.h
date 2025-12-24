@@ -483,6 +483,7 @@ struct SimData {
 		vk::raii::Buffer area{ nullptr };
 		vk::raii::Buffer volume{ nullptr };
 		vk::raii::Buffer collider{ nullptr };
+		vk::raii::Buffer delta_v{ nullptr };
 	} ssbos_;
 
 	struct SSBOMemory {
@@ -497,6 +498,7 @@ struct SimData {
 		vk::raii::DeviceMemory area{ nullptr };
 		vk::raii::DeviceMemory volume{ nullptr };
 		vk::raii::DeviceMemory collider{ nullptr };
+		vk::raii::DeviceMemory delta_v{ nullptr };
 	} ssbo_memories_;
 
 	struct SSBOSize {
@@ -511,6 +513,7 @@ struct SimData {
 		vk::DeviceSize area = 0;
 		vk::DeviceSize volume = 0;
 		vk::DeviceSize collider = 0;
+		vk::DeviceSize delta_v = 0;
 	} ssbo_size_;
 
 	struct Staging {

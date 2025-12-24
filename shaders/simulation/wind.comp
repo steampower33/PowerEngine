@@ -1,12 +1,21 @@
-    #version 460
+#version 460
+#extension GL_EXT_shader_atomic_float : require
 
 #include "../common/simulation_common.glsl"
 
 layout(local_size_x = 256) in;
 
+void accumulate_v(uint i, vec3 dv)
+{
+    atomicAdd(delta_v[i].x, dv.x);
+    atomicAdd(delta_v[i].y, dv.y);
+    atomicAdd(delta_v[i].z, dv.z);
+}
+
 void main() {
     uint triId = gl_GlobalInvocationID.x;
     if (triId >= sim.num_tries) return; // sim.num_tries = numTris
+    if (sim.wind_enable == 0u) return;
 
     uint i0 = indices[triId * 3 + 0];
     uint i1 = indices[triId * 3 + 1];
@@ -26,5 +35,39 @@ void main() {
     vec3 n = fn / area2;
 
     float wind_force = sim.wind_force;
+
+    vec3 c = (p0 + p1 + p2) * (1.0 / 3.0);
+    vec3 u_air = normalize(sim.wind_dir) * wind_force;
+    vec3 u_tri = (v[i0].xyz + v[i1].xyz + v[i2].xyz) * (1.0 / 3.0);
+    vec3 rel = u_air - u_tri;
+    float v2 = dot(rel, rel);
+    if (v2 < 1e-10) return;
+
+    float rho = sim.air_density;
+    float Cd  = sim.drag_coefficient;
+    float Cl  = sim.lift_coefficient;
+
+     // Double-sided stabilization
+    float vn   = dot(rel, n);
+    float s    = abs(vn);
+    float sgn  = (vn >= 0.0) ? 1.0 : -1.0;
+    vec3 nFace = n * sgn;
+
+    vec3 F = 0.5 * rho * A * ( (Cd - Cl) * s * rel + Cl * v2 * nFace );
+
+    vec3 fShare = F * (1.0/3.0);
+    float dt = sim.dt;
+
+    float im0 = w[i0];
+    float im1 = w[i1];
+    float im2 = w[i2];
+
+    vec3 dv0 = dt * fShare * im0;
+    vec3 dv1 = dt * fShare * im1;
+    vec3 dv2 = dt * fShare * im2;
+
+    accumulate_v(i0, dv0);
+    accumulate_v(i1, dv1);
+    accumulate_v(i2, dv2);
 
 }

@@ -118,7 +118,7 @@ The renderer is primarily for **simulation visualization & debugging** (not a fu
 - Fetched via package manager (recommended: **vcpkg**):
   - GLFW, KTX-Software, fmt
   
-> Note : Check out [THIRD_PARTY_NOTICES.md](https://github.com/steampower33/PowerEngine/blob/master/THIRD_PARTY_NOTICES.md)
+> Note : Check out [THIRD_PARTY_NOTICES.md](https://github.com/steampower33/PowerEngine/docs/THIRD_PARTY_NOTICES.md)
 
 ---
 

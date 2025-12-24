@@ -89,7 +89,12 @@ void main(){
     }
 
     mouse_select_pass(i, xi);
-
+    
+    if (sim.wind_enable == 1u)
+    {
+        vi += delta_v[i].xyz;
+        delta_v[i].xyz = vec3(0.0);
+    }
     vi += sim.gravity.xyz * sim.dt;
 
     vec3 xpi = xi + vi * sim.dt;

@@ -721,8 +721,12 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 		if (ImGui::BeginTable("Wind", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
-			row("Wind Enable", [&] { CheckEnable("##Wind Enable", sim.ubo_.datas.sim_params.wind_enable); });
-			row("Wind Force", [&] { ImGui::DragFloat("##Wind Force", &sim.ubo_.datas.sim_params.wind_force, 1e-3f, 0.0f, 100.0f, "%.3f"); });
+			row("WindEnable", [&] { CheckEnable("##WindEnable", sim.ubo_.datas.sim_params.wind_enable); });
+			row("WindDir", [&] { ImGui::DragFloat3("##WindDir", &sim.ubo_.datas.sim_params.wind_dir[0], 0.1f, 0.0f, 1.0f, "%.1f"); });
+			row("WindForce", [&] { ImGui::DragFloat("##WindForce", &sim.ubo_.datas.sim_params.wind_force, 0.3f, 0.0f, 100.0f, "%.3f"); });
+			row("AirDensity", [&] { ImGui::DragFloat("##AirDensity", &sim.ubo_.datas.sim_params.air_density, 0.3f, 0.0f, 100.0f, "%.3f"); });
+			row("DragCoeff", [&] { ImGui::DragFloat("##DragCoeff", &sim.ubo_.datas.sim_params.drag_coefficient, 0.3f, 0.0f, 100.0f, "%.3f"); });
+			row("LiftCoeff", [&] { ImGui::DragFloat("##LiftCoeff", &sim.ubo_.datas.sim_params.lift_coefficient, 0.3f, 0.0f, 100.0f, "%.3f"); });
 
 			ImGui::EndTable();
 		}
