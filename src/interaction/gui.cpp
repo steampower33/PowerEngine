@@ -408,7 +408,7 @@ void GUI::SetModelsGUI(RowFn&& row)
 				{
 					ImGui::SeparatorText("Factor");
 					ImGui::Indent();
-					ImGui::BeginChild("Factor", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+					ImGui::BeginChild("Factor", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 
 					if (ImGui::BeginTable("Factor", 2,
 						ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
@@ -433,7 +433,7 @@ void GUI::SetModelsGUI(RowFn&& row)
 				{
 					ImGui::SeparatorText("Enable");
 					ImGui::Indent();
-					ImGui::BeginChild("Enable", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+					ImGui::BeginChild("Enable", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 
 					if (ImGui::BeginTable("Enable", 3,
 						ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
@@ -485,7 +485,7 @@ void GUI::SetModelsGUI(RowFn&& row)
 
 		ImGui::SeparatorText("Cloth");
 		ImGui::Indent();
-		ImGui::BeginChild("Cloth", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+		ImGui::BeginChild("Cloth", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 		for (auto& cloth : clothes)
 		{
 			if (ImGui::TreeNode(cloth.name.c_str()))
@@ -493,7 +493,7 @@ void GUI::SetModelsGUI(RowFn&& row)
 				{
 					ImGui::SeparatorText("Factor");
 					ImGui::Indent();
-					ImGui::BeginChild("Factor", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+					ImGui::BeginChild("Factor", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 					if (ImGui::BeginTable("Factor", 2,
 						ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 					{
@@ -518,7 +518,7 @@ void GUI::SetModelsGUI(RowFn&& row)
 				{
 					ImGui::SeparatorText("Enable");
 					ImGui::Indent();
-					ImGui::BeginChild("Enable", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+					ImGui::BeginChild("Enable", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 					if (ImGui::BeginTable("Enable", 3,
 						ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 					{
@@ -557,7 +557,7 @@ void GUI::SetModelsGUI(RowFn&& row)
 
 		ImGui::SeparatorText("Softbody");
 		ImGui::Indent();
-		ImGui::BeginChild("Softbody", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+		ImGui::BeginChild("Softbody", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 
 		for (auto& softbody : softbodies)
 		{
@@ -566,7 +566,7 @@ void GUI::SetModelsGUI(RowFn&& row)
 				{
 					ImGui::SeparatorText("Factor");
 					ImGui::Indent();
-					ImGui::BeginChild("Factor", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+					ImGui::BeginChild("Factor", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 					if (ImGui::BeginTable("Factor", 2,
 						ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 					{
@@ -594,7 +594,7 @@ void GUI::SetModelsGUI(RowFn&& row)
 				{
 					ImGui::SeparatorText("Enable");
 					ImGui::Indent();
-					ImGui::BeginChild("Enable", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+					ImGui::BeginChild("Enable", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 					if (ImGui::BeginTable("Enable", 3,
 						ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 					{
@@ -688,7 +688,7 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 		ImGui::SeparatorText("Parameter");
 
 		ImGui::Indent();
-		ImGui::BeginChild("Parameter", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+		ImGui::BeginChild("Parameter", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 
 		if (ImGui::BeginTable("Parameter", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
@@ -717,7 +717,7 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 
 		ImGui::SeparatorText("Wind");
 		ImGui::Indent();
-		ImGui::BeginChild("Wind", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+		ImGui::BeginChild("Wind", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 		if (ImGui::BeginTable("Wind", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
@@ -734,7 +734,7 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 		{
 			ImGui::SeparatorText("SolverConfig");
 			ImGui::Indent();
-			ImGui::BeginChild("SolverConfig", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+			ImGui::BeginChild("SolverConfig", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 			if (ImGui::BeginTable("SolverConfig", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
@@ -750,7 +750,7 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 
 			ImGui::SeparatorText("Stiffness");
 			ImGui::Indent();
-			ImGui::BeginChild("Stiffness", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+			ImGui::BeginChild("Stiffness", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 			if (ImGui::BeginTable("Stiffness", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
@@ -766,7 +766,7 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 
 			ImGui::SeparatorText("Compliance");
 			ImGui::Indent();
-			ImGui::BeginChild("Compliance", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+			ImGui::BeginChild("Compliance", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 			if (ImGui::BeginTable("Compliance", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
@@ -787,7 +787,7 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 
 			ImGui::SeparatorText("Beta");
 			ImGui::Indent();
-			ImGui::BeginChild("Beta", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+			ImGui::BeginChild("Beta", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 			if (ImGui::BeginTable("Beta", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
@@ -805,7 +805,7 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 		{
 			ImGui::SeparatorText("SolverConfig");
 			ImGui::Indent();
-			ImGui::BeginChild("SolverConfig", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+			ImGui::BeginChild("SolverConfig", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 			if (ImGui::BeginTable("SolverConfig", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
@@ -818,7 +818,7 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 
 			ImGui::SeparatorText("Stiffness");
 			ImGui::Indent();
-			ImGui::BeginChild("Stiffness", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+			ImGui::BeginChild("Stiffness", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 			if (ImGui::BeginTable("Stiffness", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
@@ -831,7 +831,7 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 
 			ImGui::SeparatorText("Compliance");
 			ImGui::Indent();
-			ImGui::BeginChild("Compliance", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+			ImGui::BeginChild("Compliance", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 			if (ImGui::BeginTable("Compliance", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
@@ -898,7 +898,7 @@ void GUI::SetRenderingGUI(RowFn&& row)
 
 		ImGui::SeparatorText("InfiniteGrid");
 		ImGui::Indent();
-		ImGui::BeginChild("InfiniteGrid", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+		ImGui::BeginChild("InfiniteGrid", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 
 		if (ImGui::BeginTable("SpotLight", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
@@ -914,7 +914,7 @@ void GUI::SetRenderingGUI(RowFn&& row)
 
 		ImGui::SeparatorText("PolygonMode");
 		ImGui::Indent();
-		ImGui::BeginChild("PolygonMode", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+		ImGui::BeginChild("PolygonMode", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 
 		const char* items[] = { "Solid", "Wireframe", "Point" };
 		int item_current = gp.polygon_mode_;
@@ -925,7 +925,7 @@ void GUI::SetRenderingGUI(RowFn&& row)
 
 		ImGui::SeparatorText("SpotLight");
 		ImGui::Indent();
-		ImGui::BeginChild("SpotLight", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+		ImGui::BeginChild("SpotLight", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 
 		if (ImGui::BeginTable("SpotLight", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
@@ -944,7 +944,7 @@ void GUI::SetRenderingGUI(RowFn&& row)
 
 		ImGui::SeparatorText("Shadow");
 		ImGui::Indent();
-		ImGui::BeginChild("Shadow", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+		ImGui::BeginChild("Shadow", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 
 		if (ImGui::BeginTable("Shadow", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
@@ -959,7 +959,7 @@ void GUI::SetRenderingGUI(RowFn&& row)
 
 		ImGui::SeparatorText("PBR");
 		ImGui::Indent();
-		ImGui::BeginChild("PBR", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+		ImGui::BeginChild("PBR", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 		if (ImGui::BeginTable("PBR", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
@@ -973,7 +973,7 @@ void GUI::SetRenderingGUI(RowFn&& row)
 		ImGui::SeparatorText("Skybox");
 
 		ImGui::Indent();
-		ImGui::BeginChild("Skybox", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+		ImGui::BeginChild("Skybox", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 		ImVec2 buttonSize = ImVec2(ImGui::GetContentRegionAvail().x, 0);
 		if (ImGui::Button("Morning", buttonSize))
 		{
@@ -1026,7 +1026,7 @@ void GUI::SetStatGUI(RowFn&& row)
 	{
 		ImGui::SeparatorText("Cloth");
 		ImGui::Indent();
-		ImGui::BeginChild("Cloth", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+		ImGui::BeginChild("Cloth", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 		if (ImGui::BeginTable("Stat", 3, ImGuiTableFlags_BordersInnerV))
 		{
 			ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, columnSize);
@@ -1056,7 +1056,7 @@ void GUI::SetStatGUI(RowFn&& row)
 
 		ImGui::SeparatorText("Softbody");
 		ImGui::Indent();
-		ImGui::BeginChild("Softbody", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+		ImGui::BeginChild("Softbody", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 		if (ImGui::BeginTable("Stat", 3, ImGuiTableFlags_BordersInnerV))
 		{
 			ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, columnSize);
@@ -1078,7 +1078,7 @@ void GUI::SetStatGUI(RowFn&& row)
 
 		ImGui::SeparatorText("Total");
 		ImGui::Indent();
-		ImGui::BeginChild("Total", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+		ImGui::BeginChild("Total", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 		if (ImGui::BeginTable("Stat", 2, ImGuiTableFlags_BordersInnerV))
 		{
 			ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, columnSize);
@@ -1107,7 +1107,7 @@ void GUI::SetCameraGUI(RowFn&& row, Camera& camera)
 		ImGui::SeparatorText("Move");
 
 		ImGui::Indent();
-		ImGui::BeginChild("Move", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border);
+		ImGui::BeginChild("Move", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 
 		if (ImGui::BeginTable("Camera", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))

@@ -1,6 +1,7 @@
 {
-  "name": "vulkan-tutorial",
+  "name": "powereninge",
   "version-string": "1.0.0",
+  "builtin-baseline": "7220a4eebf20515cdd9c34721e15ca082bae9038",
   "dependencies": [
     "glfw3",
     "glm",

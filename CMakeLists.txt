@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 
-set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/third_party/imgui)
+set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/external/imgui)
 
 set(IMGUI_SOURCES
   ${IMGUI_DIR}/imgui.cpp
@@ -29,8 +29,6 @@ target_link_libraries(imgui PUBLIC glfw Vulkan::Vulkan)
 set_source_files_properties(${IMGUI_SOURCES} PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 
 add_subdirectory(external/vulkan_radix_sort)
-
-set(CMAKE_PREFIX_PATH "F:/vcpkg/installed/x64-windows" ${CMAKE_PREFIX_PATH})
 
 find_package(Vulkan REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)

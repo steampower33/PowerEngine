@@ -7,8 +7,8 @@
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/out/build/${presetName}",
       "installDir": "${sourceDir}/out/install/${presetName}",
-      "toolchainFile": "F:/vcpkg/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "CMAKE_C_COMPILER": "cl.exe",
         "CMAKE_CXX_COMPILER": "cl.exe",
         "VCPKG_TARGET_TRIPLET": "x64-windows",
@@ -22,22 +22,11 @@
         "CMAKE_BUILD_TYPE": "Debug"
       }
     }
-    //{
-    //  "name": "windows-release",
-    //  "inherits": "windows-base",
-    //  "cacheVariables": {
-    //    "CMAKE_BUILD_TYPE": "Release"
-    //  }
-    //}
   ],
   "buildPresets": [
     {
       "name": "Debug",
       "configurePreset": "windows-debug"
     }
-    //{
-    //  "name": "Release",
-    //  "configurePreset": "windows-release"
-    //}
   ]
 }

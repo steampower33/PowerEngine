@@ -45,8 +45,8 @@ inline const std::vector<const char*> validation_layers = {
 };
 
 #include "imgui.h"
-#include "backends/imgui_impl_glfw.h"
-#include "backends/imgui_impl_vulkan.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_vulkan.h"
 
 #include <tiny_gltf.h>
 
