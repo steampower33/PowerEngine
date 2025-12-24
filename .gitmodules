@@ -1,3 +1,6 @@
 [submodule "external/vulkan_radix_sort"]
 	path = external/vulkan_radix_sort
 	url = https://github.com/jaesung-cs/vulkan_radix_sort.git
+[submodule "external/imgui"]
+	path = external/imgui
+	url = https://github.com/ocornut/imgui.git
