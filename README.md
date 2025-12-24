@@ -114,6 +114,8 @@ The renderer is primarily for **simulation visualization & debugging** (not a fu
   - `external/vk_radix_sort`
 - Fetched via package manager (recommended: **vcpkg**):
   - GLFW, KTX-Software, fmt
+  
+> Note : Check out [THIRD_PARTY_NOTICES.md](https://github.com/steampower33/PowerEngine/blob/master/THIRD_PARTY_NOTICES.md)
 
 ## Quick Start
 
@@ -133,7 +135,6 @@ git submodule update --init --recursive
 cmake -S . -B build
 cmake --build build --config Release
 
----------------continue scripting
 ```
 
 ## References
@@ -142,7 +143,9 @@ cmake --build build --config Release
 - [Macklin+16] Macklin et al., *XPBD: Position-Based Simulation of Compliant Constrained Dynamics*, 2016. DOI: https://doi.org/10.1145/2994258.2994272
 - [Macklin+19] Macklin et al., *Small Steps in Physics Simulation*, 2019. DOI: https://dl.acm.org/doi/10.1145/3309486.3340247
 - [Wilson+14] (used in Disney’s Frozen) DOI: https://doi.org/10.1145/2614106.2614120
-- [OpenPBR](https://github.com/AcademySoftwareFoundation/OpenPBR?utm_source=chatgpt.com) 
+- [OpenPBR](https://github.com/AcademySoftwareFoundation/OpenPBR?utm_source=chatgpt.com)
+- [Khronos Vulkan® Tutorial](https://docs.vulkan.org/tutorial/latest/00_Introduction.html)
+- [Ten Minute Physics](https://matthias-research.github.io/pages/tenMinutePhysics/index.html?utm_source=chatgpt.com)
 
 ## Acknowledgements
 - README structure inspired by: [Velvet](https://github.com/vitalight/Velvet/tree/master) (vitalight/Velvet), [elasty](https://github.com/yuki-koyama/elasty?tab=readme-ov-file) (yuki-koyama/elasty)
