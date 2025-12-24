@@ -26,7 +26,7 @@ Window::Window()
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-	glfw_window_ = glfwCreateWindow(init_width_, init_height_, "Vulkan", nullptr, nullptr);
+	glfw_window_ = glfwCreateWindow(init_width_, init_height_, "PowerEngine", nullptr, nullptr);
 
 	glfwSetWindowUserPointer(glfw_window_, this);
 

@@ -126,7 +126,7 @@ struct SimData {
 		glm::vec3 cross_n1n2 = glm::cross(n1, n2);
 		float s = glm::dot(ehat, cross_n1n2);
 
-		float phi = std::atan2(s, c); // atan(s,c)¿Í µ¿ÀÏ
+		float phi = std::atan2(s, c); // atan(s,c)
 
 		return phi;
 	}
