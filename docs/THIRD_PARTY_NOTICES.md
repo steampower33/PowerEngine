@@ -60,8 +60,8 @@ Please refer to the upstream repositories for the full license texts.
 
 ## Assets
 Third-party assets (HDRIs / textures / LUTs) are documented separately:
-- `docs/ASSET_CREDITS.md`
-- `docs/ASSET_PIPELINE.md`
+- [docs/ASSET_CREDITS.md](./ASSET_CREDITS.md)
+- [docs/ASSET_PIPELINE.md](./ASSET_PIPELINE.md)
 
 ---
 
