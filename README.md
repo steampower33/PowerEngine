@@ -4,7 +4,7 @@
 > Real-time oriented particle systems (cloth / softbody / fluid, etc.) built on a unified XPBD solver.
 
 <p align="center">
-  <img src="docs/media/preview.png" alt="PowerEngine preview" width="800" />
+  <img src="docs/media/preview.png" alt="PowerEngine preview" width="600" />
 </p>
 
 ---
@@ -19,6 +19,22 @@ Most real-time particle simulators either:
 PowerEngine aims to:
 - provide a **unified XPBD solver** that can cover multiple particle systems
 - keep the architecture **GPU-friendly** for real-time iteration
+
+---
+
+## Demo
+
+<p align="center">
+  <img src="docs/media/horizontal_drop.gif" alt="horizontal_drop" width="380" />
+  <img src="docs/media/vertical_drop.gif" alt="vertical_drop" width="380" />
+</p>
+<p align="center">
+  <img src="docs/media/pinned_corner.gif" alt="pinned_corner" width="380" />
+  <img src="docs/media/top_pinned_corner.gif" alt="top_pinned_corner" width="380" />
+</p>
+<p align="center">
+  <img src="docs/media/wind.gif" alt="wind" width="380" />
+</p>
 
 ---
 

@@ -140,7 +140,7 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, T
 	{
 		SoftBody softbody;
 		softbody.name = "softbody1";
-		softbody.origin = glm::vec3(2.0f, 1.0f, 0.0f);
+		softbody.origin = glm::vec3(10.0f, 1.0f, 0.0f);
 		softbody.render = true;
 
 		SetSoftbody("assets/sphere.msh", softbody);
@@ -266,7 +266,7 @@ void ParticleManager::SetPlaneCloth(Cloth& cloth)
 	// Area zero defence
 	float density = 0.0f;
 	if (totalArea > 0.0f) {
-		density = totalMassTarget / totalArea; // kg/m©÷
+		density = totalMassTarget / totalArea; // kg/mï¿½ï¿½
 	}
 
 	// Distribute mass to each triangle in proportion to area
@@ -369,7 +369,7 @@ void ParticleManager::SetClothFromMesh(Cloth& cloth)
 	// Area zero defence
 	float density = 0.0f;
 	if (totalArea > 0.0f) {
-		density = totalMassTarget / totalArea; // kg/m©÷
+		density = totalMassTarget / totalArea; // kg/mï¿½ï¿½
 	}
 
 	// Distribute mass to each triangle in proportion to area
@@ -564,7 +564,7 @@ void ParticleManager::ResetCloth(Cloth& cloth)
 	// Area zero defence
 	float density = 0.0f;
 	if (totalArea > 0.0f) {
-		density = totalMassTarget / totalArea; // kg/m©÷
+		density = totalMassTarget / totalArea; // kg/mï¿½ï¿½
 	}
 
 	for (uint32_t i = cloth.offset_particle; i < cloth.offset_particle + cloth.num_particle; ++i)
