@@ -41,7 +41,7 @@ struct SimUBO {
 			float p1;
 
 			glm::vec3 wind_dir{ 0.0f, 0.0f, 1.0f };
-			uint32_t wind_enable = 1;
+			uint32_t wind_enable = 0;
 
 			float wind_force = 1.0f;
 			float air_density = 1.2f;

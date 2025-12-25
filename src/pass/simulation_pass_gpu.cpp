@@ -558,9 +558,10 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 {
 	auto& pm = particle_manager_;
 
-	if (testScene.sphere_collision)
+	if (testScene.horizontal_drop)
 	{
-		testScene.sphere_collision = false;
+		testScene.horizontal_drop = false;
+		ubo_.datas.sim_params.wind_enable = 0;
 
 		float height = 5.0f;
 		for (auto& cloth : pm.clothes_)
@@ -580,9 +581,32 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 
 		CopySimDatas(cmd);
 	}
+	else if (testScene.vertical_drop)
+	{
+		testScene.vertical_drop = false;
+		ubo_.datas.sim_params.wind_enable = 0;
+
+		float height = 10.0f;
+		for (auto& cloth : pm.clothes_)
+		{
+			cloth.origin = glm::vec3(0.0f, height, 0.0f);
+			cloth.angle_deg = 90.0f;
+			cloth.axis = glm::vec3(1, 0, 0);
+			pm.ResetCloth(cloth);
+			cloth.angle_deg = 0.0f;
+
+			height -= (cloth.cloth_size.y + 1.0f);
+		}
+		datas_.ResetConstraints(pm.positions_, pm.indices_);
+
+		pm.ResetVolumeConstraint();
+
+		CopySimDatas(cmd);
+	}
 	else if (testScene.pinned_corner)
 	{
 		testScene.pinned_corner = false;
+		ubo_.datas.sim_params.wind_enable = 0;
 
 		pm.clothes_[0].origin = glm::vec3(0.0f, 5.0f, 0.0f);
 		pm.ResetCloth(pm.clothes_[0]);
@@ -607,6 +631,7 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 	else if (testScene.top_pinned_corner)
 	{
 		testScene.top_pinned_corner = false;
+		ubo_.datas.sim_params.wind_enable = 0;
 
 		float height = 3.0f;
 		for (auto& cloth : pm.clothes_)
@@ -624,30 +649,10 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 
 		CopySimDatas(cmd);
 	}
-	else if (testScene.vertical_drop)
-	{
-		testScene.vertical_drop = false;
-
-		float height = 10.0f;
-		for (auto& cloth : pm.clothes_)
-		{
-			cloth.origin = glm::vec3(0.0f, height, 0.0f);
-			cloth.angle_deg = 90.0f;
-			cloth.axis = glm::vec3(1, 0, 0);
-			pm.ResetCloth(cloth);
-			cloth.angle_deg = 0.0f;
-
-			height -= (cloth.cloth_size.y + 1.0f);
-		}
-		datas_.ResetConstraints(pm.positions_, pm.indices_);
-
-		pm.ResetVolumeConstraint();
-
-		CopySimDatas(cmd);
-	}
 	else if (testScene.wind)
 	{
 		testScene.wind = false;
+		ubo_.datas.sim_params.wind_enable = 1;
 
 		float height = 8.0f;
 		for (auto& cloth : pm.clothes_)

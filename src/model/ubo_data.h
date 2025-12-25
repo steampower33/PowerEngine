@@ -20,7 +20,7 @@ namespace ubo_data {
 
 		float outer = 90.0f;
 		uint32_t light_enable = 1;
-		uint32_t pbr_enable = 0;
+		uint32_t ibl_enable = 0;
 		float exposure = 1.0f;
 
 		int ggx_brdf_idx = 0;

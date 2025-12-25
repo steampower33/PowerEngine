@@ -22,10 +22,10 @@ namespace vku
 	};
 
 	struct TestScene {
-		bool sphere_collision = false;
+		bool horizontal_drop = false;
+		bool vertical_drop = false;
 		bool pinned_corner = false;
 		bool top_pinned_corner = false;
-		bool vertical_drop = false;
 		bool wind = false;
 	};
 
@@ -665,7 +665,7 @@ namespace vku
 						int n0, n1, n2, n3;
 						in >> n0 >> n1 >> n2 >> n3;
 
-						// 1-based ¡æ 0-based
+						// 1-based ï¿½ï¿½ 0-based
 						n0--; n1--; n2--; n3--;
 
 						tets.emplace_back(

@@ -861,9 +861,14 @@ void GUI::SetTestSceneGUI(RowFn&& row)
 	auto& scene = pass_manager_.test_scene_;
 
 	ImVec2 buttonSize = ImVec2(ImGui::GetContentRegionAvail().x, 0);
-	if (ImGui::Button("Sphere Collision", buttonSize))
+	if (ImGui::Button("Horizontal Drop", buttonSize))
 	{
-		scene.sphere_collision = true;
+		scene.horizontal_drop = true;
+	}
+
+	if (ImGui::Button("Vertical Drop", buttonSize))
+	{
+		scene.vertical_drop = true;
 	}
 
 	if (ImGui::Button("Pinned Corner", buttonSize))
@@ -874,11 +879,6 @@ void GUI::SetTestSceneGUI(RowFn&& row)
 	if (ImGui::Button("Top Pinned Corner", buttonSize))
 	{
 		scene.top_pinned_corner = true;
-	}
-
-	if (ImGui::Button("Vertical Drop", buttonSize))
-	{
-		scene.vertical_drop = true;
 	}
 
 	if (ImGui::Button("Wind", buttonSize))
@@ -961,13 +961,13 @@ void GUI::SetRenderingGUI(RowFn&& row)
 		ImGui::EndChild();
 		ImGui::Unindent();
 
-		ImGui::SeparatorText("PBR");
+		ImGui::SeparatorText("IBL");
 		ImGui::Indent();
-		ImGui::BeginChild("PBR", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
-		if (ImGui::BeginTable("PBR", 2,
+		ImGui::BeginChild("IBL", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
+		if (ImGui::BeginTable("IBL", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
-			row("Enable", [&] { CheckEnable("##Enable", gp.ubo_datas_.light.pbr_enable); });
+			row("Enable", [&] { CheckEnable("##Enable", gp.ubo_datas_.light.ibl_enable); });
 			row("Exposure", [&] { ImGui::DragFloat("##Exposure", &gp.ubo_datas_.light.exposure, 0.1f, 0.0f, 2.0f); });
 			ImGui::EndTable();
 		}

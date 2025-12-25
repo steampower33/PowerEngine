@@ -14,7 +14,7 @@ layout(set = 0, binding = 0) uniform LightUBO {
 
     float outer;
     uint light_enable;
-    uint pbr_enable;
+    uint ibl_enable;
     float exposure;
 
     int ggx_brdf_idx;
@@ -97,7 +97,7 @@ float D_Charlie(float NdotH, float roughness)
     float sin2 = max(1.0 - cos2, 0.0);
     float sinTheta = sqrt(sin2);
 
-    // (2 + 1/alpha) * sinTheta^(1/alpha) / (2¥ð)
+    // (2 + 1/alpha) * sinTheta^(1/alpha) / (2ï¿½ï¿½)
     float power = pow(sinTheta, invAlpha);
     return ( (2.0 + invAlpha) * power ) * (1.0 / (2.0 * PI));
 }
@@ -105,7 +105,7 @@ float D_Charlie(float NdotH, float roughness)
 float G_SchlickGGX(float NdotX, float roughness)
 {
     float r = roughness + 1.0;
-    float k = (r * r) / 8.0;  // UE4 ½ºÅ¸ÀÏ
+    float k = (r * r) / 8.0;  // UE4 ï¿½ï¿½Å¸ï¿½ï¿½
 
     return NdotX / (NdotX * (1.0 - k) + k);
 }
@@ -131,7 +131,7 @@ float F_Sheen(float LdotH)
 {
     float x = 1.0 - LdotH;
     float x2 = x * x;
-    return x2 * x2 * x; // (1 - L¡¤H)^5
+    return x2 * x2 * x; // (1 - Lï¿½ï¿½H)^5
 }
 
 float apply_shadow_strength(float s, float shadowStrength)
@@ -191,7 +191,7 @@ void main()
     vec3 N = normal;
     vec3 color = vec3(0.0);
 
-    if (light.pbr_enable == 1u)
+    if (light.ibl_enable == 1u)
     {
         if (depth >= 1.0 - 1e-5) {
             vec3 dir = normalize(world_pos - camera_pos);
