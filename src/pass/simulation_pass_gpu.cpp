@@ -675,7 +675,6 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 	}
 }
 
-// Very Naive Solution
 void SimulationPassGPU::CopyColliders(const vk::raii::CommandBuffer& cmd)
 {
 	bool isCopyToGPU = false;

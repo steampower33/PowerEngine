@@ -106,6 +106,20 @@ cmake --build build --config Release
 ```
 ---
 
+## Controls
+
+* **W/A/S/D**: Move the camera
+* **X**: Pause/Resume simulation
+* **Z + X**: After pressing **Z**, pressing **X** steps the simulation **one frame at a time** (frame stepping)
+* **F**: Focus the camera on the world origin
+* **R**: Toggle mouse-driven camera control (enable/disable view rotation by mouse)
+* **Right Mouse Button (RMB)**: Move objects *(particle-based objects are not supported yet)*
+* **Left Mouse Button (LMB)**: Rotate objects
+* **LMB (Particle interaction)**: Drag particles with the mouse
+* **ESC**: Quit the application
+
+---
+
 ## Docs
 - [docs/README.md](./docs/README.md)
 
@@ -113,7 +127,7 @@ cmake --build build --config Release
 ---
 
 ## References
-- [docs/references.md](./docs/references.md)
+- [docs/REFERENCES.md](./docs/REFERENCES.md)
 
 ---
 

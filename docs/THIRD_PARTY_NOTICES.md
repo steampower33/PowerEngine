@@ -18,11 +18,11 @@ Please refer to the upstream repositories for the full license texts.
 - Local path: `external/imgui` (via `add_subdirectory`)
 - License file: `external/imgui/LICENSE.txt`
 
-### vulkan_radix_sort (vk_radix_sort)
+### vk_radix_sort (vulkan_radix_sort)
 - Upstream: https://github.com/jaesung-cs/vulkan_radix_sort
 - License: MIT
-- Local path: `external/vulkan_radix_sort` (or `external/vk_radix_sort`) (via `add_subdirectory`)
-- License file: `external/vulkan_radix_sort/LICENSE` (or `external/vk_radix_sort/LICENSE`)
+- Local path: `external/vk_radix_sort` (via `add_subdirectory`)
+- License file: `external/vk_radix_sort/LICENSE`
 
 ---
 
@@ -58,6 +58,13 @@ Please refer to the upstream repositories for the full license texts.
 
 ---
 
+## Assets
+Third-party assets (HDRIs / textures / LUTs) are documented separately:
+- `docs/ASSET_CREDITS.md`
+- `docs/ASSET_PIPELINE.md`
+
+---
+
 ## Additional notes
-- If any third-party code/assets are later copied into this repository, add them to the “Vendored / Included” section
-  and keep their LICENSE files alongside the copied code.
+- If any third-party code/assets are later copied into this repository, add them to the appropriate section
+  and keep their LICENSE files alongside the copied content when applicable.

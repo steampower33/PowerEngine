@@ -1,4 +1,17 @@
 
+
+---
+
+## XPBD
+- **XPBD (Extended Position-Based Dynamics)** is a constraint-based simulation method that enforces constraints directly on particle positions.
+- Unlike classic PBD, XPBD introduces **compliance (α)** to control stiffness in a time-step–robust way, making results less sensitive to the chosen `dt`.
+- Each constraint is solved via XPBD using **first-order constraint gradients** `∇C` to compute `Δλ` and apply mass-weighted position corrections.
+- Implementation notes:
+  - The **Stretch (distance)** constraint additionally uses an XPBD **damping** term `β`, while the other constraints currently use compliance (`α`) only.
+  - In this project, each constraint scales its final position correction by a per-constraint stiffness factor (e.g., `stretch_stiffness`, `shear_stiffness`, `bend_stiffness`, `area_stiffness`).
+
+---
+
 ## Simulation
 
 PowerEngine runs the XPBD simulation entirely on GPU compute shaders.  
@@ -100,7 +113,6 @@ The renderer is primarily for **simulation visualization & debugging** (not a fu
 
 - [x] Deferred Shading
 - [x] OpenPBR material model (WIP / partial)
-
   - [x] baseColor / metalness / roughness
   - [x] normal / emissive
   - [x] coat / fuzz
@@ -110,6 +122,7 @@ The renderer is primarily for **simulation visualization & debugging** (not a fu
 ### Shadows
 
 - [x] Shadow mapping (spot light)
-
   - [x] PCF filtering
   - [ ] Cascaded Shadow Maps (CSM)
+
+---

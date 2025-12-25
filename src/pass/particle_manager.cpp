@@ -13,27 +13,6 @@
 ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, TextureManager& textureManager)
 	: context_(context)
 {
-	//{
-	//	Cloth cloth{};
-
-	//	cloth.name = "Cloth Model";
-	//	cloth.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-
-	//	cloth.origin = glm::vec3(0.0f, 1.0f, 0.0f);
-	//	cloth.angle_deg = 0.0f;
-	//	cloth.axis = glm::vec3(0, 1, 0);
-
-	//	
-	//	ModelLoader modelLoader;
-	//	std::string filename = "assets/velour_velvet/velour_velvet_1k.gltf";
-	//	modelLoader.LoadModel(filename, vku::VertexIncludeInfo{ true, true, true, false, false }, textureManager, 1.0f);
-
-	//	cloth.vertices = std::move(modelLoader.mesh_.vertices);
-	//	cloth.indices = std::move(modelLoader.mesh_.indices);
-
-	//	SetClothFromMesh(cloth);
-
-	//}
 
 	{
 		Cloth cloth{};

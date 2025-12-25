@@ -39,11 +39,6 @@ void main(){
     vec3 x2 = xp[i2].xyz;
     vec3 x3 = xp[i3].xyz;
 
-    vec3 px0 = x[i0].xyz;
-    vec3 px1 = x[i1].xyz;
-    vec3 px2 = x[i2].xyz;
-    vec3 px3 = x[i3].xyz;
-
     vec3 e   = x1 - x0;
     float el = safeLen(e);
     vec3 ehat = e / el;

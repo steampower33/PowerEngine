@@ -38,19 +38,19 @@ ModelManager::ModelManager(Context& context, TextureManager& textureManager)
 		models_.emplace_back(std::move(model));
 	}
 
-	{
-		glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
-		glm::vec3 initPos = glm::vec3(0.0f, 0.0f, 0.0f);
-		glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
-		float initRadius = 1.0f;
+	//{
+	//	glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
+	//	glm::vec3 initPos = glm::vec3(0.0f, 0.0f, 0.0f);
+	//	glm::vec4 initColor = glm::vec4(1.0f, 1.0f, 1.0f, 0.0);
+	//	float initRadius = 1.0f;
 
-		std::string filename = "assets/walking.glb";
-		std::unique_ptr<Model> model = std::make_unique<Model>(filename, vku::VertexIncludeInfo{ true, true, true, true, true }, context, textureManager, initPos, angleQuat, initColor, initRadius, true, "Walking", 1.0f, ShapeColliderType::NONE, ModelType::SKINNED);
-		model->movable_ = false;
-		model->render_ = false;
+	//	std::string filename = "assets/walking.glb";
+	//	std::unique_ptr<Model> model = std::make_unique<Model>(filename, vku::VertexIncludeInfo{ true, true, true, true, true }, context, textureManager, initPos, angleQuat, initColor, initRadius, true, "Walking", 1.0f, ShapeColliderType::NONE, ModelType::SKINNED);
+	//	model->movable_ = false;
+	//	model->render_ = false;
 
-		models_.emplace_back(std::move(model));
-	}
+	//	models_.emplace_back(std::move(model));
+	//}
 
 	//{
 	//	glm::quat angleQuat = glm::angleAxis(glm::radians(0.0f), glm::vec3(1, 0, 0));
