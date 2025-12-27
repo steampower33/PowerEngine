@@ -12,7 +12,7 @@ struct SimUBO {
 			
 			float global_damping = 2.0f;
 			float relaxation_factor = 0.2f;
-			float neighbor_friction = 1.0f;
+			float neighbor_friction = 0.1f;
 			float p0;
 			
 			uint32_t num_particles;

@@ -45,6 +45,8 @@ void main() {
     // "near-contact" slop (prevents micro-separation & jitter)
     const float SLOP = 1e-4;
     
+    for (uint iter = 0; iter < 2; iter++)
+    {
         for (uint c = 0; c < sim.num_colliders; ++c) {
             Collider col = colliders[c];
             if (col.do_collide == 0u) continue;
@@ -81,6 +83,6 @@ void main() {
                 }
             }
         }
-
+    }
     xp[id].xyz = p;
 }

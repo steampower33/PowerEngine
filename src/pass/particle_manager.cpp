@@ -31,7 +31,7 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, T
 
 		cloth.render = true;
 
-		std::string base = "assets/fabric/quatrefoil_jacquard_fabric";
+		std::string base = "assets/fabric/gingham_check";
 		cloth.ubo_data.albedo_enable = 1;
 		cloth.ubo_data.albedo_idx = textureManager.CreateTexture(base, "diff", false, true);
 		cloth.ubo_data.normal_enable = 1;

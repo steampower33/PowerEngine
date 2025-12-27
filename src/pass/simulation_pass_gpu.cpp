@@ -564,7 +564,7 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 		testScene.horizontal_drop = false;
 		ubo_.datas.sim_params.wind_enable = 0;
 
-		float height = 6.0f;
+		float height = 4.0f;
 		for (auto& cloth : pm.clothes_)
 		{
 			cloth.origin = glm::vec3(0.0f, height, 0.0f);

@@ -15,48 +15,53 @@ void main() {
 
     vec3 old_pos = x[i].xyz;
     vec3 new_pos = xp[i].xyz;
+    float dt = sim.dt;
 
-    vec3 raw_vel = (new_pos - old_pos) / sim.dt;
+    // Ground contact check (y=0)
+    const float SLOP = 1e-4;
+    float groundY = 0.0 + sim.thickness + SLOP;
 
-    for (uint c = 0; c < sim.num_colliders; ++c)
-    {
-        Collider col = colliders[c];
-        if (col.do_collide == 0u) continue;
-        if (col.kind != 1) continue; // plane only
+    bool onGround = (new_pos.y <= groundY + 5e-4); // contact band
 
-        vec3 n = normalize(col.p1);
-        float C = dot(n, new_pos - (col.p0 + n * sim.thickness));
+    if (onGround) {
+        // Keep it on the ground
+        new_pos.y = max(new_pos.y, groundY);
 
-        // slop contact (treat near-contact as contact)
-        const float SLOP = 1e-4;
-        if (C < SLOP)
-        {
-            // 1) remove inward normal velocity (no sinking)
-            float vn = dot(raw_vel, n);
-            if (vn < 0.0) raw_vel -= vn * n;
+        // Static-like stick: kill tiny tangent drift
+        vec3 disp = new_pos - old_pos;
 
-            // 2) kill tangential velocity (static-like)
-            vec3 vt = raw_vel - dot(raw_vel, n) * n;
+        // No downward motion
+        if (disp.y < 0.0) disp.y = 0.0;
 
-            // sim.friction: 0 -> no stick, 1 -> full stick
-            vt *= (1.0 - sim.friction);
+        // Tangential displacement damping (x,z)
+        float stick = clamp(sim.friction, 0.0, 1.0); // 0=no stick, 1=full stick
+        disp.x *= (1.0 - stick);
+        disp.z *= (1.0 - stick);
 
-            // small snap threshold (prevents micro creep)
-            if (length(vt) < 0.02) vt = vec3(0.0);
+        // Snap tiny drift to zero
+        const float SNAP = 5e-4;
+        if (abs(disp.x) < SNAP) disp.x = 0.0;
+        if (abs(disp.z) < SNAP) disp.z = 0.0;
 
-            raw_vel = dot(raw_vel, n) * n + vt;
-
-            break; // only one ground plane needed
-        }
+        new_pos = old_pos + disp;
     }
 
+    // Velocity from final position
+    vec3 raw_vel = (new_pos - old_pos) / dt;
+
+    // Optional: if on ground and very slow, hard sleep
+    if (onGround && length(raw_vel) < 0.01) {
+        raw_vel = vec3(0.0);
+    }
+
+    // Clamp & damping (as you had)
     float speed = length(raw_vel);
     if (speed > sim.max_speed) {
-        raw_vel = raw_vel * (sim.max_speed / speed);
-        new_pos = old_pos + raw_vel * sim.dt;
+        raw_vel *= (sim.max_speed / speed);
+        new_pos = old_pos + raw_vel * dt;
     }
 
-    vec3 damped_vel = raw_vel * (1.0 - sim.global_damping * sim.dt);
+    vec3 damped_vel = raw_vel * (1.0 - sim.global_damping * dt);
 
     v[i].xyz = damped_vel;
     x[i].xyz = new_pos;
