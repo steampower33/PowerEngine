@@ -3,31 +3,35 @@
 
 #include "../common/simulation_common.glsl"
 
-#define TYPE_CLOTH 0
-#define TYPE_SOFTBODY 1
+#define TYPE_CLOTH    0u
+#define TYPE_SOFTBODY 1u
 
 layout(local_size_x = 256) in;
 
-void accumulate_delta(uint i, vec3 corr, uint count)
+void accumulate_delta(uint i, vec3 corr)
 {
     atomicAdd(delta_x[i], corr.x);
     atomicAdd(delta_y[i], corr.y);
     atomicAdd(delta_z[i], corr.z);
-    atomicAdd(delta_count[i], count);
+    atomicAdd(delta_count[i], 1u);
 }
 
-vec3 coulomb_dt_rel(vec3 rel_disp, vec3 n, float dn_mag, float mu)
+bool isFinite_f(float x){ return !isnan(x) && !isinf(x); }
+
+// PBD/XPBD-style friction approximation:
+// clamp tangential relative displacement based on normal correction magnitude.
+// This is NOT a full Coulomb cone solve.
+vec3 friction_clamp(vec3 rel_disp, vec3 n, float dn, float mu)
 {
-    if (mu <= 0.0 || dn_mag <= 0.0) return vec3(0.0);
+    if (mu <= 0.0 || dn <= 0.0) return vec3(0.0);
 
-    vec3 t = rel_disp - n * dot(rel_disp, n);
-    float tlen = length(t);
-    if (tlen < 1e-6) return vec3(0.0);
+    vec3 t  = rel_disp - n * dot(rel_disp, n);
+    float tl = length(t);
+    if (tl < 1e-7) return vec3(0.0);
 
-    float max_t = mu * dn_mag;
-
-    float s = min(1.0, max_t / tlen);
-    return -t * s;
+    float max_t = mu * dn;              // tangential displacement limit
+    float s = min(1.0, max_t / tl);
+    return -t * s;                      // oppose tangential motion
 }
 
 void main()
@@ -38,21 +42,31 @@ void main()
     float wi = w[i];
     if (wi == 0.0) return;
 
-    vec3 xi  = xp[i].xyz;
-    vec3 pxi = x[i].xyz;
+    // Only cloth participates in self-collision in this pass
+    if (collision_masks[i].object_type != TYPE_CLOTH) return;
+
+    uint obj_i = collision_masks[i].object_id;
 
     uint maxN = sim.max_neighbors;
-    float r   = sim.collision_radius;
     uint base = i * maxN;
+
+    float r  = sim.collision_radius;
+    float r2 = r * r;
 
     float dt = sim.dt;
 
-    vec3 delta_i = vec3(0.0);
-    uint count_i = 0u;
+    // Self-collision compliance (0 => hard constraint)
+    float alpha_tilde = pc.solve.compliance / (dt * dt);
 
-    uint object_i = collision_masks[i].object_id;
+    // Strength knobs
+    float stiffness = sim.self_collision_stiffness; // your own scaling (0..1 or more)
+    float mu        = sim.neighbor_friction;        // 0..1 recommended
 
-    float stiffness = sim.self_collision_stiffness;
+    vec3 xi  = xp[i].xyz;
+    vec3 pxi = x[i].xyz;        // previous position (for rel disp proxy)
+
+    vec3 sumCorr = vec3(0.0);
+    uint sumCount = 0u;
 
     for (uint k = 0; k < maxN; ++k)
     {
@@ -63,16 +77,11 @@ void main()
         float wj = w[j];
         if (wj == 0.0) continue;
 
-        uint object_j = collision_masks[j].object_id;
-        bool same = (object_i == object_j);
+        // same object only
+        if (collision_masks[j].object_id != obj_i) continue;
 
-        bool sameSoftbody = same && (collision_masks[j].object_type == TYPE_SOFTBODY);
-        if (sameSoftbody) continue;
-        if (collision_masks[j].object_type == TYPE_SOFTBODY) continue;
-
-        float compliance  = same ? pc.solve.compliance : 0.0;
-        float mu          = same ? sim.neighbor_friction : 1.0;
-        float alpha_tilde = compliance / (dt * dt);
+        // cloth only
+        if (collision_masks[j].object_type != TYPE_CLOTH) continue;
 
         vec3 xj  = xp[j].xyz;
         vec3 pxj = x[j].xyz;
@@ -81,47 +90,72 @@ void main()
         float d2 = dot(d, d);
         if (d2 < 1e-12) continue;
 
+        // quick reject
+        if (d2 >= r2) continue;
+
         float dist = sqrt(d2);
-        float C = dist - r;
+        vec3  n = d / dist;
+
+        float C = dist - r;     // < 0 => penetration
         if (C >= 0.0) continue;
 
-        vec3 n = d / dist;
         float wsum = wi + wj;
         if (wsum <= 0.0) continue;
 
-        float lambda_old = same ? neighbor_lambdas[idx] : 0.0;
+        // Inequality constraint: lambda >= 0
+        float lam_old = neighbor_lambdas[idx];
 
+        // denom = sum(w_i * |grad_i|^2) + alpha_tilde
+        // Here, grad_i = n, grad_j = -n => |grad|^2 = 1
         float denom = wsum + alpha_tilde;
-        if (denom < 1e-8) denom = 1e-8;
+        denom = max(denom, 1e-8);
 
-        float rhs = C + alpha_tilde * lambda_old;
-        float dLambda = -rhs / denom;
+        float rhs = C + alpha_tilde * lam_old;
+        float dLam = -rhs / denom;                  // XPBD update
 
-        float lambda_new = max(0.0, lambda_old + dLambda);
-        dLambda = lambda_new - lambda_old;
-        neighbor_lambdas[idx] = lambda_new;
+        float lam_new = max(0.0, lam_old + dLam);
+        dLam = lam_new - lam_old;
 
-        vec3 corr_i =  wi * dLambda * n * stiffness;
-        vec3 corr_j = -wj * dLambda * n * stiffness;
+        float safeLam = isFinite_f(lam_new) ? lam_new : 0.0;
+        neighbor_lambdas[idx] = safeLam;
 
+        // Normal correction (position)
+        // corr_i = +wi * dLam * n, corr_j = -wj * dLam * n
+        vec3 corr_i =  (wi * dLam) * n;
+        vec3 corr_j = -(wj * dLam) * n;
+
+        // Friction approximation (tangential clamp) using relative displacement proxy
         vec3 disp_i = xi - pxi;
         vec3 disp_j = xj - pxj;
         vec3 rel_disp = disp_i - disp_j;
 
-        float dn_mag = abs(dot(corr_i - corr_j, n));
+        // Use normal correction magnitude as proxy for dn (normal displacement)
+        // Relative normal displacement magnitude ~ (wi+wj)*dLam
+        float dn = abs(wsum * dLam);
 
-        vec3 dt_rel = coulomb_dt_rel(rel_disp, n, dn_mag, mu);
+        vec3 fric = friction_clamp(rel_disp, n, dn, mu);
 
-        vec3 fric_i =  (wi / wsum) * dt_rel;
-        vec3 fric_j = -(wj / wsum) * dt_rel;
+        // Distribute friction by inverse masses (mass-weighted split)
+        vec3 fric_i =  (wi / wsum) * fric;
+        vec3 fric_j = -(wj / wsum) * fric;
 
-        delta_i += (corr_i + fric_i);
-        count_i += 1u;
+        // Apply overall stiffness scaling at the end (keeps math cleaner)
+        vec3 out_i = (corr_i + fric_i) * stiffness;
+        vec3 out_j = (corr_j + fric_j) * stiffness;
 
-        accumulate_delta(j, (corr_j + fric_j), 1u);
+        // Accumulate
+        sumCorr += out_i;
+        sumCount += 1u;
+
+        accumulate_delta(j, out_j);
     }
 
-    if (count_i > 0u) {
-        accumulate_delta(i, delta_i, count_i);
+    if (sumCount > 0u)
+    {
+        // We keep delta_count consistent with "1 contribution per neighbor"
+        atomicAdd(delta_x[i], sumCorr.x);
+        atomicAdd(delta_y[i], sumCorr.y);
+        atomicAdd(delta_z[i], sumCorr.z);
+        atomicAdd(delta_count[i], sumCount);
     }
 }

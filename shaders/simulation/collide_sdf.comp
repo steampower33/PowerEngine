@@ -1,155 +1,86 @@
 #version 460
-
 #include "../common/simulation_common.glsl"
 
 layout(local_size_x = 256) in;
 
-float sdf_sphere(vec3 p, vec3 center, float radius)
-{
+float sdf_sphere(vec3 p, vec3 center, float radius) {
     return length(p - center) - radius;
 }
-
-vec3 normal_sphere(vec3 p, vec3 center)
-{
-    return normalize(p - center);
+vec3 normal_sphere(vec3 p, vec3 center) {
+    vec3 d = p - center;
+    float l = length(d);
+    return (l > 1e-8) ? (d / l) : vec3(0.0, 1.0, 0.0);
 }
 
-float sdf_plane(vec3 p, vec3 pointOnPlane, vec3 normal)
-{
-    return dot(normal, p - pointOnPlane);
+float sdf_plane(vec3 p, vec3 pointOnPlane, vec3 n) {
+    return dot(n, p - pointOnPlane);
 }
+vec3 normal_plane(vec3 n) { return n; }
 
-vec3 normal_plane(vec3 p, vec3 normal)
-{
-    return normal;
-}
-
-float sdf_capsule(vec3 p, vec3 a, vec3 b, float radius)
-{
+float sdf_capsule(vec3 p, vec3 a, vec3 b, float r) {
     vec3 pa = p - a;
     vec3 ba = b - a;
-    float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
-    vec3 closest = a + h * ba;
-    return length(p - closest) - radius;
+    float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-8), 0.0, 1.0);
+    vec3 q = a + h * ba;
+    return length(p - q) - r;
 }
-
-vec3 normal_capsule(vec3 p, vec3 a, vec3 b)
-{
-    vec3 pa = p - a;
+vec3 normal_capsule(vec3 p, vec3 a, vec3 b) {
     vec3 ba = b - a;
-    float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
-    vec3 closest = a + h * ba;
-
-    vec3 d = p - closest;
-    float len = length(d);
-    if (len < 1e-6) return vec3(0.0, 1.0, 0.0);
-    return d / len;
+    float h = clamp(dot(p - a, ba) / max(dot(ba, ba), 1e-8), 0.0, 1.0);
+    vec3 q = a + h * ba;
+    vec3 d = p - q;
+    float l = length(d);
+    return (l > 1e-8) ? (d / l) : vec3(0.0, 1.0, 0.0);
 }
 
-void main()
-{
+void main() {
     uint id = gl_GlobalInvocationID.x;
     if (id >= sim.num_particles) return;
 
-    float w_i = w[id];
-    if (w_i == 0.0) return;
+    if (w[id] == 0.0) return;
 
-    vec3 x0  = x[id].xyz;
-    vec3 xp0 = xp[id].xyz;
-    vec3 x_work = xp0;
+    vec3 p = xp[id].xyz;          // predicted position
+    float thickness = sim.thickness;
+
+    // "near-contact" slop (prevents micro-separation & jitter)
+    const float SLOP = 1e-4;
     
-    float dt    = sim.dt;
-    float alpha_tilde = pc.solve.compliance / (dt * dt);
+        for (uint c = 0; c < sim.num_colliders; ++c) {
+            Collider col = colliders[c];
+            if (col.do_collide == 0u) continue;
 
-    for (uint i = 0; i < sim.num_colliders; i++)
-    {
-        Collider col = colliders[i];
+            int kind = col.kind;
 
-        if (col.do_collide == 0u) continue;
-
-        vec3 p0   = col.p0;
-        float rad = col.radius + sim.thickness;
-        vec3 p1   = col.p1;
-        int kind  = col.kind;
-
-        float C = 0.0;
-        vec3 n  = vec3(0.0);
-
-        if (kind == 0) {          // sphere
-            C = sdf_sphere(x_work, p0, rad);
-            if (C < 0.0) 
-                n = normal_sphere(x_work, p0);
-        }
-        else if (kind == 1) {     // plane
-            vec3 n_plane = normalize(p1);
-            C = sdf_plane(x_work, p0 + n_plane * sim.thickness, n_plane);
-            if (C < 0.0) 
-                n = normalize(p1);
-        }
-        else if (kind == 2) {     // capsule
-            C = sdf_capsule(x_work, p0, p1, rad);
-            if (C < 0.0) 
-                n = normal_capsule(x_work, p0, p1);
-        }
-        
-        const float STATIC_V_THRESH = 0.12;
-        if (C < 0.0)
-        {
-            // --- Normal (penetration) correction (XPBD-ish) ---
-            float denom = w_i + alpha_tilde;
-            denom = max(denom, 1e-8);
-
-            float dlambda = w_i / denom;
-
-            vec3 corr_n = (-C) * dlambda * n;
-            x_work += corr_n;
-
-            // --- Decompose total displacement into normal/tangent ---
-            vec3  d = x_work - x0;
-            float dn_total = max(dot(d, n), 0.0);
-            vec3  d_n = dn_total * n;
-            vec3  d_t = d - d_n;
-            float lt  = length(d_t);
-
-            // --- Friction "normal magnitude" proxy ---
-            // corr_n-based dn reduces sticking/jitter on curved surfaces.
-            float dn_corr = max(dot(corr_n, n), 0.0);
-            float dn = dn_corr;
-
-            // On planes only: blend in dn_total to suppress long-term creep.
-            if (kind == 1) {
-                dn = mix(dn_total, dn_corr, 0.9);     // tune: 0.7~0.95
-                dn = min(dn, dn_corr * 4.0 + 1e-6);   // optional cap to avoid over-sticking
+            if (kind == 0) {
+                // sphere
+                float r = col.radius + thickness;
+                float C = sdf_sphere(p, col.p0, r);
+                if (C < 0.0) {
+                    vec3 n = normal_sphere(p, col.p0);
+                    p += (-C + SLOP) * n; // push out + keep a tiny gap
+                }
             }
+            else if (kind == 1) {
+                // plane
+                vec3 n = normalize(col.p1);
+                // plane point is col.p0, push plane "up" by thickness
+                float C = sdf_plane(p, col.p0 + n * thickness, n);
 
-            // --- Collider-specific friction (simple heuristic using sim.friction as base) ---
-            // Plane: strong static + moderate kinetic.
-            // Sphere/capsule: no static, low kinetic (easy sliding).
-            float mu_s = (kind == 1) ? sim.friction : 0.0;
-            float mu_k = (kind == 1) ? (sim.friction * 0.75) : (sim.friction * 0.12);
-
-            // --- Static friction only when nearly stopped (plane only) ---
-            bool want_static = false;
-            if (kind == 1) {
-                vec3 v_pred = d / dt;
-                vec3 v_t = v_pred - dot(v_pred, n) * n;          // tangential predicted velocity
-                want_static = (length(v_t) < STATIC_V_THRESH);
+                // treat near-contact as contact to prevent creep/jitter
+                if (C < SLOP) {
+                    p += (SLOP - C) * n; // if penetrating, (SLOP - C) includes penetration
+                }
             }
-
-            if (want_static && lt <= mu_s * dn)
-            {
-                // Static friction: fully cancel tangential displacement (stick)
-                x_work -= d_t;
-            }
-            else if (lt > 1e-6)
-            {
-                // Kinetic friction: reduce tangential displacement by mu_k * dn (more stable than "clamp to mu*dn")
-                float new_lt = max(0.0, lt - mu_k * dn);
-                d_t *= (new_lt / lt);
-                x_work = x0 + d_n + d_t;
+            else if (kind == 2) {
+                // capsule
+                float r = col.radius + thickness;
+                float C = sdf_capsule(p, col.p0, col.p1, r);
+                if (C < 0.0) {
+                    vec3 n = normal_capsule(p, col.p0, col.p1);
+                    p += (-C + SLOP) * n;
+                }
             }
         }
-    }
 
-    xp[id] = vec4(x_work, xp[id].w);
+    xp[id].xyz = p;
 }

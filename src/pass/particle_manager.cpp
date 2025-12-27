@@ -13,75 +13,6 @@
 ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, TextureManager& textureManager)
 	: context_(context)
 {
-
-	{
-		Cloth cloth{};
-
-		cloth.name = "1x1 Cloth";
-		cloth.spacing = default_cloth_spacing_;
-		cloth.gsm = 0.2f;
-		cloth.cloth_size = glm::vec2(1.0f, 1.0f);
-
-		cloth.color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-
-		cloth.origin = glm::vec3(0.0f, 5.0f, 0.0f);
-		cloth.angle_deg = 0.0f;
-		cloth.axis = glm::vec3(0, 1, 0);
-
-		cloth.num_particle = cloth.nx1 * cloth.ny1;
-
-		cloth.render = true;
-
-		std::string base = "assets/fabric/quatrefoil_jacquard_fabric";
-		cloth.ubo_data.albedo_enable = 1;
-		cloth.ubo_data.albedo_idx = textureManager.CreateTexture(base, "diff", false, true);
-		cloth.ubo_data.normal_enable = 1;
-		cloth.ubo_data.normal_idx = textureManager.CreateTexture(base, "nor", false, true);
-		cloth.ubo_data.arm_enable = 1;
-		cloth.ubo_data.arm_idx = textureManager.CreateTexture(base, "arm", false, true);
-		cloth.ubo_data.fuzz_factor = 0.1f;
-		cloth.ubo_data.fuzz_roughness_factor = 1.0f;
-
-		cloth.ubo_data.tile_uv = cloth.cloth_size;
-
-		SetPlaneCloth(cloth);
-
-	}
-
-	{
-		Cloth cloth{};
-
-		cloth.name = "2x2 Cloth";
-		cloth.spacing = default_cloth_spacing_;
-		cloth.gsm = 0.2f;
-		cloth.cloth_size = glm::vec2(2.0f, 2.0f);
-
-		cloth.color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
-
-		cloth.origin = glm::vec3(0.0f, 4.0f, 0.0f);
-		cloth.angle_deg = 0.0f;
-		cloth.axis = glm::vec3(0, 1, 0);
-
-		cloth.num_particle = cloth.nx1 * cloth.ny1;
-
-		cloth.render = true;
-
-		std::string base = "assets/fabric/gingham_check";
-		cloth.ubo_data.albedo_enable = 1;
-		cloth.ubo_data.albedo_idx = textureManager.CreateTexture(base, "diff", false, true);
-		cloth.ubo_data.normal_enable = 1;
-		cloth.ubo_data.normal_idx = textureManager.CreateTexture(base, "nor", false, true);
-		cloth.ubo_data.arm_enable = 1;
-		cloth.ubo_data.arm_idx = textureManager.CreateTexture(base, "arm", false, true);
-		cloth.ubo_data.fuzz_factor = 0.1f;
-		cloth.ubo_data.fuzz_roughness_factor = 1.0f;
-
-		cloth.ubo_data.tile_uv = cloth.cloth_size;
-
-		SetPlaneCloth(cloth);
-
-	}
-
 	{
 		Cloth cloth{};
 
@@ -118,28 +49,10 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, T
 
 	{
 		SoftBody softbody;
-		softbody.name = "softbody1";
+		softbody.name = "softbody";
 		softbody.origin = glm::vec3(10.0f, 1.0f, 0.0f);
 		softbody.render = true;
 
-		SetSoftbody("assets/sphere.msh", softbody);
-	}
-
-	{
-		SoftBody softbody;
-
-		softbody.name = "softbody2";
-		softbody.origin = glm::vec3(2.0f, 2.0f, 0.0f);
-		softbody.render = true;
-		SetSoftbody("assets/sphere.msh", softbody);
-	}
-	
-	{
-		SoftBody softbody;
-
-		softbody.name = "softbody3";
-		softbody.origin = glm::vec3(2.0f, 3.0f, 0.0f);
-		softbody.render = true;
 		SetSoftbody("assets/sphere.msh", softbody);
 	}
 

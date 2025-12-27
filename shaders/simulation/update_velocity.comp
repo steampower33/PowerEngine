@@ -1,16 +1,16 @@
 #version 460
-
 #include "../common/simulation_common.glsl"
 
 layout(local_size_x = 256) in;
+
 void main() {
     uint i = gl_GlobalInvocationID.x;
     if (i >= sim.num_particles) return;
 
-     if (w[i] == 0.0) { 
-        v[i] = vec4(0.0); 
-        x[i] = xp[i]; 
-        return; 
+    if (w[i] == 0.0) {
+        v[i] = vec4(0.0);
+        x[i] = xp[i];
+        return;
     }
 
     vec3 old_pos = x[i].xyz;
@@ -18,11 +18,44 @@ void main() {
 
     vec3 raw_vel = (new_pos - old_pos) / sim.dt;
 
+    for (uint c = 0; c < sim.num_colliders; ++c)
+    {
+        Collider col = colliders[c];
+        if (col.do_collide == 0u) continue;
+        if (col.kind != 1) continue; // plane only
+
+        vec3 n = normalize(col.p1);
+        float C = dot(n, new_pos - (col.p0 + n * sim.thickness));
+
+        // slop contact (treat near-contact as contact)
+        const float SLOP = 1e-4;
+        if (C < SLOP)
+        {
+            // 1) remove inward normal velocity (no sinking)
+            float vn = dot(raw_vel, n);
+            if (vn < 0.0) raw_vel -= vn * n;
+
+            // 2) kill tangential velocity (static-like)
+            vec3 vt = raw_vel - dot(raw_vel, n) * n;
+
+            // sim.friction: 0 -> no stick, 1 -> full stick
+            vt *= (1.0 - sim.friction);
+
+            // small snap threshold (prevents micro creep)
+            if (length(vt) < 0.02) vt = vec3(0.0);
+
+            raw_vel = dot(raw_vel, n) * n + vt;
+
+            break; // only one ground plane needed
+        }
+    }
+
     float speed = length(raw_vel);
     if (speed > sim.max_speed) {
         raw_vel = raw_vel * (sim.max_speed / speed);
         new_pos = old_pos + raw_vel * sim.dt;
     }
+
     vec3 damped_vel = raw_vel * (1.0 - sim.global_damping * sim.dt);
 
     v[i].xyz = damped_vel;
