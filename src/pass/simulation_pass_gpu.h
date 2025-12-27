@@ -65,6 +65,7 @@ public:
 		bool bend = false;
 		bool area = true;
 		bool self_collision = true;
+		bool inter_collision = true;
 
 		bool softbody_stretch = true;
 		bool softbody_volume = true;
@@ -74,7 +75,7 @@ public:
 	uint32_t timestamp_steps_ = 0;
 	uint32_t slots_integrate_clear = 4;
 	uint32_t slots_spatial_hashing_ = 8;
-	uint32_t slots_per_iteration_ = 16;
+	uint32_t slots_per_iteration_ = 18;
 	uint32_t slots_collide_update_ = 4;
 	uint32_t slots_calculate_normals_ = 4;
 	uint32_t slots_per_compute_ =
@@ -87,7 +88,7 @@ public:
 		+ 1;
 	float pass_total_time_ = 0.0f;
 
-	std::array<std::string, 18> labels_ = { "Intergrate", "ClearLambdas", "HashBuild", "RadixSort", "BuildCell", "BuildNeighbor", "SolveStretch", "SolveShear", "SolveBend", "SolveArea", "SolveSoftbodyStretch", "SolveSoftbodyVolume","SolveSelfCollision", "ApplyDeltas", "CollideSdf", "Update", "CalculateNormals", "Total" };
+	std::array<std::string, 19> labels_ = { "Intergrate", "ClearLambdas", "HashBuild", "RadixSort", "BuildCell", "BuildNeighbor", "SolveStretch", "SolveShear", "SolveBend", "SolveArea", "SolveSoftbodyStretch", "SolveSoftbodyVolume","SolveSelfCollision", "SolveInterCollision", "ApplyDeltas", "CollideSdf", "Update", "CalculateNormals", "Total" };
 	std::unordered_map<std::string, double> label_time_;
 	std::unordered_map<std::string, double> label_avg_time_;
 	uint32_t time_count_ = 0;
@@ -149,6 +150,8 @@ public:
 		vk::raii::Pipeline solve_shear{ nullptr };
 		vk::raii::Pipeline solve_bend{ nullptr };
 		vk::raii::Pipeline solve_area{ nullptr };
+		vk::raii::Pipeline solve_self_collision{ nullptr };
+		vk::raii::Pipeline solve_inter_cloth_collision{ nullptr };
 		vk::raii::Pipeline apply_deltas{ nullptr };
 		vk::raii::Pipeline collide_sdf{ nullptr };
 		vk::raii::Pipeline update_velocity{ nullptr };
@@ -156,7 +159,6 @@ public:
 		vk::raii::Pipeline build_hash{ nullptr };
 		vk::raii::Pipeline build_cell{ nullptr };
 		vk::raii::Pipeline build_neighbor{ nullptr };
-		vk::raii::Pipeline solve_self_collision{ nullptr };
 
 		vk::raii::Pipeline tri_normal{ nullptr };
 		vk::raii::Pipeline vector_normal{ nullptr };

@@ -60,7 +60,7 @@ layout(std140, set = 0, binding = 0) uniform SimParams {
     float self_collision_stiffness;
     float volume_stiffness;
     float softbody_stretch_stiffness;
-    float p1;
+    float inter_collision_stiffness;
 
     vec3 wind_dir;
     uint wind_enable;

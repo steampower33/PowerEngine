@@ -155,16 +155,16 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 		cmd.dispatch(groupsTotal, 1, 1);
 		TS(timestamp_steps_);
 		vku::ssboCompWtoCompRW(cmd, pm.ssbos_.pred_position);
-		
+
 		// Clear Lambdas
 		uint32_t Nmax = std::max(
-			{ 
+			{
 				total_particles_,
 				datas_.num_edges,
 				datas_.num_bends,
 				datas_.num_shears,
 				datas_.num_areas,
-				datas_.num_volumes 
+				datas_.num_volumes
 			}
 		);
 		TS(timestamp_steps_);
@@ -371,11 +371,11 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 				cmd.pushConstants<PushConstant>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute,
-						0,
-						push_constants_);
+					0,
+					push_constants_);
 
-						uint32_t group = (count + 256 - 1) / 256;
-						cmd.dispatch(group, 1, 1);
+				uint32_t group = (count + 256 - 1) / 256;
+				cmd.dispatch(group, 1, 1);
 			}
 			TS(timestamp_steps_);
 
@@ -436,6 +436,15 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 			}
 			TS(timestamp_steps_);
 
+			// solve_inter_cloth_collision
+			TS(timestamp_steps_);
+			if (solver_config_.inter_collision)
+			{
+				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_inter_cloth_collision);
+				cmd.dispatch(groupsTotal, 1, 1);
+			}
+			TS(timestamp_steps_);
+
 			vku::ssboCompWtoCompRW(cmd, dSSBO.delta_x);
 			vku::ssboCompWtoCompRW(cmd, dSSBO.delta_y);
 			vku::ssboCompWtoCompRW(cmd, dSSBO.delta_z);
@@ -448,12 +457,12 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 			TS(timestamp_steps_);
 			vku::ssboCompWtoCompRW(cmd, pmSSBO.pred_position);
 
-			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.collide_sdf);
-			cmd.dispatch(groupsTotal, 1, 1);
 		}
 
 		// Collide SDF
 		TS(timestamp_steps_);
+		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.collide_sdf);
+		cmd.dispatch(groupsTotal, 1, 1);
 		TS(timestamp_steps_);
 
 		// Update Velocity
@@ -555,7 +564,29 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 		testScene.horizontal_drop = false;
 		ubo_.datas.sim_params.wind_enable = 0;
 
-		float height = 5.0f;
+		float height = 6.0f;
+		for (auto& cloth : pm.clothes_)
+		{
+			cloth.origin = glm::vec3(0.0f, height, 0.0f);
+			cloth.angle_deg = 0.0f;
+			cloth.axis = glm::vec3(1, 0, 0);
+			pm.ResetCloth(cloth);
+			cloth.angle_deg = 0.0f;
+
+			height -= 1.0f;
+		}
+		datas_.ResetConstraints(pm.positions_, pm.indices_);
+
+		pm.ResetVolumeConstraint();
+
+		CopySimDatas(cmd);
+	}
+	if (testScene.curtain)
+	{
+		testScene.curtain = false;
+		ubo_.datas.sim_params.wind_enable = 0;
+
+		float height = 4.0f;
 		for (auto& cloth : pm.clothes_)
 		{
 			cloth.origin = glm::vec3(0.0f, height, 0.0f);
@@ -564,107 +595,89 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 
 			pm.ResetCloth(cloth);
 
+			pm.inverse_masses_[cloth.offset_particle] = 0.0f;
+			pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
+
 			height -= 1.0f;
 		}
-		
+
 		datas_.ResetConstraints(pm.positions_, pm.indices_);
 
 		pm.ResetVolumeConstraint();
 
 		CopySimDatas(cmd);
 	}
-	else if (testScene.vertical_drop)
-	{
-		testScene.vertical_drop = false;
-		ubo_.datas.sim_params.wind_enable = 0;
 
-		float height = 10.0f;
-		for (auto& cloth : pm.clothes_)
-		{
-			cloth.origin = glm::vec3(0.0f, height, 0.0f);
-			cloth.angle_deg = 90.0f;
-			cloth.axis = glm::vec3(1, 0, 0);
-			pm.ResetCloth(cloth);
-			cloth.angle_deg = 0.0f;
+	//else if (testScene.pinned_corner)
+	//{
+	//	testScene.pinned_corner = false;
+	//	ubo_.datas.sim_params.wind_enable = 0;
 
-			height -= (cloth.cloth_size.y + 1.0f);
-		}
-		datas_.ResetConstraints(pm.positions_, pm.indices_);
+	//	pm.clothes_[0].origin = glm::vec3(0.0f, 5.0f, 0.0f);
+	//	pm.ResetCloth(pm.clothes_[0]);
+	//	pm.clothes_[1].origin = glm::vec3(0.0f, 4.0f, 0.0f);
+	//	pm.ResetCloth(pm.clothes_[1]);
 
-		pm.ResetVolumeConstraint();
+	//	auto& cloth = pm.clothes_[2];
+	//	cloth.origin = glm::vec3(0.0f, 3.0f, 0.0f);
+	//	cloth.angle_deg = 0.0f;
+	//	cloth.axis = glm::vec3(0, 1, 0);
+	//	pm.ResetCloth(cloth);
+	//	pm.inverse_masses_[cloth.offset_particle] = 0.0f;
+	//	pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
+	//	pm.inverse_masses_[cloth.offset_particle + (cloth.ny1 - 1) * cloth.nx1] = 0.0f;
+	//	pm.inverse_masses_[cloth.offset_particle + (cloth.ny1 - 1) * cloth.nx1 + cloth.nx1 - 1] = 0.0f;
+	//	datas_.ResetConstraints(pm.positions_, pm.indices_);
 
-		CopySimDatas(cmd);
-	}
-	else if (testScene.pinned_corner)
-	{
-		testScene.pinned_corner = false;
-		ubo_.datas.sim_params.wind_enable = 0;
+	//	pm.ResetVolumeConstraint();
 
-		pm.clothes_[0].origin = glm::vec3(0.0f, 5.0f, 0.0f);
-		pm.ResetCloth(pm.clothes_[0]);
-		pm.clothes_[1].origin = glm::vec3(0.0f, 4.0f, 0.0f);
-		pm.ResetCloth(pm.clothes_[1]);
+	//	CopySimDatas(cmd);
+	//}
+	//else if (testScene.top_pinned_corner)
+	//{
+	//	testScene.top_pinned_corner = false;
+	//	ubo_.datas.sim_params.wind_enable = 0;
 
-		auto& cloth = pm.clothes_[2];
-		cloth.origin = glm::vec3(0.0f, 3.0f, 0.0f);
-		cloth.angle_deg = 0.0f;
-		cloth.axis = glm::vec3(0, 1, 0);
-		pm.ResetCloth(cloth);
-		pm.inverse_masses_[cloth.offset_particle] = 0.0f;
-		pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
-		pm.inverse_masses_[cloth.offset_particle + (cloth.ny1 - 1) * cloth.nx1] = 0.0f;
-		pm.inverse_masses_[cloth.offset_particle + (cloth.ny1 - 1) * cloth.nx1 + cloth.nx1 - 1] = 0.0f;
-		datas_.ResetConstraints(pm.positions_, pm.indices_);
+	//	float height = 3.0f;
+	//	for (auto& cloth : pm.clothes_)
+	//	{
+	//		cloth.origin = glm::vec3(0.0f, height, 0.0f);
+	//		pm.ResetCloth(cloth);
+	//		pm.inverse_masses_[cloth.offset_particle] = 0.0f;
+	//		pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
 
-		pm.ResetVolumeConstraint();
+	//		height -= 0.1f;
+	//	}
+	//	datas_.ResetConstraints(pm.positions_, pm.indices_);
 
-		CopySimDatas(cmd);
-	}
-	else if (testScene.top_pinned_corner)
-	{
-		testScene.top_pinned_corner = false;
-		ubo_.datas.sim_params.wind_enable = 0;
+	//	pm.ResetVolumeConstraint();
 
-		float height = 3.0f;
-		for (auto& cloth : pm.clothes_)
-		{
-			cloth.origin = glm::vec3(0.0f, height, 0.0f);
-			pm.ResetCloth(cloth);
-			pm.inverse_masses_[cloth.offset_particle] = 0.0f;
-			pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
+	//	CopySimDatas(cmd);
+	//}
+	//else if (testScene.wind)
+	//{
+	//	testScene.wind = false;
+	//	ubo_.datas.sim_params.wind_enable = 1;
 
-			height -= 0.1f;
-		}
-		datas_.ResetConstraints(pm.positions_, pm.indices_);
+	//	float height = 8.0f;
+	//	for (auto& cloth : pm.clothes_)
+	//	{
+	//		cloth.origin = glm::vec3(0.0f, height, 0.0f);
+	//		//cloth.angle_deg = 90.0f;
+	//		//cloth.axis = glm::vec3(1, 0, 0);
+	//		pm.ResetCloth(cloth);
+	//		cloth.angle_deg = 0.0f;
+	//		pm.inverse_masses_[cloth.offset_particle] = 0.0f;
+	//		pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
 
-		pm.ResetVolumeConstraint();
+	//		height -= (cloth.cloth_size.y + 1.0f);
+	//	}
+	//	datas_.ResetConstraints(pm.positions_, pm.indices_);
 
-		CopySimDatas(cmd);
-	}
-	else if (testScene.wind)
-	{
-		testScene.wind = false;
-		ubo_.datas.sim_params.wind_enable = 1;
+	//	pm.ResetVolumeConstraint();
 
-		float height = 8.0f;
-		for (auto& cloth : pm.clothes_)
-		{
-			cloth.origin = glm::vec3(0.0f, height, 0.0f);
-			//cloth.angle_deg = 90.0f;
-			//cloth.axis = glm::vec3(1, 0, 0);
-			pm.ResetCloth(cloth);
-			cloth.angle_deg = 0.0f;
-			pm.inverse_masses_[cloth.offset_particle] = 0.0f;
-			pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
-
-			height -= (cloth.cloth_size.y + 1.0f);
-		}
-		datas_.ResetConstraints(pm.positions_, pm.indices_);
-
-		pm.ResetVolumeConstraint();
-
-		CopySimDatas(cmd);
-	}
+	//	CopySimDatas(cmd);
+	//}
 }
 
 void SimulationPassGPU::CopyColliders(const vk::raii::CommandBuffer& cmd)
@@ -683,7 +696,7 @@ void SimulationPassGPU::CopyColliders(const vk::raii::CommandBuffer& cmd)
 			isCopyToGPU = true;
 
 			model.UpdateShapeColliders();
-			
+
 			//std::cout <<" Update " << model.name_ << std::endl;
 
 			for (uint32_t j = 0; j < model.shape_colliders_.size(); j++)
@@ -913,7 +926,7 @@ void SimulationPassGPU::CreateColiiders()
 	{
 		for (auto c : model->shape_colliders_)
 			datas_.colliders.push_back(c);
-		
+
 		for (auto c : model->capsule_colliders_)
 			datas_.colliders.push_back(c);
 	}
@@ -1603,6 +1616,16 @@ void SimulationPassGPU::CreateComputePipelines()
 		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
 		pipelines_.vector_normal = vk::raii::Pipeline(context_.device_, nullptr, pipelineInfo);
 	}
+
+	// solve_inter_cloth_collision
+	{
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context_.device_, vku::ReadFile("shaders/spv/solve_inter_cloth_collision.comp.spv"));
+
+		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
+
+		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
+		pipelines_.solve_inter_cloth_collision = vk::raii::Pipeline(context_.device_, nullptr, pipelineInfo);
+	}
 }
 
 void SimulationPassGPU::CreateVrdxSorter()
@@ -1673,6 +1696,7 @@ void SimulationPassGPU::CalculateGpuTime()
 	float tSolveSoftbodyStretch = 0.0f;
 	float tSolveSoftbodyVolume = 0.0f;
 	float tSolveSelfCollision = 0.0f;
+	float tSolveInterCollision = 0.0f;
 	float tApplyDeltas = 0.0f;
 	float tCollideSdf = 0.0f;
 	float tUpdate = 0.0f;
@@ -1704,7 +1728,8 @@ void SimulationPassGPU::CalculateGpuTime()
 			tSolveSoftbodyStretch += delta_ms(iterBase + it * tsCnt + 8, iterBase + it * tsCnt + 9);
 			tSolveSoftbodyVolume += delta_ms(iterBase + it * tsCnt + 10, iterBase + it * tsCnt + 11);
 			tSolveSelfCollision += delta_ms(iterBase + it * tsCnt + 12, iterBase + it * tsCnt + 13);
-			tApplyDeltas += delta_ms(iterBase + it * tsCnt + 14, iterBase + it * tsCnt + 15);
+			tSolveInterCollision += delta_ms(iterBase + it * tsCnt + 14, iterBase + it * tsCnt + 15);
+			tApplyDeltas += delta_ms(iterBase + it * tsCnt + 16, iterBase + it * tsCnt + 17);
 		}
 		afterIteration = iterBase + datas_.iterations * tsCnt;
 
@@ -1722,7 +1747,7 @@ void SimulationPassGPU::CalculateGpuTime()
 	float total =
 		tIntegrate + tClearLambdas +
 		tHashBuild + tRadixSort + tBuildCell + tBuildNeighbor +
-		tSolveStretch + tSolveSoftbodyStretch + tSolveSoftbodyVolume + tSolveBend + tSolveArea + tSolveSelfCollision + tApplyDeltas +
+		tSolveStretch + tSolveSoftbodyStretch + tSolveSoftbodyVolume + tSolveBend + tSolveArea + tSolveSelfCollision + tSolveInterCollision + tApplyDeltas +
 		tCollideSdf + tUpdate +
 		tCalculateNormals;
 
@@ -1743,6 +1768,7 @@ void SimulationPassGPU::CalculateGpuTime()
 		label_time_[labels_[c++]] = tSolveSoftbodyStretch;
 		label_time_[labels_[c++]] = tSolveSoftbodyVolume;
 		label_time_[labels_[c++]] = tSolveSelfCollision;
+		label_time_[labels_[c++]] = tSolveInterCollision;
 		label_time_[labels_[c++]] = tApplyDeltas;
 		label_time_[labels_[c++]] = tCollideSdf;
 		label_time_[labels_[c++]] = tUpdate;
@@ -1765,6 +1791,7 @@ void SimulationPassGPU::CalculateGpuTime()
 		label_avg_time_[labels_[c++]] += tSolveSoftbodyStretch;
 		label_avg_time_[labels_[c++]] += tSolveSoftbodyVolume;
 		label_avg_time_[labels_[c++]] += tSolveSelfCollision;
+		label_avg_time_[labels_[c++]] += tSolveInterCollision;
 		label_avg_time_[labels_[c++]] += tApplyDeltas;
 		label_avg_time_[labels_[c++]] += tCollideSdf;
 		label_avg_time_[labels_[c++]] += tUpdate;

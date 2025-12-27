@@ -23,10 +23,7 @@ namespace vku
 
 	struct TestScene {
 		bool horizontal_drop = false;
-		bool vertical_drop = false;
-		bool pinned_corner = false;
-		bool top_pinned_corner = false;
-		bool wind = false;
+		bool curtain = false;
 	};
 
 	struct VertexIncludeInfo {

@@ -38,7 +38,7 @@ struct SimUBO {
 			float self_collision_stiffness = 30.0f;
 			float volume_stiffness = 10.0f;
 			float softbody_stretch_stiffness = 20.0f;
-			float p1;
+			float inter_collision_stiffness = 100.0f;
 
 			glm::vec3 wind_dir{ 0.0f, 0.0f, 1.0f };
 			uint32_t wind_enable = 0;

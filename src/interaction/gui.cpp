@@ -747,6 +747,7 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 				row("Bend", [&] { ImGui::Checkbox("##Bend", &sim.solver_config_.bend); });
 				row("Area", [&] { ImGui::Checkbox("##Area", &sim.solver_config_.area); });
 				row("SelfCollision", [&] { ImGui::Checkbox("##SelfCollision", &sim.solver_config_.self_collision); });
+				row("InterCollision", [&] { ImGui::Checkbox("##InterCollision", &sim.solver_config_.inter_collision); });
 				ImGui::EndTable();
 			}
 			ImGui::EndChild();
@@ -763,6 +764,7 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 				row("Bend", [&] { ImGui::DragFloat("##BendStiffness", &sim.ubo_.datas.sim_params.bend_stiffness, 1e-3f, 0.0f, 2.0f, "%.3f"); });
 				row("Area", [&] { ImGui::DragFloat("##AreaStiffness", &sim.ubo_.datas.sim_params.area_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
 				row("SelfCollision", [&] { ImGui::DragFloat("##SelfCollision", &sim.ubo_.datas.sim_params.self_collision_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
+				row("InterColiision", [&] { ImGui::DragFloat("##InterColiision", &sim.ubo_.datas.sim_params.inter_collision_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
 				ImGui::EndTable();
 			}
 			ImGui::EndChild();
@@ -861,30 +863,31 @@ void GUI::SetTestSceneGUI(RowFn&& row)
 	auto& scene = pass_manager_.test_scene_;
 
 	ImVec2 buttonSize = ImVec2(ImGui::GetContentRegionAvail().x, 0);
+
 	if (ImGui::Button("Horizontal Drop", buttonSize))
 	{
 		scene.horizontal_drop = true;
 	}
 
-	if (ImGui::Button("Vertical Drop", buttonSize))
+	if (ImGui::Button("Curtain", buttonSize))
 	{
-		scene.vertical_drop = true;
+		scene.curtain = true;
 	}
 
-	if (ImGui::Button("Pinned Corner", buttonSize))
-	{
-		scene.pinned_corner = true;
-	}
+	//if (ImGui::Button("Pinned Corner", buttonSize))
+	//{
+	//	scene.pinned_corner = true;
+	//}
 
-	if (ImGui::Button("Top Pinned Corner", buttonSize))
-	{
-		scene.top_pinned_corner = true;
-	}
+	//if (ImGui::Button("Top Pinned Corner", buttonSize))
+	//{
+	//	scene.top_pinned_corner = true;
+	//}
 
-	if (ImGui::Button("Wind", buttonSize))
-	{
-		scene.wind = true;
-	}
+	//if (ImGui::Button("Wind", buttonSize))
+	//{
+	//	scene.wind = true;
+	//}
 }
 
 template<typename RowFn>
