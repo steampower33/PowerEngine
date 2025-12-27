@@ -218,7 +218,6 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 
 			if (solver_config_.self_collision)
 			{
-				uint32_t fillValue = 0xFFFFFFFF;
 				uint32_t offset = 0;
 				uint64_t size = VK_WHOLE_SIZE;
 
@@ -233,8 +232,8 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 					vk::PipelineStageFlagBits2::eClear,
 					vk::AccessFlagBits2::eTransferWrite);
 
-				cmd.fillBuffer(pmSSBO.start, offset, size, fillValue);
-				cmd.fillBuffer(pmSSBO.end, offset, size, fillValue);
+				cmd.fillBuffer(pmSSBO.start, offset, size, 0xFFFFFFFF);
+				cmd.fillBuffer(pmSSBO.end, offset, size, 0);
 
 				vku::BufferBarrier2(cmd, pmSSBO.start, offset, particle_manager_.ssbo_size_.start,
 					vk::PipelineStageFlagBits2::eClear,

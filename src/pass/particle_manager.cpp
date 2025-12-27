@@ -125,23 +125,23 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, T
 		SetSoftbody("assets/sphere.msh", softbody);
 	}
 
-	//{
-	//	SoftBody softbody;
+	{
+		SoftBody softbody;
 
-	//	softbody.name = "softbody2";
-	//	softbody.origin = glm::vec3(2.0f, 2.0f, 0.0f);
-	//	softbody.render = true;
-	//	SetSoftbody("assets/sphere.msh", softbody);
-	//}
-	//
-	//{
-	//	SoftBody softbody;
+		softbody.name = "softbody2";
+		softbody.origin = glm::vec3(2.0f, 2.0f, 0.0f);
+		softbody.render = true;
+		SetSoftbody("assets/sphere.msh", softbody);
+	}
+	
+	{
+		SoftBody softbody;
 
-	//	softbody.name = "softbody3";
-	//	softbody.origin = glm::vec3(2.0f, 3.0f, 0.0f);
-	//	softbody.render = true;
-	//	SetSoftbody("assets/sphere.msh", softbody);
-	//}
+		softbody.name = "softbody3";
+		softbody.origin = glm::vec3(2.0f, 3.0f, 0.0f);
+		softbody.render = true;
+		SetSoftbody("assets/sphere.msh", softbody);
+	}
 
 	vku::CreateIndexBuffer(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_, indices_, index_buffer_, index_buffer_memory_);
 
@@ -321,7 +321,7 @@ void ParticleManager::SetClothFromMesh(Cloth& cloth)
 	// Set indices
 	for (uint32_t i = 0; i < cloth.indices.size(); i++)
 	{
-		indices_.push_back(cloth.offset_indices + cloth.indices[i]);
+		indices_.push_back(cloth.offset_particle + cloth.indices[i]);
 	}
 	cloth.num_indices = static_cast<uint32_t>(indices_.size() - cloth.offset_indices);
 
@@ -604,7 +604,7 @@ void ParticleManager::CreateSSBO()
 {
 	// Self Collision
 	uint32_t tableSize = total_particles_;
-	uint32_t maxNeighbors = 20;
+	uint32_t maxNeighbors = 16;
 
 	particle_hashes_.resize(total_particles_, 0);
 	particle_indices_.resize(total_particles_, 0);

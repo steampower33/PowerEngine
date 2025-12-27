@@ -1,41 +1,18 @@
 #version 460
-
 #include "../common/simulation_common.glsl"
-
 layout(local_size_x = 256) in;
 
-shared uint s_hash[256 + 1];
-
-void main()
-{
+void main() {
     uint gid = gl_GlobalInvocationID.x;
-    uint lid = gl_LocalInvocationID.x;
     uint N   = sim.num_particles;
     if (gid >= N) return;
 
-    uint h = hashes[gid];
-    s_hash[lid + 1] = h;
-
-    if (gid == 0 && lid == 0) {
-        s_hash[0] = uint(0xffffffff);
-    }
-    else if (lid == 0) {
-        s_hash[0] = hashes[gid - 1];
-    }
-
-    barrier();
-
-    uint prev = s_hash[lid];
-    uint curr = s_hash[lid + 1];
+    uint curr = hashes[gid];
+    uint prev = (gid == 0) ? 0xFFFFFFFFu : hashes[gid - 1];
 
     if (gid == 0 || curr != prev) {
         starts[curr] = gid;
-        if (gid > 0 && prev != 0xffffffffu) {
-            ends[prev] = gid;
-        }
+        if (gid > 0) ends[prev] = gid;
     }
-
-    if (gid == N - 1) {
-        ends[curr] = N;
-    }
+    if (gid == N - 1) ends[curr] = N;
 }

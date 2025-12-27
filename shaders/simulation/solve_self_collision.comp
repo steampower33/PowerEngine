@@ -68,11 +68,7 @@ void main()
 
         bool sameSoftbody = same && (collision_masks[j].object_type == TYPE_SOFTBODY);
         if (sameSoftbody) continue;
-        
-        if (collision_masks[j].object_type == TYPE_SOFTBODY)
-        {
-            r *= 2.0;
-        }
+        if (collision_masks[j].object_type == TYPE_SOFTBODY) continue;
 
         float compliance  = same ? pc.solve.compliance : 0.0;
         float mu          = same ? sim.neighbor_friction : 1.0;

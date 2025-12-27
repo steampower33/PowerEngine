@@ -55,8 +55,10 @@ void main()
 
                 uint start = starts[h];
                 if (start == 0xFFFFFFFFu) continue;
-
-                uint end   = ends[h];
+                
+                uint end = ends[h];
+                if (end == 0u || end <= start) continue;
+                end = min(end, sim.num_particles);
 
                 for (uint idx = start; idx < end; ++idx) {
                     uint j = sorted_indices[idx];
