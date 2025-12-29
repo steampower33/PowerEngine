@@ -187,3 +187,16 @@ The renderer is primarily for **simulation visualization & debugging** (not a fu
   - [ ] Cascaded Shadow Maps (CSM)
 
 ---
+
+### Debug UI (ImGui)
+
+PowerEngine includes an ImGui-based debug UI for fast iteration on rendering and simulation.
+
+#### Material / Texture Picker
+<p align="center">
+  <img src="media/texturing.png" alt="ImGui texture picker" width="400" />
+</p>
+- Select per-object textures from a small preview grid (e.g., Albedo / Normal / ARM).
+- Toggle individual texture channels on/off for debugging (e.g., disable Normal or ARM).
+- Override material factors (e.g., baseColor tint, roughness/metallic scalars, fuzz/coat parameters).
+- Adjust UV tiling for quick look-dev / validation.
