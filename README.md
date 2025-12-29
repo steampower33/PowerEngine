@@ -55,6 +55,8 @@ PowerEngine aims to:
 - [x] Bending (A) [Müller+07]
 - [x] Area (A) [Müller+14]
 - [x] Self-Collision (A)
+- [x] Inter-Collision (A)
+- [x] LRA(Long Range Attachments) (G) [Kim+12]
 
 ### Softbody
 - [x] Stretch (A) [Müller+14]
