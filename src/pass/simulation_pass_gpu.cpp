@@ -456,7 +456,6 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 			cmd.dispatch(groupsTotal, 1, 1);
 			TS(timestamp_steps_);
 			vku::ssboCompWtoCompRW(cmd, pmSSBO.pred_position);
-
 		}
 
 		// Solve LRA

@@ -29,8 +29,11 @@ for each frame:
       Broadphase: build_hash → radix sort(vk_radix_sort) → build cell ranges(start/end) → build neighbor list
     for iter in [0..iterations):
       Solve constraints (stretch uses coloring-GS, others use atomic accumulation)
+      Solve Self Collision (intra-cloth)
+      Solve Inter Collision (cloth ↔ cloth)
       Apply accumulated position deltas
       Clear accumulators (per-iteration)
+    Solve LRA (Long-Range Attachments)
     Collide with SDF
     Update velocity
   Recompute normals (tri → vertex)
@@ -64,6 +67,7 @@ for each frame:
 - Solve constraints
   - Stretch (Edge)
     - Enforces distance constraints on mesh edges.
+    - Uses XPBD damping term β (in addition to compliance α).
 
   - Shear
     - Enforces shear behavior on cloth quads (implementation-dependent: angle/diagonal-based).
@@ -74,10 +78,57 @@ for each frame:
   - Area
     - Enforces triangle area constraints.
 
-  - Self Collision
-    - Resolves cloth self-collision constraints.
-    - Multiple cloth instances may share the same SSBO; cross-object collisions are currently handled in the same pass for more natural interaction.
-    - Approximated Coulomb friction is applied.
+  - Self Collision (intra-cloth)
+    - This pass handles **cloth self-collision only**. Particles are filtered by `collision_masks[i].object_type == TYPE_CLOTH`.
+    - Candidate pairs are obtained from the broadphase **neighbor list** (`neighbors`), built from the spatial hash grid.
+    - Self-collision is applied **within the same object only**:
+      - `collision_masks[j].object_id == collision_masks[i].object_id`
+      - and `collision_masks[j].object_type == TYPE_CLOTH`
+      - (Inter-cloth / inter-object collisions are handled in a separate pass.)
+
+    - The constraint is a **particle–particle distance inequality** (non-penetration):
+      - Penetration when `dist < r` (`r = collision_radius`)
+      - Constraint value `C = dist - r` and we solve only when `C < 0`
+      - XPBD compliance is included via `α̃ = compliance / dt²` in the denominator to reduce timestep sensitivity.
+      - Because this is an inequality constraint, the Lagrange multiplier is clamped to `λ ≥ 0` and stored per neighbor-slot in `neighbor_lambdas[idx]`.
+
+    - Friction is implemented as a **PBD/XPBD-style tangential displacement clamp** (heuristic), not a full Coulomb cone solve:
+      - We form a relative displacement proxy using previous positions:
+        `rel_disp = (xp_i - x_i) - (xp_j - x_j)`
+      - Using the normal correction magnitude as a proxy `dn ≈ |(wi+wj) * Δλ|`, we limit tangential motion by:
+        `|t| ≤ μ * dn`, where `μ = neighbor_friction`.
+      - This is primarily for stability/visual plausibility rather than physically exact friction.
+
+    - For parallel GPU solving, corrections are **atomically accumulated** into `delta_x/y/z` and `delta_count` rather than writing directly to `xp`.
+      The accumulated deltas are applied later in the “Apply accumulated position deltas” pass.
+
+    - Overall strength is scaled by `self_collision_stiffness`.
+
+    **Note:** `neighbor_lambdas` is per “(particle i, neighbor-slot k)” state. It typically assumes lambdas are cleared/reset at substep start (or whenever the neighbor list is rebuilt), depending on the chosen scheme.
+
+  - Inter Collision (cloth ↔ cloth)
+    - Separate pass from self-collision.
+    - Resolves collisions between different cloth instances (different object ids).
+    - Reuses the same broadphase neighbor list, but filters pairs by object id/type.
+
+  - LRA (Long-Range Attachments)
+    - Adds long-range constraints that prevent unrealistic global stretching under gravity and fast motion.
+    - Implemented as a post-iteration pass (after all local constraints per substep), before SDF collision.
+    - Each particle stores `K` attachment anchors and rest distances in SSBO (`lra_ids`, `lra_rests`).
+    - Solve step:
+      - For each attachment `(anchor a, radius r)`, enforce `|x_i - x_a| ≤ r` by projecting back onto a sphere when violated.
+      - Uses `lra_stiffness` to blend towards the projected position (artist-friendly control).
+    - Controlled stretchiness:
+      - The stored rest radius can be inflated by a **slack** factor (currently `+10%`, i.e. `r *= 1.1`).
+      -Together, `slack` and `lra_stiffness` control how strongly LRA “pulls back” the cloth and how much extra stretch is allowed.
+
+    > Note: The original LRA paper describes accumulating per-attachment displacements and applying their average per particle.
+
+    > This project currently applies attachments sequentially with a stiffness blend, which is simpler and works well in practice.
+
+    > LRA rest radii are precomputed on CPU by running **Dijkstra** over the cloth graph (edges weighted by rest edge length) from each anchor to all vertices, then selecting the `K` closest anchors per vertex.
+
+    > On GPU, LRA is evaluated as a lightweight projection-only pass with no lambdas (pure positional correction).
 
 - Apply accumulated position deltas
   - Applies the accumulated corrections to predicted positions.
@@ -85,7 +136,7 @@ for each frame:
 
 - Collide with SDF
   - Applies SDF-based collisions for primitive colliders (sphere / plane / capsule).
-  - Approximated Coulomb friction is applied.
+  - A simple friction approximation (tangential displacement clamp) is applied.
 
 - Update velocity
   - Updates `v` from the corrected predicted positions.
@@ -96,6 +147,16 @@ for each frame:
   - Recomputes per-vertex normals from triangle geometry after simulation.
   - Used for lighting in the rendering pass and for debugging visualization.
 
+---
+
+## Constraint gradients (∇C)
+
+- XPBD updates `Δλ` using the **first-order constraint gradient** `∇C = ∂C/∂x`.
+- For each constraint, the solver needs:
+    - the constraint value `C(x)`
+    - the per-particle gradients `∇C_i`
+- The denominator uses the **mass-weighted gradient norm**:
+    `Σ w_i ||∇C_i||²` (plus compliance term)
 ---
 
 ## Rendering
