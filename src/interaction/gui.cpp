@@ -869,26 +869,22 @@ void GUI::SetTestSceneGUI(RowFn&& row)
 	{
 		scene.horizontal_drop = true;
 	}
-
-	if (ImGui::Button("Curtain", buttonSize))
+	if (ImGui::Button("Vertical Drop", buttonSize))
 	{
-		scene.curtain = true;
+		scene.vertical_drop = true;
 	}
-
-	//if (ImGui::Button("Pinned Corner", buttonSize))
-	//{
-	//	scene.pinned_corner = true;
-	//}
-
-	//if (ImGui::Button("Top Pinned Corner", buttonSize))
-	//{
-	//	scene.top_pinned_corner = true;
-	//}
-
-	//if (ImGui::Button("Wind", buttonSize))
-	//{
-	//	scene.wind = true;
-	//}
+	if (ImGui::Button("Pinned Corner", buttonSize))
+	{
+		scene.pinned_corner = true;
+	}
+	if (ImGui::Button("Top Pinned Corner", buttonSize))
+	{
+		scene.top_pinned_corner = true;
+	}
+	if (ImGui::Button("Wind", buttonSize))
+	{
+		scene.wind = true;
+	}
 }
 
 template<typename RowFn>

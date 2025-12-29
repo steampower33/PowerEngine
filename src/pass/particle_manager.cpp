@@ -16,6 +16,39 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, T
 	{
 		Cloth cloth{};
 
+		cloth.name = "1x1 Cloth";
+		cloth.spacing = default_cloth_spacing_;
+		cloth.gsm = 0.2f;
+		cloth.cloth_size = glm::vec2(1.0f, 1.0f);
+
+		cloth.color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+
+		cloth.origin = glm::vec3(0.0f, 5.0f, 0.0f);
+		cloth.angle_deg = 0.0f;
+		cloth.axis = glm::vec3(0, 1, 0);
+
+		cloth.num_particle = cloth.nx1 * cloth.ny1;
+
+		cloth.render = true;
+
+		std::string base = "assets/fabric/quatrefoil_jacquard_fabric";
+		cloth.ubo_data.albedo_enable = 1;
+		cloth.ubo_data.albedo_idx = textureManager.CreateTexture(base, "diff", false, true);
+		cloth.ubo_data.normal_enable = 1;
+		cloth.ubo_data.normal_idx = textureManager.CreateTexture(base, "nor", false, true);
+		cloth.ubo_data.arm_enable = 1;
+		cloth.ubo_data.arm_idx = textureManager.CreateTexture(base, "arm", false, true);
+		cloth.ubo_data.fuzz_factor = 0.1f;
+		cloth.ubo_data.fuzz_roughness_factor = 1.0f;
+
+		cloth.ubo_data.tile_uv = cloth.cloth_size;
+
+		SetPlaneCloth(cloth);
+	}
+
+	{
+		Cloth cloth{};
+
 		cloth.name = "2x2 Cloth";
 		cloth.spacing = default_cloth_spacing_;
 		cloth.gsm = 0.2f;
@@ -231,8 +264,8 @@ void ParticleManager::SetPlaneCloth(Cloth& cloth)
 
 	object_cnt_++;
 
-	inverse_masses_[cloth.offset_particle] = 0.0f;
-	inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
+	//inverse_masses_[cloth.offset_particle] = 0.0f;
+	//inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
 
 	clothes_.push_back(cloth);
 }

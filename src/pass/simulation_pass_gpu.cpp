@@ -583,7 +583,7 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 		testScene.horizontal_drop = false;
 		ubo_.datas.sim_params.wind_enable = 0;
 
-		float height = 4.0f;
+		float height = 5.0f;
 		for (auto& cloth : pm.clothes_)
 		{
 			cloth.origin = glm::vec3(0.0f, height, 0.0f);
@@ -600,103 +600,98 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 
 		CopySimDatas(cmd);
 	}
-	if (testScene.curtain)
+	else if (testScene.vertical_drop)
 	{
-		testScene.curtain = false;
+		testScene.vertical_drop = false;
 		ubo_.datas.sim_params.wind_enable = 0;
 
-		float height = 4.0f;
+		float height = 10.0f;
 		for (auto& cloth : pm.clothes_)
 		{
 			cloth.origin = glm::vec3(0.0f, height, 0.0f);
-			cloth.angle_deg = 0.0f;
-			cloth.axis = glm::vec3(0, 1, 0);
-
+			cloth.angle_deg = 90.0f;
+			cloth.axis = glm::vec3(1, 0, 0);
 			pm.ResetCloth(cloth);
+			cloth.angle_deg = 0.0f;
 
-			pm.inverse_masses_[cloth.offset_particle] = 0.0f;
-			pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
-
-			height -= 1.0f;
+			height -= (cloth.cloth_size.y + 1.0f);
 		}
-
 		datas_.ResetConstraints(pm.positions_, pm.indices_);
 
 		pm.ResetVolumeConstraint();
 
 		CopySimDatas(cmd);
 	}
+	else if (testScene.pinned_corner)
+	{
+		testScene.pinned_corner = false;
+		ubo_.datas.sim_params.wind_enable = 0;
 
-	//else if (testScene.pinned_corner)
-	//{
-	//	testScene.pinned_corner = false;
-	//	ubo_.datas.sim_params.wind_enable = 0;
+		pm.clothes_[0].origin = glm::vec3(0.0f, 5.0f, 0.0f);
+		pm.ResetCloth(pm.clothes_[0]);
+		pm.clothes_[1].origin = glm::vec3(0.0f, 4.0f, 0.0f);
+		pm.ResetCloth(pm.clothes_[1]);
 
-	//	pm.clothes_[0].origin = glm::vec3(0.0f, 5.0f, 0.0f);
-	//	pm.ResetCloth(pm.clothes_[0]);
-	//	pm.clothes_[1].origin = glm::vec3(0.0f, 4.0f, 0.0f);
-	//	pm.ResetCloth(pm.clothes_[1]);
+		auto& cloth = pm.clothes_[2];
+		cloth.origin = glm::vec3(0.0f, 3.0f, 0.0f);
+		cloth.angle_deg = 0.0f;
+		cloth.axis = glm::vec3(0, 1, 0);
+		pm.ResetCloth(cloth);
+		pm.inverse_masses_[cloth.offset_particle] = 0.0f;
+		pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
+		pm.inverse_masses_[cloth.offset_particle + (cloth.ny1 - 1) * cloth.nx1] = 0.0f;
+		pm.inverse_masses_[cloth.offset_particle + (cloth.ny1 - 1) * cloth.nx1 + cloth.nx1 - 1] = 0.0f;
+		datas_.ResetConstraints(pm.positions_, pm.indices_);
 
-	//	auto& cloth = pm.clothes_[2];
-	//	cloth.origin = glm::vec3(0.0f, 3.0f, 0.0f);
-	//	cloth.angle_deg = 0.0f;
-	//	cloth.axis = glm::vec3(0, 1, 0);
-	//	pm.ResetCloth(cloth);
-	//	pm.inverse_masses_[cloth.offset_particle] = 0.0f;
-	//	pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
-	//	pm.inverse_masses_[cloth.offset_particle + (cloth.ny1 - 1) * cloth.nx1] = 0.0f;
-	//	pm.inverse_masses_[cloth.offset_particle + (cloth.ny1 - 1) * cloth.nx1 + cloth.nx1 - 1] = 0.0f;
-	//	datas_.ResetConstraints(pm.positions_, pm.indices_);
+		pm.ResetVolumeConstraint();
 
-	//	pm.ResetVolumeConstraint();
+		CopySimDatas(cmd);
+	}
+	else if (testScene.top_pinned_corner)
+	{
+		testScene.top_pinned_corner = false;
+		ubo_.datas.sim_params.wind_enable = 0;
 
-	//	CopySimDatas(cmd);
-	//}
-	//else if (testScene.top_pinned_corner)
-	//{
-	//	testScene.top_pinned_corner = false;
-	//	ubo_.datas.sim_params.wind_enable = 0;
+		float height = 3.0f;
+		for (auto& cloth : pm.clothes_)
+		{
+			cloth.origin = glm::vec3(0.0f, height, 0.0f);
+			pm.ResetCloth(cloth);
+			pm.inverse_masses_[cloth.offset_particle] = 0.0f;
+			pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
 
-	//	float height = 3.0f;
-	//	for (auto& cloth : pm.clothes_)
-	//	{
-	//		cloth.origin = glm::vec3(0.0f, height, 0.0f);
-	//		pm.ResetCloth(cloth);
-	//		pm.inverse_masses_[cloth.offset_particle] = 0.0f;
-	//		pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
+			height -= 0.1f;
+		}
+		datas_.ResetConstraints(pm.positions_, pm.indices_);
 
-	//		height -= 0.1f;
-	//	}
-	//	datas_.ResetConstraints(pm.positions_, pm.indices_);
+		pm.ResetVolumeConstraint();
 
-	//	pm.ResetVolumeConstraint();
+		CopySimDatas(cmd);
+	}
+	else if (testScene.wind)
+	{
+		testScene.wind = false;
+		ubo_.datas.sim_params.wind_enable = 1;
 
-	//	CopySimDatas(cmd);
-	//}
-	//else if (testScene.wind)
-	//{
-	//	testScene.wind = false;
-	//	ubo_.datas.sim_params.wind_enable = 1;
+		float height = 8.0f;
+		for (auto& cloth : pm.clothes_)
+		{
+			cloth.origin = glm::vec3(0.0f, height, 0.0f);
+			//cloth.angle_deg = 90.0f;
+			//cloth.axis = glm::vec3(1, 0, 0);
+			pm.ResetCloth(cloth);
+			cloth.angle_deg = 0.0f;
+			pm.inverse_masses_[cloth.offset_particle] = 0.0f;
+			pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
 
-	//	float height = 8.0f;
-	//	for (auto& cloth : pm.clothes_)
-	//	{
-	//		cloth.origin = glm::vec3(0.0f, height, 0.0f);
-	//		//cloth.angle_deg = 90.0f;
-	//		//cloth.axis = glm::vec3(1, 0, 0);
-	//		pm.ResetCloth(cloth);
-	//		cloth.angle_deg = 0.0f;
-	//		pm.inverse_masses_[cloth.offset_particle] = 0.0f;
-	//		pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
+			height -= (cloth.cloth_size.y + 1.0f);
+		}
+		datas_.ResetConstraints(pm.positions_, pm.indices_);
 
-	//		height -= (cloth.cloth_size.y + 1.0f);
-	//	}
-	//	datas_.ResetConstraints(pm.positions_, pm.indices_);
+		pm.ResetVolumeConstraint();
 
-	//	pm.ResetVolumeConstraint();
-
-	//	CopySimDatas(cmd);
-	//}
+		CopySimDatas(cmd);
+	}
 }
 
 void SimulationPassGPU::CopyColliders(const vk::raii::CommandBuffer& cmd)
