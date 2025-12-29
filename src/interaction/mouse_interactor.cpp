@@ -118,7 +118,7 @@ void MouseInteractor::Update(const Camera& camera,
                     }
                     if (angle > 0.0f) {
                         glm::quat dq = glm::angleAxis(angle, axis);
-                        model.ApplyTransform(glm::vec3(1.0f), dq, glm::vec3(0.0f)); // È¸Àü
+                        model.ApplyTransform(glm::vec3(1.0f), dq, glm::vec3(0.0f)); // È¸ï¿½ï¿½
                     }
                 }
                 prevVector_ = curr;

@@ -6,6 +6,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 
+find_package(Vulkan REQUIRED)
+find_package(glfw3 CONFIG REQUIRED)
+find_package(KTX CONFIG REQUIRED)
+find_package(fmt CONFIG REQUIRED)
+
 set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/external/imgui)
 
 set(IMGUI_SOURCES
@@ -30,11 +35,6 @@ set_source_files_properties(${IMGUI_SOURCES} PROPERTIES SKIP_PRECOMPILE_HEADERS 
 
 add_subdirectory(external/vulkan_radix_sort)
 
-find_package(Vulkan REQUIRED)
-find_package(glfw3 CONFIG REQUIRED)
-find_package(KTX CONFIG REQUIRED)
-find_package(fmt CONFIG REQUIRED)
-
 file(GLOB SRC CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/context/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/src/pass/*.cpp"
@@ -53,8 +53,6 @@ if (MSVC)
 target_compile_options(PowerEngine PRIVATE 
     $<$<CONFIG:Debug>:/Od /RTC1>                         # Debug
     $<$<CONFIG:Release>:/O2 /Ob2 /DNDEBUG>               # Release
-    $<$<CONFIG:RelWithDebInfo>:/O2 /Ob2 /DNDEBUG>        # RelWithDebInfo
-    $<$<CONFIG:MinSizeRel>:/O1 /DNDEBUG>                 # MinSizeRel
 )
 add_custom_command(TARGET PowerEngine POST_BUILD
 COMMAND ${CMAKE_COMMAND} -E make_directory 

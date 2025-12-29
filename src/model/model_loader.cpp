@@ -108,7 +108,7 @@ void ModelLoader::ParseMesh(const tinygltf::Model& model, vku::VertexIncludeInfo
 					auto tmp = ReadAccessor<glm::u8vec4>(model, it->second);
 					joints.resize(tmp.size());
 					for (size_t i = 0; i < tmp.size(); ++i) {
-						joints[i] = glm::uvec4(tmp[i]); // u8 ¡æ u32
+						joints[i] = glm::uvec4(tmp[i]); // u8 ï¿½ï¿½ u32
 					}
 				}
 				else if (acc.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {

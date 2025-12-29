@@ -12,7 +12,7 @@ struct Camera;
 class Renderer
 {
 public:
-	Renderer(GLFWwindow* glfwWindow, float width, float height);
+	Renderer(GLFWwindow* glfwWindow, uint32_t width, uint32_t height);
 	Renderer(const Renderer& rhs) = delete;
 	Renderer(Renderer&& rhs) = delete;
 	Renderer& operator=(const Renderer& rhs) = delete;

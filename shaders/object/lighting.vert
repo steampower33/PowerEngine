@@ -1,5 +1,4 @@
 #version 450
-#extension GL_KHR_vulkan_glsl : enable
 
 layout(location = 0) out vec2 vUV;
 
@@ -13,7 +12,7 @@ void main()
     );
 
     vec2 pos = positions[gl_VertexIndex];
-    vUV = pos * 0.5 + 0.5;  // NDC ¡æ UV
+    vUV = pos * 0.5 + 0.5;  // NDC ï¿½ï¿½ UV
 
     gl_Position = vec4(pos, 0.0, 1.0);
 }

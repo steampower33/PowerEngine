@@ -59,17 +59,15 @@ void PassManager::Draw(std::unique_ptr<GUI>& gui, bool paused)
 				.pSemaphores = &*timeline_semaphore_,
 				.pValues = &last_compute_timeline_
 			};
-			device.waitSemaphores(waitInfo, UINT64_MAX);
+			vku::VK_CHECK(device.waitSemaphores(waitInfo, UINT64_MAX), "waitSemaphores failed");
 
 			sim_pass_gpu_->CalculateGpuTime();
 		}
-
-		//sim_pass_gpu_->ClearCpuTime();
 	}
 
 	const uint32_t frame = current_frame_;
 
-	device.waitForFences(*in_flight_fences_[frame], vk::True, UINT64_MAX);
+	vku::VK_CHECK(device.waitForFences(*in_flight_fences_[frame], vk::True, UINT64_MAX), "waitForFences failed");
 	device.resetFences(*in_flight_fences_[frame]);
 
 	if (gui->open_timestamps_ && !paused)

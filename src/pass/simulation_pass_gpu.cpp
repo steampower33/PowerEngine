@@ -21,6 +21,8 @@ SimulationPassGPU::SimulationPassGPU(Context& context, Swapchain& swapchain, Par
 	CreateDescriptorPools();
 	CreateUniformBuffers();
 
+	//std::cout << std::filesystem::current_path() << std::endl;
+
 	total_particles_ = particleManager.total_particles_;
 	total_indices_ = particleManager.total_indices_;
 	total_tri_ = particleManager.total_tries_;

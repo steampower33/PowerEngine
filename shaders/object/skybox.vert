@@ -1,6 +1,4 @@
 #version 450
-
-#extension GL_KHR_vulkan_glsl : enable
 #extension GL_EXT_nonuniform_qualifier : require
 
 layout(location = 0) in vec3 in_pos;

@@ -1053,7 +1053,7 @@ void GraphicsPass::CreateDescriptorSets()
 
 void GraphicsPass::CreateGeometryBuffers()
 {
-	//RT0: albedo + metallic ¡æ VK_FORMAT_R8G8B8A8_UNORM
+	//RT0: albedo + metallic ï¿½ï¿½ VK_FORMAT_R8G8B8A8_UNORM
 	{
 		vk::Format format = vk::Format::eR8G8B8A8Unorm;
 		auto& image = geometry_buffers_.albedo_mettalic_image;
@@ -1070,7 +1070,7 @@ void GraphicsPass::CreateGeometryBuffers()
 		imageView = vku::CreateImageView(context_.device_, image, format, vk::ImageAspectFlagBits::eColor, 1);
 	}
 
-	//RT1 : normal + roughness ¡æ VK_FORMAT_R8G8B8A8_UNORM
+	//RT1 : normal + roughness ï¿½ï¿½ VK_FORMAT_R8G8B8A8_UNORM
 	{
 		vk::Format format = vk::Format::eR8G8B8A8Unorm;
 		geometry_buffers_.formats.push_back(format);
@@ -1087,7 +1087,7 @@ void GraphicsPass::CreateGeometryBuffers()
 		imageView = vku::CreateImageView(context_.device_, image, format, vk::ImageAspectFlagBits::eColor, 1);
 	}
 
-	//RT2 : height + ao ¡æ VK_FORMAT_R8G8_UNORM
+	//RT2 : height + ao ï¿½ï¿½ VK_FORMAT_R8G8_UNORM
 	{
 		vk::Format format = vk::Format::eR8G8Unorm;
 		geometry_buffers_.formats.push_back(format);
@@ -1104,7 +1104,7 @@ void GraphicsPass::CreateGeometryBuffers()
 		imageView = vku::CreateImageView(context_.device_, image, format, vk::ImageAspectFlagBits::eColor, 1);
 	}
 
-	//RT3 : coat + coat_roughness + fuzz + fuzz_roughness ¡æ VK_FORMAT_R8G8B8A8_UNORM
+	//RT3 : coat + coat_roughness + fuzz + fuzz_roughness ï¿½ï¿½ VK_FORMAT_R8G8B8A8_UNORM
 	{
 		vk::Format format = vk::Format::eR8G8B8A8Unorm;
 		geometry_buffers_.formats.push_back(format);
@@ -2654,7 +2654,7 @@ void GraphicsPass::PreMainRenderPass(const vk::raii::CommandBuffer& cmd, uint32_
 		);
 		};
 
-	// G-buffer: Undefined/ShaderReadOnly ¡æ ColorAttachmentOptimal
+	// G-buffer: Undefined/ShaderReadOnly ï¿½ï¿½ ColorAttachmentOptimal
 	toShaderWrite(geometry_buffers_.albedo_mettalic_image);
 	toShaderWrite(geometry_buffers_.normal_roughness_image);
 	toShaderWrite(geometry_buffers_.height_ao_image);

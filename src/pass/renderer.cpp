@@ -9,7 +9,7 @@
 
 #include "renderer.h"
 
-Renderer::Renderer(GLFWwindow* glfwWindow, float width, float height)
+Renderer::Renderer(GLFWwindow* glfwWindow, uint32_t width, uint32_t height)
 {
 	context_ = std::make_unique<Context>(glfwWindow, width, height);
 	swapchain_ = std::make_unique<Swapchain>(glfwWindow, *context_);

@@ -248,8 +248,8 @@ Mesh GeometryGenerator::MakeSphere(
     auto& vertices = meshData.vertices;
     auto& indices = meshData.indices;
 
-    // ¥õ: 0..¥ð (stack)
-    // ¥è: 0..2¥ð (slice)
+    // ï¿½ï¿½: 0..ï¿½ï¿½ (stack)
+    // ï¿½ï¿½: 0..2ï¿½ï¿½ (slice)
     for (int j = 0; j <= numStacks; ++j)
     {
         float phi = glm::pi<float>() * static_cast<float>(j) / static_cast<float>(numStacks);

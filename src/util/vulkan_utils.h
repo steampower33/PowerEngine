@@ -376,16 +376,19 @@ namespace vku
 		ssbo = std::move(shaderStorageBufferTemp);
 		ssboMem = std::move(shaderStorageBufferTempMemory);
 
+#ifdef DEBUG
 		SetDebugName(device, vk::ObjectType::eBuffer,
 			(uint64_t)(VkBuffer)(*ssbo),
 			name.c_str());
+#endif
 
 		if (optStagingBuf && optStagingMem) {
+#ifdef DEBUG
 			name += "Staging";
 			SetDebugName(device, vk::ObjectType::eBuffer,
 				(uint64_t)(VkBuffer)(*stagingBuffer),
 				name.c_str());
-
+#endif
 			*optStagingBuf = std::move(stagingBuffer);
 			*optStagingMem = std::move(stagingBufferMemory);
 
@@ -726,5 +729,10 @@ namespace vku
 		return mesh;
 	}
 
+	inline void VK_CHECK(vk::Result r, const char* msg)
+	{
+		if (r != vk::Result::eSuccess)
+			throw std::runtime_error(msg);
+	}
 }
 

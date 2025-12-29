@@ -323,9 +323,9 @@ struct SimData {
 			numIndices += c.num_indices;
 		}
 
-		const size_t numTris = numIndices / 3;
+		const uint32_t numTris = numIndices / 3;
 
-		for (size_t t = 0; t < numTris; ++t)
+		for (uint32_t t = 0; t < numTris; ++t)
 		{
 			uint32_t i0 = indices[3 * t + 0];
 			uint32_t i1 = indices[3 * t + 1];

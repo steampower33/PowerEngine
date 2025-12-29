@@ -12,8 +12,6 @@
 
 #version 450
 
-#extension GL_KHR_vulkan_glsl : enable
-
 const float grid_size = 100.0;
 const float grid_cell_size = 1.0;
 const float grid_min_pixel_between_cells = 1.0;

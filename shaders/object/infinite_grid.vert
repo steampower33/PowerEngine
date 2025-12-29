@@ -11,7 +11,6 @@
 */
 
 #version 450
-#extension GL_KHR_vulkan_glsl : enable
 
 const float cell_size = 100.0;
 
