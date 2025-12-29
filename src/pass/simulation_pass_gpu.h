@@ -69,7 +69,7 @@ public:
 
 		bool softbody_stretch = true;
 		bool softbody_volume = true;
-		bool lra = true;
+		bool lra = false;
 	} solver_config_;
 
 	vk::raii::QueryPool timestamp_pool_{ nullptr };
