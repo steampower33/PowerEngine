@@ -130,10 +130,10 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 		{ simparamOffset }
 	);
 
-	auto ceil_div = [](uint32_t n, uint32_t d) { return (n + d - 1) / d; };
+	auto CellDiv = [](uint32_t n, uint32_t d) { return (n + d - 1) / d; };
 
-	uint32_t groupsTotal = ceil_div(total_particles_, 256);
-	uint32_t groupsTri = ceil_div((total_indices_) / 3, 256u);
+	uint32_t groupsTotal = CellDiv(total_particles_, 256);
+	uint32_t groupsTri = CellDiv((total_indices_) / 3, 256u);
 
 	for (uint32_t step = 0; step < datas_.substeps; step++)
 	{
@@ -169,7 +169,7 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 		);
 		TS(timestamp_steps_);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.clear_lambdas);
-		uint32_t groups = ceil_div(Nmax, 256);
+		uint32_t groups = CellDiv(Nmax, 256);
 		cmd.dispatch(groups, 1, 1);
 		TS(timestamp_steps_);
 
@@ -332,7 +332,7 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 					0,
 					push_constants_);
 
-				uint32_t groupsShear = ceil_div(datas_.num_shears, 256);
+				uint32_t groupsShear = CellDiv(datas_.num_shears, 256);
 				cmd.dispatch(groupsShear, 1, 1);
 			}
 			TS(timestamp_steps_);
@@ -398,7 +398,7 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 					0,
 					push_constants_);
 
-				uint32_t groupsSoftbodyStretch = ceil_div(count, 256);
+				uint32_t groupsSoftbodyStretch = CellDiv(count, 256);
 				cmd.dispatch(groupsSoftbodyStretch, 1, 1);
 			}
 			TS(timestamp_steps_);
@@ -416,7 +416,7 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 					0,
 					push_constants_);
 
-				uint32_t groupsSoftbodyVolume = ceil_div(datas_.num_volumes, 256);
+				uint32_t groupsSoftbodyVolume = CellDiv(datas_.num_volumes, 256);
 				cmd.dispatch(groupsSoftbodyVolume, 1, 1);
 			}
 			TS(timestamp_steps_);
@@ -458,6 +458,24 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 			vku::ssboCompWtoCompRW(cmd, pmSSBO.pred_position);
 
 		}
+
+		// Solve LRA
+		if (solver_config_.lra && step == 0)
+		{
+			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_lra);
+			push_constants_.solve.base = pm.clothes_[0].offset_particle;
+			push_constants_.solve.count = pm.num_cloth_particles_;
+			cmd.pushConstants<PushConstant>(
+				*pipeline_layouts_.common,
+				vk::ShaderStageFlagBits::eCompute,
+				0,
+				push_constants_);
+
+			uint32_t groupsCloth = CellDiv(push_constants_.solve.count, 256);
+			cmd.dispatch(groupsCloth, 1, 1);
+		}
+
+		vku::ssboCompWtoCompRW(cmd, pmSSBO.pred_position);
 
 		// Collide SDF
 		TS(timestamp_steps_);
@@ -793,8 +811,10 @@ void SimulationPassGPU::CreateDescriptorSetLayout()
 			vk::DescriptorSetLayoutBinding{ 25, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
 			vk::DescriptorSetLayoutBinding{ 26, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
 			vk::DescriptorSetLayoutBinding{ 27, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
+			vk::DescriptorSetLayoutBinding{ 28, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
+			vk::DescriptorSetLayoutBinding{ 29, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute },
 		};
-		counts_.sb += 28;
+		counts_.sb += 30;
 		counts_.layout += 1;
 
 		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
@@ -863,12 +883,10 @@ void SimulationPassGPU::CreateClothConstraintDatas()
 	uint32_t N = cloth_particles_;
 
 	datas_.BuildStretchConstraints(pm.positions_, pm.indices_, pm.clothes_);
-
 	datas_.BuildShearConstraints(pm.positions_, pm.indices_, pm.clothes_);
-
 	datas_.BuildBendConstraints(pm.positions_, pm.indices_, pm.clothes_);
-
 	datas_.BuildAreaConstraints(pm.positions_, pm.indices_, pm.clothes_);
+	datas_.BuildLRAConstraints(pm.positions_, pm.indices_, pm);
 }
 
 void SimulationPassGPU::CreateSoftBodyConstraintDatas()
@@ -1100,6 +1118,28 @@ void SimulationPassGPU::CreateSSBOBuffers()
 		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
 		vk::MemoryPropertyFlagBits::eDeviceLocal,
 		datas_.ssbos_.delta_v, datas_.ssbo_memories_.delta_v);
+
+	// lra_ids
+	datas_.ssbo_size_.lra_ids = sizeof(uint32_t) * datas_.lra_ids.size();
+	vku::CreateSSBO("lra_ids", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+		datas_.ssbo_size_.lra_ids,
+		vk::BufferUsageFlagBits::eTransferSrc,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+		datas_.lra_ids,
+		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+		vk::MemoryPropertyFlagBits::eDeviceLocal,
+		datas_.ssbos_.lra_ids, datas_.ssbo_memories_.lra_ids);
+
+	// lra_r
+	datas_.ssbo_size_.lra_r = sizeof(float) * datas_.lra_r.size();
+	vku::CreateSSBO("lra_r", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
+		datas_.ssbo_size_.lra_r,
+		vk::BufferUsageFlagBits::eTransferSrc,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+		datas_.lra_r,
+		vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
+		vk::MemoryPropertyFlagBits::eDeviceLocal,
+		datas_.ssbos_.lra_r, datas_.ssbo_memories_.lra_r);
 }
 
 void SimulationPassGPU::CreateDescriptorSets()
@@ -1172,6 +1212,8 @@ void SimulationPassGPU::CreateDescriptorSets()
 		vk::DescriptorBufferInfo collider(*dSSBO.collider, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo collisionMask(*pmSSBO.collision_masks_, 0, VK_WHOLE_SIZE);
 		vk::DescriptorBufferInfo deltaV(*dSSBO.delta_v, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo lraIds(*dSSBO.lra_ids, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo lraR(*dSSBO.lra_r, 0, VK_WHOLE_SIZE);
 
 		std::array descriptorWrites{
 			vk::WriteDescriptorSet{
@@ -1397,6 +1439,22 @@ void SimulationPassGPU::CreateDescriptorSets()
 				.descriptorCount = 1,
 				.descriptorType = vk::DescriptorType::eStorageBuffer,
 				.pBufferInfo = &deltaV
+			},
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.cloth_compute,
+				.dstBinding = 28,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &lraIds
+			},
+			vk::WriteDescriptorSet{
+				.dstSet = *sets_.cloth_compute,
+				.dstBinding = 29,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer,
+				.pBufferInfo = &lraR
 			},
 		};
 		context_.device_.updateDescriptorSets(descriptorWrites, {});
@@ -1625,6 +1683,16 @@ void SimulationPassGPU::CreateComputePipelines()
 
 		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
 		pipelines_.solve_inter_cloth_collision = vk::raii::Pipeline(context_.device_, nullptr, pipelineInfo);
+	}
+
+	// solve_inter_cloth_collision
+	{
+		vk::raii::ShaderModule shaderModule = vku::CreateShaderModule(context_.device_, vku::ReadFile("shaders/spv/solve_lra.comp.spv"));
+
+		vk::PipelineShaderStageCreateInfo computeShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eCompute, .module = shaderModule, .pName = "main" };
+
+		vk::ComputePipelineCreateInfo pipelineInfo{ .stage = computeShaderStageInfo, .layout = *pipeline_layouts_.common };
+		pipelines_.solve_lra = vk::raii::Pipeline(context_.device_, nullptr, pipelineInfo);
 	}
 }
 

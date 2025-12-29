@@ -1,0 +1,32 @@
+#version 460
+#include "../common/simulation_common.glsl"
+
+layout(local_size_x = 256) in;
+
+const uint K = 2u;
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= pc.solve.count) return;
+    if (w[i] == 0.0) return;
+
+    vec3 xi = xp[i].xyz;
+
+    for (uint k = 0; k < K; ++k) {
+        uint idx = i * K + k;
+        uint a = lra_ids[idx];
+        if (a == 0xFFFFFFFFu) continue;
+
+        vec3 xa = xp[a].xyz;
+        float r = lra_rests[idx];
+
+        vec3 dvec = xi - xa;
+        float d = length(dvec);
+        if (d > r && d > 1e-8) {
+            vec3 x_proj = xa + (r / d) * dvec;
+            xi = mix(xi, x_proj, sim.lra_stiffness);
+        }
+    }
+
+    xp[i].xyz = xi;
+}

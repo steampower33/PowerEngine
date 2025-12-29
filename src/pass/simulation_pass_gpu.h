@@ -69,6 +69,7 @@ public:
 
 		bool softbody_stretch = true;
 		bool softbody_volume = true;
+		bool lra = true;
 	} solver_config_;
 
 	vk::raii::QueryPool timestamp_pool_{ nullptr };
@@ -153,6 +154,7 @@ public:
 		vk::raii::Pipeline solve_self_collision{ nullptr };
 		vk::raii::Pipeline solve_inter_cloth_collision{ nullptr };
 		vk::raii::Pipeline apply_deltas{ nullptr };
+		vk::raii::Pipeline solve_lra{ nullptr };
 		vk::raii::Pipeline collide_sdf{ nullptr };
 		vk::raii::Pipeline update_velocity{ nullptr };
 

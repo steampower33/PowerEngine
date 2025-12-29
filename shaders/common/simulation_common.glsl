@@ -62,6 +62,11 @@ layout(std140, set = 0, binding = 0) uniform SimParams {
     float softbody_stretch_stiffness;
     float inter_collision_stiffness;
 
+    float lra_stiffness;
+    float p1;
+    float p2;
+    float p3;
+
     vec3 wind_dir;
     uint wind_enable;
 
@@ -161,6 +166,9 @@ struct ColiisiotnMask {
 };
 layout(std430, set = 1, binding = 26) buffer CollisionMasks { ColiisiotnMask collision_masks[]; };
 layout(std430, set = 1, binding = 27) buffer DeltaV { vec4 delta_v[]; };
+
+layout(std430, set = 1, binding = 28) buffer LRAIndexes { uint lra_ids[]; };
+layout(std430, set = 1, binding = 29) buffer LRARests { float  lra_rests[]; };
 
 
 #endif

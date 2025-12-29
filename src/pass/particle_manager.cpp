@@ -44,7 +44,6 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, T
 		cloth.ubo_data.tile_uv = cloth.cloth_size;
 
 		SetPlaneCloth(cloth);
-
 	}
 
 	{
@@ -231,6 +230,9 @@ void ParticleManager::SetPlaneCloth(Cloth& cloth)
 	num_cloth_indices_ = indices_.size();
 
 	object_cnt_++;
+
+	inverse_masses_[cloth.offset_particle] = 0.0f;
+	inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
 
 	clothes_.push_back(cloth);
 }

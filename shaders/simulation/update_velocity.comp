@@ -17,28 +17,22 @@ void main() {
     vec3 new_pos = xp[i].xyz;
     float dt = sim.dt;
 
-    // Ground contact check (y=0)
     const float SLOP = 1e-4;
     float groundY = 0.0 + sim.thickness + SLOP;
 
-    bool onGround = (new_pos.y <= groundY + 5e-4); // contact band
+    bool onGround = (new_pos.y <= groundY + 5e-4);
 
     if (onGround) {
-        // Keep it on the ground
         new_pos.y = max(new_pos.y, groundY);
 
-        // Static-like stick: kill tiny tangent drift
         vec3 disp = new_pos - old_pos;
 
-        // No downward motion
         if (disp.y < 0.0) disp.y = 0.0;
 
-        // Tangential displacement damping (x,z)
-        float stick = clamp(sim.friction, 0.0, 1.0); // 0=no stick, 1=full stick
+        float stick = clamp(sim.friction, 0.0, 1.0);
         disp.x *= (1.0 - stick);
         disp.z *= (1.0 - stick);
 
-        // Snap tiny drift to zero
         const float SNAP = 5e-4;
         if (abs(disp.x) < SNAP) disp.x = 0.0;
         if (abs(disp.z) < SNAP) disp.z = 0.0;
@@ -46,15 +40,12 @@ void main() {
         new_pos = old_pos + disp;
     }
 
-    // Velocity from final position
     vec3 raw_vel = (new_pos - old_pos) / dt;
 
-    // Optional: if on ground and very slow, hard sleep
     if (onGround && length(raw_vel) < 0.01) {
         raw_vel = vec3(0.0);
     }
 
-    // Clamp & damping (as you had)
     float speed = length(raw_vel);
     if (speed > sim.max_speed) {
         raw_vel *= (sim.max_speed / speed);

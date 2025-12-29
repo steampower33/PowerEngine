@@ -746,6 +746,8 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 				row("Area", [&] { ImGui::Checkbox("##Area", &sim.solver_config_.area); });
 				row("SelfCollision", [&] { ImGui::Checkbox("##SelfCollision", &sim.solver_config_.self_collision); });
 				row("InterCollision", [&] { ImGui::Checkbox("##InterCollision", &sim.solver_config_.inter_collision); });
+				row("LRA", [&] { ImGui::Checkbox("##LRA", &sim.solver_config_.lra); });
+
 				ImGui::EndTable();
 			}
 			ImGui::EndChild();
@@ -763,6 +765,7 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 				row("Area", [&] { ImGui::DragFloat("##AreaStiffness", &sim.ubo_.datas.sim_params.area_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
 				row("SelfCollision", [&] { ImGui::DragFloat("##SelfCollision", &sim.ubo_.datas.sim_params.self_collision_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
 				row("InterColiision", [&] { ImGui::DragFloat("##InterColiision", &sim.ubo_.datas.sim_params.inter_collision_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
+				row("LRA", [&] { ImGui::DragFloat("##LRA", &sim.ubo_.datas.sim_params.lra_stiffness, 1e-3f, 0.0f, 100.0f, "%.3f"); });
 				ImGui::EndTable();
 			}
 			ImGui::EndChild();

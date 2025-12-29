@@ -13,7 +13,6 @@ struct SimData {
 		float bend = 1e-2f;
 		float area = 1e-2f;
 		float self_collision = 1e-9f;
-		float collide = 1e-9f;
 	} compliance;
 
 	struct Beta {
@@ -103,6 +102,13 @@ struct SimData {
 	};
 
 	std::vector<Collider> colliders;
+
+	struct LRAEntry {
+		uint32_t anchor = 0xFFFFFFFFu;
+		float r = std::numeric_limits<float>::infinity();
+	};
+	std::vector<uint32_t> lra_ids;
+	std::vector<float> lra_r;
 
 	float ComputeRestBendAngle(
 		uint32_t i1, uint32_t i2,
@@ -385,7 +391,6 @@ struct SimData {
 		num_bends = static_cast<uint32_t>(bends.size());
 	}
 
-
 	void BuildAreaConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices, std::vector<Cloth> cloth)
 	{
 		uint32_t numIndices = 0;
@@ -426,6 +431,116 @@ struct SimData {
 		}
 
 		num_areas = static_cast<uint32_t>(areas.size());
+	}
+
+	void InsertBestK(std::vector<LRAEntry>& best, uint32_t a, float r) {
+		if (!std::isfinite(r)) return;
+		for (auto& e : best) {
+			if (e.anchor == a) { e.r = std::min(e.r, r); return; }
+		}
+		int worst = 0;
+		for (int k = 1; k < (int)best.size(); ++k) {
+			if (best[k].r > best[worst].r) worst = k;
+		}
+		if (r < best[worst].r) best[worst] = { a, r };
+	}
+
+	std::vector<float> Dijkstra(
+		int localVCount,
+		const std::vector<std::vector<std::pair<int, float>>>& adj,
+		int src)
+	{
+		const float INF = std::numeric_limits<float>::infinity();
+		std::vector<float> dist(localVCount, INF);
+		dist[src] = 0.0f;
+
+		using Node = std::pair<float, int>; // (dist, v)
+		std::priority_queue<Node, std::vector<Node>, std::greater<Node>> pq;
+		pq.push({ 0.0f, src });
+
+		while (!pq.empty()) {
+			auto [d, u] = pq.top(); pq.pop();
+			if (d != dist[u]) continue;
+			for (auto [v, w] : adj[u]) {
+				float nd = d + w;
+				if (nd < dist[v]) {
+					dist[v] = nd;
+					pq.push({ nd, v });
+				}
+			}
+		}
+		return dist;
+	}
+
+	void BuildLRAConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices, ParticleManager& pm)
+	{
+		uint32_t K = 2;
+
+		lra_ids.resize(pm.num_cloth_particles_ * K);
+		lra_r.resize(pm.num_cloth_particles_ * K);
+		for (auto& cloth : pm.clothes_)
+		{
+			std::vector<uint32_t> verts;
+			uint32_t offsetParticles = cloth.offset_particle;
+			uint32_t numParticles = cloth.num_particle;
+			verts.reserve(numParticles);
+			std::unordered_map<uint32_t, int> globalToLocal;
+			globalToLocal.reserve(numParticles);
+
+			for (uint32_t i = offsetParticles; i < offsetParticles + numParticles; ++i) {
+				int li = (int)verts.size();
+				verts.push_back(i);
+				globalToLocal[i] = li;
+			}
+			const int V = (int)verts.size();
+			if (V == 0) return;
+
+			std::vector<std::vector<std::pair<int, float>>> adj(V);
+			for (const auto& e : edges) {
+				auto itI = globalToLocal.find(e.i);
+				auto itJ = globalToLocal.find(e.j);
+				if (itI == globalToLocal.end() || itJ == globalToLocal.end()) continue;
+
+				int u = itI->second;
+				int v = itJ->second;
+				float w = e.rest;
+
+				adj[u].push_back({ v, w });
+				adj[v].push_back({ u, w });
+			}
+
+			std::vector<uint32_t> anchors;
+			anchors.push_back(cloth.offset_particle);
+			anchors.push_back(cloth.offset_particle + cloth.nx1 - 1);
+			if (anchors.size() != K) return;
+
+			std::vector<std::vector<LRAEntry>> best(V, std::vector<LRAEntry>(K));
+
+			for (uint32_t aGlobal : anchors) {
+				int aLocal = globalToLocal[aGlobal];
+
+				auto dist = Dijkstra(V, adj, aLocal);
+				for (int li = 0; li < V; ++li) {
+					InsertBestK(best[li], aGlobal, dist[li]);
+				}
+			}
+
+			float slack = 0.1f;
+			for (int li = 0; li < V; ++li) {
+				uint32_t gi = verts[li];
+				for (uint32_t k = 0; k < K; ++k) {
+					uint32_t slot = gi * K + k;
+					if (best[li][k].anchor == 0xFFFFFFFFu || !std::isfinite(best[li][k].r)) {
+						lra_ids[slot] = 0xFFFFFFFFu;
+						lra_r[slot] = 0.0f;
+					}
+					else {
+						lra_ids[slot] = best[li][k].anchor;
+						lra_r[slot] = best[li][k].r * (1.0f + slack);
+					}
+				}
+			}
+		}
 	}
 
 	void ResetConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices)
@@ -484,6 +599,8 @@ struct SimData {
 		vk::raii::Buffer volume{ nullptr };
 		vk::raii::Buffer collider{ nullptr };
 		vk::raii::Buffer delta_v{ nullptr };
+		vk::raii::Buffer lra_ids{ nullptr };
+		vk::raii::Buffer lra_r{ nullptr };
 	} ssbos_;
 
 	struct SSBOMemory {
@@ -499,6 +616,8 @@ struct SimData {
 		vk::raii::DeviceMemory volume{ nullptr };
 		vk::raii::DeviceMemory collider{ nullptr };
 		vk::raii::DeviceMemory delta_v{ nullptr };
+		vk::raii::DeviceMemory lra_ids{ nullptr };
+		vk::raii::DeviceMemory lra_r{ nullptr };
 	} ssbo_memories_;
 
 	struct SSBOSize {
@@ -514,6 +633,8 @@ struct SimData {
 		vk::DeviceSize volume = 0;
 		vk::DeviceSize collider = 0;
 		vk::DeviceSize delta_v = 0;
+		vk::DeviceSize lra_ids = 0;
+		vk::DeviceSize lra_r = 0;
 	} ssbo_size_;
 
 	struct Staging {
