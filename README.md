@@ -93,27 +93,29 @@ PowerEngine aims to:
 - Windows
 - CMake >= 3.29
 - C++ 20
-- GPU backend: [Vulkan 1.4+](https://vulkan.lunarg.com/sdk/home#windows)
-- vcpkg
-- Visual Studio 2022 (MSVC) + C++ Desktop workload (build from “x64 Native Tools Command Prompt” recommended)
+- GPU backend: Vulkan 1.4+ (LunarG SDK)
+- Visual Studio 2022 (MSVC) + C++ Desktop workload
+- vcpkg (set environment variable `VCPKG_ROOT` to your vcpkg directory, e.g. `C:\vcpkg`)
 
 ### Build (CMake)
-```bash
+> Run from **x64 Native Tools Command Prompt for VS 2022**.
+
+```bat
 git clone https://github.com/steampower33/PowerEngine.git
 cd PowerEngine
 git submodule update --init --recursive
 
-Release:
+:: Release
 cmake --preset windows-release
 cmake --build --preset release
 release.bat
 
-Debug:
+:: Debug
 cmake --preset windows-debug
 cmake --build --preset debug
 debug.bat
-
 ```
+
 ---
 
 ## Controls
