@@ -1051,6 +1051,8 @@ void GUI::SetStatGUI(RowFn&& row)
 				[&] { std::string str = gpuSim->solver_config_.bend ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
 			row3("NumAreas", [&] { ImGui::Text("%u", d.num_areas); },
 				[&] { std::string str = gpuSim->solver_config_.area ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
+			row3("NumLRAs", [&] { ImGui::Text("%u", d.num_lras); },
+				[&] { std::string str = gpuSim->solver_config_.lra ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
 
 			ImGui::EndTable();
 		}

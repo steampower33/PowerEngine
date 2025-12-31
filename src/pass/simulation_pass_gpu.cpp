@@ -461,6 +461,7 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 		}
 
 		// Solve LRA
+		TS(timestamp_steps_);
 		if (solver_config_.lra && step == 0)
 		{
 			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_lra);
@@ -475,6 +476,7 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 			uint32_t groupsCloth = CellDiv(push_constants_.solve.count, 256);
 			cmd.dispatch(groupsCloth, 1, 1);
 		}
+		TS(timestamp_steps_);
 
 		vku::ssboCompWtoCompRW(cmd, pmSSBO.pred_position);
 
@@ -1762,6 +1764,7 @@ void SimulationPassGPU::CalculateGpuTime()
 	float tSolveSelfCollision = 0.0f;
 	float tSolveInterCollision = 0.0f;
 	float tApplyDeltas = 0.0f;
+	float tSolveLRA = 0.0f;
 	float tCollideSdf = 0.0f;
 	float tUpdate = 0.0f;
 	float tCalculateNormals = 0.0f;
@@ -1797,10 +1800,11 @@ void SimulationPassGPU::CalculateGpuTime()
 		}
 		afterIteration = iterBase + datas_.iterations * tsCnt;
 
-		tCollideSdf += delta_ms(afterIteration + 0, afterIteration + 1);
-		tUpdate += delta_ms(afterIteration + 2, afterIteration + 3);
+		tSolveLRA += delta_ms(afterIteration + 0, afterIteration + 1);
+		tCollideSdf += delta_ms(afterIteration + 2, afterIteration + 3);
+		tUpdate += delta_ms(afterIteration + 4, afterIteration + 5);
 	}
-	uint32_t afterSubstep = afterIteration + slots_collide_update_;
+	uint32_t afterSubstep = afterIteration + slots_after_iteration_;
 
 	tCalculateNormals = delta_ms(afterSubstep, afterSubstep + 1) + delta_ms(afterSubstep + 2, afterSubstep + 3);
 
@@ -1834,6 +1838,7 @@ void SimulationPassGPU::CalculateGpuTime()
 		label_time_[labels_[c++]] = tSolveSelfCollision;
 		label_time_[labels_[c++]] = tSolveInterCollision;
 		label_time_[labels_[c++]] = tApplyDeltas;
+		label_time_[labels_[c++]] = tSolveLRA;
 		label_time_[labels_[c++]] = tCollideSdf;
 		label_time_[labels_[c++]] = tUpdate;
 		label_time_[labels_[c++]] = tCalculateNormals;
@@ -1857,6 +1862,7 @@ void SimulationPassGPU::CalculateGpuTime()
 		label_avg_time_[labels_[c++]] += tSolveSelfCollision;
 		label_avg_time_[labels_[c++]] += tSolveInterCollision;
 		label_avg_time_[labels_[c++]] += tApplyDeltas;
+		label_avg_time_[labels_[c++]] += tSolveLRA;
 		label_avg_time_[labels_[c++]] += tCollideSdf;
 		label_avg_time_[labels_[c++]] += tUpdate;
 		label_avg_time_[labels_[c++]] += tCalculateNormals;

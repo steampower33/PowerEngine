@@ -157,6 +157,27 @@ for each frame:
     - the per-particle gradients `∇C_i`
 - The denominator uses the **mass-weighted gradient norm**:
     `Σ w_i ||∇C_i||²` (plus compliance term)
+
+---
+
+## Performance (profiling numbers)
+- GPU: NVIDIA GeForce RTX 4060 Laptop GPU
+- Scene: XPBD Cloth + collisions (softbody constraints enabled; softbody simulation optional)
+- Cloth stats: 35,603 particles / 105,600 edges / 70,000 shears / 104,400 bends / 70,000 areas / 71,206 LRAs
+- Softbody stats: 891 particles / 5,273 edges / 3,903 volumes
+- GPU timestamp (per-frame): Compute 7.325 ms, Graphics 0.717 ms
+- Kernel breakdown (avg): Total 7.183 ms
+  - SolveStretch 1.868 ms, BuildNeighbor 0.958 ms, SolveBend 1.070 ms, SolveArea 0.711 ms, SolveShear 0.685 ms, SolveSelfCollision 0.773 ms
+  - SolveLRA 0.043 ms (~0.6% of kernel time)
+
+Notes:
+- The numbers above come from Vulkan timestamp queries and are intended for GPU kernel breakdown.
+  The profiling overlay performs per-frame query readback, which can introduce CPU↔GPU synchronization overhead;
+  therefore, overlay ms/frame is not used as a benchmark number.
+- Runtime scales with quality/performance parameters: substeps, solver iterations, neighbor search density (radius / max neighbors),
+  collision settings, and enabled constraint sets
+- Terminology: "Edges" refer to mesh connectivity; "Stretch" refers to distance constraints solved along those edges.
+
 ---
 
 ## Rendering

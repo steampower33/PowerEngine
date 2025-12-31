@@ -77,19 +77,19 @@ public:
 	uint32_t slots_integrate_clear = 4;
 	uint32_t slots_spatial_hashing_ = 8;
 	uint32_t slots_per_iteration_ = 18;
-	uint32_t slots_collide_update_ = 4;
+	uint32_t slots_after_iteration_ = 6;
 	uint32_t slots_calculate_normals_ = 4;
 	uint32_t slots_per_compute_ =
 		1 
 		+ datas_.substeps * 
 		(slots_integrate_clear + slots_spatial_hashing_
 			+ datas_.iterations * slots_per_iteration_ 
-			+ slots_collide_update_)
+			+ slots_after_iteration_)
 		+ slots_calculate_normals_
 		+ 1;
 	float pass_total_time_ = 0.0f;
 
-	std::array<std::string, 19> labels_ = { "Intergrate", "ClearLambdas", "HashBuild", "RadixSort", "BuildCell", "BuildNeighbor", "SolveStretch", "SolveShear", "SolveBend", "SolveArea", "SolveSoftbodyStretch", "SolveSoftbodyVolume","SolveSelfCollision", "SolveInterCollision", "ApplyDeltas", "CollideSdf", "Update", "CalculateNormals", "Total" };
+	std::array<std::string, 20> labels_ = { "Intergrate", "ClearLambdas", "HashBuild", "RadixSort", "BuildCell", "BuildNeighbor", "SolveStretch", "SolveShear", "SolveBend", "SolveArea", "SolveSoftbodyStretch", "SolveSoftbodyVolume","SolveSelfCollision", "SolveInterCollision", "ApplyDeltas", "SolveLRA", "CollideSdf", "Update", "CalculateNormals", "Total" };
 	std::unordered_map<std::string, double> label_time_;
 	std::unordered_map<std::string, double> label_avg_time_;
 	uint32_t time_count_ = 0;

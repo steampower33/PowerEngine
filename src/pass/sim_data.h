@@ -24,6 +24,7 @@ struct SimData {
 	uint32_t num_bends = 0;
 	uint32_t num_areas = 0;
 	uint32_t num_volumes = 0;
+	uint32_t num_lras = 0;
 	uint32_t num_colliders = 0;
 
 	uint32_t num_cloth_edges = 0;
@@ -476,8 +477,10 @@ struct SimData {
 	{
 		uint32_t K = 2;
 
-		lra_ids.resize(pm.num_cloth_particles_ * K);
-		lra_r.resize(pm.num_cloth_particles_ * K);
+		num_lras = pm.num_cloth_particles_ * K;
+
+		lra_ids.resize(num_lras);
+		lra_r.resize(num_lras);
 		for (auto& cloth : pm.clothes_)
 		{
 			std::vector<uint32_t> verts;
