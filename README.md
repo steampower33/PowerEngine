@@ -33,7 +33,7 @@ PowerEngine aims to:
   <img src="docs/media/top_pinned_corner.gif" alt="top_pinned_corner" width="400" />
 </p>
 <p align="center">
-  <img src="docs/media/wind.gif" alt="wind" width="800" />
+  <img src="docs/media/wind2.gif" alt="wind" width="800" />
 </p>
 
 ---
