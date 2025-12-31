@@ -116,7 +116,7 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, T
 	{
 		SoftBody softbody;
 		softbody.name = "softbody";
-		softbody.origin = glm::vec3(10.0f, 1.0f, 0.0f);
+		softbody.origin = glm::vec3(20.0f, 1.0f, 0.0f);
 		softbody.render = true;
 
 		SetSoftbody("assets/sphere.msh", softbody);

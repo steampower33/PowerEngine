@@ -25,15 +25,15 @@ PowerEngine aims to:
 ## Demo
 
 <p align="center">
-  <img src="docs/media/horizontal_drop.gif" alt="horizontal_drop" width="380" />
-  <img src="docs/media/vertical_drop.gif" alt="vertical_drop" width="380" />
+  <img src="docs/media/horizontal_drop.gif" alt="horizontal_drop" width="400" />
+  <img src="docs/media/vertical_drop.gif" alt="vertical_drop" width="400" />
 </p>
 <p align="center">
-  <img src="docs/media/pinned_corner.gif" alt="pinned_corner" width="380" />
-  <img src="docs/media/top_pinned_corner.gif" alt="top_pinned_corner" width="380" />
+  <img src="docs/media/pinned_corner.gif" alt="pinned_corner" width="400" />
+  <img src="docs/media/top_pinned_corner.gif" alt="top_pinned_corner" width="400" />
 </p>
 <p align="center">
-  <img src="docs/media/wind.gif" alt="wind" width="380" />
+  <img src="docs/media/wind.gif" alt="wind" width="800" />
 </p>
 
 ---
@@ -45,9 +45,12 @@ PowerEngine aims to:
 - [x] Small-steps XPBD [Macklin+19]
 
 ### Constraints Solve Scheme
-- **G**: Gauss–Seidel (sequential, in-place)
-- **A**: Parallel accumulation (atomic add; Jacobi-like)
-> Note: Atomic accumulation is not strictly deterministic and may converge differently from classic Gauss–Seidel.
+- **G**: Gauss–Seidel (sequential, in-place projection)
+- **A**: Parallel accumulation (atomic add + apply; Jacobi-style)
+
+> Note:
+> - The accumulation path is **Jacobi-style** (constraints write to accumulators, then positions are updated in a separate pass).
+> - Due to atomic update order, results are **not bitwise deterministic** and may converge differently from classic GS/Jacobi.
 
 ### Cloth
 - [x] Distance/Stretch (G) [Müller+07]
@@ -56,7 +59,7 @@ PowerEngine aims to:
 - [x] Area (A) [Müller+14]
 - [x] Self-Collision (A)
 - [x] Inter-Collision (A)
-- [x] LRA(Long Range Attachments) (G) [Kim+12]
+- [x] LRA(Long Range Attachments) (per-particle sequential projection; GS-like) [Kim+12]
 
 ### Softbody
 - [x] Stretch (A) [Müller+14]
