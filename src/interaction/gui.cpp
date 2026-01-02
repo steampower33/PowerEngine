@@ -13,6 +13,7 @@
 #include "graphics_pass.h"
 #include "particle_manager.h"
 #include "camera.h"
+#include "gpu_profiler.h"
 
 #include "gui.h"
 
@@ -638,11 +639,11 @@ void GUI::SetModelsGUI(RowFn&& row)
 template<typename RowFn>
 void GUI::SetTimeingGUI(RowFn&& row)
 {
-	auto& sim = *pass_manager_.sim_pass_gpu_;
+	auto& gp = *pass_manager_.sim_pass_gpu_->gpu_profiler_;
 
-	auto& labels = sim.labels_;
-	auto& labelToTime = sim.label_time_;
-	auto& labelToAvgTime = sim.label_avg_time_;
+	auto& labels = gp.labels_;
+	auto& labelToTime = gp.label_time_;
+	auto& labelToAvgTime = gp.label_avg_time_;
 
 	open_timestamps_ = ImGui::CollapsingHeader("Timing"); //, ImGuiTreeNodeFlags_DefaultOpen
 	if (open_timestamps_)
@@ -665,10 +666,10 @@ void GUI::SetTimeingGUI(RowFn&& row)
 			ImGui::EndTable();
 		}
 		ImGui::SeparatorText("GpuTime");
-		ImGui::Text("Compute : %.3f", sim.pass_total_time_);
+		ImGui::Text("Compute : %.3f", gp.pass_total_time_);
 		ImGui::Text("Graphics : %.3f", pass_manager_.graphics_pass_->pass_total_time_);
 
-		count_ = sim.time_count_;
+		count_ = gp.time_count_;
 	}
 }
 

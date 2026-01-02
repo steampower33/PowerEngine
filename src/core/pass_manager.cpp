@@ -9,6 +9,7 @@
 #include "particle_manager.h"
 #include "camera.h"
 #include "mouse_interactor.h"
+#include "gpu_profiler.h"
 
 #include "pass_manager.h"
 
@@ -47,7 +48,6 @@ void PassManager::Update(Camera& camera, MouseInteractor& mouseInteractor, Model
 
 void PassManager::Draw(std::unique_ptr<GUI>& gui, bool paused)
 {
-
 	auto& device = context_.device_;
 	auto& queue = context_.queue_;
 

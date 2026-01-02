@@ -8,6 +8,7 @@ class Model;
 class ModelManager;
 class MouseInteractor;
 class ParticleManager;
+class GpuProfiler;
 
 #include "sim_data.h"
 #include "sim_ubo.h"
@@ -47,12 +48,10 @@ public:
 
 	void RecordCompute(uint32_t currentFrame, vku::TestScene& testScene);
 
-	void ClearCpuTime();
-	void CalculateGpuTime();
-
 	void CopySimDatas(const vk::raii::CommandBuffer& cmd);
 	void ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene);
 	void CopyColliders(const vk::raii::CommandBuffer& cmd);
+	void CalculateGpuTime();
 
 	std::vector<vk::raii::CommandBuffer> cmds_;
 
@@ -72,27 +71,7 @@ public:
 		bool lra = false;
 	} solver_config_;
 
-	vk::raii::QueryPool timestamp_pool_{ nullptr };
-	uint32_t timestamp_steps_ = 0;
-	uint32_t slots_integrate_clear = 4;
-	uint32_t slots_spatial_hashing_ = 8;
-	uint32_t slots_per_iteration_ = 18;
-	uint32_t slots_after_iteration_ = 6;
-	uint32_t slots_calculate_normals_ = 4;
-	uint32_t slots_per_compute_ =
-		1 
-		+ datas_.substeps * 
-		(slots_integrate_clear + slots_spatial_hashing_
-			+ datas_.iterations * slots_per_iteration_ 
-			+ slots_after_iteration_)
-		+ slots_calculate_normals_
-		+ 1;
-	float pass_total_time_ = 0.0f;
-
-	std::array<std::string, 20> labels_ = { "Intergrate", "ClearLambdas", "HashBuild", "RadixSort", "BuildCell", "BuildNeighbor", "SolveStretch", "SolveShear", "SolveBend", "SolveArea", "SolveSoftbodyStretch", "SolveSoftbodyVolume","SolveSelfCollision", "SolveInterCollision", "ApplyDeltas", "SolveLRA", "CollideSdf", "Update", "CalculateNormals", "Total" };
-	std::unordered_map<std::string, double> label_time_;
-	std::unordered_map<std::string, double> label_avg_time_;
-	uint32_t time_count_ = 0;
+	std::unique_ptr<GpuProfiler> gpu_profiler_;
 
 	vku::Count counts_;
 	vk::raii::DescriptorPool descriptor_pool_{ nullptr };
@@ -169,7 +148,6 @@ public:
 
 private:
 	void CreateCommandBuffers();
-	void CreateQueryPool();
 	void CreateDescriptorSetLayout();
 	void CreateDescriptorPools();
 	void CreateUniformBuffers();

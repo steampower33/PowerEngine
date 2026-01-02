@@ -8,6 +8,7 @@
 #include "ray.h"
 #include "mouse_interactor.h"
 #include "particle_manager.h"
+#include "gpu_profiler.h"
 
 #define VRDX_IMPLEMENTATION
 #include "simulation_pass_gpu.h"
@@ -16,7 +17,6 @@ SimulationPassGPU::SimulationPassGPU(Context& context, Swapchain& swapchain, Par
 	: context_(context), particle_manager_(particleManager), model_manager_(modelManager)
 {
 	CreateCommandBuffers();
-	CreateQueryPool();
 	CreateDescriptorSetLayout();
 	CreateDescriptorPools();
 	CreateUniformBuffers();
@@ -35,6 +35,8 @@ SimulationPassGPU::SimulationPassGPU(Context& context, Swapchain& swapchain, Par
 	CreateComputePipelineLayouts();
 	CreateComputePipelines();
 	CreateVrdxSorter();
+
+	gpu_profiler_ = std::make_unique<GpuProfiler>(context, datas_);
 }
 
 SimulationPassGPU::~SimulationPassGPU()
@@ -107,19 +109,20 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 	auto& pmSSBO = particle_manager_.ssbos_;
 	auto& dSSBO = datas_.ssbos_;
 	auto& pm = particle_manager_;
+	auto& gp = *gpu_profiler_;
 
 	cmd.reset();
 	cmd.begin({});
 
-	timestamp_steps_ = 0;
+	gp.timestamp_steps_ = 0;
 	const auto stage = vk::PipelineStageFlagBits2::eComputeShader;
 	auto TS = [&](uint32_t& idx) {
-		cmd.writeTimestamp2(stage, *timestamp_pool_, idx++);
+		cmd.writeTimestamp2(stage, *gp.timestamp_pool_, idx++);
 		};
 
-	cmd.resetQueryPool(*timestamp_pool_, 0, slots_per_compute_);
+	cmd.resetQueryPool(*gp.timestamp_pool_, 0, gp.slots_per_compute_);
 
-	TS(timestamp_steps_); // Start
+	TS(gp.timestamp_steps_); // Start
 
 	ResetTestScene(cmd, testScene);
 	CopyColliders(cmd);
@@ -140,13 +143,13 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 	for (uint32_t step = 0; step < datas_.substeps; step++)
 	{
 		// Wind
-		//TS(timestamp_steps_);
+		TS(gp.timestamp_steps_);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.wind);
 		cmd.dispatch(groupsTri, 1, 1);
-		//TS(timestamp_steps_);
+		TS(gp.timestamp_steps_);
 
 		// Integrate
-		TS(timestamp_steps_);
+		TS(gp.timestamp_steps_);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.integrate);
 		cmd.pushConstants<PushConstant>(
 			*pipeline_layouts_.common,
@@ -155,7 +158,7 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 			push_constants_);
 
 		cmd.dispatch(groupsTotal, 1, 1);
-		TS(timestamp_steps_);
+		TS(gp.timestamp_steps_);
 		vku::ssboCompWtoCompRW(cmd, pm.ssbos_.pred_position);
 
 		// Clear Lambdas
@@ -169,11 +172,11 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 				datas_.num_volumes
 			}
 		);
-		TS(timestamp_steps_);
+		TS(gp.timestamp_steps_);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.clear_lambdas);
 		uint32_t groups = CellDiv(Nmax, 256);
 		cmd.dispatch(groups, 1, 1);
-		TS(timestamp_steps_);
+		TS(gp.timestamp_steps_);
 
 		// Broad Phase
 		if (step % broadphase_interval_ == 0)
@@ -185,13 +188,13 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
 			// build_hash
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 			if (solver_config_.self_collision)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_hash);
 				cmd.dispatch(groupsTotal, 1, 1);
 			}
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 
 			vku::BufferBarrier2(
 				cmd,
@@ -204,7 +207,7 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 				vk::AccessFlagBits2::eTransferWrite
 			);
 
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 			if (solver_config_.self_collision)
 			{
 				vrdxCmdSortKeyValue(
@@ -215,7 +218,7 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 					nullptr, 0
 				);
 			}
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 
 
 			if (solver_config_.self_collision)
@@ -259,13 +262,13 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 			);
 
 			// build_cell
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 			if (solver_config_.self_collision)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_cell);
 				cmd.dispatch(groupsTotal, 1, 1);
 			}
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 
 			vku::Barrier2(cmd,
 				vk::PipelineStageFlagBits2::eComputeShader,
@@ -274,13 +277,13 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 				vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
 			// build_neighbor
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 			if (solver_config_.self_collision)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_neighbor);
 				cmd.dispatch(groupsTotal, 1, 1);
 			}
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 
 			vku::Barrier2(cmd,
 				vk::PipelineStageFlagBits2::eComputeShader,
@@ -293,7 +296,7 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 		{
 			// Solve Coloring - Stretch
 			// TS -> include Barrier Time
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 			if (solver_config_.stretch)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_stretch);
@@ -319,10 +322,10 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 					vku::ssboCompWtoCompRW(cmd, pmSSBO.pred_position);
 				}
 			}
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 
 			// Solve Shear
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 			if (solver_config_.shear)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_shear);
@@ -337,10 +340,10 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 				uint32_t groupsShear = CellDiv(datas_.num_shears, 256);
 				cmd.dispatch(groupsShear, 1, 1);
 			}
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 
 			// Solve Bend
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 			if (solver_config_.bend)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_bend);
@@ -358,10 +361,10 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 				uint32_t group = (count + 256 - 1) / 256;
 				cmd.dispatch(group, 1, 1);
 			}
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 
 			// Solve Area
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 			if (solver_config_.area)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_area);
@@ -379,10 +382,10 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 				uint32_t group = (count + 256 - 1) / 256;
 				cmd.dispatch(group, 1, 1);
 			}
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 
 			// solve_softbody_stretch
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 			if (solver_config_.softbody_stretch)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_softbody_stretch);
@@ -403,10 +406,10 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 				uint32_t groupsSoftbodyStretch = CellDiv(count, 256);
 				cmd.dispatch(groupsSoftbodyStretch, 1, 1);
 			}
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 
 			// solve_softbody_volume
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 			if (solver_config_.softbody_volume)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_softbody_volume);
@@ -421,10 +424,10 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 				uint32_t groupsSoftbodyVolume = CellDiv(datas_.num_volumes, 256);
 				cmd.dispatch(groupsSoftbodyVolume, 1, 1);
 			}
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 
 			// Solve Self Collision
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 			if (solver_config_.self_collision && iter % narrowphase_interval_ == 0)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_self_collision);
@@ -436,16 +439,16 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 					push_constants_);
 				cmd.dispatch(groupsTotal, 1, 1);
 			}
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 
 			// solve_inter_cloth_collision
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 			if (solver_config_.inter_collision)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_inter_cloth_collision);
 				cmd.dispatch(groupsTotal, 1, 1);
 			}
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 
 			vku::ssboCompWtoCompRW(cmd, dSSBO.delta_x);
 			vku::ssboCompWtoCompRW(cmd, dSSBO.delta_y);
@@ -453,15 +456,15 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 			vku::ssboCompWtoCompRW(cmd, dSSBO.delta_count);
 
 			// Apply Deltas 
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.apply_deltas);
 			cmd.dispatch(groupsTotal, 1, 1);
-			TS(timestamp_steps_);
+			TS(gp.timestamp_steps_);
 			vku::ssboCompWtoCompRW(cmd, pmSSBO.pred_position);
 		}
 
 		// Solve LRA
-		TS(timestamp_steps_);
+		TS(gp.timestamp_steps_);
 		if (solver_config_.lra && step == 0)
 		{
 			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_lra);
@@ -476,28 +479,28 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 			uint32_t groupsCloth = CellDiv(push_constants_.solve.count, 256);
 			cmd.dispatch(groupsCloth, 1, 1);
 		}
-		TS(timestamp_steps_);
+		TS(gp.timestamp_steps_);
 
 		vku::ssboCompWtoCompRW(cmd, pmSSBO.pred_position);
 
 		// Collide SDF
-		TS(timestamp_steps_);
+		TS(gp.timestamp_steps_);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.collide_sdf);
 		cmd.dispatch(groupsTotal, 1, 1);
-		TS(timestamp_steps_);
+		TS(gp.timestamp_steps_);
 
 		// Update Velocity
-		TS(timestamp_steps_);
+		TS(gp.timestamp_steps_);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.update_velocity);
 		cmd.dispatch(groupsTotal, 1, 1);
-		TS(timestamp_steps_);
+		TS(gp.timestamp_steps_);
 	}
 
 	// Calculate Normals
-	TS(timestamp_steps_);
+	TS(gp.timestamp_steps_);
 	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.tri_normal);
 	cmd.dispatch(groupsTri, 1, 1);
-	TS(timestamp_steps_);
+	TS(gp.timestamp_steps_);
 
 	vku::Barrier2(cmd,
 		vk::PipelineStageFlagBits2::eComputeShader,
@@ -505,15 +508,15 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 		vk::PipelineStageFlagBits2::eComputeShader,
 		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 
-	TS(timestamp_steps_);
+	TS(gp.timestamp_steps_);
 	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.vector_normal);
 	cmd.dispatch(groupsTotal, 1, 1);
-	TS(timestamp_steps_);
+	TS(gp.timestamp_steps_);
 
 	vku::ssboCompWtoVertR(cmd, pmSSBO.position);
 	vku::ssboCompWtoVertR(cmd, pmSSBO.normal);
 
-	TS(timestamp_steps_); // End
+	TS(gp.timestamp_steps_); // End
 	cmd.end();
 }
 
@@ -754,14 +757,6 @@ void SimulationPassGPU::CreateCommandBuffers()
 	allocInfo.level = vk::CommandBufferLevel::ePrimary;
 	allocInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
 	cmds_ = vk::raii::CommandBuffers(context_.device_, allocInfo);
-}
-
-void SimulationPassGPU::CreateQueryPool() {
-	vk::QueryPoolCreateInfo queryInfo = {};
-	queryInfo.queryType = vk::QueryType::eTimestamp;
-	queryInfo.queryCount = 2048;
-
-	timestamp_pool_ = context_.device_.createQueryPool(queryInfo);
 }
 
 void SimulationPassGPU::CreateDescriptorSetLayout()
@@ -1716,159 +1711,7 @@ void SimulationPassGPU::CreateVrdxSorter()
 		radix_.storage_memory);
 }
 
-void SimulationPassGPU::ClearCpuTime()
-{
-	uint32_t c = 0;
-
-	for (auto& t : label_time_)
-		t.second = 0.0f;
-
-	for (auto& t : label_avg_time_)
-		t.second = 0.0f;
-}
-
 void SimulationPassGPU::CalculateGpuTime()
 {
-	float nsPerTick = context_.physical_device_.getProperties().limits.timestampPeriod;
-	float toMs = nsPerTick / 1e6f;
-
-	if (timestamp_steps_ <= 0) return;
-
-	uint32_t numTimestamp = timestamp_steps_;
-	std::vector<uint64_t> ts(numTimestamp);
-
-	VkResult res = vkGetQueryPoolResults(
-		static_cast<VkDevice>(*context_.device_),
-		static_cast<VkQueryPool>(*timestamp_pool_),
-		0, numTimestamp,
-		ts.size() * sizeof(uint64_t), ts.data(), sizeof(uint64_t),
-		VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT
-	);
-
-	auto delta_ms = [&](uint32_t i0, uint32_t i1) {
-		return (ts[i1] - ts[i0]) * toMs;
-		};
-
-	float tIntegrate = 0.0f;
-	float tClearLambdas = 0.0f;
-	float tHashBuild = 0.0f;
-	float tRadixSort = 0.0f;
-	float tBuildCell = 0.0f;
-	float tBuildNeighbor = 0.0f;
-	float tSolveStretch = 0.0f;
-	float tSolveShear = 0.0f;
-	float tSolveBend = 0.0f;
-	float tSolveArea = 0.0f;
-	float tSolveSoftbodyStretch = 0.0f;
-	float tSolveSoftbodyVolume = 0.0f;
-	float tSolveSelfCollision = 0.0f;
-	float tSolveInterCollision = 0.0f;
-	float tApplyDeltas = 0.0f;
-	float tSolveLRA = 0.0f;
-	float tCollideSdf = 0.0f;
-	float tUpdate = 0.0f;
-	float tCalculateNormals = 0.0f;
-
-	uint32_t tsCnt = slots_per_iteration_;
-	uint32_t base = 1;
-	uint32_t afterIteration = 0;
-	for (uint32_t sub = 0; sub < datas_.substeps; sub++)
-	{
-		tIntegrate += delta_ms(base + 0, base + 1);
-		tClearLambdas += delta_ms(base + 2, base + 3);
-
-		if (sub % broadphase_interval_ == 0)
-		{
-			tHashBuild += delta_ms(base + 4, base + 5);
-			tRadixSort += delta_ms(base + 6, base + 7);
-			tBuildCell += delta_ms(base + 8, base + 9);
-			tBuildNeighbor += delta_ms(base + 10, base + 11);
-		}
-
-		uint32_t iterBase = base + 12;
-		for (uint32_t it = 0; it < datas_.iterations; it++)
-		{
-			tSolveStretch += delta_ms(iterBase + it * tsCnt + 0, iterBase + it * tsCnt + 1);
-			tSolveShear += delta_ms(iterBase + it * tsCnt + 2, iterBase + it * tsCnt + 3);
-			tSolveBend += delta_ms(iterBase + it * tsCnt + 4, iterBase + it * tsCnt + 5);
-			tSolveArea += delta_ms(iterBase + it * tsCnt + 6, iterBase + it * tsCnt + 7);
-			tSolveSoftbodyStretch += delta_ms(iterBase + it * tsCnt + 8, iterBase + it * tsCnt + 9);
-			tSolveSoftbodyVolume += delta_ms(iterBase + it * tsCnt + 10, iterBase + it * tsCnt + 11);
-			tSolveSelfCollision += delta_ms(iterBase + it * tsCnt + 12, iterBase + it * tsCnt + 13);
-			tSolveInterCollision += delta_ms(iterBase + it * tsCnt + 14, iterBase + it * tsCnt + 15);
-			tApplyDeltas += delta_ms(iterBase + it * tsCnt + 16, iterBase + it * tsCnt + 17);
-		}
-		afterIteration = iterBase + datas_.iterations * tsCnt;
-
-		tSolveLRA += delta_ms(afterIteration + 0, afterIteration + 1);
-		tCollideSdf += delta_ms(afterIteration + 2, afterIteration + 3);
-		tUpdate += delta_ms(afterIteration + 4, afterIteration + 5);
-	}
-	uint32_t afterSubstep = afterIteration + slots_after_iteration_;
-
-	tCalculateNormals = delta_ms(afterSubstep, afterSubstep + 1) + delta_ms(afterSubstep + 2, afterSubstep + 3);
-
-	pass_total_time_ = delta_ms(0, numTimestamp - 1);
-
-	//std::cout << pass_total_time_ << std::endl;
-
-	float total =
-		tIntegrate + tClearLambdas +
-		tHashBuild + tRadixSort + tBuildCell + tBuildNeighbor +
-		tSolveStretch + tSolveSoftbodyStretch + tSolveSoftbodyVolume + tSolveBend + tSolveArea + tSolveSelfCollision + tSolveInterCollision + tApplyDeltas +
-		tCollideSdf + tUpdate +
-		tCalculateNormals;
-
-	uint32_t c = 0;
-
-	{
-		c = 0;
-		label_time_[labels_[c++]] = tIntegrate;
-		label_time_[labels_[c++]] = tClearLambdas;
-		label_time_[labels_[c++]] = tHashBuild;
-		label_time_[labels_[c++]] = tRadixSort;
-		label_time_[labels_[c++]] = tBuildCell;
-		label_time_[labels_[c++]] = tBuildNeighbor;
-		label_time_[labels_[c++]] = tSolveStretch;
-		label_time_[labels_[c++]] = tSolveShear;
-		label_time_[labels_[c++]] = tSolveBend;
-		label_time_[labels_[c++]] = tSolveArea;
-		label_time_[labels_[c++]] = tSolveSoftbodyStretch;
-		label_time_[labels_[c++]] = tSolveSoftbodyVolume;
-		label_time_[labels_[c++]] = tSolveSelfCollision;
-		label_time_[labels_[c++]] = tSolveInterCollision;
-		label_time_[labels_[c++]] = tApplyDeltas;
-		label_time_[labels_[c++]] = tSolveLRA;
-		label_time_[labels_[c++]] = tCollideSdf;
-		label_time_[labels_[c++]] = tUpdate;
-		label_time_[labels_[c++]] = tCalculateNormals;
-		label_time_[labels_[c++]] = total;
-	}
-
-	{
-		c = 0;
-		label_avg_time_[labels_[c++]] += tIntegrate;
-		label_avg_time_[labels_[c++]] += tClearLambdas;
-		label_avg_time_[labels_[c++]] += tHashBuild;
-		label_avg_time_[labels_[c++]] += tRadixSort;
-		label_avg_time_[labels_[c++]] += tBuildCell;
-		label_avg_time_[labels_[c++]] += tBuildNeighbor;
-		label_avg_time_[labels_[c++]] += tSolveStretch;
-		label_avg_time_[labels_[c++]] += tSolveShear;
-		label_avg_time_[labels_[c++]] += tSolveBend;
-		label_avg_time_[labels_[c++]] += tSolveArea;
-		label_avg_time_[labels_[c++]] += tSolveSoftbodyStretch;
-		label_avg_time_[labels_[c++]] += tSolveSoftbodyVolume;
-		label_avg_time_[labels_[c++]] += tSolveSelfCollision;
-		label_avg_time_[labels_[c++]] += tSolveInterCollision;
-		label_avg_time_[labels_[c++]] += tApplyDeltas;
-		label_avg_time_[labels_[c++]] += tSolveLRA;
-		label_avg_time_[labels_[c++]] += tCollideSdf;
-		label_avg_time_[labels_[c++]] += tUpdate;
-		label_avg_time_[labels_[c++]] += tCalculateNormals;
-		label_avg_time_[labels_[c++]] += total;
-	}
-
-	time_count_++;
-
+	gpu_profiler_->CalculateGpuTime(datas_, broadphase_interval_);
 }
