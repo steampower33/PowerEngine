@@ -36,8 +36,8 @@ set_source_files_properties(${IMGUI_SOURCES} PROPERTIES SKIP_PRECOMPILE_HEADERS 
 add_subdirectory(external/vulkan_radix_sort)
 
 file(GLOB SRC CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/src/context/*.cpp"
-     "${CMAKE_CURRENT_SOURCE_DIR}/src/pass/*.cpp"
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.cpp"
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/simulation/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/src/model/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/src/interaction/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/src/util/*.cpp"
@@ -95,8 +95,8 @@ target_link_libraries(PowerEngine
 )
 target_include_directories(PowerEngine
   PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/context
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/pass
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/simulation
     ${CMAKE_CURRENT_SOURCE_DIR}/src/model
     ${CMAKE_CURRENT_SOURCE_DIR}/src/interaction
     ${CMAKE_CURRENT_SOURCE_DIR}/src/util
@@ -110,7 +110,7 @@ endif()
 if (NOT GLSLC_EXECUTABLE)
   find_program(GLSLANG_VALIDATOR NAMES glslangValidator)
   if (NOT GLSLANG_VALIDATOR)
-    message(FATAL_ERROR "glslc 또는 glslangValidator를 찾을 수 없습니다.")
+    message(FATAL_ERROR "Could not find glslc or glslangValidator.")
   endif()
 endif()
 
