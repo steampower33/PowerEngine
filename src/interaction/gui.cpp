@@ -697,11 +697,11 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 			row("Pause(X)", [&] { ImGui::Checkbox("##Pause", &paused); });
 			row("PauseEachframe(Z,X)", [&] { ImGui::Checkbox("##PauseEachframe", &pauseEachframe); });
 			row("TargetSimFPS", [&] { ImGui::DragFloat("##TargetSimFPS", &targetSimFPS, 1.0f, 30.0f, 1000.0f); simDt = 1.0 / static_cast<double>(targetSimFPS); });
-			row("1 / FrameDt", [&] { ImGui::DragFloat("##FrameDt", &sim.datas_.frame_dt, 1.0f, 60.0f, 240.0f); });
-			row("Substeps", [&] { ImGui::DragInt("##Substeps", &sim.datas_.substeps, 1, 1, 40); });
-			row("Iterations", [&] { ImGui::DragInt("##Iterations", &sim.datas_.iterations, 1, 1, 40); });
-			row("BroadphaseInterval", [&] { ImGui::DragInt("##BroadphaseInterval", &sim.broadphase_interval_, 1, 1, sim.datas_.substeps); });
-			row("NarrowphaseInterval", [&] { ImGui::DragInt("##NarrowphaseInterval", &sim.narrowphase_interval_, 1, 1, sim.datas_.iterations); });
+			row("1 / FrameDt", [&] { ImGui::DragFloat("##FrameDt", &sim.sim_datas_.frame_dt, 1.0f, 60.0f, 240.0f); });
+			row("Substeps", [&] { ImGui::DragInt("##Substeps", &sim.sim_datas_.substeps, 1, 1, 40); });
+			row("Iterations", [&] { ImGui::DragInt("##Iterations", &sim.sim_datas_.iterations, 1, 1, 40); });
+			row("BroadphaseInterval", [&] { ImGui::DragInt("##BroadphaseInterval", &sim.sim_datas_.broadphase_interval_, 1, 1, sim.sim_datas_.substeps); });
+			row("NarrowphaseInterval", [&] { ImGui::DragInt("##NarrowphaseInterval", &sim.sim_datas_.narrowphase_interval_, 1, 1, sim.sim_datas_.iterations); });
 			row("GlobalDamping", [&] { ImGui::DragFloat("##GlobalDamping", &sim.ubo_.datas.sim_params.global_damping, 0.1f, 1.0f, 2.0f); });
 			row("RelaxationFactor", [&] { ImGui::DragFloat("##RelaxationFactor", &sim.ubo_.datas.sim_params.relaxation_factor, 0.1f, 0.0f, 1.0f); });
 			row("Thickness", [&] { ImGui::DragFloat("##Thickness", &sim.ubo_.datas.sim_params.thickness, 0.001f, 0.0f, 1.0f, "%.3f"); });
@@ -741,13 +741,13 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 			if (ImGui::BeginTable("SolverConfig", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
-				row("Stretch", [&] { ImGui::Checkbox("##Stretch", &sim.solver_config_.stretch); });
-				row("Shear", [&] { ImGui::Checkbox("##Shear", &sim.solver_config_.shear); });
-				row("Bend", [&] { ImGui::Checkbox("##Bend", &sim.solver_config_.bend); });
-				row("Area", [&] { ImGui::Checkbox("##Area", &sim.solver_config_.area); });
-				row("SelfCollision", [&] { ImGui::Checkbox("##SelfCollision", &sim.solver_config_.self_collision); });
-				row("InterCollision", [&] { ImGui::Checkbox("##InterCollision", &sim.solver_config_.inter_collision); });
-				row("LRA", [&] { ImGui::Checkbox("##LRA", &sim.solver_config_.lra); });
+				row("Stretch", [&] { ImGui::Checkbox("##Stretch", &sim.sim_datas_.solver_config_.stretch); });
+				row("Shear", [&] { ImGui::Checkbox("##Shear", &sim.sim_datas_.solver_config_.shear); });
+				row("Bend", [&] { ImGui::Checkbox("##Bend", &sim.sim_datas_.solver_config_.bend); });
+				row("Area", [&] { ImGui::Checkbox("##Area", &sim.sim_datas_.solver_config_.area); });
+				row("SelfCollision", [&] { ImGui::Checkbox("##SelfCollision", &sim.sim_datas_.solver_config_.self_collision); });
+				row("InterCollision", [&] { ImGui::Checkbox("##InterCollision", &sim.sim_datas_.solver_config_.inter_collision); });
+				row("LRA", [&] { ImGui::Checkbox("##LRA", &sim.sim_datas_.solver_config_.lra); });
 
 				ImGui::EndTable();
 			}
@@ -778,15 +778,15 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 			if (ImGui::BeginTable("Compliance", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
-				row("Stretch", [&] { ImGui::DragFloat("##Stretch", &sim.datas_.compliance.stretch,
+				row("Stretch", [&] { ImGui::DragFloat("##Stretch", &sim.sim_datas_.compliance.stretch,
 					1e-9f, 0.0f, 1.0f, "%.9f"); });
-				row("Shear", [&] { ImGui::DragFloat("##Shear", &sim.datas_.compliance.shear
+				row("Shear", [&] { ImGui::DragFloat("##Shear", &sim.sim_datas_.compliance.shear
 					, 1e-9f, 0.0f, 1.0f, "%.9f"); });
-				row("Bend", [&] { ImGui::DragFloat("##Bend", &sim.datas_.compliance.bend
+				row("Bend", [&] { ImGui::DragFloat("##Bend", &sim.sim_datas_.compliance.bend
 					, 1e-2f, 0.0f, 1.0f, "%.9f"); });
-				row("Area", [&] { ImGui::DragFloat("##Area", &sim.datas_.compliance.area
+				row("Area", [&] { ImGui::DragFloat("##Area", &sim.sim_datas_.compliance.area
 					, 1e-2f, 0.0f, 1.0f, "%.9f"); });
-				row("SelfCollision", [&] { ImGui::DragFloat("##SelfCollision", &sim.datas_.compliance.self_collision
+				row("SelfCollision", [&] { ImGui::DragFloat("##SelfCollision", &sim.sim_datas_.compliance.self_collision
 					, 1e-9f, 0.0f, 1.0f, "%.9f"); });
 				ImGui::EndTable();
 			}
@@ -799,7 +799,7 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 			if (ImGui::BeginTable("Beta", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
-				row("Stretch", [&] { ImGui::DragFloat("##Stretch", &sim.datas_.beta.stretch, 1.0f, 0.0f, 1000.0f, "%.1f"); });
+				row("Stretch", [&] { ImGui::DragFloat("##Stretch", &sim.sim_datas_.beta.stretch, 1.0f, 0.0f, 1000.0f, "%.1f"); });
 
 				ImGui::EndTable();
 			}
@@ -817,8 +817,8 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 			if (ImGui::BeginTable("SolverConfig", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
-				row("Stretch", [&] { ImGui::Checkbox("##SoftbodyStretch", &sim.solver_config_.softbody_stretch); });
-				row("Volume", [&] { ImGui::Checkbox("##SoftbodyVolume", &sim.solver_config_.softbody_volume); });
+				row("Stretch", [&] { ImGui::Checkbox("##SoftbodyStretch", &sim.sim_datas_.solver_config_.softbody_stretch); });
+				row("Volume", [&] { ImGui::Checkbox("##SoftbodyVolume", &sim.sim_datas_.solver_config_.softbody_volume); });
 				ImGui::EndTable();
 			}
 			ImGui::EndChild();
@@ -843,9 +843,9 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 			if (ImGui::BeginTable("Compliance", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
-				row("Stretch", [&] { ImGui::DragFloat("##SoftbodyStretch", &sim.datas_.compliance.softbody_stretch,
+				row("Stretch", [&] { ImGui::DragFloat("##SoftbodyStretch", &sim.sim_datas_.compliance.softbody_stretch,
 					1e-9f, 0.0f, 1.0f, "%.9f"); });
-				row("Volume", [&] { ImGui::DragFloat("##SoftbodyVolume", &sim.datas_.compliance.softbody_volume,
+				row("Volume", [&] { ImGui::DragFloat("##SoftbodyVolume", &sim.sim_datas_.compliance.softbody_volume,
 					1e-9f, 0.0f, 1.0f, "%.9f"); });
 
 				ImGui::EndTable();
@@ -1006,7 +1006,7 @@ void GUI::SetStatGUI(RowFn&& row)
 	ImGui::Text("Avr %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
 	auto& pm = *pass_manager_.particle_manager_;
-	auto& d = pass_manager_.sim_pass_gpu_->datas_;
+	auto& d = pass_manager_.sim_pass_gpu_->sim_datas_;
 	auto& gpuSim = pass_manager_.sim_pass_gpu_;
 
 	auto row3 = [&](const char* label, auto&& drawControl, auto&& drawExtra)
@@ -1043,17 +1043,17 @@ void GUI::SetStatGUI(RowFn&& row)
 				[&] { ImGui::Text("%u", pm.num_cloth_particles_); });
 			row3("NumEdges", 
 				[&] { ImGui::Text("%u", d.num_cloth_edges); },
-				[&] { std::string str = gpuSim->solver_config_.stretch ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
+				[&] { std::string str = gpuSim->sim_datas_.solver_config_.stretch ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
 			row3("NumShears", 
 				[&] { ImGui::Text("%u", d.num_shears); },
-				[&] { std::string str = gpuSim->solver_config_.shear ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
+				[&] { std::string str = gpuSim->sim_datas_.solver_config_.shear ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
 			row3("NumBends", 
 				[&] { ImGui::Text("%u", d.num_bends); },
-				[&] { std::string str = gpuSim->solver_config_.bend ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
+				[&] { std::string str = gpuSim->sim_datas_.solver_config_.bend ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
 			row3("NumAreas", [&] { ImGui::Text("%u", d.num_areas); },
-				[&] { std::string str = gpuSim->solver_config_.area ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
+				[&] { std::string str = gpuSim->sim_datas_.solver_config_.area ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
 			row3("NumLRAs", [&] { ImGui::Text("%u", d.num_lras); },
-				[&] { std::string str = gpuSim->solver_config_.lra ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
+				[&] { std::string str = gpuSim->sim_datas_.solver_config_.lra ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
 
 			ImGui::EndTable();
 		}
@@ -1073,9 +1073,9 @@ void GUI::SetStatGUI(RowFn&& row)
 
 			row("NumParticles", [&] { ImGui::Text("%u", pm.num_softbody_particles_); });
 			row3("NumEdges", [&] { ImGui::Text("%u", d.num_softbody_edges); },
-				[&] { std::string str = gpuSim->solver_config_.softbody_stretch ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
+				[&] { std::string str = gpuSim->sim_datas_.solver_config_.softbody_stretch ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
 			row3("NumVolumes", [&] { ImGui::Text("%u", d.num_volumes); },
-				[&] { std::string str = gpuSim->solver_config_.softbody_volume ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
+				[&] { std::string str = gpuSim->sim_datas_.solver_config_.softbody_volume ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
 
 			ImGui::EndTable();
 		}

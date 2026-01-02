@@ -5,6 +5,53 @@
 
 struct SimData {
 
+	uint32_t total_particles_;
+	uint32_t total_indices_;
+	uint32_t total_tri_;
+
+	uint32_t cloth_particles_;
+	uint32_t cloth_indices_;
+	uint32_t softbody_particles_;
+	uint32_t softbody_indices_;
+
+	int broadphase_interval_ = 2;
+	int narrowphase_interval_ = 1;
+
+	struct PushConstant {
+		struct Solve {
+			uint32_t base;
+			uint32_t count;
+			float compliance;
+			float beta;
+		} solve;
+		static_assert(sizeof(Solve) % 4 == 0, "push constant must be multiple of 4 bytes");
+
+		struct MouseInteract {
+			glm::vec3 ray_origin;
+			uint32_t select_mode; // 0: none, 1: select, 2: drag
+			glm::vec3 ray_dir;
+			float radius = 0.1f;
+			uint32_t depth_mode;
+			uint32_t p0;
+			uint32_t p1;
+			uint32_t p2;
+		} mouse_interact;
+		static_assert(sizeof(MouseInteract) % 4 == 0, "push constant must be multiple of 4 bytes");
+	} push_constants_;
+
+	struct SolverConfig {
+		bool stretch = true;
+		bool shear = true;
+		bool bend = false;
+		bool area = true;
+		bool self_collision = true;
+		bool inter_collision = true;
+
+		bool softbody_stretch = true;
+		bool softbody_volume = true;
+		bool lra = false;
+	} solver_config_;
+
 	struct Compliance {
 		float stretch = 1e-6f;
 		float softbody_stretch = 1e-6f;

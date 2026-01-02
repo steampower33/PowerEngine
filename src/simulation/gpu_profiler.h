@@ -14,7 +14,7 @@ public:
 	~GpuProfiler();
 	Context& context_;
 
-	void CalculateGpuTime(SimData& simData, uint32_t broadphase_interval_);
+	void CalculateGpuTime(SimData& simData);
 
 	vk::raii::QueryPool timestamp_pool_{ nullptr };
 	uint32_t timestamp_steps_ = 0;

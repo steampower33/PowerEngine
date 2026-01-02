@@ -31,7 +31,7 @@ public:
 	void UpdateMousePushConstant(Camera& camera, MouseInteractor& mouseInteractor, glm::vec2 viewportSize);
 
 	ParticleManager& particle_manager_;
-	SimData datas_;
+	SimData sim_datas_;
 	uint32_t total_particles_;
 
 	int id = -1;

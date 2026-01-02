@@ -62,7 +62,7 @@ void SimulationPassCPU::UpdateMousePushConstant(Camera& camera, MouseInteractor&
 void SimulationPassCPU::ComputeSolve(ModelManager& modelManager)
 {
 	auto& pm = particle_manager_;
-	auto& d = datas_;
+	auto& d = sim_datas_;
 	auto& cloth = pm.clothes_[0];
 
 	const uint32_t N = total_particles_;
@@ -264,7 +264,7 @@ void SimulationPassCPU::BuildSpatialHash(float cellSize, CellMap& outCells)
 {
 	outCells.clear();
 
-	auto& d = datas_;
+	auto& d = sim_datas_;
 	auto& pm = particle_manager_;
 
 	const uint32_t N = total_particles_;
@@ -289,7 +289,7 @@ void SimulationPassCPU::BuildCollisionPairs(const CellMap& cells, float cellSize
 {
 	outPairs.clear();
 
-	auto& d = datas_;
+	auto& d = sim_datas_;
 	auto& pm = particle_manager_;
 
 	const uint32_t N = total_particles_;
@@ -325,7 +325,7 @@ void SimulationPassCPU::BuildCollisionPairs(const CellMap& cells, float cellSize
 
 void SimulationPassCPU::SolveSelfCollision(const std::vector<CollisionPair>& pairs, float thickness)
 {
-	auto& d = datas_;
+	auto& d = sim_datas_;
 	auto& pm = particle_manager_;
 
 	const float thickness2 = thickness * thickness;
@@ -378,7 +378,7 @@ void SimulationPassCPU::CreateCommandBuffers()
 void SimulationPassCPU::CreateConstraintDatas()
 {
 	auto& pm = particle_manager_;
-	auto& d = datas_;
+	auto& d = sim_datas_;
 	auto& cloth = pm.clothes_[0];
 
 	total_particles_ = cloth.num_particle;
@@ -396,47 +396,47 @@ void SimulationPassCPU::CreateConstraintDatas()
 	//		// Set stretch edges coloring
 	//		for (int x = 0; x < nx1; ++x)
 	//			for (int y = 0; y + 1 < ny1; y += 2)
-	//				datas_.passes[0].push_back({ vid(x,y), vid(x,y + 1) });
+	//				sim_datas_.passes[0].push_back({ vid(x,y), vid(x,y + 1) });
 
 	//		for (int x = 0; x < nx1; ++x)
 	//			for (int y = 1; y + 1 < ny1; y += 2)
-	//				datas_.passes[1].push_back({ vid(x,y), vid(x,y + 1) });
+	//				sim_datas_.passes[1].push_back({ vid(x,y), vid(x,y + 1) });
 
 	//		for (int y = 0; y < ny1; ++y)
 	//			for (int x = 0; x + 1 < nx1; x += 2)
-	//				datas_.passes[2].push_back({ vid(x,y), vid(x + 1,y) });
+	//				sim_datas_.passes[2].push_back({ vid(x,y), vid(x + 1,y) });
 
 	//		for (int y = 0; y < ny1; ++y)
 	//			for (int x = 1; x + 1 < nx1; x += 2)
-	//				datas_.passes[3].push_back({ vid(x,y), vid(x + 1,y) });
+	//				sim_datas_.passes[3].push_back({ vid(x,y), vid(x + 1,y) });
 	//	};
 
 	//CreateColoringPass(cloth);
 
 	//// Set Edges using coloring
-	//datas_.pass_offsets[0] = 0;
+	//sim_datas_.pass_offsets[0] = 0;
 
-	//for (int p = 0; p < datas_.pass_offsets.size() - 1; ++p) {
-	//	for (auto [i, j] : datas_.passes[p]) {
+	//for (int p = 0; p < sim_datas_.pass_offsets.size() - 1; ++p) {
+	//	for (auto [i, j] : sim_datas_.passes[p]) {
 	//		glm::vec3 pi = glm::vec3(pm.positions_[i]);
 	//		glm::vec3 pj = glm::vec3(pm.positions_[j]);
 	//		float rest = glm::length(pj - pi);
 
-	//		datas_.edges.push_back({ i, j, rest, 0.0f });
+	//		sim_datas_.edges.push_back({ i, j, rest, 0.0f });
 	//	}
-	//	datas_.pass_offsets[p + 1] = static_cast<uint32_t>(datas_.edges.size());
+	//	sim_datas_.pass_offsets[p + 1] = static_cast<uint32_t>(sim_datas_.edges.size());
 	//}
 
-	datas_.num_edges = static_cast<uint32_t>(datas_.edges.size());
-	//if (datas_.num_edges != ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)))
+	sim_datas_.num_edges = static_cast<uint32_t>(sim_datas_.edges.size());
+	//if (sim_datas_.num_edges != ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)))
 	//{
-	//	std::cout << datas_.num_edges << " " << ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)) << std::endl;
+	//	std::cout << sim_datas_.num_edges << " " << ((nx1 - 1) * ny1) + (nx1 * (ny1 - 1)) << std::endl;
 	//	throw std::runtime_error("edge size is not right");
 	//}
 
 	//// Set shears
 	//const size_t numTris = pm.indices.size() / 3;
-	//datas_.shears.reserve(numTris);
+	//sim_datas_.shears.reserve(numTris);
 
 	//for (size_t t = 0; t < numTris; ++t)
 	//{
@@ -460,14 +460,14 @@ void SimulationPassCPU::CreateConstraintDatas()
 	//	c.rest_dot = restDot;
 	//	c.lambda = 0.0f;
 
-	//	datas_.shears.push_back(c);
+	//	sim_datas_.shears.push_back(c);
 	//}
-	//datas_.num_shears = static_cast<uint32_t>(datas_.shears.size());
+	//sim_datas_.num_shears = static_cast<uint32_t>(sim_datas_.shears.size());
 
-	//datas_.BuildBendConstraints(pm.positions, pm.indices);
-	//datas_.num_bends = static_cast<uint32_t>(datas_.bends.size());
+	//sim_datas_.BuildBendConstraints(pm.positions, pm.indices);
+	//sim_datas_.num_bends = static_cast<uint32_t>(sim_datas_.bends.size());
 
-	//datas_.BuildAreaConstraints(pm.positions, pm.indices);
-	//datas_.num_areas = static_cast<uint32_t>(datas_.areas.size());
+	//sim_datas_.BuildAreaConstraints(pm.positions, pm.indices);
+	//sim_datas_.num_areas = static_cast<uint32_t>(sim_datas_.areas.size());
 
 }

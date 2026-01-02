@@ -31,7 +31,7 @@ void GpuProfiler::CreateQueryPool() {
 	timestamp_pool_ = context_.device_.createQueryPool(queryInfo);
 }
 
-void GpuProfiler::CalculateGpuTime(SimData& simData, uint32_t broadphase_interval_)
+void GpuProfiler::CalculateGpuTime(SimData& simData)
 {
 	float nsPerTick = context_.physical_device_.getProperties().limits.timestampPeriod;
 	float toMs = nsPerTick / 1e6f;
@@ -83,7 +83,7 @@ void GpuProfiler::CalculateGpuTime(SimData& simData, uint32_t broadphase_interva
 		tIntegrate += delta_ms(base + 2, base + 3);
 		tClearLambdas += delta_ms(base + 4, base + 5);
 
-		if (sub % broadphase_interval_ == 0)
+		if (sub % simData.broadphase_interval_ == 0)
 		{
 			tHashBuild += delta_ms(base + 6, base + 7);
 			tRadixSort += delta_ms(base + 8, base + 9);
