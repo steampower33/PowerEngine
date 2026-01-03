@@ -19,15 +19,15 @@ struct SimUBO;
 
 #include <vk_radix_sort.h>
 
-class SimulationPassGPU
+class ClothXpbdPassGPU
 {
 public:
-	SimulationPassGPU(Context& context, Swapchain& swapchain, ParticleManager& particleManager, ModelManager& modelManager);
-	SimulationPassGPU(const SimulationPassGPU& rhs) = delete;
-	SimulationPassGPU(SimulationPassGPU&& rhs) = delete;
-	SimulationPassGPU& operator=(const SimulationPassGPU& rhs) = delete;
-	SimulationPassGPU& operator=(SimulationPassGPU&& rhs) = delete;
-	~SimulationPassGPU();
+	ClothXpbdPassGPU(Context& context, Swapchain& swapchain, ParticleManager& particleManager, ModelManager& modelManager);
+	ClothXpbdPassGPU(const ClothXpbdPassGPU& rhs) = delete;
+	ClothXpbdPassGPU(ClothXpbdPassGPU&& rhs) = delete;
+	ClothXpbdPassGPU& operator=(const ClothXpbdPassGPU& rhs) = delete;
+	ClothXpbdPassGPU& operator=(ClothXpbdPassGPU&& rhs) = delete;
+	~ClothXpbdPassGPU();
 
 	Context& context_;
 	ParticleManager& particle_manager_;

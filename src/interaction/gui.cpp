@@ -4,7 +4,7 @@
 #include "swapchain.h"
 #include "vulkan_utils.h"
 #include "pass_manager.h"
-#include "simulation_pass_gpu.h"
+#include "cloth_xpbd_pass_gpu.h"
 #include "simulation_pass_cpu.h"
 #include "model.h"
 #include "model_manager.h"
@@ -257,8 +257,7 @@ void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera, bool& pause
 
 		SetModelsGUI(row);
 
-		if (pass_manager_.cpu_or_gpu_ == vku::CpuOrGpu::GPU)
-			SetSimulationGUI(row, targetSimFPS, simDt, paused, pauseEachframe);
+		SetSimulationGUI(row, targetSimFPS, simDt, paused, pauseEachframe);
 
 	}
 	ImGui::End();

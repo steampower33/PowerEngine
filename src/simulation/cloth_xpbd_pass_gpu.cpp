@@ -11,9 +11,9 @@
 #include "gpu_profiler.h"
 
 #define VRDX_IMPLEMENTATION
-#include "simulation_pass_gpu.h"
+#include "cloth_xpbd_pass_gpu.h"
 
-SimulationPassGPU::SimulationPassGPU(Context& context, Swapchain& swapchain, ParticleManager& particleManager, ModelManager& modelManager)
+ClothXpbdPassGPU::ClothXpbdPassGPU(Context& context, Swapchain& swapchain, ParticleManager& particleManager, ModelManager& modelManager)
 	: context_(context), particle_manager_(particleManager), model_manager_(modelManager)
 {
 	CreateCommandBuffers();
@@ -39,14 +39,14 @@ SimulationPassGPU::SimulationPassGPU(Context& context, Swapchain& swapchain, Par
 	gpu_profiler_ = std::make_unique<GpuProfiler>(context, sim_datas_);
 }
 
-SimulationPassGPU::~SimulationPassGPU()
+ClothXpbdPassGPU::~ClothXpbdPassGPU()
 {
 	if (radix_.sorter) {
 		vrdxDestroySorter(radix_.sorter);
 	}
 }
 
-void SimulationPassGPU::UpdateMousePushConstant(Camera& camera, MouseInteractor& mouseInteractor, glm::vec2 viewportSize)
+void ClothXpbdPassGPU::UpdateMousePushConstant(Camera& camera, MouseInteractor& mouseInteractor, glm::vec2 viewportSize)
 {
 	if (mouseInteractor.is_left_button_down_event)
 	{
@@ -79,7 +79,7 @@ void SimulationPassGPU::UpdateMousePushConstant(Camera& camera, MouseInteractor&
 	mouseInteractor.depth_state = vku::DepthState::MOUSE_DEPTH_NONE;
 }
 
-void SimulationPassGPU::UpdateComputeUBO(uint32_t currentFrame, ModelManager& modelManager)
+void ClothXpbdPassGPU::UpdateComputeUBO(uint32_t currentFrame, ModelManager& modelManager)
 {
 	ubo_.datas.sim_params.dt = 1.0f / sim_datas_.frame_dt / sim_datas_.substeps;
 
@@ -103,7 +103,7 @@ void SimulationPassGPU::UpdateComputeUBO(uint32_t currentFrame, ModelManager& mo
 	std::memcpy(dst, &ubo_.datas.sim_params, sizeof(SimUBO::Data::SimParams));
 }
 
-void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene)
+void ClothXpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene)
 {
 	auto& cmd = cmds_[currentFrame];
 	auto& pmSSBO = particle_manager_.ssbos_;
@@ -521,7 +521,7 @@ void SimulationPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& tes
 	cmd.end();
 }
 
-void SimulationPassGPU::CopySimDatas(const vk::raii::CommandBuffer& cmd)
+void ClothXpbdPassGPU::CopySimDatas(const vk::raii::CommandBuffer& cmd)
 {
 	auto& pm = particle_manager_;
 
@@ -580,7 +580,7 @@ void SimulationPassGPU::CopySimDatas(const vk::raii::CommandBuffer& cmd)
 		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 }
 
-void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene)
+void ClothXpbdPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene)
 {
 	auto& pm = particle_manager_;
 
@@ -700,7 +700,7 @@ void SimulationPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::
 	}
 }
 
-void SimulationPassGPU::CopyColliders(const vk::raii::CommandBuffer& cmd)
+void ClothXpbdPassGPU::CopyColliders(const vk::raii::CommandBuffer& cmd)
 {
 	bool isCopyToGPU = false;
 
@@ -750,7 +750,7 @@ void SimulationPassGPU::CopyColliders(const vk::raii::CommandBuffer& cmd)
 
 }
 
-void SimulationPassGPU::CreateCommandBuffers()
+void ClothXpbdPassGPU::CreateCommandBuffers()
 {
 	cmds_.clear();
 	vk::CommandBufferAllocateInfo allocInfo{};
@@ -760,7 +760,7 @@ void SimulationPassGPU::CreateCommandBuffers()
 	cmds_ = vk::raii::CommandBuffers(context_.device_, allocInfo);
 }
 
-void SimulationPassGPU::CreateDescriptorSetLayout()
+void ClothXpbdPassGPU::CreateDescriptorSetLayout()
 {
 	// Sim params UBO
 	{
@@ -817,7 +817,7 @@ void SimulationPassGPU::CreateDescriptorSetLayout()
 
 }
 
-void SimulationPassGPU::CreateDescriptorPools()
+void ClothXpbdPassGPU::CreateDescriptorPools()
 {
 	std::vector<vk::DescriptorPoolSize> poolSizes;
 
@@ -844,7 +844,7 @@ void SimulationPassGPU::CreateDescriptorPools()
 	descriptor_pool_ = vk::raii::DescriptorPool(context_.device_, poolInfo);
 }
 
-void SimulationPassGPU::CreateUniformBuffers()
+void ClothXpbdPassGPU::CreateUniformBuffers()
 {
 	// Sim params UBO
 	{
@@ -867,7 +867,7 @@ void SimulationPassGPU::CreateUniformBuffers()
 
 }
 
-void SimulationPassGPU::CreateClothConstraintDatas()
+void ClothXpbdPassGPU::CreateClothConstraintDatas()
 {
 	auto& pm = particle_manager_;
 	auto& d = sim_datas_;
@@ -883,7 +883,7 @@ void SimulationPassGPU::CreateClothConstraintDatas()
 	sim_datas_.BuildLRAConstraints(pm.positions_, pm.indices_, pm);
 }
 
-void SimulationPassGPU::CreateSoftBodyConstraintDatas()
+void ClothXpbdPassGPU::CreateSoftBodyConstraintDatas()
 {
 	auto& pm = particle_manager_;
 
@@ -932,7 +932,7 @@ void SimulationPassGPU::CreateSoftBodyConstraintDatas()
 	sim_datas_.num_volumes = pm.volume_constraints.size();
 }
 
-void SimulationPassGPU::CreateColiiders()
+void ClothXpbdPassGPU::CreateColiiders()
 {
 	for (auto& model : model_manager_.models_)
 	{
@@ -946,7 +946,7 @@ void SimulationPassGPU::CreateColiiders()
 	sim_datas_.num_colliders = sim_datas_.colliders.size();
 }
 
-void SimulationPassGPU::CreateSSBOBuffers()
+void ClothXpbdPassGPU::CreateSSBOBuffers()
 {
 	// Self Collision
 	auto& pm = particle_manager_;
@@ -1136,7 +1136,7 @@ void SimulationPassGPU::CreateSSBOBuffers()
 		sim_datas_.ssbos_.lra_r, sim_datas_.ssbo_memories_.lra_r);
 }
 
-void SimulationPassGPU::CreateDescriptorSets()
+void ClothXpbdPassGPU::CreateDescriptorSets()
 {
 	// Sim Params
 	{
@@ -1455,7 +1455,7 @@ void SimulationPassGPU::CreateDescriptorSets()
 	}
 }
 
-void SimulationPassGPU::CreateComputePipelineLayouts()
+void ClothXpbdPassGPU::CreateComputePipelineLayouts()
 {
 	// common pipeline layout
 	{
@@ -1480,7 +1480,7 @@ void SimulationPassGPU::CreateComputePipelineLayouts()
 	}
 }
 
-void SimulationPassGPU::CreateComputePipelines()
+void ClothXpbdPassGPU::CreateComputePipelines()
 {
 	// wind
 	{
@@ -1690,7 +1690,7 @@ void SimulationPassGPU::CreateComputePipelines()
 	}
 }
 
-void SimulationPassGPU::CreateVrdxSorter()
+void ClothXpbdPassGPU::CreateVrdxSorter()
 {
 	VrdxSorterCreateInfo info{};
 	info.physicalDevice = *context_.physical_device_;
@@ -1712,7 +1712,7 @@ void SimulationPassGPU::CreateVrdxSorter()
 		radix_.storage_memory);
 }
 
-void SimulationPassGPU::CalculateGpuTime()
+void ClothXpbdPassGPU::CalculateGpuTime()
 {
 	gpu_profiler_->CalculateGpuTime(sim_datas_);
 }

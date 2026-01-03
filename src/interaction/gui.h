@@ -3,7 +3,7 @@
 class Context;
 class Swapchain;
 class PassManager;
-class SimulationPassGPU;
+class ClothXpbdPassGPU;
 class SimulationPassCPU;
 class Model;
 class ModelManager;

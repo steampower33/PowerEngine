@@ -20,7 +20,7 @@ public:
 	~GraphicsPass();
 
 	void UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera, bool paused);
-	void RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t currentFrame, vku::CpuOrGpu cpuOrGpu);
+	void RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t currentFrame);
 	void CreateDepthResources();
 	void CreateShadowResources();
 	

@@ -180,7 +180,7 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera, bool
 // ============================
 // ========== Record ==========
 // ============================
-void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t currentFrame, vku::CpuOrGpu cpuOrGpu)
+void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t currentFrame)
 {
 	const auto& cmd = cmds_[currentFrame];
 	timestamp_steps_ = 0;
@@ -196,16 +196,6 @@ void GraphicsPass::RecordGraphicsCommandBuffer(uint32_t imageIndex, uint32_t cur
 	cmd.resetQueryPool(*timestamp_pool_, 0, slots);
 
 	TS(timestamp_steps_);
-
-	if (cpuOrGpu == vku::CpuOrGpu::CPU)
-	{
-		auto& pm = particle_manager_;
-		vku::CopyStagingToSSBO(cmd, sizeof(glm::vec4) * pm.clothes_[0].num_particle, pm.staging_mapped_.position, pm.positions_, pm.staging_.position, pm.ssbos_.position,
-			vk::PipelineStageFlagBits2::eVertexShader,
-			vk::AccessFlagBits2::eShaderStorageRead,
-			vk::PipelineStageFlagBits2::eVertexShader,
-			vk::AccessFlagBits2::eShaderStorageRead);
-	}
 
 	ShadowDepthOnlyPass(cmd, currentFrame);
 	PreMainRenderPass(cmd, currentFrame);

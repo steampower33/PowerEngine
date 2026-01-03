@@ -1,7 +1,6 @@
 #include "context.h"
 #include "swapchain.h"
-#include "simulation_pass_cpu.h"
-#include "simulation_pass_gpu.h"
+#include "cloth_xpbd_pass_gpu.h"
 #include "texture_manager.h"
 #include "model_manager.h"
 #include "graphics_pass.h"
@@ -20,10 +19,7 @@ PassManager::PassManager(GLFWwindow* glfwWindow, Context& context, Swapchain& sw
 
 	particle_manager_ = std::make_unique<ParticleManager>(context, modelManager, textureManager);
 
-	if (cpu_or_gpu_ == vku::CpuOrGpu::CPU)
-		sim_pass_cpu_ = std::make_unique<SimulationPassCPU>(context, *particle_manager_);
-	else
-		sim_pass_gpu_ = std::make_unique<SimulationPassGPU>(context, swapchain, *particle_manager_, modelManager);
+	sim_pass_gpu_ = std::make_unique<ClothXpbdPassGPU>(context, swapchain, *particle_manager_, modelManager);
 	graphics_pass_ = std::make_unique<GraphicsPass>(context, swapchain, textureManager, modelManager, *particle_manager_);
 }
 
@@ -31,18 +27,9 @@ void PassManager::Update(Camera& camera, MouseInteractor& mouseInteractor, Model
 {
 	graphics_pass_->UpdateGraphicsUBO(current_frame_, camera, paused);
 
-	if (cpu_or_gpu_ == vku::CpuOrGpu::CPU)
-	{
-		sim_pass_cpu_->UpdateMousePushConstant(camera, mouseInteractor, glm::vec2(swapchain_.swapchain_extent_.width, swapchain_.swapchain_extent_.height));
+	sim_pass_gpu_->UpdateComputeUBO(current_frame_, modelManager);
 
-		sim_pass_cpu_->ComputeSolve(modelManager);
-	}
-	else if (cpu_or_gpu_ == vku::CpuOrGpu::GPU)
-	{
-		sim_pass_gpu_->UpdateComputeUBO(current_frame_, modelManager);
-
-		sim_pass_gpu_->UpdateMousePushConstant(camera, mouseInteractor, glm::vec2(swapchain_.swapchain_extent_.width, swapchain_.swapchain_extent_.height));
-	}
+	sim_pass_gpu_->UpdateMousePushConstant(camera, mouseInteractor, glm::vec2(swapchain_.swapchain_extent_.width, swapchain_.swapchain_extent_.height));
 
 }
 
@@ -95,7 +82,7 @@ void PassManager::Draw(std::unique_ptr<GUI>& gui, bool paused)
 		imageIndex = idx;
 	}
 
-	if (cpu_or_gpu_ == vku::CpuOrGpu::GPU && !paused)
+	if (!paused)
 	{
 		sim_pass_gpu_->RecordCompute(frame, test_scene_);
 
@@ -123,16 +110,11 @@ void PassManager::Draw(std::unique_ptr<GUI>& gui, bool paused)
 				.pSignalSemaphores = &*timeline_semaphore_
 			};
 
-			if (cpu_or_gpu_ == vku::CpuOrGpu::CPU)
-			{
-				submitInfo.pCommandBuffers = &*sim_pass_cpu_->cmds_[frame];
-			}
-
 			queue.submit(submitInfo, nullptr);
 		}
 	}
 
-	graphics_pass_->RecordGraphicsCommandBuffer(imageIndex, current_frame_, cpu_or_gpu_);
+	graphics_pass_->RecordGraphicsCommandBuffer(imageIndex, current_frame_);
 
 	{
 		vk::Semaphore waitSems[] = {
