@@ -8,9 +8,9 @@
 #include "geometry_generator.h"
 #include "model_loader.h"
 
-#include "particle_manager.h"
+#include "xpbd_particle_manager.h"
 
-ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, TextureManager& textureManager)
+XpbdParticleManager::XpbdParticleManager(Context& context, ModelManager& modelManager, TextureManager& textureManager)
 	: context_(context)
 {
 	{
@@ -136,12 +136,12 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, T
 	CreateSSBO();
 }
 
-ParticleManager::~ParticleManager()
+XpbdParticleManager::~XpbdParticleManager()
 {
 
 }
 
-void ParticleManager::SetPlaneCloth(Cloth& cloth)
+void XpbdParticleManager::SetPlaneCloth(Cloth& cloth)
 {
 	cloth.type = Cloth::Type::PLANE;
 	cloth.nx = (uint32_t)std::round(cloth.cloth_size.x / cloth.spacing);
@@ -270,7 +270,7 @@ void ParticleManager::SetPlaneCloth(Cloth& cloth)
 	clothes_.push_back(cloth);
 }
 
-void ParticleManager::SetClothFromMesh(Cloth& cloth)
+void XpbdParticleManager::SetClothFromMesh(Cloth& cloth)
 {
 	cloth.type = Cloth::Type::MESH;
 
@@ -375,7 +375,7 @@ void ParticleManager::SetClothFromMesh(Cloth& cloth)
 	//cloth.mesh = std::move(mesh);
 }
 
-void ParticleManager::SetSoftbody(std::string path, SoftBody& softbody)
+void XpbdParticleManager::SetSoftbody(std::string path, SoftBody& softbody)
 {
 	softbody.tetmesh = vku::LoadGmshMsh2(path.c_str());
 	softbody.density = 0.5f;
@@ -456,7 +456,7 @@ void ParticleManager::SetSoftbody(std::string path, SoftBody& softbody)
 	softbodies_.push_back(softbody);
 }
 
-void ParticleManager::ResetCloth(Cloth& cloth)
+void XpbdParticleManager::ResetCloth(Cloth& cloth)
 {
 	if (cloth.type == Cloth::Type::MESH)
 		return;
@@ -564,7 +564,7 @@ void ParticleManager::ResetCloth(Cloth& cloth)
 	}
 }
 
-void ParticleManager::ResetSoftbody(SoftBody& softbody)
+void XpbdParticleManager::ResetSoftbody(SoftBody& softbody)
 {
 	for (uint32_t i = 0; i < softbody.tetmesh.positions.size(); i++)
 	{
@@ -574,7 +574,7 @@ void ParticleManager::ResetSoftbody(SoftBody& softbody)
 	}
 }
 
-void ParticleManager::ResetVolumeConstraint()
+void XpbdParticleManager::ResetVolumeConstraint()
 {
 	for (auto& v : volume_constraints)
 	{
@@ -582,7 +582,7 @@ void ParticleManager::ResetVolumeConstraint()
 	}
 }
 
-void ParticleManager::CreateSSBO()
+void XpbdParticleManager::CreateSSBO()
 {
 	// Self Collision
 	uint32_t tableSize = total_particles_;
@@ -785,7 +785,7 @@ void ParticleManager::CreateSSBO()
 
 }
 
-void ParticleManager::BuildVertexAdjacency()
+void XpbdParticleManager::BuildVertexAdjacency()
 {
 	const uint32_t numIndices = total_indices_;
 	assert(numIndices % 3 == 0);

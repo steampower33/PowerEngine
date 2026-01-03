@@ -1,20 +1,20 @@
 #pragma once
 
 class Context;
-struct SimData;
+struct XpbdData;
 
-class GpuProfiler
+class XpbdGpuProfiler
 {
 public:
-	GpuProfiler(Context& context, SimData& simData);
-	GpuProfiler(const GpuProfiler& rhs) = delete;
-	GpuProfiler(GpuProfiler&& rhs) = delete;
-	GpuProfiler& operator=(const GpuProfiler& rhs) = delete;
-	GpuProfiler& operator=(GpuProfiler&& rhs) = delete;
-	~GpuProfiler();
+	XpbdGpuProfiler(Context& context, XpbdData& simData);
+	XpbdGpuProfiler(const XpbdGpuProfiler& rhs) = delete;
+	XpbdGpuProfiler(XpbdGpuProfiler&& rhs) = delete;
+	XpbdGpuProfiler& operator=(const XpbdGpuProfiler& rhs) = delete;
+	XpbdGpuProfiler& operator=(XpbdGpuProfiler&& rhs) = delete;
+	~XpbdGpuProfiler();
 	Context& context_;
 
-	void CalculateGpuTime(SimData& simData);
+	void CalculateGpuTime(XpbdData& simData);
 
 	vk::raii::QueryPool timestamp_pool_{ nullptr };
 	uint32_t timestamp_steps_ = 0;

@@ -3,13 +3,13 @@
 class Context;
 class Swapchain;
 class PassManager;
-class ClothXpbdPassGPU;
+class XpbdPassGPU;
 class SimulationPassCPU;
 class Model;
 class ModelManager;
 class TextureManager;
 class GraphicsPass;
-class ParticleManager;
+class XpbdParticleManager;
 class Camera;
 
 class GUI

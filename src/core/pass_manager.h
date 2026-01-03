@@ -4,12 +4,12 @@
 
 class Context;
 class Swapchain;
-class ClothXpbdPassGPU;
+class XpbdPassGPU;
 class TextureManager;
 class ModelManager;
 class GraphicsPass;
 class GUI;
-class ParticleManager;
+class XpbdParticleManager;
 class Camera;
 class MouseInteractor;
 
@@ -28,8 +28,8 @@ public:
 
 	vku::TestScene test_scene_;
 
-	std::unique_ptr<ParticleManager> particle_manager_;
-	std::unique_ptr<ClothXpbdPassGPU> sim_pass_gpu_;
+	std::unique_ptr<XpbdParticleManager> particle_manager_;
+	std::unique_ptr<XpbdPassGPU> sim_pass_gpu_;
 	std::unique_ptr<GraphicsPass> graphics_pass_;
 
 	vk::raii::Semaphore timeline_semaphore_{ nullptr };

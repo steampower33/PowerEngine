@@ -1,9 +1,9 @@
 #include "context.h"
-#include "sim_data.h"
+#include "xpbd_data.h"
 
-#include "gpu_profiler.h"
+#include "xpbd_gpu_profiler.h"
 
-GpuProfiler::GpuProfiler(Context& context, SimData& simData)
+XpbdGpuProfiler::XpbdGpuProfiler(Context& context, XpbdData& simData)
 	: context_(context)
 {
 	CreateQueryPool();
@@ -18,12 +18,12 @@ GpuProfiler::GpuProfiler(Context& context, SimData& simData)
 		+ 1;
 }
 
-GpuProfiler::~GpuProfiler()
+XpbdGpuProfiler::~XpbdGpuProfiler()
 {
 
 }
 
-void GpuProfiler::CreateQueryPool() {
+void XpbdGpuProfiler::CreateQueryPool() {
 	vk::QueryPoolCreateInfo queryInfo = {};
 	queryInfo.queryType = vk::QueryType::eTimestamp;
 	queryInfo.queryCount = 2048;
@@ -31,7 +31,7 @@ void GpuProfiler::CreateQueryPool() {
 	timestamp_pool_ = context_.device_.createQueryPool(queryInfo);
 }
 
-void GpuProfiler::CalculateGpuTime(SimData& simData)
+void XpbdGpuProfiler::CalculateGpuTime(XpbdData& simData)
 {
 	float nsPerTick = context_.physical_device_.getProperties().limits.timestampPeriod;
 	float toMs = nsPerTick / 1e6f;

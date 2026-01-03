@@ -6,12 +6,12 @@
 #include "texture_manager.h"
 #include "model.h"
 #include "model_manager.h"
-#include "particle_manager.h"
+#include "xpbd_particle_manager.h"
 #include "model_loader.h"
 
 #include "graphics_pass.h"
 
-GraphicsPass::GraphicsPass(Context& context, Swapchain& swapchain, TextureManager& textureManager, ModelManager& modelManager, ParticleManager& particleManager)
+GraphicsPass::GraphicsPass(Context& context, Swapchain& swapchain, TextureManager& textureManager, ModelManager& modelManager, XpbdParticleManager& particleManager)
 	: context_(context), swapchain_(swapchain), texture_manager_(textureManager), model_manager_(modelManager), particle_manager_(particleManager)
 {
 	//msaa_samples_ = vku::GetMaxUsableSampleCount(context_.physical_device_.getProperties());

@@ -7,36 +7,36 @@ class TextureManager;
 class Model;
 class ModelManager;
 class MouseInteractor;
-class ParticleManager;
-class GpuProfiler;
-struct SimData;
-struct SimUBO;
+class XpbdParticleManager;
+class XpbdGpuProfiler;
+struct XpbdData;
+struct XpbdUBO;
 
-#include "sim_data.h"
-#include "sim_ubo.h"
+#include "xpbd_data.h"
+#include "xpbd_ubo.h"
 
 #include "vulkan_utils.h"
 
 #include <vk_radix_sort.h>
 
-class ClothXpbdPassGPU
+class XpbdPassGPU
 {
 public:
-	ClothXpbdPassGPU(Context& context, Swapchain& swapchain, ParticleManager& particleManager, ModelManager& modelManager);
-	ClothXpbdPassGPU(const ClothXpbdPassGPU& rhs) = delete;
-	ClothXpbdPassGPU(ClothXpbdPassGPU&& rhs) = delete;
-	ClothXpbdPassGPU& operator=(const ClothXpbdPassGPU& rhs) = delete;
-	ClothXpbdPassGPU& operator=(ClothXpbdPassGPU&& rhs) = delete;
-	~ClothXpbdPassGPU();
+	XpbdPassGPU(Context& context, Swapchain& swapchain, XpbdParticleManager& particleManager, ModelManager& modelManager);
+	XpbdPassGPU(const XpbdPassGPU& rhs) = delete;
+	XpbdPassGPU(XpbdPassGPU&& rhs) = delete;
+	XpbdPassGPU& operator=(const XpbdPassGPU& rhs) = delete;
+	XpbdPassGPU& operator=(XpbdPassGPU&& rhs) = delete;
+	~XpbdPassGPU();
 
 	Context& context_;
-	ParticleManager& particle_manager_;
+	XpbdParticleManager& particle_manager_;
 	ModelManager& model_manager_;
 
-	std::unique_ptr<GpuProfiler> gpu_profiler_;
+	std::unique_ptr<XpbdGpuProfiler> gpu_profiler_;
 
-	SimData sim_datas_;
-	SimUBO ubo_;
+	XpbdData sim_datas_;
+	XpbdUBO ubo_;
 
 	std::vector<vk::raii::CommandBuffer> cmds_;
 

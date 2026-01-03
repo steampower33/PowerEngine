@@ -7,12 +7,12 @@ class Texture;
 class TextureManager;
 class Model;
 class ModelManager;
-class ParticleManager;
+class XpbdParticleManager;
 
 class GraphicsPass
 {
 public:
-	GraphicsPass(Context& context, Swapchain& swapchain, TextureManager& textureManager, ModelManager& modelManager, ParticleManager& particleManager);
+	GraphicsPass(Context& context, Swapchain& swapchain, TextureManager& textureManager, ModelManager& modelManager, XpbdParticleManager& particleManager);
 	GraphicsPass(const GraphicsPass& rhs) = delete;
 	GraphicsPass(GraphicsPass&& rhs) = delete;
 	GraphicsPass& operator=(const GraphicsPass& rhs) = delete;
@@ -47,7 +47,7 @@ private:
 	Swapchain& swapchain_;
 	TextureManager& texture_manager_;
 	ModelManager& model_manager_;
-	ParticleManager& particle_manager_;
+	XpbdParticleManager& particle_manager_;
 
 	vk::raii::QueryPool timestamp_pool_{ nullptr };
 	uint32_t timestamp_steps_ = 0;

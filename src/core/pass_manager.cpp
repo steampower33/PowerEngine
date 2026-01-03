@@ -1,14 +1,14 @@
 #include "context.h"
 #include "swapchain.h"
-#include "cloth_xpbd_pass_gpu.h"
+#include "xpbd_pass_gpu.h"
 #include "texture_manager.h"
 #include "model_manager.h"
 #include "graphics_pass.h"
 #include "gui.h"
-#include "particle_manager.h"
+#include "xpbd_particle_manager.h"
 #include "camera.h"
 #include "mouse_interactor.h"
-#include "gpu_profiler.h"
+#include "xpbd_gpu_profiler.h"
 
 #include "pass_manager.h"
 
@@ -17,9 +17,9 @@ PassManager::PassManager(GLFWwindow* glfwWindow, Context& context, Swapchain& sw
 {
 	CreateSyncObjects();
 
-	particle_manager_ = std::make_unique<ParticleManager>(context, modelManager, textureManager);
+	particle_manager_ = std::make_unique<XpbdParticleManager>(context, modelManager, textureManager);
 
-	sim_pass_gpu_ = std::make_unique<ClothXpbdPassGPU>(context, swapchain, *particle_manager_, modelManager);
+	sim_pass_gpu_ = std::make_unique<XpbdPassGPU>(context, swapchain, *particle_manager_, modelManager);
 	graphics_pass_ = std::make_unique<GraphicsPass>(context, swapchain, textureManager, modelManager, *particle_manager_);
 }
 

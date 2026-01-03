@@ -69,15 +69,15 @@ struct SoftBody
 	ubo_data::Model ubo_data;
 };
 
-class ParticleManager
+class XpbdParticleManager
 {
 public:
-	ParticleManager(Context& context, ModelManager& modelManager, TextureManager& textureManager);
-	ParticleManager(const ParticleManager& rhs) = delete;
-	ParticleManager(ParticleManager&& rhs) = delete;
-	ParticleManager& operator=(const ParticleManager& rhs) = delete;
-	ParticleManager& operator=(ParticleManager&& rhs) = delete;
-	~ParticleManager();
+	XpbdParticleManager(Context& context, ModelManager& modelManager, TextureManager& textureManager);
+	XpbdParticleManager(const XpbdParticleManager& rhs) = delete;
+	XpbdParticleManager(XpbdParticleManager&& rhs) = delete;
+	XpbdParticleManager& operator=(const XpbdParticleManager& rhs) = delete;
+	XpbdParticleManager& operator=(XpbdParticleManager&& rhs) = delete;
+	~XpbdParticleManager();
 
 	void SetPlaneCloth(Cloth& cloth);
 	void SetClothFromMesh(Cloth& cloth);

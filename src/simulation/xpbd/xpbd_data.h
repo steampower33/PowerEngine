@@ -1,9 +1,9 @@
 #pragma once
 
 #include "model_data.h"
-#include "particle_manager.h"
+#include "xpbd_particle_manager.h"
 
-struct SimData {
+struct XpbdData {
 
 	uint32_t total_particles_;
 	uint32_t total_indices_;
@@ -339,7 +339,7 @@ struct SimData {
 
 			float restDot = glm::dot(e1, e2);
 
-			SimData::Shear c{};
+			XpbdData::Shear c{};
 			c.i0 = i0;
 			c.i1 = i1;
 			c.i2 = i2;
@@ -520,7 +520,7 @@ struct SimData {
 		return dist;
 	}
 
-	void BuildLRAConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices, ParticleManager& pm)
+	void BuildLRAConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices, XpbdParticleManager& pm)
 	{
 		uint32_t K = 2;
 

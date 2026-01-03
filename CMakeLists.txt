@@ -37,7 +37,8 @@ add_subdirectory(external/vulkan_radix_sort)
 
 file(GLOB SRC CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.cpp"
-     "${CMAKE_CURRENT_SOURCE_DIR}/src/simulation/*.cpp"
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/simulation/xpbd/*.cpp"
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/simulation/pbf/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/src/model/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/src/interaction/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/src/util/*.cpp"
@@ -96,7 +97,8 @@ target_link_libraries(PowerEngine
 target_include_directories(PowerEngine
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/simulation
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/simulation/xpbd
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/simulation/pbf
     ${CMAKE_CURRENT_SOURCE_DIR}/src/model
     ${CMAKE_CURRENT_SOURCE_DIR}/src/interaction
     ${CMAKE_CURRENT_SOURCE_DIR}/src/util
