@@ -11,7 +11,7 @@ struct XpbdUBO {
 			float max_speed;
 			
 			float global_damping = 2.0f;
-			float relaxation_factor = 0.2f;
+			float relaxation_factor = 1.0f;
 			float neighbor_friction = 0.1f;
 			float p0;
 			
@@ -31,14 +31,14 @@ struct XpbdUBO {
 			float collision_radius;
 
 			float stretch_stiffness = 1.0f;
-			float shear_stiffness = 5.0f;
-			float bend_stiffness = 0.001f;
+			float shear_stiffness = 1.0f;
+			float bend_stiffness = 1.0f;
 			float area_stiffness = 1.0f;
 
-			float self_collision_stiffness = 30.0f;
-			float volume_stiffness = 10.0f;
-			float softbody_stretch_stiffness = 20.0f;
-			float inter_collision_stiffness = 50.0f;
+			float self_collision_stiffness = 5.0f;
+			float volume_stiffness = 1.0f;
+			float softbody_stretch_stiffness = 1.0f;
+			float inter_collision_stiffness = 10.0f;
 
 			float lra_stiffness = 0.1f;
 			float p1;

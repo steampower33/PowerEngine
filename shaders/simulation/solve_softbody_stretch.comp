@@ -25,7 +25,7 @@ void main() {
     uint  i      = edges[eidx].i;
     uint  j      = edges[eidx].j;
     float rest   = edges[eidx].rest;
-    float lambda = edges[eidx].lambda;
+    float old_lambda = edges[eidx].lambda;
 
     float wi = w[i];
     float wj = w[j];
@@ -56,13 +56,13 @@ void main() {
     float denom = wsum + alpha_tilde;
     if (denom < 1e-8) denom = 1e-8;
 
-    float rhs = C + alpha_tilde * lambda;
+    float rhs = C + alpha_tilde * old_lambda;
 
     float dlambda = -rhs / denom;
-    float newLambda = lambda + dlambda;
+    float newLambda = old_lambda + dlambda * sim.softbody_stretch_stiffness;
     edges[eidx].lambda = isFinite_f(newLambda) ? newLambda : 0.0;
 
-    vec3 corr = dlambda * n * sim.softbody_stretch_stiffness;
+    vec3 corr = dlambda * n;
     if (wi > 0.0)
         accumulate_delta(i, +wi * corr);
     if (wj > 0.0)

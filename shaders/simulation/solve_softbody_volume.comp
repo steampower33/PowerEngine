@@ -49,7 +49,7 @@ void main() {
     float dt = sim.dt;
     float alpha_tilde = pc.solve.compliance / (dt * dt);
 
-    float lambda = vc.lambda;
+    float old_lambda = vc.lambda;
 
     vec3 g0 = cross(x3 - x1, x2 - x1);
     vec3 g1 = cross(x2 - x0, x3 - x0);
@@ -65,15 +65,15 @@ void main() {
 
     if (denom < 1e-9) return;
 
-    float dlambda = -(C + alpha_tilde * lambda) / denom;
-    float newLambda = lambda + dlambda;
+    float dlambda = -(C + alpha_tilde * old_lambda) / denom;
+    float newLambda = old_lambda + dlambda * sim.volume_stiffness;
 
     volumes[vidx].lambda = isFinite_f(newLambda) ? newLambda : 0.0;
 
-    vec3 corr0 = -w0 * dlambda * g0 * sim.volume_stiffness;
-    vec3 corr1 = -w1 * dlambda * g1 * sim.volume_stiffness;
-    vec3 corr2 = -w2 * dlambda * g2 * sim.volume_stiffness;
-    vec3 corr3 = -w3 * dlambda * g3 * sim.volume_stiffness;
+    vec3 corr0 = -w0 * dlambda * g0;
+    vec3 corr1 = -w1 * dlambda * g1;
+    vec3 corr2 = -w2 * dlambda * g2;
+    vec3 corr3 = -w3 * dlambda * g3;
 
     if (w0 > 0.0) accumulate_delta(i0, corr0);
     if (w1 > 0.0) accumulate_delta(i1, corr1);

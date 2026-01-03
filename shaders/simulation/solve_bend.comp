@@ -26,7 +26,7 @@ void main(){
     Bend bc = bends[cidx];
     uint i0 = bc.i0, i1 = bc.i1, i2 = bc.i2, i3 = bc.i3;
     float rest = bc.rest_angle;
-    float lam  = bc.lambda;
+    float lambda_old  = bc.lambda;
 
     float w0 = w[i0], w1 = w[i1], w2 = w[i2], w3 = w[i3];
     if (w0 + w1 + w2 + w3 == 0.0) {
@@ -74,17 +74,17 @@ void main(){
     float denom = wsum_grad + alpha_tilde;
     if (denom < 1e-8) denom = 1e-8;
 
-    float rhs = C + alpha_tilde * lam;
+    float rhs = C + alpha_tilde * lambda_old;
     float dlambda = -rhs / denom;
 
-    float newLam = lam + dlambda;
+    float newLam = lambda_old + dlambda * sim.bend_stiffness;
     if (!isFinite_f(newLam)) newLam = 0.0;
     bends[cidx].lambda = newLam;
 
-    vec3 corr0 =  w0 * dlambda * q0 * sim.bend_stiffness;
-    vec3 corr1 =  w1 * dlambda * q1 * sim.bend_stiffness;
-    vec3 corr2 =  w2 * dlambda * q2 * sim.bend_stiffness;
-    vec3 corr3 =  w3 * dlambda * q3 * sim.bend_stiffness;
+    vec3 corr0 =  w0 * dlambda * q0;
+    vec3 corr1 =  w1 * dlambda * q1;
+    vec3 corr2 =  w2 * dlambda * q2;
+    vec3 corr3 =  w3 * dlambda * q3;
 
     if (w0 > 0.0) accumulate_delta(i0, corr0);
     if (w1 > 0.0) accumulate_delta(i1, corr1);

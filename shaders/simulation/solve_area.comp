@@ -62,13 +62,13 @@ void main() {
     float rhs = C + alpha_tilde * lambda_old;
 
     float dLambda = -rhs / denom;
-    float lambda_new = lambda_old + dLambda;
+    float lambda_new = lambda_old + dLambda * sim.area_stiffness;
 
     areas[gid].lambda = lambda_new;
 
-    vec3 corr0 = w0 * dLambda * g0 * sim.area_stiffness;
-    vec3 corr1 = w1 * dLambda * g1 * sim.area_stiffness;
-    vec3 corr2 = w2 * dLambda * g2 * sim.area_stiffness;
+    vec3 corr0 = w0 * dLambda * g0;
+    vec3 corr1 = w1 * dLambda * g1;
+    vec3 corr2 = w2 * dLambda * g2;
 
     accumulate_delta(i0, corr0);
     accumulate_delta(i1, corr1);

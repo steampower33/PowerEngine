@@ -16,12 +16,12 @@ void main() {
     uint  i      = edges[eidx].i;
     uint  j      = edges[eidx].j;
     float rest   = edges[eidx].rest;
-    float lambda = edges[eidx].lambda;
+    float lambda_old = edges[eidx].lambda;
 
     float wi = w[i];
     float wj = w[j];
     float wsum = wi + wj;
-    if (wsum == 0.0) { edges[eidx].lambda = 0.0; return; }
+    if (wsum == 0.0) { lambda_old = 0.0; return; }
 
     vec3 xi = xp[i].xyz;
     vec3 xj = xp[j].xyz;
@@ -51,13 +51,13 @@ void main() {
     float denom = (1.0 + gamma) * wsum + alpha_tilde;
     if (denom < 1e-8) denom = 1e-8;
 
-    float rhs = C + alpha_tilde * lambda + gamma * rel;
+    float rhs = C + alpha_tilde * lambda_old + gamma * rel;
 
     float dlambda = -rhs / denom;
-    float newLambda = lambda + dlambda;
+    float newLambda = lambda_old + dlambda * sim.stretch_stiffness;
     edges[eidx].lambda = isFinite_f(newLambda) ? newLambda : 0.0;
 
-    vec3 corr = dlambda * n * sim.stretch_stiffness;
+    vec3 corr = dlambda * n;
     if (wi > 0.0) xp[i].xyz += wi * corr;
     if (wj > 0.0) xp[j].xyz -= wj * corr;
 }

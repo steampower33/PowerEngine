@@ -64,13 +64,13 @@ void main() {
     float rhs = C + alpha_tilde * lambda_old;
 
     float dLambda = -rhs / denom;
-    float lambda_new = lambda_old + dLambda;
+    float lambda_new = lambda_old + dLambda * sim.shear_stiffness;
 
     shears[gid].lambda = lambda_new;
 
-    vec3 corr0 = w0 * dLambda * grad0 * sim.shear_stiffness;
-    vec3 corr1 = w1 * dLambda * grad1 * sim.shear_stiffness;
-    vec3 corr2 = w2 * dLambda * grad2 * sim.shear_stiffness;
+    vec3 corr0 = w0 * dLambda * grad0;
+    vec3 corr1 = w1 * dLambda * grad1;
+    vec3 corr2 = w2 * dLambda * grad2;
 
     accumulate_delta(i0, corr0);
     accumulate_delta(i1, corr1);

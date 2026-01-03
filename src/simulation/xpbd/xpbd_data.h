@@ -57,7 +57,7 @@ struct XpbdData {
 		float softbody_stretch = 1e-6f;
 		float softbody_volume = 1e-6f;
 		float shear = 1e-6f;
-		float bend = 1e-2f;
+		float bend = 500.0f;
 		float area = 1e-2f;
 		float self_collision = 1e-9f;
 	} compliance;

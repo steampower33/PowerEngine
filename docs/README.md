@@ -8,7 +8,10 @@
 - Each constraint is solved via XPBD using **first-order constraint gradients** `∇C` to compute `Δλ` and apply mass-weighted position corrections.
 - Implementation notes:
   - The **Stretch (distance)** constraint additionally uses an XPBD **damping** term `β`, while the other constraints currently use compliance (`α`) only.
-  - In this project, each constraint scales its final position correction by a per-constraint stiffness factor (e.g., `stretch_stiffness`, `shear_stiffness`, `bend_stiffness`, `area_stiffness`).
+  - In this project, per-constraint "stiffness" is applied as a scale on the XPBD impulse update (Δλ),
+  so that both λ accumulation and position corrections use the same scaled Δλ.
+  (Previously stiffness was applied only to the final Δx, which could desync λ and the actual positional response.)
+
 
 ---
 
@@ -85,7 +88,7 @@ for each frame:
       - `collision_masks[j].object_id == collision_masks[i].object_id`
       - and `collision_masks[j].object_type == TYPE_CLOTH`
       - (Inter-cloth / inter-object collisions are handled in a separate pass.)
-
+    
     - The constraint is a **particle–particle distance inequality** (non-penetration):
       - Penetration when `dist < r` (`r = collision_radius`)
       - Constraint value `C = dist - r` and we solve only when `C < 0`
@@ -102,14 +105,13 @@ for each frame:
     - For parallel GPU solving, corrections are **atomically accumulated** into `delta_x/y/z` and `delta_count` rather than writing directly to `xp`.
       The accumulated deltas are applied later in the “Apply accumulated position deltas” pass.
 
-    - Overall strength is scaled by `self_collision_stiffness`.
-
     **Note:** `neighbor_lambdas` is per “(particle i, neighbor-slot k)” state. It typically assumes lambdas are cleared/reset at substep start (or whenever the neighbor list is rebuilt), depending on the chosen scheme.
 
   - Inter Collision (cloth ↔ cloth)
     - Separate pass from self-collision.
     - Resolves collisions between different cloth instances (different object ids).
     - Reuses the same broadphase neighbor list, but filters pairs by object id/type.
+    > Note: collision stiffness may exceed 1 (acts as solver-strength gain rather than material stiffness).
 
   - LRA (Long-Range Attachments)
     - Adds long-range constraints that prevent unrealistic global stretching under gravity and fast motion.
@@ -121,7 +123,7 @@ for each frame:
     - Controlled stretchiness:
       - The stored rest radius can be inflated by a **slack** factor (currently `+10%`, i.e. `r *= 1.1`).
       -Together, `slack` and `lra_stiffness` control how strongly LRA “pulls back” the cloth and how much extra stretch is allowed.
-
+    
     > Note: The original LRA paper describes accumulating per-attachment displacements and applying their average per particle.
 
     > This project currently applies attachments sequentially with a stiffness blend, which is simpler and works well in practice.
@@ -131,8 +133,11 @@ for each frame:
     > On GPU, LRA is evaluated as a lightweight projection-only pass with no lambdas (pure positional correction).
 
 - Apply accumulated position deltas
-  - Applies the accumulated corrections to predicted positions.
-  - The accumulated delta is **averaged** (e.g., divided by `delta_count`) and then scaled by a relaxation factor (0.0 ~ 1.0).
+  - Applies atomically accumulated corrections to predicted positions.
+  - Deltas are averaged (divided by `delta_count`).
+  - `relaxation_factor` is an optional *under-relaxation* step size (default 1.0).
+    Values < 1.0 reduce correction magnitude and can improve stability, but slow convergence
+    and make constraints/collisions appear weaker (may require more iterations).
 
 - Collide with SDF
   - Applies SDF-based collisions for primitive colliders (sphere / plane / capsule).
@@ -157,6 +162,21 @@ for each frame:
     - the per-particle gradients `∇C_i`
 - The denominator uses the **mass-weighted gradient norm**:
     `Σ w_i ||∇C_i||²` (plus compliance term)
+
+## Stiffness parameters
+
+This project uses "stiffness" in two slightly different senses:
+
+- **Constraint stiffness (material)**: `k ∈ [0, 1]`
+  Used for internal constraints (stretch / shear / bend / area / volume).
+
+- **Collision stiffness (solver strength)**: `k > 1` allowed
+  Used for self/inter collision contacts. Here stiffness acts as a solver-strength gain
+  to speed up penetration removal in the Jacobi-style delta accumulation pipeline.
+  Typical values are scene dependent (often > 1).
+
+> Rationale: internal constraints use normalized stiffness for intuitive material tuning,
+while collisions may require stronger gains due to dense contact graphs and averaged delta application.
 
 ---
 

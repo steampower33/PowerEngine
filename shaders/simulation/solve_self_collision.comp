@@ -55,15 +55,13 @@ void main()
 
     float dt = sim.dt;
 
-    // Self-collision compliance (0 => hard constraint)
     float alpha_tilde = pc.solve.compliance / (dt * dt);
 
-    // Strength knobs
-    float stiffness = sim.self_collision_stiffness; // your own scaling (0..1 or more)
-    float mu        = sim.neighbor_friction;        // 0..1 recommended
+    float stiffness = sim.self_collision_stiffness;
+    float mu        = sim.neighbor_friction;
 
     vec3 xi  = xp[i].xyz;
-    vec3 pxi = x[i].xyz;        // previous position (for rel disp proxy)
+    vec3 pxi = x[i].xyz;
 
     vec3 sumCorr = vec3(0.0);
     uint sumCount = 0u;
@@ -90,72 +88,56 @@ void main()
         float d2 = dot(d, d);
         if (d2 < 1e-12) continue;
 
-        // quick reject
         if (d2 >= r2) continue;
 
         float dist = sqrt(d2);
         vec3  n = d / dist;
 
-        float C = dist - r;     // < 0 => penetration
+        float C = dist - r;
         if (C >= 0.0) continue;
 
         float wsum = wi + wj;
         if (wsum <= 0.0) continue;
 
-        // Inequality constraint: lambda >= 0
         float lam_old = neighbor_lambdas[idx];
 
-        // denom = sum(w_i * |grad_i|^2) + alpha_tilde
-        // Here, grad_i = n, grad_j = -n => |grad|^2 = 1
         float denom = wsum + alpha_tilde;
         denom = max(denom, 1e-8);
 
         float rhs = C + alpha_tilde * lam_old;
-        float dLam = -rhs / denom;                  // XPBD update
+        float dLam = -rhs / denom;
 
-        float lam_new = max(0.0, lam_old + dLam);
+        float lam_new = max(0.0, lam_old + dLam * stiffness);
         dLam = lam_new - lam_old;
 
         float safeLam = isFinite_f(lam_new) ? lam_new : 0.0;
         neighbor_lambdas[idx] = safeLam;
 
-        // Normal correction (position)
-        // corr_i = +wi * dLam * n, corr_j = -wj * dLam * n
         vec3 corr_i =  (wi * dLam) * n;
         vec3 corr_j = -(wj * dLam) * n;
 
-        // Friction approximation (tangential clamp) using relative displacement proxy
         vec3 disp_i = xi - pxi;
         vec3 disp_j = xj - pxj;
         vec3 rel_disp = disp_i - disp_j;
 
-        // Use normal correction magnitude as proxy for dn (normal displacement)
-        // Relative normal displacement magnitude ~ (wi+wj)*dLam
         float dn = abs(wsum * dLam);
 
         vec3 fric = friction_clamp(rel_disp, n, dn, mu);
 
-        // Distribute friction by inverse masses (mass-weighted split)
         vec3 fric_i =  (wi / wsum) * fric;
         vec3 fric_j = -(wj / wsum) * fric;
 
-        // Apply overall stiffness scaling at the end (keeps math cleaner)
-        vec3 out_i = (corr_i + fric_i) * stiffness;
-        vec3 out_j = (corr_j + fric_j) * stiffness;
+        vec3 out_i = (corr_i + fric_i);
+        vec3 out_j = (corr_j + fric_j);
 
-        // Accumulate
         sumCorr += out_i;
         sumCount += 1u;
 
         accumulate_delta(j, out_j);
     }
-
-    if (sumCount > 0u)
-    {
-        // We keep delta_count consistent with "1 contribution per neighbor"
-        atomicAdd(delta_x[i], sumCorr.x);
-        atomicAdd(delta_y[i], sumCorr.y);
-        atomicAdd(delta_z[i], sumCorr.z);
-        atomicAdd(delta_count[i], sumCount);
-    }
+    
+    atomicAdd(delta_x[i], sumCorr.x);
+    atomicAdd(delta_y[i], sumCorr.y);
+    atomicAdd(delta_z[i], sumCorr.z);
+    atomicAdd(delta_count[i], sumCount);
 }

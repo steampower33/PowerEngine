@@ -93,7 +93,7 @@ void main()
         float dLambda = -rhs / denom;
 
         // Inequality: lambda >= 0 (no attraction)
-        float lambda_new = max(0.0, lambda_old + dLambda);
+        float lambda_new = max(0.0, lambda_old + dLambda * stiffness);
         dLambda = lambda_new - lambda_old;
 
         if (!isFinite_f(dLambda)) continue;
@@ -101,10 +101,6 @@ void main()
         // Normal correction
         vec3 corr_i =  (wi * dLambda) * n;
         vec3 corr_j = -(wj * dLambda) * n;
-
-        // Apply global scaling for "contact hardness"
-        corr_i *= stiffness;
-        corr_j *= stiffness;
 
         // Accumulate:
         // - i: local sum (reduce atomics)
