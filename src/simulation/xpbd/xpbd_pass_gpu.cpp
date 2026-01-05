@@ -137,23 +137,27 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 
 	auto CellDiv = [](uint32_t n, uint32_t d) { return (n + d - 1) / d; };
 
-	uint32_t groupsTotal = CellDiv(sim_datas_.total_particles_, 256);
-	uint32_t groupsTri = CellDiv((sim_datas_.total_indices_) / 3, 256u);
+	uint32_t totalParticle = sim_datas_.total_particles_;
+	uint32_t groupsTotal = CellDiv(totalParticle, 256);
+	uint32_t clothParticle = sim_datas_.cloth_particles_;
+	uint32_t groupsCloth = CellDiv(clothParticle, 256);
+	uint32_t triTotal = sim_datas_.total_indices_ / 3;
+	uint32_t groupsTri = CellDiv(triTotal, 256u);
+	uint32_t triCloth = sim_datas_.cloth_indices_ / 3;
 
 	for (uint32_t step = 0; step < sim_datas_.substeps; step++)
 	{
 		// Wind
 		{
 			TS(gp.timestamp_steps_);
+
 			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.wind);
 
 			uint32_t base = 0;
-			uint32_t count = sim_datas_.cloth_indices_ / 3;
+			uint32_t count = triCloth;
 
-			sim_datas_.push_constants_.solve.base = base;
+			sim_datas_.push_constants_.solve.base = 0;
 			sim_datas_.push_constants_.solve.count = count;
-			sim_datas_.push_constants_.solve.compliance = sim_datas_.compliance.stretch;
-			sim_datas_.push_constants_.solve.beta = sim_datas_.beta.stretch;
 
 			cmd.pushConstants<XpbdData::PushConstant>(
 				*pipeline_layouts_.common,
@@ -162,41 +166,51 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 				sim_datas_.push_constants_);
 			uint32_t group = CellDiv(count, 256);
 			cmd.dispatch(group, 1, 1);
+
 			TS(gp.timestamp_steps_);
 		}
 
 		// Integrate
-		TS(gp.timestamp_steps_);
-		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.integrate);
-		cmd.pushConstants < XpbdData::PushConstant > (
-			*pipeline_layouts_.common,
-			vk::ShaderStageFlagBits::eCompute,
-			0,
-			sim_datas_.push_constants_);
+		{
+			TS(gp.timestamp_steps_);
+			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.integrate);
 
-		cmd.dispatch(groupsTotal, 1, 1);
-		TS(gp.timestamp_steps_);
-		vku::ssboCompWtoCompRW(cmd, pm.ssbos_.pred_position);
+			sim_datas_.push_constants_.solve.base = 0;
+			sim_datas_.push_constants_.solve.count = totalParticle;
+
+			cmd.pushConstants < XpbdData::PushConstant > (
+				*pipeline_layouts_.common,
+				vk::ShaderStageFlagBits::eCompute,
+				0,
+				sim_datas_.push_constants_);
+
+			cmd.dispatch(groupsTotal, 1, 1);
+
+			TS(gp.timestamp_steps_);
+
+			vku::ssboCompWtoCompRW(cmd, pm.ssbos_.pred_position);
+		}
 
 		// Clear Lambdas
-		uint32_t Nmax = std::max(
-			{
-				sim_datas_.total_particles_,
-				sim_datas_.num_edges,
-				sim_datas_.num_bends,
-				sim_datas_.num_shears,
-				sim_datas_.num_areas,
-				sim_datas_.num_volumes,
-				sim_datas_.num_lras
-			}
-		);
-		TS(gp.timestamp_steps_);
-		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.clear_lambdas);
-		uint32_t groups = CellDiv(Nmax, 256);
-		cmd.dispatch(groups, 1, 1);
-		TS(gp.timestamp_steps_);
+		{
+			TS(gp.timestamp_steps_);
+			uint32_t Nmax = std::max(
+				{
+					sim_datas_.total_particles_,
+					sim_datas_.num_edges,
+					sim_datas_.num_bends,
+					sim_datas_.num_shears,
+					sim_datas_.num_areas,
+					sim_datas_.num_volumes,
+					sim_datas_.num_lras
+				}
+			);
+			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.clear_lambdas);
+			cmd.dispatch(CellDiv(Nmax, 256), 1, 1);
+			TS(gp.timestamp_steps_);
+		}
 
-		// Broad Phase
+		// Broad Phase - only cloth particle
 		if (step % sim_datas_.broadphase_interval_ == 0)
 		{
 			vku::Barrier2(cmd,
@@ -210,7 +224,16 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 			if (sim_datas_.solver_config_.self_collision)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_hash);
-				cmd.dispatch(groupsTotal, 1, 1);
+
+				sim_datas_.push_constants_.solve.base = 0;
+				sim_datas_.push_constants_.solve.count = clothParticle;
+				cmd.pushConstants < XpbdData::PushConstant >(
+					*pipeline_layouts_.common,
+					vk::ShaderStageFlagBits::eCompute,
+					0,
+					sim_datas_.push_constants_);
+
+				cmd.dispatch(groupsCloth, 1, 1);
 			}
 			TS(gp.timestamp_steps_);
 
@@ -229,7 +252,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 			if (sim_datas_.solver_config_.self_collision)
 			{
 				vrdxCmdSortKeyValue(
-					*cmd, radix_.sorter, sim_datas_.total_particles_,
+					*cmd, radix_.sorter, clothParticle,
 					*pmSSBO.particle_hash, 0,
 					*pmSSBO.sorted_indice, 0,
 					*radix_.storage_buffer, 0,
@@ -284,7 +307,16 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 			if (sim_datas_.solver_config_.self_collision)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_cell);
-				cmd.dispatch(groupsTotal, 1, 1);
+
+				sim_datas_.push_constants_.solve.base = 0;
+				sim_datas_.push_constants_.solve.count = clothParticle;
+				cmd.pushConstants < XpbdData::PushConstant >(
+					*pipeline_layouts_.common,
+					vk::ShaderStageFlagBits::eCompute,
+					0,
+					sim_datas_.push_constants_);
+
+				cmd.dispatch(groupsCloth, 1, 1);
 			}
 			TS(gp.timestamp_steps_);
 
@@ -299,7 +331,16 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 			if (sim_datas_.solver_config_.self_collision)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_neighbor);
-				cmd.dispatch(groupsTotal, 1, 1);
+
+				sim_datas_.push_constants_.solve.base = 0;
+				sim_datas_.push_constants_.solve.count = clothParticle;
+				cmd.pushConstants < XpbdData::PushConstant >(
+					*pipeline_layouts_.common,
+					vk::ShaderStageFlagBits::eCompute,
+					0,
+					sim_datas_.push_constants_);
+
+				cmd.dispatch(groupsCloth, 1, 1);
 			}
 			TS(gp.timestamp_steps_);
 
@@ -335,8 +376,9 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 						0,
 						sim_datas_.push_constants_);
 
-					uint32_t groups = (count + 256 - 1) / 256;
+					uint32_t groups = CellDiv(count, 256);
 					cmd.dispatch(groups, 1, 1);
+
 					vku::ssboCompWtoCompRW(cmd, pmSSBO.pred_position);
 				}
 			}
@@ -348,6 +390,10 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_shear);
 
+				uint32_t base = 0;
+				uint32_t count = sim_datas_.num_shears;
+				sim_datas_.push_constants_.solve.base = base;
+				sim_datas_.push_constants_.solve.count = count;
 				sim_datas_.push_constants_.solve.compliance = sim_datas_.compliance.shear;
 				cmd.pushConstants<XpbdData::PushConstant>(
 					*pipeline_layouts_.common,
@@ -355,8 +401,8 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 					0,
 					sim_datas_.push_constants_);
 
-				uint32_t groupsShear = CellDiv(sim_datas_.num_shears, 256);
-				cmd.dispatch(groupsShear, 1, 1);
+				uint32_t groups = CellDiv(count, 256);
+				cmd.dispatch(groups, 1, 1);
 			}
 			TS(gp.timestamp_steps_);
 
@@ -365,6 +411,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 			if (sim_datas_.solver_config_.bend)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_bend);
+
 				uint32_t base = 0;
 				uint32_t count = sim_datas_.num_bends;
 				sim_datas_.push_constants_.solve.base = base;
@@ -376,8 +423,8 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 					0,
 					sim_datas_.push_constants_);
 
-				uint32_t group = (count + 256 - 1) / 256;
-				cmd.dispatch(group, 1, 1);
+				uint32_t groups = CellDiv(count, 256);
+				cmd.dispatch(groups, 1, 1);
 			}
 			TS(gp.timestamp_steps_);
 
@@ -386,6 +433,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 			if (sim_datas_.solver_config_.area)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_area);
+
 				uint32_t base = 0;
 				uint32_t count = sim_datas_.num_areas;
 				sim_datas_.push_constants_.solve.base = base;
@@ -397,8 +445,8 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 					0,
 					sim_datas_.push_constants_);
 
-				uint32_t group = (count + 256 - 1) / 256;
-				cmd.dispatch(group, 1, 1);
+				uint32_t groups = CellDiv(count, 256);
+				cmd.dispatch(groups, 1, 1);
 			}
 			TS(gp.timestamp_steps_);
 
@@ -421,8 +469,8 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 					0,
 					sim_datas_.push_constants_);
 
-				uint32_t groupsSoftbodyStretch = CellDiv(count, 256);
-				cmd.dispatch(groupsSoftbodyStretch, 1, 1);
+				uint32_t groups = CellDiv(count, 256);
+				cmd.dispatch(groups, 1, 1);
 			}
 			TS(gp.timestamp_steps_);
 
@@ -432,6 +480,10 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_softbody_volume);
 
+				uint32_t base = 0;
+				uint32_t count = sim_datas_.num_volumes;
+				sim_datas_.push_constants_.solve.base = base;
+				sim_datas_.push_constants_.solve.count = count;
 				sim_datas_.push_constants_.solve.compliance = sim_datas_.compliance.softbody_volume;
 				cmd.pushConstants<XpbdData::PushConstant>(
 					*pipeline_layouts_.common,
@@ -439,23 +491,27 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 					0,
 					sim_datas_.push_constants_);
 
-				uint32_t groupsSoftbodyVolume = CellDiv(sim_datas_.num_volumes, 256);
-				cmd.dispatch(groupsSoftbodyVolume, 1, 1);
+				uint32_t groups = CellDiv(count, 256);
+				cmd.dispatch(groups, 1, 1);
 			}
 			TS(gp.timestamp_steps_);
 
-			// Solve Self Collision
+			// solve_self_collision
 			TS(gp.timestamp_steps_);
 			if (sim_datas_.solver_config_.self_collision && iter % sim_datas_.narrowphase_interval_ == 0)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_self_collision);
+
+				sim_datas_.push_constants_.solve.base = 0;
+				sim_datas_.push_constants_.solve.count = clothParticle;
 				sim_datas_.push_constants_.solve.compliance = sim_datas_.compliance.self_collision;
-				cmd.pushConstants<XpbdData::PushConstant>(
+				cmd.pushConstants < XpbdData::PushConstant >(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute,
 					0,
 					sim_datas_.push_constants_);
-				cmd.dispatch(groupsTotal, 1, 1);
+
+				cmd.dispatch(groupsCloth, 1, 1);
 			}
 			TS(gp.timestamp_steps_);
 
@@ -464,7 +520,16 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 			if (sim_datas_.solver_config_.inter_collision)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_inter_cloth_collision);
-				cmd.dispatch(groupsTotal, 1, 1);
+
+				sim_datas_.push_constants_.solve.base = 0;
+				sim_datas_.push_constants_.solve.count = clothParticle;
+				cmd.pushConstants < XpbdData::PushConstant >(
+					*pipeline_layouts_.common,
+					vk::ShaderStageFlagBits::eCompute,
+					0,
+					sim_datas_.push_constants_);
+
+				cmd.dispatch(groupsCloth, 1, 1);
 			}
 			TS(gp.timestamp_steps_);
 
@@ -486,15 +551,15 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 		if (sim_datas_.solver_config_.lra && step == 0)
 		{
 			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_lra);
-			sim_datas_.push_constants_.solve.base = pm.clothes_[0].offset_particle;
-			sim_datas_.push_constants_.solve.count = pm.num_cloth_particles_;
-			cmd.pushConstants<XpbdData::PushConstant>(
+
+			sim_datas_.push_constants_.solve.base = 0;
+			sim_datas_.push_constants_.solve.count = clothParticle;
+			cmd.pushConstants < XpbdData::PushConstant >(
 				*pipeline_layouts_.common,
 				vk::ShaderStageFlagBits::eCompute,
 				0,
 				sim_datas_.push_constants_);
 
-			uint32_t groupsCloth = CellDiv(sim_datas_.push_constants_.solve.count, 256);
 			cmd.dispatch(groupsCloth, 1, 1);
 		}
 		TS(gp.timestamp_steps_);
@@ -1717,7 +1782,7 @@ void XpbdPassGPU::CreateVrdxSorter()
 	vrdxCreateSorter(&info, &radix_.sorter);
 
 	VrdxSorterStorageRequirements req{};
-	vrdxGetSorterKeyValueStorageRequirements(radix_.sorter, sim_datas_.total_particles_, &req);
+	vrdxGetSorterKeyValueStorageRequirements(radix_.sorter, sim_datas_.cloth_particles_, &req);
 	radix_.storage_size = req.size;
 
 	vku::CreateBuffer(context_.physical_device_,

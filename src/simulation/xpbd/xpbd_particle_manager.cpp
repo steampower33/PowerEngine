@@ -584,20 +584,6 @@ void XpbdParticleManager::ResetVolumeConstraint()
 
 void XpbdParticleManager::CreateSSBO()
 {
-	// Self Collision
-	uint32_t tableSize = total_particles_;
-	uint32_t maxNeighbors = 16;
-
-	particle_hashes_.resize(total_particles_, 0);
-	particle_indices_.resize(total_particles_, 0);
-
-	starts_.resize(tableSize, 0);
-	ends_.resize(tableSize, 0);
-
-	num_neighbors_ = total_particles_ * maxNeighbors;
-	neighbors_.resize(num_neighbors_, 0);
-	neighbor_lambdas_.resize(num_neighbors_, 0);
-
 	// position
 	ssbo_size_.position = sizeof(glm::vec4) * total_particles_;
 	vku::CreateSSBO("Position", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
@@ -650,8 +636,22 @@ void XpbdParticleManager::CreateSSBO()
 		&staging_.inverse_mass, &staging_memories_.inverse_mass);
 	staging_mapped_.inverse_mass = staging_memories_.inverse_mass.mapMemory(0, ssbo_size_.inverse_mass);
 
+	// Cloth Self Collision
+	uint32_t tableSize = num_cloth_particles_;
+	uint32_t maxNeighbors = 16;
+
+	particle_hashes_.resize(num_cloth_particles_, 0);
+	particle_indices_.resize(num_cloth_particles_, 0);
+
+	starts_.resize(tableSize, 0);
+	ends_.resize(tableSize, 0);
+
+	num_neighbors_ = num_cloth_particles_ * maxNeighbors;
+	neighbors_.resize(num_neighbors_, 0);
+	neighbor_lambdas_.resize(num_neighbors_, 0);
+
 	// particle_hash
-	ssbo_size_.particle_hash = sizeof(uint32_t) * total_particles_;
+	ssbo_size_.particle_hash = sizeof(uint32_t) * num_cloth_particles_;
 	vku::CreateSSBO("Particle Hash", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.particle_hash,
 		vk::BufferUsageFlagBits::eTransferSrc,
@@ -662,7 +662,7 @@ void XpbdParticleManager::CreateSSBO()
 		ssbos_.particle_hash, ssbo_memories_.particle_hash);
 
 	// particle_indice
-	ssbo_size_.sorted_indice = sizeof(uint32_t) * total_particles_;
+	ssbo_size_.sorted_indice = sizeof(uint32_t) * num_cloth_particles_;
 	vku::CreateSSBO("Particle Indice", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.sorted_indice,
 		vk::BufferUsageFlagBits::eTransferSrc,

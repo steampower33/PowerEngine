@@ -16,10 +16,10 @@ void accumulate_delta(uint i, vec3 corr)
 bool isFinite_f(float x) { return !isnan(x) && !isinf(x); }
 
 void main() {
-    uint t = gl_GlobalInvocationID.x;
-    if (t >= pc.solve.count) return;
+    uint gid = gl_GlobalInvocationID.x;
+    if (gid >= pc.solve.count) return;
 
-    uint eidx = pc.solve.base + t;
+    uint eidx = pc.solve.base + gid;
     if (eidx >= sim.num_edges) return;
 
     uint  i      = edges[eidx].i;

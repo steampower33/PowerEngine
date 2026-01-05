@@ -4,7 +4,7 @@ layout(local_size_x = 256) in;
 
 void main() {
     uint gid = gl_GlobalInvocationID.x;
-    uint N   = sim.num_particles;
+    uint N   = pc.solve.count;
     if (gid >= N) return;
 
     uint curr = hashes[gid];

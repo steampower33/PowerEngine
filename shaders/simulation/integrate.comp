@@ -77,7 +77,7 @@ void mouse_drag_pass(uint i, inout vec3 xpi, inout vec3 vi)
 
 void main(){
     uint i = gl_GlobalInvocationID.x;
-    if (i >= sim.num_particles) return;
+    if (i >= pc.solve.count) return;
     
     vec3 xi = x[i].xyz;
     vec3 vi = v[i].xyz;

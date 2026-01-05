@@ -17,20 +17,17 @@ void accumulate_delta(uint i, vec3 corr)
 }
 
 void main(){
-    uint t = gl_GlobalInvocationID.x;
-    if (t >= pc.solve.count) return;
+    uint gid = gl_GlobalInvocationID.x;
+    if (gid >= pc.solve.count) return;
 
-    uint cidx = pc.solve.base + t;
-    if (cidx >= sim.num_bends) return;
-
-    Bend bc = bends[cidx];
+    Bend bc = bends[gid];
     uint i0 = bc.i0, i1 = bc.i1, i2 = bc.i2, i3 = bc.i3;
     float rest = bc.rest_angle;
     float lambda_old  = bc.lambda;
 
     float w0 = w[i0], w1 = w[i1], w2 = w[i2], w3 = w[i3];
     if (w0 + w1 + w2 + w3 == 0.0) {
-        bends[cidx].lambda = 0.0;
+        bends[gid].lambda = 0.0;
         return;
     }
 
@@ -79,7 +76,7 @@ void main(){
 
     float newLam = lambda_old + dlambda * sim.bend_stiffness;
     if (!isFinite_f(newLam)) newLam = 0.0;
-    bends[cidx].lambda = newLam;
+    bends[gid].lambda = newLam;
 
     vec3 corr0 =  w0 * dlambda * q0;
     vec3 corr1 =  w1 * dlambda * q1;

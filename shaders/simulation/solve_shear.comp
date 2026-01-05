@@ -15,7 +15,7 @@ void accumulate_delta(uint i, vec3 corr)
 
 void main() {
     uint gid  = gl_GlobalInvocationID.x;
-    if (gid >= sim.num_shears) return;
+    if (gid >= pc.solve.count) return;
 
     Shear s = shears[gid];
 

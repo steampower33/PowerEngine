@@ -28,7 +28,7 @@ ivec3 int_coord(vec3 p) {
 void main()
 {
     uint gid = gl_GlobalInvocationID.x;
-    if (gid >= sim.num_particles) return;
+    if (gid >= pc.solve.count) return;
     
     const uint maxN = sim.max_neighbors;
     const float r   = sim.collision_radius;

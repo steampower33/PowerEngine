@@ -16,10 +16,10 @@ void accumulate_delta(uint i, vec3 corr)
 bool isFinite_f(float x) { return !isnan(x) && !isinf(x); }
 
 void main() {
-    uint vidx = gl_GlobalInvocationID.x;
-    if (vidx >= sim.num_volumes) return;
+    uint gid = gl_GlobalInvocationID.x;
+    if (gid >= pc.solve.count) return;
 
-    Volume vc = volumes[vidx];
+    Volume vc = volumes[gid];
 
     uint i0 = vc.i0;
     uint i1 = vc.i1;
@@ -33,7 +33,7 @@ void main() {
 
     float wsum = w0 + w1 + w2 + w3;
     if (wsum == 0.0) {
-        volumes[vidx].lambda = 0.0;
+        volumes[gid].lambda = 0.0;
         return;
     }
 
@@ -68,7 +68,7 @@ void main() {
     float dlambda = -(C + alpha_tilde * old_lambda) / denom;
     float newLambda = old_lambda + dlambda * sim.volume_stiffness;
 
-    volumes[vidx].lambda = isFinite_f(newLambda) ? newLambda : 0.0;
+    volumes[gid].lambda = isFinite_f(newLambda) ? newLambda : 0.0;
 
     vec3 corr0 = -w0 * dlambda * g0;
     vec3 corr1 = -w1 * dlambda * g1;
