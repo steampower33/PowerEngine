@@ -145,12 +145,14 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 	uint32_t groupsTri = CellDiv(triTotal, 256u);
 	uint32_t triCloth = sim_datas_.cloth_indices_ / 3;
 
+	bool enableClothSim = sim_datas_.simulation_type_ == XpbdData::SimulationType::CLOTH;
+
 	for (uint32_t step = 0; step < sim_datas_.substeps; step++)
 	{
 		// Wind
+		TS(gp.timestamp_steps_);
+		if (enableClothSim)
 		{
-			TS(gp.timestamp_steps_);
-
 			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.wind);
 
 			uint32_t base = 0;
@@ -166,17 +168,18 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 				sim_datas_.push_constants_);
 			uint32_t group = CellDiv(count, 256);
 			cmd.dispatch(group, 1, 1);
-
-			TS(gp.timestamp_steps_);
 		}
+		TS(gp.timestamp_steps_);
 
 		// Integrate
 		{
 			TS(gp.timestamp_steps_);
 			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.integrate);
 
-			sim_datas_.push_constants_.solve.base = 0;
-			sim_datas_.push_constants_.solve.count = totalParticle;
+			uint32_t base = enableClothSim ? 0 : pm.softbodies_[0].offset_particle;
+			uint32_t count = enableClothSim ? totalParticle : pm.num_softbody_particles_;
+			sim_datas_.push_constants_.solve.base = base;
+			sim_datas_.push_constants_.solve.count = count;
 
 			cmd.pushConstants < XpbdData::PushConstant > (
 				*pipeline_layouts_.common,
@@ -184,7 +187,8 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 				0,
 				sim_datas_.push_constants_);
 
-			cmd.dispatch(groupsTotal, 1, 1);
+			uint32_t groups = CellDiv(count, 256);
+			cmd.dispatch(groups, 1, 1);
 
 			TS(gp.timestamp_steps_);
 
@@ -196,10 +200,9 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 			TS(gp.timestamp_steps_);
 			uint32_t Nmax = std::max(
 				{
-					sim_datas_.total_particles_,
 					sim_datas_.num_edges,
-					sim_datas_.num_bends,
 					sim_datas_.num_shears,
+					sim_datas_.num_bends,
 					sim_datas_.num_areas,
 					sim_datas_.num_volumes,
 					sim_datas_.num_lras
@@ -207,6 +210,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 			);
 			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.clear_lambdas);
 			cmd.dispatch(CellDiv(Nmax, 256), 1, 1);
+
 			TS(gp.timestamp_steps_);
 		}
 
@@ -221,7 +225,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 
 			// build_hash
 			TS(gp.timestamp_steps_);
-			if (sim_datas_.solver_config_.self_collision)
+			if (sim_datas_.solver_config_.self_collision && enableClothSim)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_hash);
 
@@ -249,7 +253,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 			);
 
 			TS(gp.timestamp_steps_);
-			if (sim_datas_.solver_config_.self_collision)
+			if (sim_datas_.solver_config_.self_collision && enableClothSim)
 			{
 				vrdxCmdSortKeyValue(
 					*cmd, radix_.sorter, clothParticle,
@@ -262,7 +266,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 			TS(gp.timestamp_steps_);
 
 
-			if (sim_datas_.solver_config_.self_collision)
+			if (sim_datas_.solver_config_.self_collision && enableClothSim)
 			{
 				uint32_t offset = 0;
 				uint64_t size = VK_WHOLE_SIZE;
@@ -304,7 +308,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 
 			// build_cell
 			TS(gp.timestamp_steps_);
-			if (sim_datas_.solver_config_.self_collision)
+			if (sim_datas_.solver_config_.self_collision && enableClothSim)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_cell);
 
@@ -328,7 +332,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 
 			// build_neighbor
 			TS(gp.timestamp_steps_);
-			if (sim_datas_.solver_config_.self_collision)
+			if (sim_datas_.solver_config_.self_collision && enableClothSim)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.build_neighbor);
 
@@ -356,7 +360,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 			// Solve Coloring - Stretch
 			// TS -> include Barrier Time
 			TS(gp.timestamp_steps_);
-			if (sim_datas_.solver_config_.stretch)
+			if (sim_datas_.solver_config_.stretch && enableClothSim)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_stretch);
 
@@ -386,7 +390,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 
 			// Solve Shear
 			TS(gp.timestamp_steps_);
-			if (sim_datas_.solver_config_.shear)
+			if (sim_datas_.solver_config_.shear && enableClothSim)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_shear);
 
@@ -408,7 +412,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 
 			// Solve Bend
 			TS(gp.timestamp_steps_);
-			if (sim_datas_.solver_config_.bend)
+			if (sim_datas_.solver_config_.bend && enableClothSim)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_bend);
 
@@ -430,7 +434,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 
 			// Solve Area
 			TS(gp.timestamp_steps_);
-			if (sim_datas_.solver_config_.area)
+			if (sim_datas_.solver_config_.area && enableClothSim)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_area);
 
@@ -452,7 +456,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 
 			// solve_softbody_stretch
 			TS(gp.timestamp_steps_);
-			if (sim_datas_.solver_config_.softbody_stretch)
+			if (sim_datas_.solver_config_.softbody_stretch && !enableClothSim)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_softbody_stretch);
 
@@ -476,7 +480,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 
 			// solve_softbody_volume
 			TS(gp.timestamp_steps_);
-			if (sim_datas_.solver_config_.softbody_volume)
+			if (sim_datas_.solver_config_.softbody_volume && !enableClothSim)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_softbody_volume);
 
@@ -498,7 +502,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 
 			// solve_self_collision
 			TS(gp.timestamp_steps_);
-			if (sim_datas_.solver_config_.self_collision && iter % sim_datas_.narrowphase_interval_ == 0)
+			if (sim_datas_.solver_config_.self_collision && iter % sim_datas_.narrowphase_interval_ == 0 && enableClothSim)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_self_collision);
 
@@ -517,7 +521,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 
 			// solve_inter_cloth_collision
 			TS(gp.timestamp_steps_);
-			if (sim_datas_.solver_config_.inter_collision)
+			if (sim_datas_.solver_config_.inter_collision && enableClothSim)
 			{
 				cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_inter_cloth_collision);
 
@@ -541,14 +545,28 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 			// Apply Deltas 
 			TS(gp.timestamp_steps_);
 			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.apply_deltas);
-			cmd.dispatch(groupsTotal, 1, 1);
+
+			uint32_t base = enableClothSim ? 0 : pm.softbodies_[0].offset_particle;
+			uint32_t count = enableClothSim ? totalParticle : pm.num_softbody_particles_;
+			sim_datas_.push_constants_.solve.base = base;
+			sim_datas_.push_constants_.solve.count = count;
+
+			cmd.pushConstants < XpbdData::PushConstant >(
+				*pipeline_layouts_.common,
+				vk::ShaderStageFlagBits::eCompute,
+				0,
+				sim_datas_.push_constants_);
+
+			uint32_t groups = CellDiv(count, 256);
+			cmd.dispatch(groups, 1, 1);
+
 			TS(gp.timestamp_steps_);
 			vku::ssboCompWtoCompRW(cmd, pmSSBO.pred_position);
 		}
 
 		// Solve LRA
 		TS(gp.timestamp_steps_);
-		if (sim_datas_.solver_config_.lra && step == 0)
+		if (sim_datas_.solver_config_.lra && step == 0 && enableClothSim)
 		{
 			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.solve_lra);
 
@@ -568,14 +586,43 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 
 		// Collide SDF
 		TS(gp.timestamp_steps_);
-		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.collide_sdf);
-		cmd.dispatch(groupsTotal, 1, 1);
+		{
+			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.collide_sdf);
+
+			uint32_t base = enableClothSim ? 0 : pm.softbodies_[0].offset_particle;
+			uint32_t count = enableClothSim ? totalParticle : pm.num_softbody_particles_;
+			sim_datas_.push_constants_.solve.base = base;
+			sim_datas_.push_constants_.solve.count = count;
+
+			cmd.pushConstants < XpbdData::PushConstant >(
+				*pipeline_layouts_.common,
+				vk::ShaderStageFlagBits::eCompute,
+				0,
+				sim_datas_.push_constants_);
+
+			uint32_t groups = CellDiv(count, 256);
+			cmd.dispatch(groups, 1, 1);
+		}
 		TS(gp.timestamp_steps_);
 
 		// Update Velocity
 		TS(gp.timestamp_steps_);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.update_velocity);
-		cmd.dispatch(groupsTotal, 1, 1);
+
+		uint32_t base = enableClothSim ? 0 : pm.softbodies_[0].offset_particle;
+		uint32_t count = enableClothSim ? totalParticle : pm.num_softbody_particles_;
+		sim_datas_.push_constants_.solve.base = base;
+		sim_datas_.push_constants_.solve.count = count;
+
+		cmd.pushConstants < XpbdData::PushConstant >(
+			*pipeline_layouts_.common,
+			vk::ShaderStageFlagBits::eCompute,
+			0,
+			sim_datas_.push_constants_);
+
+		uint32_t groups = CellDiv(count, 256);
+		cmd.dispatch(groups, 1, 1);
+
 		TS(gp.timestamp_steps_);
 	}
 
@@ -668,6 +715,7 @@ void XpbdPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::TestSc
 
 	if (testScene.horizontal_drop)
 	{
+		sim_datas_.simulation_type_ = XpbdData::SimulationType::CLOTH;
 		testScene.horizontal_drop = false;
 		ubo_.datas.sim_params.wind_enable = 0;
 
@@ -679,17 +727,22 @@ void XpbdPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::TestSc
 			cloth.axis = glm::vec3(1, 0, 0);
 			pm.ResetCloth(cloth);
 			cloth.angle_deg = 0.0f;
+			cloth.render = true;
 
 			height -= 1.0f;
 		}
 		sim_datas_.ResetConstraints(pm.positions_, pm.indices_);
 
-		pm.ResetVolumeConstraint();
+		for (auto& softbody : pm.softbodies_)
+		{
+			softbody.render = false;
+		}
 
 		CopySimDatas(cmd);
 	}
 	else if (testScene.vertical_drop)
 	{
+		sim_datas_.simulation_type_ = XpbdData::SimulationType::CLOTH;
 		testScene.vertical_drop = false;
 		ubo_.datas.sim_params.wind_enable = 0;
 
@@ -701,29 +754,37 @@ void XpbdPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::TestSc
 			cloth.axis = glm::vec3(1, 0, 0);
 			pm.ResetCloth(cloth);
 			cloth.angle_deg = 0.0f;
+			cloth.render = true;
 
 			height -= (cloth.cloth_size.y + 1.0f);
 		}
 		sim_datas_.ResetConstraints(pm.positions_, pm.indices_);
 
-		pm.ResetVolumeConstraint();
+		for (auto& softbody : pm.softbodies_)
+		{
+			softbody.render = false;
+		}
 
 		CopySimDatas(cmd);
 	}
 	else if (testScene.pinned_corner)
 	{
+		sim_datas_.simulation_type_ = XpbdData::SimulationType::CLOTH;
 		testScene.pinned_corner = false;
 		ubo_.datas.sim_params.wind_enable = 0;
 
 		pm.clothes_[0].origin = glm::vec3(0.0f, 5.0f, 0.0f);
+		pm.clothes_[0].render = true;
 		pm.ResetCloth(pm.clothes_[0]);
 		pm.clothes_[1].origin = glm::vec3(0.0f, 4.0f, 0.0f);
+		pm.clothes_[1].render = true;
 		pm.ResetCloth(pm.clothes_[1]);
 
 		auto& cloth = pm.clothes_[2];
 		cloth.origin = glm::vec3(0.0f, 3.0f, 0.0f);
 		cloth.angle_deg = 0.0f;
 		cloth.axis = glm::vec3(0, 1, 0);
+		cloth.render = true;
 		pm.ResetCloth(cloth);
 		pm.inverse_masses_[cloth.offset_particle] = 0.0f;
 		pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
@@ -731,12 +792,16 @@ void XpbdPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::TestSc
 		pm.inverse_masses_[cloth.offset_particle + (cloth.ny1 - 1) * cloth.nx1 + cloth.nx1 - 1] = 0.0f;
 		sim_datas_.ResetConstraints(pm.positions_, pm.indices_);
 
-		pm.ResetVolumeConstraint();
+		for (auto& softbody : pm.softbodies_)
+		{
+			softbody.render = false;
+		}
 
 		CopySimDatas(cmd);
 	}
 	else if (testScene.top_pinned_corner)
 	{
+		sim_datas_.simulation_type_ = XpbdData::SimulationType::CLOTH;
 		testScene.top_pinned_corner = false;
 		ubo_.datas.sim_params.wind_enable = 0;
 
@@ -744,6 +809,7 @@ void XpbdPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::TestSc
 		for (auto& cloth : pm.clothes_)
 		{
 			cloth.origin = glm::vec3(0.0f, height, 0.0f);
+			cloth.render = true;
 			pm.ResetCloth(cloth);
 			pm.inverse_masses_[cloth.offset_particle] = 0.0f;
 			pm.inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
@@ -752,12 +818,16 @@ void XpbdPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::TestSc
 		}
 		sim_datas_.ResetConstraints(pm.positions_, pm.indices_);
 
-		pm.ResetVolumeConstraint();
+		for (auto& softbody : pm.softbodies_)
+		{
+			softbody.render = false;
+		}
 
 		CopySimDatas(cmd);
 	}
 	else if (testScene.wind)
 	{
+		sim_datas_.simulation_type_ = XpbdData::SimulationType::CLOTH;
 		testScene.wind = false;
 		ubo_.datas.sim_params.wind_enable = 1;
 
@@ -765,6 +835,7 @@ void XpbdPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::TestSc
 		for (auto& cloth : pm.clothes_)
 		{
 			cloth.origin = glm::vec3(0.0f, height, 0.0f);
+			cloth.render = true;
 			//cloth.angle_deg = 90.0f;
 			//cloth.axis = glm::vec3(1, 0, 0);
 			pm.ResetCloth(cloth);
@@ -776,10 +847,35 @@ void XpbdPassGPU::ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::TestSc
 		}
 		sim_datas_.ResetConstraints(pm.positions_, pm.indices_);
 
+		for (auto& softbody : pm.softbodies_)
+		{
+			softbody.render = false;
+		}
+
+		CopySimDatas(cmd);
+	}
+	else if (testScene.softbody)
+	{
+		sim_datas_.simulation_type_ = XpbdData::SimulationType::SOFTBODY;
+		testScene.softbody = false;
+
+		for (auto& cloth : pm.clothes_)
+		{
+			cloth.render = false;
+		}
+
+		for (auto& softbody : pm.softbodies_)
+		{
+			softbody.render = true;
+		}
+
+		sim_datas_.ResetConstraints(pm.positions_, pm.indices_);
+
 		pm.ResetVolumeConstraint();
 
 		CopySimDatas(cmd);
 	}
+
 }
 
 void XpbdPassGPU::CopyColliders(const vk::raii::CommandBuffer& cmd)

@@ -5,6 +5,13 @@
 
 struct XpbdData {
 
+	enum SimulationType {
+		CLOTH,
+		SOFTBODY
+	};
+
+	SimulationType simulation_type_ = SimulationType::CLOTH;
+
 	uint32_t total_particles_;
 	uint32_t total_indices_;
 	uint32_t total_tri_;

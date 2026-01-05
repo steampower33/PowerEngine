@@ -884,6 +884,11 @@ void GUI::SetTestSceneGUI(RowFn&& row)
 	{
 		scene.wind = true;
 	}
+
+	if (ImGui::Button("Softbody", buttonSize))
+	{
+		scene.softbody = true;
+	}
 }
 
 template<typename RowFn>

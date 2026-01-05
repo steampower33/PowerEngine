@@ -115,8 +115,26 @@ XpbdParticleManager::XpbdParticleManager(Context& context, ModelManager& modelMa
 
 	{
 		SoftBody softbody;
-		softbody.name = "softbody";
-		softbody.origin = glm::vec3(20.0f, 1.0f, 0.0f);
+		softbody.name = "softbody1";
+		softbody.origin = glm::vec3(1.0f, 1.0f, 0.0f);
+		softbody.render = true;
+
+		SetSoftbody("assets/sphere.msh", softbody);
+	}
+
+	{
+		SoftBody softbody;
+		softbody.name = "softbody2";
+		softbody.origin = glm::vec3(1.0f, 2.0f, 0.0f);
+		softbody.render = true;
+
+		SetSoftbody("assets/sphere.msh", softbody);
+	}
+
+	{
+		SoftBody softbody;
+		softbody.name = "softbody3";
+		softbody.origin = glm::vec3(1.0f, 3.0f, 0.0f);
 		softbody.render = true;
 
 		SetSoftbody("assets/sphere.msh", softbody);

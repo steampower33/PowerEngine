@@ -2605,8 +2605,29 @@ void GraphicsPass::ShadowDepthOnlyPass(const vk::raii::CommandBuffer& cmd, uint3
 		);
 
 		cmd.bindIndexBuffer(*particle_manager_.index_buffer_, 0, vk::IndexType::eUint32);
-		uint32_t totalIndices = particle_manager_.num_cloth_indices_ + particle_manager_.num_softbody_indices_;
-		cmd.drawIndexed(totalIndices, 1, 0, 0, 0);
+
+		auto& pm = particle_manager_;
+
+		for (uint32_t i = 0; i < pm.clothes_.size(); i++)
+		{
+			auto& cloth = pm.clothes_[i];
+
+			if (!cloth.render) continue;
+
+			cmd.drawIndexed(cloth.num_indices, 1, cloth.offset_indices, 0, 0);
+		}
+
+		for (uint32_t i = 0; i < pm.softbodies_.size(); i++)
+		{
+			auto& softbody = pm.softbodies_[i];
+
+			if (!softbody.render) continue;
+
+			cmd.drawIndexed(pm.softbodies_[i].num_indices, 1, pm.softbodies_[i].offset_indices, 0, 0);
+		}
+
+		//uint32_t totalIndices = particle_manager_.num_cloth_indices_ + particle_manager_.num_softbody_indices_;
+		//cmd.drawIndexed(totalIndices, 1, 0, 0, 0);
 	}
 
 	cmd.endRendering();

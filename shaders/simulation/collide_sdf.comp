@@ -34,8 +34,9 @@ vec3 normal_capsule(vec3 p, vec3 a, vec3 b) {
 }
 
 void main() {
-    uint id = gl_GlobalInvocationID.x;
-    if (id >= sim.num_particles) return;
+    uint gid = gl_GlobalInvocationID.x;
+    if (gid >= pc.solve.count) return;
+    uint id = pc.solve.base + gid;
 
     if (w[id] == 0.0) return;
 
