@@ -14,7 +14,7 @@ void accumulate_v(uint i, vec3 dv)
 
 void main() {
     uint triId = gl_GlobalInvocationID.x;
-    if (triId >= sim.num_tries) return; // sim.num_tries = numTris
+    if (triId >= pc.solve.count) return; // sim.num_tries = numTris
     if (sim.wind_enable == 0u) return;
 
     uint i0 = indices[triId * 3 + 0];

@@ -143,10 +143,27 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 	for (uint32_t step = 0; step < sim_datas_.substeps; step++)
 	{
 		// Wind
-		TS(gp.timestamp_steps_);
-		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.wind);
-		cmd.dispatch(groupsTri, 1, 1);
-		TS(gp.timestamp_steps_);
+		{
+			TS(gp.timestamp_steps_);
+			cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.wind);
+
+			uint32_t base = 0;
+			uint32_t count = sim_datas_.cloth_indices_ / 3;
+
+			sim_datas_.push_constants_.solve.base = base;
+			sim_datas_.push_constants_.solve.count = count;
+			sim_datas_.push_constants_.solve.compliance = sim_datas_.compliance.stretch;
+			sim_datas_.push_constants_.solve.beta = sim_datas_.beta.stretch;
+
+			cmd.pushConstants<XpbdData::PushConstant>(
+				*pipeline_layouts_.common,
+				vk::ShaderStageFlagBits::eCompute,
+				0,
+				sim_datas_.push_constants_);
+			uint32_t group = CellDiv(count, 256);
+			cmd.dispatch(group, 1, 1);
+			TS(gp.timestamp_steps_);
+		}
 
 		// Integrate
 		TS(gp.timestamp_steps_);

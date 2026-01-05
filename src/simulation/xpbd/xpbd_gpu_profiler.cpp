@@ -91,7 +91,7 @@ void XpbdGpuProfiler::CalculateGpuTime(XpbdData& simData)
 			tBuildNeighbor += delta_ms(base + 12, base + 13);
 		}
 
-		uint32_t iterBase = base + 12;
+		uint32_t iterBase = base + 14;
 		for (uint32_t it = 0; it < simData.iterations; it++)
 		{
 			tSolveStretch += delta_ms(iterBase + it * tsCnt + 0, iterBase + it * tsCnt + 1);
