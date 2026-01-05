@@ -62,7 +62,7 @@ void main() {
     float rhs = C + alpha_tilde * lambda_old;
 
     float dLambda = -rhs / denom;
-    float lambda_new = lambda_old + dLambda * sim.area_stiffness;
+    float lambda_new = lambda_old + dLambda * pc.solve.stiffness;
 
     areas[gid].lambda = lambda_new;
 

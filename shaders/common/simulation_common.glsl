@@ -6,6 +6,10 @@ struct Solve {
     uint count;
     float compliance;
     float beta;
+    float stiffness;
+    float p0;
+    float p1;
+    float p2;
 };
 
 struct MouseInteract {
@@ -51,21 +55,6 @@ layout(std140, set = 0, binding = 0) uniform SimParams {
     uint num_tables;
     uint max_neighbors;
     float collision_radius;
-
-    float stretch_stiffness;
-    float shear_stiffness;
-    float bend_stiffness;
-    float area_stiffness;
-
-    float self_collision_stiffness;
-    float volume_stiffness;
-    float softbody_stretch_stiffness;
-    float inter_collision_stiffness;
-
-    float lra_stiffness;
-    float p1;
-    float p2;
-    float p3;
 
     vec3 wind_dir;
     uint wind_enable;

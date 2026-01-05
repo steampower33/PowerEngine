@@ -758,13 +758,13 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 			if (ImGui::BeginTable("Stiffness", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
-				row("Stretch", [&] { ImGui::DragFloat("##StretchStiffness", &sim.ubo_.datas.sim_params.stretch_stiffness, 1e-2f, 0.0f, 100.0f, "%.3f"); });
-				row("Shear", [&] { ImGui::DragFloat("##ShearStiffness", &sim.ubo_.datas.sim_params.shear_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
-				row("Bend", [&] { ImGui::DragFloat("##BendStiffness", &sim.ubo_.datas.sim_params.bend_stiffness, 1e-3f, 0.0f, 2.0f, "%.3f"); });
-				row("Area", [&] { ImGui::DragFloat("##AreaStiffness", &sim.ubo_.datas.sim_params.area_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
-				row("SelfCollision", [&] { ImGui::DragFloat("##SelfCollision", &sim.ubo_.datas.sim_params.self_collision_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
-				row("InterColiision", [&] { ImGui::DragFloat("##InterColiision", &sim.ubo_.datas.sim_params.inter_collision_stiffness, 1.0f, 0.0f, 100.0f, "%.1f"); });
-				row("LRA", [&] { ImGui::DragFloat("##LRA", &sim.ubo_.datas.sim_params.lra_stiffness, 1e-3f, 0.0f, 100.0f, "%.3f"); });
+				row("Stretch", [&] { ImGui::DragFloat("##StretchStiffness", &sim.sim_datas_.stiffness_.stretch, 1e-2f, 0.0f, 100.0f, "%.3f"); });
+				row("Shear", [&] { ImGui::DragFloat("##ShearStiffness", &sim.sim_datas_.stiffness_.shear, 1.0f, 0.0f, 100.0f, "%.1f"); });
+				row("Bend", [&] { ImGui::DragFloat("##BendStiffness", &sim.sim_datas_.stiffness_.bend, 1e-3f, 0.0f, 2.0f, "%.3f"); });
+				row("Area", [&] { ImGui::DragFloat("##AreaStiffness", &sim.sim_datas_.stiffness_.area, 1.0f, 0.0f, 100.0f, "%.1f"); });
+				row("SelfCollision", [&] { ImGui::DragFloat("##SelfCollision", &sim.sim_datas_.stiffness_.self_collision, 1.0f, 0.0f, 100.0f, "%.1f"); });
+				row("InterColiision", [&] { ImGui::DragFloat("##InterColiision", &sim.sim_datas_.stiffness_.inter_collision, 1.0f, 0.0f, 100.0f, "%.1f"); });
+				row("LRA", [&] { ImGui::DragFloat("##LRA", &sim.sim_datas_.stiffness_.lra, 1e-3f, 0.0f, 100.0f, "%.3f"); });
 				ImGui::EndTable();
 			}
 			ImGui::EndChild();
@@ -828,8 +828,8 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 			if (ImGui::BeginTable("Stiffness", 2,
 				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 			{
-				row("Stretch", [&] { ImGui::DragFloat("##SoftbodyStretch", &sim.ubo_.datas.sim_params.softbody_stretch_stiffness, 1e-2f, 0.0f, 100.0f, "%.1f"); });
-				row("Volume", [&] { ImGui::DragFloat("##SoftbodyVolume", &sim.ubo_.datas.sim_params.volume_stiffness, 1e-2f, 0.0f, 100.0f, "%.1f"); });
+				row("Stretch", [&] { ImGui::DragFloat("##SoftbodyStretch", &sim.sim_datas_.stiffness_.softbody_stretch, 1e-2f, 0.0f, 100.0f, "%.1f"); });
+				row("Volume", [&] { ImGui::DragFloat("##SoftbodyVolume", &sim.sim_datas_.stiffness_.softbody_volume, 1e-2f, 0.0f, 100.0f, "%.1f"); });
 				ImGui::EndTable();
 			}
 			ImGui::EndChild();

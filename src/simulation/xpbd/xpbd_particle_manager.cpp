@@ -396,7 +396,7 @@ void XpbdParticleManager::SetClothFromMesh(Cloth& cloth)
 void XpbdParticleManager::SetSoftbody(std::string path, SoftBody& softbody)
 {
 	softbody.tetmesh = vku::LoadGmshMsh2(path.c_str());
-	softbody.density = 0.5f;
+	softbody.density = 0.1f;
 	softbody.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
 
 	softbody.offset_particle = positions_.size();

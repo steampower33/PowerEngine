@@ -41,7 +41,7 @@ void main()
     float dt = sim.dt;
     float alpha_tilde = 0.0;
 
-    float stiffness = sim.inter_collision_stiffness;
+    float stiffness = pc.solve.stiffness;
 
     vec3 xi = xp[i].xyz;
 

@@ -24,7 +24,7 @@ void main() {
         float d = length(dvec);
         if (d > r && d > 1e-8) {
             vec3 x_proj = xa + (r / d) * dvec;
-            xi = mix(xi, x_proj, sim.lra_stiffness);
+            xi = mix(xi, x_proj, pc.solve.stiffness);
         }
     }
 

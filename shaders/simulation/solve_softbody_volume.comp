@@ -66,7 +66,7 @@ void main() {
     if (denom < 1e-9) return;
 
     float dlambda = -(C + alpha_tilde * old_lambda) / denom;
-    float newLambda = old_lambda + dlambda * sim.volume_stiffness;
+    float newLambda = old_lambda + dlambda * pc.solve.stiffness;
 
     volumes[gid].lambda = isFinite_f(newLambda) ? newLambda : 0.0;
 

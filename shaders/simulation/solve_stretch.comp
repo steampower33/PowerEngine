@@ -54,7 +54,7 @@ void main() {
     float rhs = C + alpha_tilde * lambda_old + gamma * rel;
 
     float dlambda = -rhs / denom;
-    float newLambda = lambda_old + dlambda * sim.stretch_stiffness;
+    float newLambda = lambda_old + dlambda * pc.solve.stiffness;
     edges[eidx].lambda = isFinite_f(newLambda) ? newLambda : 0.0;
 
     vec3 corr = dlambda * n;

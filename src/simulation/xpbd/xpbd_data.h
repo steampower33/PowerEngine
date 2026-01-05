@@ -24,12 +24,30 @@ struct XpbdData {
 	int broadphase_interval_ = 2;
 	int narrowphase_interval_ = 1;
 
+	struct Stiffness {
+		float stretch = 1.0f;
+		float shear = 1.0f;
+		float bend = 1.0f;
+		float area = 1.0f;
+
+		float self_collision = 5.0f;
+		float softbody_stretch = 1.0f;
+		float softbody_volume = 1.0f;
+		float inter_collision = 10.0f;
+
+		float lra = 0.1f;
+	} stiffness_;
+
 	struct PushConstant {
 		struct Solve {
 			uint32_t base;
 			uint32_t count;
 			float compliance;
 			float beta;
+			float stiffness;
+			float p0;
+			float p1;
+			float p2;
 		} solve;
 		static_assert(sizeof(Solve) % 4 == 0, "push constant must be multiple of 4 bytes");
 

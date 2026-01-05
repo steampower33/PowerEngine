@@ -57,7 +57,7 @@ void main()
 
     float alpha_tilde = pc.solve.compliance / (dt * dt);
 
-    float stiffness = sim.self_collision_stiffness;
+    float stiffness = pc.solve.stiffness;
     float mu        = sim.neighbor_friction;
 
     vec3 xi  = xp[i].xyz;

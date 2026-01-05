@@ -74,7 +74,7 @@ void main(){
     float rhs = C + alpha_tilde * lambda_old;
     float dlambda = -rhs / denom;
 
-    float newLam = lambda_old + dlambda * sim.bend_stiffness;
+    float newLam = lambda_old + dlambda * pc.solve.stiffness;
     if (!isFinite_f(newLam)) newLam = 0.0;
     bends[gid].lambda = newLam;
 

@@ -373,6 +373,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 					sim_datas_.push_constants_.solve.count = count;
 					sim_datas_.push_constants_.solve.compliance = sim_datas_.compliance.stretch;
 					sim_datas_.push_constants_.solve.beta = sim_datas_.beta.stretch;
+					sim_datas_.push_constants_.solve.stiffness = sim_datas_.stiffness_.stretch;
 
 					cmd.pushConstants<XpbdData::PushConstant>(
 						*pipeline_layouts_.common,
@@ -399,6 +400,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 				sim_datas_.push_constants_.solve.base = base;
 				sim_datas_.push_constants_.solve.count = count;
 				sim_datas_.push_constants_.solve.compliance = sim_datas_.compliance.shear;
+				sim_datas_.push_constants_.solve.stiffness = sim_datas_.stiffness_.shear;
 				cmd.pushConstants<XpbdData::PushConstant>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute,
@@ -421,6 +423,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 				sim_datas_.push_constants_.solve.base = base;
 				sim_datas_.push_constants_.solve.count = count;
 				sim_datas_.push_constants_.solve.compliance = sim_datas_.compliance.bend;
+				sim_datas_.push_constants_.solve.stiffness = sim_datas_.stiffness_.bend;
 				cmd.pushConstants<XpbdData::PushConstant>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute,
@@ -443,6 +446,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 				sim_datas_.push_constants_.solve.base = base;
 				sim_datas_.push_constants_.solve.count = count;
 				sim_datas_.push_constants_.solve.compliance = sim_datas_.compliance.area;
+				sim_datas_.push_constants_.solve.stiffness = sim_datas_.stiffness_.area;
 				cmd.pushConstants<XpbdData::PushConstant>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute,
@@ -467,6 +471,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 				sim_datas_.push_constants_.solve.base = base;
 				sim_datas_.push_constants_.solve.count = count;
 				sim_datas_.push_constants_.solve.compliance = sim_datas_.compliance.softbody_stretch;
+				sim_datas_.push_constants_.solve.stiffness = sim_datas_.stiffness_.softbody_stretch;
 				cmd.pushConstants<XpbdData::PushConstant>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute,
@@ -489,6 +494,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 				sim_datas_.push_constants_.solve.base = base;
 				sim_datas_.push_constants_.solve.count = count;
 				sim_datas_.push_constants_.solve.compliance = sim_datas_.compliance.softbody_volume;
+				sim_datas_.push_constants_.solve.stiffness = sim_datas_.stiffness_.softbody_volume;
 				cmd.pushConstants<XpbdData::PushConstant>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute,
@@ -509,6 +515,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 				sim_datas_.push_constants_.solve.base = 0;
 				sim_datas_.push_constants_.solve.count = clothParticle;
 				sim_datas_.push_constants_.solve.compliance = sim_datas_.compliance.self_collision;
+				sim_datas_.push_constants_.solve.stiffness = sim_datas_.stiffness_.self_collision;
 				cmd.pushConstants < XpbdData::PushConstant >(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute,
@@ -527,6 +534,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 
 				sim_datas_.push_constants_.solve.base = 0;
 				sim_datas_.push_constants_.solve.count = clothParticle;
+				sim_datas_.push_constants_.solve.stiffness = sim_datas_.stiffness_.inter_collision;
 				cmd.pushConstants < XpbdData::PushConstant >(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute,
@@ -572,6 +580,7 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 
 			sim_datas_.push_constants_.solve.base = 0;
 			sim_datas_.push_constants_.solve.count = clothParticle;
+			sim_datas_.push_constants_.solve.stiffness = sim_datas_.stiffness_.lra;
 			cmd.pushConstants < XpbdData::PushConstant >(
 				*pipeline_layouts_.common,
 				vk::ShaderStageFlagBits::eCompute,

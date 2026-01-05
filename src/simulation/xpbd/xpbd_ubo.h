@@ -30,21 +30,6 @@ struct XpbdUBO {
 			uint32_t max_neighbors;
 			float collision_radius;
 
-			float stretch_stiffness = 1.0f;
-			float shear_stiffness = 1.0f;
-			float bend_stiffness = 1.0f;
-			float area_stiffness = 1.0f;
-
-			float self_collision_stiffness = 5.0f;
-			float volume_stiffness = 1.0f;
-			float softbody_stretch_stiffness = 1.0f;
-			float inter_collision_stiffness = 10.0f;
-
-			float lra_stiffness = 0.1f;
-			float p1;
-			float p2;
-			float p3;
-
 			glm::vec3 wind_dir{ 0.0f, 0.0f, 1.0f };
 			uint32_t wind_enable = 0;
 

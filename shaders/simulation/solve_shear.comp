@@ -64,7 +64,7 @@ void main() {
     float rhs = C + alpha_tilde * lambda_old;
 
     float dLambda = -rhs / denom;
-    float lambda_new = lambda_old + dLambda * sim.shear_stiffness;
+    float lambda_new = lambda_old + dLambda * pc.solve.stiffness;
 
     shears[gid].lambda = lambda_new;
 
