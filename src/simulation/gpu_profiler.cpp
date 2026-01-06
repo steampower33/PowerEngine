@@ -1,7 +1,7 @@
 #include "context.h"
-#include "xpbd_data.h"
+#include "sim_data.h"
 
-#include "xpbd_gpu_profiler.h"
+#include "gpu_profiler.h"
 
 XpbdGpuProfiler::XpbdGpuProfiler(Context& context, XpbdData& simData)
 	: context_(context)

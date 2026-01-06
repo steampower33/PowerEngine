@@ -4,15 +4,15 @@
 #include "swapchain.h"
 #include "vulkan_utils.h"
 #include "pass_manager.h"
-#include "xpbd_pass_gpu.h"
+#include "sim_pass_gpu.h"
 #include "model.h"
 #include "model_manager.h"
 #include "texture.h"
 #include "texture_manager.h"
 #include "graphics_pass.h"
-#include "xpbd_particle_manager.h"
+#include "particle_manager.h"
 #include "camera.h"
-#include "xpbd_gpu_profiler.h"
+#include "gpu_profiler.h"
 
 #include "gui.h"
 
@@ -822,19 +822,6 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 			ImGui::EndChild();
 			ImGui::Unindent();
 
-			ImGui::SeparatorText("Stiffness");
-			ImGui::Indent();
-			ImGui::BeginChild("Stiffness", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
-			if (ImGui::BeginTable("Stiffness", 2,
-				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
-			{
-				row("Stretch", [&] { ImGui::DragFloat("##SoftbodyStretch", &sim.sim_datas_.stiffness_.softbody_stretch, 1e-2f, 0.0f, 100.0f, "%.1f"); });
-				row("Volume", [&] { ImGui::DragFloat("##SoftbodyVolume", &sim.sim_datas_.stiffness_.softbody_volume, 1e-2f, 0.0f, 100.0f, "%.1f"); });
-				ImGui::EndTable();
-			}
-			ImGui::EndChild();
-			ImGui::Unindent();
-
 			ImGui::SeparatorText("Compliance");
 			ImGui::Indent();
 			ImGui::BeginChild("Compliance", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
@@ -894,7 +881,6 @@ void GUI::SetTestSceneGUI(RowFn&& row)
 template<typename RowFn>
 void GUI::SetRenderingGUI(RowFn&& row)
 {
-
 	if (ImGui::CollapsingHeader("Rendering"))//, ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		auto& gp = *pass_manager_.graphics_pass_;
@@ -915,7 +901,6 @@ void GUI::SetRenderingGUI(RowFn&& row)
 
 			ImGui::EndTable();
 		}
-		
 
 		ImGui::EndChild();
 		ImGui::Unindent();

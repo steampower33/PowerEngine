@@ -6,7 +6,7 @@
 #include "texture_manager.h"
 #include "model.h"
 #include "model_manager.h"
-#include "xpbd_particle_manager.h"
+#include "particle_manager.h"
 #include "model_loader.h"
 
 #include "graphics_pass.h"
@@ -1727,7 +1727,7 @@ void GraphicsPass::CreateGraphicsPipelines()
 			.depthClampEnable = vk::False,
 			.rasterizerDiscardEnable = vk::False,
 			.polygonMode = vk::PolygonMode::eFill,
-			.cullMode = vk::CullModeFlagBits::eNone,
+			.cullMode = vk::CullModeFlagBits::eBack,
 			.frontFace = vk::FrontFace::eCounterClockwise,
 			.depthBiasEnable = vk::False,
 			.lineWidth = 1.0f

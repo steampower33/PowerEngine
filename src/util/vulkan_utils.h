@@ -733,6 +733,64 @@ namespace vku
 		return mesh;
 	}
 
+	inline TetMesh LoadTmpBunnyJson(const std::string& path)
+	{
+		using json = nlohmann::json;
+
+		std::ifstream in(path);
+		if (!in) throw std::runtime_error("Failed to open JSON: " + path);
+
+		json j;
+		in >> j;
+
+		const auto& pos = j.at("positions");
+		const auto& tets = j.at("tets");
+		const auto& surf = j.at("surfaceIndices");
+
+		if (!pos.is_array() || !tets.is_array() || !surf.is_array())
+			throw std::runtime_error("Invalid JSON arrays");
+
+		if (pos.size() % 3 != 0) throw std::runtime_error("positions size not multiple of 3");
+		if (tets.size() % 4 != 0) throw std::runtime_error("tets size not multiple of 4");
+		if (surf.size() % 3 != 0) throw std::runtime_error("surfaceIndices size not multiple of 3");
+
+		TetMesh mesh;
+		mesh.positions.resize(pos.size() / 3);
+
+		for (size_t i = 0; i < mesh.positions.size(); ++i) {
+			float x = pos[3 * i + 0].get<float>();
+			float y = pos[3 * i + 1].get<float>();
+			float z = pos[3 * i + 2].get<float>();
+			mesh.positions[i] = glm::vec3(x, y, z);
+		}
+
+		mesh.tets.resize(tets.size() / 4);
+		for (size_t i = 0; i < mesh.tets.size(); ++i) {
+			uint32_t a = tets[4 * i + 0].get<uint32_t>();
+			uint32_t b = tets[4 * i + 1].get<uint32_t>();
+			uint32_t c = tets[4 * i + 2].get<uint32_t>();
+			uint32_t d = tets[4 * i + 3].get<uint32_t>();
+			mesh.tets[i] = glm::uvec4(a, b, c, d);
+		}
+
+		mesh.surfaceIndices.resize(surf.size());
+		for (size_t i = 0; i < surf.size(); ++i) {
+			mesh.surfaceIndices[i] = surf[i].get<uint32_t>();
+		}
+
+		// Minimal sanity check: indices must be < numVerts
+		const uint32_t n = static_cast<uint32_t>(mesh.positions.size());
+		for (auto& tet : mesh.tets) {
+			if (tet.x >= n || tet.y >= n || tet.z >= n || tet.w >= n)
+				throw std::runtime_error("Tet index out of range");
+		}
+		for (auto idx : mesh.surfaceIndices) {
+			if (idx >= n) throw std::runtime_error("Surface index out of range");
+		}
+
+		return mesh;
+	}
+
 	inline void VK_CHECK(vk::Result r, const char* msg)
 	{
 		if (r != vk::Result::eSuccess)

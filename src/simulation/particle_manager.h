@@ -51,7 +51,6 @@ struct SoftBody
 
 	vku::TetMesh tetmesh;
 
-	float density;
 	glm::vec4 color;
 
 	uint32_t offset_particle = 0;
@@ -81,7 +80,7 @@ public:
 
 	void SetPlaneCloth(Cloth& cloth);
 	void SetClothFromMesh(Cloth& cloth);
-	void SetSoftbody(std::string path, SoftBody& softbody);
+	void SetSoftbody(std::string path, SoftBody& softbody, bool isJson);
 	void ResetCloth(Cloth& cloth);
 	void ResetSoftbody(SoftBody& softbody);
 	void ResetVolumeConstraint();

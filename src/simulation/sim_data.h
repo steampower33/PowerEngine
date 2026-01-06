@@ -1,7 +1,7 @@
 #pragma once
 
 #include "model_data.h"
-#include "xpbd_particle_manager.h"
+#include "particle_manager.h"
 
 struct XpbdData {
 
@@ -31,8 +31,6 @@ struct XpbdData {
 		float area = 1.0f;
 
 		float self_collision = 5.0f;
-		float softbody_stretch = 1.0f;
-		float softbody_volume = 1.0f;
 		float inter_collision = 10.0f;
 
 		float lra = 0.1f;
@@ -49,7 +47,7 @@ struct XpbdData {
 			float p1;
 			float p2;
 		} solve;
-		static_assert(sizeof(Solve) % 4 == 0, "push constant must be multiple of 4 bytes");
+		static_assert(sizeof(Solve) % 4 == 0, "Solve must be multiple of 4 bytes");
 
 		struct MouseInteract {
 			glm::vec3 ray_origin;
@@ -61,8 +59,9 @@ struct XpbdData {
 			uint32_t p1;
 			uint32_t p2;
 		} mouse_interact;
-		static_assert(sizeof(MouseInteract) % 4 == 0, "push constant must be multiple of 4 bytes");
+		static_assert(sizeof(MouseInteract) % 4 == 0, "MouseInteract must be multiple of 4 bytes");
 	} push_constants_;
+	static_assert(sizeof(PushConstant) <= 128, "PushConstant must be less equal than 128 bytes");
 
 	struct SolverConfig {
 		bool stretch = true;
@@ -79,8 +78,8 @@ struct XpbdData {
 
 	struct Compliance {
 		float stretch = 1e-6f;
-		float softbody_stretch = 1e-6f;
-		float softbody_volume = 1e-6f;
+		float softbody_stretch = 0.0f;
+		float softbody_volume = 0.0f;
 		float shear = 1e-6f;
 		float bend = 500.0f;
 		float area = 1e-2f;

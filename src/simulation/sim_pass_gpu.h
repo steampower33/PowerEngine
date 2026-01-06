@@ -12,8 +12,8 @@ class XpbdGpuProfiler;
 struct XpbdData;
 struct XpbdUBO;
 
-#include "xpbd_data.h"
-#include "xpbd_ubo.h"
+#include "sim_data.h"
+#include "sim_ubo.h"
 
 #include "vulkan_utils.h"
 

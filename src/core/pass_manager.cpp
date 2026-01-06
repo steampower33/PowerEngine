@@ -1,14 +1,14 @@
 #include "context.h"
 #include "swapchain.h"
-#include "xpbd_pass_gpu.h"
+#include "sim_pass_gpu.h"
 #include "texture_manager.h"
 #include "model_manager.h"
 #include "graphics_pass.h"
 #include "gui.h"
-#include "xpbd_particle_manager.h"
+#include "particle_manager.h"
 #include "camera.h"
 #include "mouse_interactor.h"
-#include "xpbd_gpu_profiler.h"
+#include "gpu_profiler.h"
 
 #include "pass_manager.h"
 

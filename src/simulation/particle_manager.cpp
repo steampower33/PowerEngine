@@ -8,7 +8,7 @@
 #include "geometry_generator.h"
 #include "model_loader.h"
 
-#include "xpbd_particle_manager.h"
+#include "particle_manager.h"
 
 XpbdParticleManager::XpbdParticleManager(Context& context, ModelManager& modelManager, TextureManager& textureManager)
 	: context_(context)
@@ -117,27 +117,20 @@ XpbdParticleManager::XpbdParticleManager(Context& context, ModelManager& modelMa
 		SoftBody softbody;
 		softbody.name = "softbody1";
 		softbody.origin = glm::vec3(1.0f, 1.0f, 0.0f);
+		softbody.color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
 		softbody.render = true;
 
-		SetSoftbody("assets/sphere.msh", softbody);
+		SetSoftbody("assets/bunny_tets_tmp.json", softbody, true);
 	}
 
 	{
 		SoftBody softbody;
 		softbody.name = "softbody2";
-		softbody.origin = glm::vec3(1.0f, 2.0f, 0.0f);
+		softbody.origin = glm::vec3(1.0f, 1.0f, 0.0f);
+		softbody.color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
 		softbody.render = true;
 
-		SetSoftbody("assets/sphere.msh", softbody);
-	}
-
-	{
-		SoftBody softbody;
-		softbody.name = "softbody3";
-		softbody.origin = glm::vec3(1.0f, 3.0f, 0.0f);
-		softbody.render = true;
-
-		SetSoftbody("assets/sphere.msh", softbody);
+		SetSoftbody("assets/sphere.msh", softbody, false);
 	}
 
 	vku::CreateIndexBuffer(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_, indices_, index_buffer_, index_buffer_memory_);
@@ -393,11 +386,17 @@ void XpbdParticleManager::SetClothFromMesh(Cloth& cloth)
 	//cloth.mesh = std::move(mesh);
 }
 
-void XpbdParticleManager::SetSoftbody(std::string path, SoftBody& softbody)
+void XpbdParticleManager::SetSoftbody(std::string path, SoftBody& softbody, bool isJson)
 {
-	softbody.tetmesh = vku::LoadGmshMsh2(path.c_str());
-	softbody.density = 0.1f;
-	softbody.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+	if (isJson)
+	{
+		softbody.tetmesh = vku::LoadTmpBunnyJson(path.c_str());
+	}
+	else
+	{
+		softbody.tetmesh = vku::LoadGmshMsh2(path.c_str());
+	}
+
 
 	softbody.offset_particle = positions_.size();
 	softbody.offset_indices = indices_.size();
@@ -455,7 +454,7 @@ void XpbdParticleManager::SetSoftbody(std::string path, SoftBody& softbody)
 
 		volume_constraints.push_back(c);
 
-		float tetMass = softbody.density * c.rest_volume;
+		float tetMass = c.rest_volume;
 		float pMass = tetMass * 0.25f;
 
 		masses_[c.i0] += pMass;

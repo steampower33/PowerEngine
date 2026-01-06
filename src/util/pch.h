@@ -19,6 +19,7 @@
 #include <filesystem>
 #include <fmt/core.h>
 #include <queue>
+#include <nlohmann/json.hpp>
 
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>

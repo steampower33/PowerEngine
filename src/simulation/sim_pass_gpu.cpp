@@ -7,11 +7,11 @@
 #include "vulkan_utils.h"
 #include "ray.h"
 #include "mouse_interactor.h"
-#include "xpbd_particle_manager.h"
-#include "xpbd_gpu_profiler.h"
+#include "particle_manager.h"
+#include "gpu_profiler.h"
 
 #define VRDX_IMPLEMENTATION
-#include "xpbd_pass_gpu.h"
+#include "sim_pass_gpu.h"
 
 XpbdPassGPU::XpbdPassGPU(Context& context, Swapchain& swapchain, XpbdParticleManager& particleManager, ModelManager& modelManager)
 	: context_(context), particle_manager_(particleManager), model_manager_(modelManager)
@@ -471,7 +471,6 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 				sim_datas_.push_constants_.solve.base = base;
 				sim_datas_.push_constants_.solve.count = count;
 				sim_datas_.push_constants_.solve.compliance = sim_datas_.compliance.softbody_stretch;
-				sim_datas_.push_constants_.solve.stiffness = sim_datas_.stiffness_.softbody_stretch;
 				cmd.pushConstants<XpbdData::PushConstant>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute,
@@ -494,7 +493,6 @@ void XpbdPassGPU::RecordCompute(uint32_t currentFrame, vku::TestScene& testScene
 				sim_datas_.push_constants_.solve.base = base;
 				sim_datas_.push_constants_.solve.count = count;
 				sim_datas_.push_constants_.solve.compliance = sim_datas_.compliance.softbody_volume;
-				sim_datas_.push_constants_.solve.stiffness = sim_datas_.stiffness_.softbody_volume;
 				cmd.pushConstants<XpbdData::PushConstant>(
 					*pipeline_layouts_.common,
 					vk::ShaderStageFlagBits::eCompute,
