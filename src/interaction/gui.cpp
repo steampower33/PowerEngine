@@ -251,13 +251,10 @@ void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera, bool& pause
 	ImGui::SetNextWindowSize(optionSize);
 	if (ImGui::Begin("Option", nullptr, wf))
 	{
-		SetCameraGUI(row, camera);
-		SetRenderingGUI(row);
-
-		SetModelsGUI(row);
-
 		SetSimulationGUI(row, targetSimFPS, simDt, paused, pauseEachframe);
-
+		SetObjectsGUI(row);
+		SetRenderingGUI(row);
+		SetCameraGUI(row, camera);
 	}
 	ImGui::End();
 
@@ -333,7 +330,7 @@ void GUI::DisplayKernelTiming(const std::string name, std::unordered_map<std::st
 }
 
 template<typename RowFn>
-void GUI::SetModelsGUI(RowFn&& row)
+void GUI::SetObjectsGUI(RowFn&& row)
 {
 
 	auto row3 = [&](const char* label, auto&& drawControl, auto&& drawExtra)
@@ -396,7 +393,7 @@ void GUI::SetModelsGUI(RowFn&& row)
 	auto& clothes = pass_manager_.particle_manager_->clothes_;
 	auto& softbodies = pass_manager_.particle_manager_->softbodies_;
 
-	if (ImGui::CollapsingHeader("Objects", ImGuiTreeNodeFlags_DefaultOpen))
+	if (ImGui::CollapsingHeader("Objects"))//, ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		for (auto& model : models)
 		{
@@ -1097,7 +1094,7 @@ void GUI::SetStatGUI(RowFn&& row)
 template<typename RowFn>
 void GUI::SetCameraGUI(RowFn&& row, Camera& camera)
 {
-	if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen))
+	if (ImGui::CollapsingHeader("Camera"))//, ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		ImGui::SeparatorText("Move");
 

@@ -733,7 +733,7 @@ namespace vku
 		return mesh;
 	}
 
-	inline TetMesh LoadTmpBunnyJson(const std::string& path)
+	inline TetMesh LoadJson(const std::string& path)
 	{
 		using json = nlohmann::json;
 

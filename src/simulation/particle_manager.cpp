@@ -10,7 +10,7 @@
 
 #include "particle_manager.h"
 
-XpbdParticleManager::XpbdParticleManager(Context& context, ModelManager& modelManager, TextureManager& textureManager)
+ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, TextureManager& textureManager)
 	: context_(context)
 {
 	{
@@ -120,7 +120,7 @@ XpbdParticleManager::XpbdParticleManager(Context& context, ModelManager& modelMa
 		softbody.color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
 		softbody.render = true;
 
-		SetSoftbody("assets/bunny_tets_tmp.json", softbody, true);
+		SetSoftbody("assets/bunny_tets.json", softbody, true);
 	}
 
 	{
@@ -133,6 +133,12 @@ XpbdParticleManager::XpbdParticleManager(Context& context, ModelManager& modelMa
 		SetSoftbody("assets/sphere.msh", softbody, false);
 	}
 
+	sim_base_.push_back(0);
+	sim_base_.push_back(num_cloth_particles_);
+
+	sim_count_.push_back(num_cloth_particles_);
+	sim_count_.push_back(num_softbody_particles_);
+
 	vku::CreateIndexBuffer(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_, indices_, index_buffer_, index_buffer_memory_);
 
 	total_particles_ = num_cloth_particles_ + num_softbody_particles_;
@@ -140,19 +146,19 @@ XpbdParticleManager::XpbdParticleManager(Context& context, ModelManager& modelMa
 	total_indices_ = num_cloth_indices_ + num_softbody_indices_;
 	assert(total_indices_ == indices_.size());
 
-	total_tries_ = (total_indices_ / 3);
+	total_tries_ = ((num_cloth_indices_ + num_softbody_indices_) / 3);
 
 	BuildVertexAdjacency();
 
 	CreateSSBO();
 }
 
-XpbdParticleManager::~XpbdParticleManager()
+ParticleManager::~ParticleManager()
 {
 
 }
 
-void XpbdParticleManager::SetPlaneCloth(Cloth& cloth)
+void ParticleManager::SetPlaneCloth(Cloth& cloth)
 {
 	cloth.type = Cloth::Type::PLANE;
 	cloth.nx = (uint32_t)std::round(cloth.cloth_size.x / cloth.spacing);
@@ -281,7 +287,7 @@ void XpbdParticleManager::SetPlaneCloth(Cloth& cloth)
 	clothes_.push_back(cloth);
 }
 
-void XpbdParticleManager::SetClothFromMesh(Cloth& cloth)
+void ParticleManager::SetClothFromMesh(Cloth& cloth)
 {
 	cloth.type = Cloth::Type::MESH;
 
@@ -386,11 +392,11 @@ void XpbdParticleManager::SetClothFromMesh(Cloth& cloth)
 	//cloth.mesh = std::move(mesh);
 }
 
-void XpbdParticleManager::SetSoftbody(std::string path, SoftBody& softbody, bool isJson)
+void ParticleManager::SetSoftbody(std::string path, SoftBody& softbody, bool isJson)
 {
 	if (isJson)
 	{
-		softbody.tetmesh = vku::LoadTmpBunnyJson(path.c_str());
+		softbody.tetmesh = vku::LoadJson(path.c_str());
 	}
 	else
 	{
@@ -473,7 +479,7 @@ void XpbdParticleManager::SetSoftbody(std::string path, SoftBody& softbody, bool
 	softbodies_.push_back(softbody);
 }
 
-void XpbdParticleManager::ResetCloth(Cloth& cloth)
+void ParticleManager::ResetCloth(Cloth& cloth)
 {
 	if (cloth.type == Cloth::Type::MESH)
 		return;
@@ -581,7 +587,7 @@ void XpbdParticleManager::ResetCloth(Cloth& cloth)
 	}
 }
 
-void XpbdParticleManager::ResetSoftbody(SoftBody& softbody)
+void ParticleManager::ResetSoftbody(SoftBody& softbody)
 {
 	for (uint32_t i = 0; i < softbody.tetmesh.positions.size(); i++)
 	{
@@ -591,7 +597,7 @@ void XpbdParticleManager::ResetSoftbody(SoftBody& softbody)
 	}
 }
 
-void XpbdParticleManager::ResetVolumeConstraint()
+void ParticleManager::ResetVolumeConstraint()
 {
 	for (auto& v : volume_constraints)
 	{
@@ -599,7 +605,7 @@ void XpbdParticleManager::ResetVolumeConstraint()
 	}
 }
 
-void XpbdParticleManager::CreateSSBO()
+void ParticleManager::CreateSSBO()
 {
 	// position
 	ssbo_size_.position = sizeof(glm::vec4) * total_particles_;
@@ -802,7 +808,7 @@ void XpbdParticleManager::CreateSSBO()
 
 }
 
-void XpbdParticleManager::BuildVertexAdjacency()
+void ParticleManager::BuildVertexAdjacency()
 {
 	const uint32_t numIndices = total_indices_;
 	assert(numIndices % 3 == 0);

@@ -1,6 +1,6 @@
 #pragma once
 
-struct XpbdUBO {
+struct SimUBO {
 	struct Data {
 		struct SimParams {
 			glm::vec4 gravity = glm::vec4(0.0f, -9.8f, 0.0f, 0.0f);

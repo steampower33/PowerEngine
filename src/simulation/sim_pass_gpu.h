@@ -7,10 +7,10 @@ class TextureManager;
 class Model;
 class ModelManager;
 class MouseInteractor;
-class XpbdParticleManager;
-class XpbdGpuProfiler;
-struct XpbdData;
-struct XpbdUBO;
+class ParticleManager;
+class GpuProfiler;
+struct SimData;
+struct SimUBO;
 
 #include "sim_data.h"
 #include "sim_ubo.h"
@@ -19,24 +19,24 @@ struct XpbdUBO;
 
 #include <vk_radix_sort.h>
 
-class XpbdPassGPU
+class SimPassGPU
 {
 public:
-	XpbdPassGPU(Context& context, Swapchain& swapchain, XpbdParticleManager& particleManager, ModelManager& modelManager);
-	XpbdPassGPU(const XpbdPassGPU& rhs) = delete;
-	XpbdPassGPU(XpbdPassGPU&& rhs) = delete;
-	XpbdPassGPU& operator=(const XpbdPassGPU& rhs) = delete;
-	XpbdPassGPU& operator=(XpbdPassGPU&& rhs) = delete;
-	~XpbdPassGPU();
+	SimPassGPU(Context& context, Swapchain& swapchain, ParticleManager& particleManager, ModelManager& modelManager);
+	SimPassGPU(const SimPassGPU& rhs) = delete;
+	SimPassGPU(SimPassGPU&& rhs) = delete;
+	SimPassGPU& operator=(const SimPassGPU& rhs) = delete;
+	SimPassGPU& operator=(SimPassGPU&& rhs) = delete;
+	~SimPassGPU();
 
 	Context& context_;
-	XpbdParticleManager& particle_manager_;
+	ParticleManager& particle_manager_;
 	ModelManager& model_manager_;
 
-	std::unique_ptr<XpbdGpuProfiler> gpu_profiler_;
+	std::unique_ptr<GpuProfiler> gpu_profiler_;
 
-	XpbdData sim_datas_;
-	XpbdUBO ubo_;
+	SimData sim_datas_;
+	SimUBO ubo_;
 
 	std::vector<vk::raii::CommandBuffer> cmds_;
 

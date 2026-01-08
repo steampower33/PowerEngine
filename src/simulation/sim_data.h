@@ -3,23 +3,15 @@
 #include "model_data.h"
 #include "particle_manager.h"
 
-struct XpbdData {
+struct SimData {
 
 	enum SimulationType {
 		CLOTH,
-		SOFTBODY
+		SOFTBODY,
+		FLUID
 	};
 
 	SimulationType simulation_type_ = SimulationType::CLOTH;
-
-	uint32_t total_particles_;
-	uint32_t total_indices_;
-	uint32_t total_tri_;
-
-	uint32_t cloth_particles_;
-	uint32_t cloth_indices_;
-	uint32_t softbody_particles_;
-	uint32_t softbody_indices_;
 
 	int broadphase_interval_ = 2;
 	int narrowphase_interval_ = 1;
@@ -363,7 +355,7 @@ struct XpbdData {
 
 			float restDot = glm::dot(e1, e2);
 
-			XpbdData::Shear c{};
+			SimData::Shear c{};
 			c.i0 = i0;
 			c.i1 = i1;
 			c.i2 = i2;
@@ -544,7 +536,7 @@ struct XpbdData {
 		return dist;
 	}
 
-	void BuildLRAConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices, XpbdParticleManager& pm)
+	void BuildLRAConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices, ParticleManager& pm)
 	{
 		uint32_t K = 2;
 

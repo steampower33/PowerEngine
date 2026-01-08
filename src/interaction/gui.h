@@ -3,13 +3,13 @@
 class Context;
 class Swapchain;
 class PassManager;
-class XpbdPassGPU;
+class SimPassGPU;
 class SimulationPassCPU;
 class Model;
 class ModelManager;
 class TextureManager;
 class GraphicsPass;
-class XpbdParticleManager;
+class ParticleManager;
 class Camera;
 
 class GUI
@@ -47,7 +47,7 @@ public:
 	template<typename RowFn>
 	void SetRenderingGUI(RowFn&& row);
 	template<typename RowFn>
-	void SetModelsGUI(RowFn&& row);
+	void SetObjectsGUI(RowFn&& row);
 	template<typename RowFn>
 	void SetTimeingGUI(RowFn&& row);
 	template<typename RowFn>

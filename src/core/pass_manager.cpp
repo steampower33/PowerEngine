@@ -17,9 +17,9 @@ PassManager::PassManager(GLFWwindow* glfwWindow, Context& context, Swapchain& sw
 {
 	CreateSyncObjects();
 
-	particle_manager_ = std::make_unique<XpbdParticleManager>(context, modelManager, textureManager);
+	particle_manager_ = std::make_unique<ParticleManager>(context, modelManager, textureManager);
 
-	sim_pass_gpu_ = std::make_unique<XpbdPassGPU>(context, swapchain, *particle_manager_, modelManager);
+	sim_pass_gpu_ = std::make_unique<SimPassGPU>(context, swapchain, *particle_manager_, modelManager);
 	graphics_pass_ = std::make_unique<GraphicsPass>(context, swapchain, textureManager, modelManager, *particle_manager_);
 }
 

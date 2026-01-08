@@ -68,15 +68,15 @@ struct SoftBody
 	ubo_data::Model ubo_data;
 };
 
-class XpbdParticleManager
+class ParticleManager
 {
 public:
-	XpbdParticleManager(Context& context, ModelManager& modelManager, TextureManager& textureManager);
-	XpbdParticleManager(const XpbdParticleManager& rhs) = delete;
-	XpbdParticleManager(XpbdParticleManager&& rhs) = delete;
-	XpbdParticleManager& operator=(const XpbdParticleManager& rhs) = delete;
-	XpbdParticleManager& operator=(XpbdParticleManager&& rhs) = delete;
-	~XpbdParticleManager();
+	ParticleManager(Context& context, ModelManager& modelManager, TextureManager& textureManager);
+	ParticleManager(const ParticleManager& rhs) = delete;
+	ParticleManager(ParticleManager&& rhs) = delete;
+	ParticleManager& operator=(const ParticleManager& rhs) = delete;
+	ParticleManager& operator=(ParticleManager&& rhs) = delete;
+	~ParticleManager();
 
 	void SetPlaneCloth(Cloth& cloth);
 	void SetClothFromMesh(Cloth& cloth);
@@ -86,6 +86,9 @@ public:
 	void ResetVolumeConstraint();
 
 	Context& context_;
+
+	std::vector<uint32_t> sim_base_;
+	std::vector<uint32_t> sim_count_;
 
 	uint32_t total_particles_ = 0;
 	uint32_t total_indices_ = 0;
