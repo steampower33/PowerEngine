@@ -6,12 +6,6 @@
 - **XPBD (Extended Position-Based Dynamics)** is a constraint-based simulation method that enforces constraints directly on particle positions.
 - Unlike classic PBD, XPBD introduces **compliance (α)** to control stiffness in a time-step–robust way, making results less sensitive to the chosen `dt`.
 - Each constraint is solved via XPBD using **first-order constraint gradients** `∇C` to compute `Δλ` and apply mass-weighted position corrections.
-- Implementation notes:
-  - The **Stretch (distance)** constraint additionally uses an XPBD **damping** term `β`, while the other constraints currently use compliance (`α`) only.
-  - In this project, per-constraint "stiffness" is applied as a scale on the XPBD impulse update (Δλ),
-  so that both λ accumulation and position corrections use the same scaled Δλ.
-  (Previously stiffness was applied only to the final Δx, which could desync λ and the actual positional response.)
-
 
 ---
 
@@ -32,8 +26,7 @@ for each frame:
       Broadphase: build_hash → radix sort(vk_radix_sort) → build cell ranges(start/end) → build neighbor list
     for iter in [0..iterations):
       Solve constraints (stretch uses coloring-GS, others use atomic accumulation)
-      Solve Self Collision (intra-cloth)
-      Solve Inter Collision (cloth ↔ cloth)
+      Solve Self Collision
       Apply accumulated position deltas
       Clear accumulators (per-iteration)
     Solve LRA (Long-Range Attachments)
@@ -81,13 +74,8 @@ for each frame:
   - Area
     - Enforces triangle area constraints.
 
-  - Self Collision (intra-cloth)
-    - This pass handles **cloth self-collision only**. Particles are filtered by `collision_masks[i].object_type == TYPE_CLOTH`.
+  - Self Collision
     - Candidate pairs are obtained from the broadphase **neighbor list** (`neighbors`), built from the spatial hash grid.
-    - Self-collision is applied **within the same object only**:
-      - `collision_masks[j].object_id == collision_masks[i].object_id`
-      - and `collision_masks[j].object_type == TYPE_CLOTH`
-      - (Inter-cloth / inter-object collisions are handled in a separate pass.)
     
     - The constraint is a **particle–particle distance inequality** (non-penetration):
       - Penetration when `dist < r` (`r = collision_radius`)
@@ -104,14 +92,6 @@ for each frame:
 
     - For parallel GPU solving, corrections are **atomically accumulated** into `delta_x/y/z` and `delta_count` rather than writing directly to `xp`.
       The accumulated deltas are applied later in the “Apply accumulated position deltas” pass.
-
-    **Note:** `neighbor_lambdas` is per “(particle i, neighbor-slot k)” state. It typically assumes lambdas are cleared/reset at substep start (or whenever the neighbor list is rebuilt), depending on the chosen scheme.
-
-  - Inter Collision (cloth ↔ cloth)
-    - Separate pass from self-collision.
-    - Resolves collisions between different cloth instances (different object ids).
-    - Reuses the same broadphase neighbor list, but filters pairs by object id/type.
-    > Note: collision stiffness may exceed 1 (acts as solver-strength gain rather than material stiffness).
 
   - LRA (Long-Range Attachments)
     - Adds long-range constraints that prevent unrealistic global stretching under gravity and fast motion.
@@ -171,32 +151,21 @@ This project uses "stiffness" in two slightly different senses:
   Used for internal constraints (stretch / shear / bend / area / volume).
 
 - **Collision stiffness (solver strength)**: `k > 1` allowed
-  Used for self/inter collision contacts. Here stiffness acts as a solver-strength gain
+  Used for self collision contacts. Here stiffness acts as a solver-strength gain
   to speed up penetration removal in the Jacobi-style delta accumulation pipeline.
   Typical values are scene dependent (often > 1).
-
-> Rationale: internal constraints use normalized stiffness for intuitive material tuning,
-while collisions may require stronger gains due to dense contact graphs and averaged delta application.
 
 ---
 
 ## Performance (profiling numbers)
 - GPU: NVIDIA GeForce RTX 4060 Laptop GPU
-- Scene: XPBD Cloth + collisions (softbody constraints enabled; softbody simulation optional)
+- Scene: XPBD Cloth + collisions 
 - Cloth stats: 35,603 particles / 105,600 edges / 70,000 shears / 104,400 bends / 70,000 areas / 71,206 LRAs
 - Softbody stats: 891 particles / 5,273 edges / 3,903 volumes
 - GPU timestamp (per-frame): Compute 7.325 ms, Graphics 0.717 ms
 - Kernel breakdown (avg): Total 7.183 ms
   - SolveStretch 1.868 ms, BuildNeighbor 0.958 ms, SolveBend 1.070 ms, SolveArea 0.711 ms, SolveShear 0.685 ms, SolveSelfCollision 0.773 ms
   - SolveLRA 0.043 ms (~0.6% of kernel time)
-
-Notes:
-- The numbers above come from Vulkan timestamp queries and are intended for GPU kernel breakdown.
-  The profiling overlay performs per-frame query readback, which can introduce CPU↔GPU synchronization overhead;
-  therefore, overlay ms/frame is not used as a benchmark number.
-- Runtime scales with quality/performance parameters: substeps, solver iterations, neighbor search density (radius / max neighbors),
-  collision settings, and enabled constraint sets
-- Terminology: "Edges" refer to mesh connectivity; "Stretch" refers to distance constraints solved along those edges.
 
 ---
 
@@ -209,7 +178,6 @@ The renderer is primarily for **simulation visualization & debugging** (not a fu
 - [x] Vulkan rendering backend
 - [x] KTX/KTX2 texture loading (KTX::ktx)
 - [x] ImGui debug UI
-- [ ] GPU skinning / animation (if any)
 
 ### Lighting & Materials
 
@@ -225,7 +193,6 @@ The renderer is primarily for **simulation visualization & debugging** (not a fu
 
 - [x] Shadow mapping (spot light)
   - [x] PCF filtering
-  - [ ] Cascaded Shadow Maps (CSM)
 
 ---
 

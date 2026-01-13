@@ -1,10 +1,10 @@
-# PowerEngine
+# PhysixStudio
 
 > GPU-accelerated particle simulation engine based on **Extended Position Based Dynamics (XPBD)**.  
 > Real-time oriented particle systems (cloth / softbody / fluid, etc.) built on a unified XPBD solver.
 
 <p align="center">
-  <img src="docs/media/preview.png" alt="PowerEngine preview" width="600" />
+  <img src="docs/media/preview.png" alt="PhysixStudio preview" width="600" />
 </p>
 
 ---
@@ -16,7 +16,7 @@ Most real-time particle simulators either:
 - run on CPU and struggle with performance at higher particle counts, or
 - hide critical implementation details behind closed source.
 
-PowerEngine aims to:
+PhysixStudio aims to:
 - provide a **unified XPBD solver** that can cover multiple particle systems
 - keep the architecture **GPU-friendly** for real-time iteration
 
@@ -58,12 +58,7 @@ PowerEngine aims to:
 - [x] Bending (A) [Müller+07]
 - [x] Area (A) [Müller+14]
 - [x] Self-Collision (A)
-- [x] Inter-Collision (A)
 - [x] LRA(Long Range Attachments) (per-particle sequential projection; GS-like) [Kim+12]
-
-### Softbody
-- [x] Stretch (A) [Müller+14]
-- [x] Volume (A) [Müller+14]
 
 ### External Force
 - [x] Wind effects [Wilson+14] (used in Disney’s Frozen)
@@ -104,8 +99,8 @@ PowerEngine aims to:
 > Run from **x64 Native Tools Command Prompt for VS 2022**.
 
 ```bat
-git clone https://github.com/steampower33/PowerEngine.git
-cd PowerEngine
+git clone https://github.com/steampower33/PhysixStudio.git
+cd PhysixStudio
 git submodule update --init --recursive
 
 :: Release
