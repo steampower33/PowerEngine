@@ -1,7 +1,7 @@
 # PhysixStudio
 
 > GPU-accelerated particle simulation engine based on **Extended Position Based Dynamics (XPBD)**.  
-> Real-time oriented particle systems (cloth / softbody / fluid, etc.) built on a unified XPBD solver.
+> Real-time oriented cloth particle system built on a unified XPBD solver.
 
 ---
 
@@ -22,7 +22,7 @@
 ### Cloth
 - [x] Distance/Stretch (G) [Müller+07]
 - [x] Shear (A) [Müller+14]
-- [x] Bending (A) [Müller+07]
+- [x] Bend (A) [Müller+07]
 - [x] Area (A) [Müller+14]
 - [x] Self-Collision (A)
 - [x] LRA(Long Range Attachments) (per-particle sequential projection; GS-like) [Kim+12]
