@@ -120,6 +120,7 @@ void ClothSimPass::RecordCompute(uint32_t currentFrame)
 		is_reset_ = false;
 		CopySimDatas(cmd);
 	}
+	CopyColliders(cmd);
 
 	uint32_t simparamOffset = currentFrame * static_cast<uint32_t>(ubo_.size.sim_params);
 	cmd.bindDescriptorSets(
@@ -625,6 +626,58 @@ void ClothSimPass::CopySimDatas(const vk::raii::CommandBuffer& cmd)
 		vk::PipelineStageFlagBits2::eComputeShader,
 		vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
 }
+
+
+void ClothSimPass::CopyColliders(const vk::raii::CommandBuffer& cmd)
+{
+	bool isCopyToGPU = false;
+
+	uint32_t base = 0;
+	for (uint32_t i = 0; i < model_manager_.models_.size(); i++)
+	{
+		auto& model = *model_manager_.models_[i];
+
+		if (model.shape_collision_update_)
+		{
+			model.shape_collision_update_ = false;
+
+			isCopyToGPU = true;
+
+			model.UpdateShapeColliders();
+
+			//std::cout <<" Update " << model.name_ << std::endl;
+
+			for (uint32_t j = 0; j < model.shape_colliders_.size(); j++)
+				datas_.colliders[base + j] = model.shape_colliders_[j];
+
+		}
+		base += model.shape_colliders_.size();
+
+		if (model.capsule_collision_update_)
+		{
+			model.capsule_collision_update_ = false;
+
+			isCopyToGPU = true;
+
+			model.UpdateCapsuleCollidersFromBones();
+
+			for (uint32_t j = 0; j < model.capsule_colliders_.size(); j++)
+				datas_.colliders[base + j] = model.capsule_colliders_[j];
+		}
+		base += model.capsule_colliders_.size();
+	}
+
+	if (isCopyToGPU)
+	{
+		vku::CopyStagingToSSBO(cmd, datas_.ssbo_size_.collider, datas_.staging_mapped_.collider, datas_.colliders, datas_.staging_.collider, datas_.ssbos_.collider,
+			vk::PipelineStageFlagBits2::eComputeShader,
+			vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
+			vk::PipelineStageFlagBits2::eComputeShader,
+			vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite);
+	}
+
+}
+
 
 void ClothSimPass::CreateCommandBuffers()
 {

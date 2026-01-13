@@ -108,4 +108,5 @@ private:
 	void CreateVrdxSorter();
 
 	void CopySimDatas(const vk::raii::CommandBuffer& cmd);
+	void CopyColliders(const vk::raii::CommandBuffer& cmd);
 };
