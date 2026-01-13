@@ -3,39 +3,6 @@
 > GPU-accelerated particle simulation engine based on **Extended Position Based Dynamics (XPBD)**.  
 > Real-time oriented particle systems (cloth / softbody / fluid, etc.) built on a unified XPBD solver.
 
-<p align="center">
-  <img src="docs/media/preview.png" alt="PhysixStudio preview" width="600" />
-</p>
-
----
-
-## Why another XPBD particle engine?
-
-Most real-time particle simulators either:
-- focus on a single material model (cloth-only / fluid-only), or
-- run on CPU and struggle with performance at higher particle counts, or
-- hide critical implementation details behind closed source.
-
-PhysixStudio aims to:
-- provide a **unified XPBD solver** that can cover multiple particle systems
-- keep the architecture **GPU-friendly** for real-time iteration
-
----
-
-## Demo
-
-<p align="center">
-  <img src="docs/media/horizontal_drop.gif" alt="horizontal_drop" width="400" />
-  <img src="docs/media/vertical_drop.gif" alt="vertical_drop" width="400" />
-</p>
-<p align="center">
-  <img src="docs/media/pinned_corner.gif" alt="pinned_corner" width="400" />
-  <img src="docs/media/top_pinned_corner.gif" alt="top_pinned_corner" width="400" />
-</p>
-<p align="center">
-  <img src="docs/media/wind2.gif" alt="wind" width="800" />
-</p>
-
 ---
 
 ## Features
