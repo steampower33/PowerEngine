@@ -6,13 +6,13 @@
 #include "texture_manager.h"
 #include "model.h"
 #include "model_manager.h"
-#include "particle_manager.h"
+#include "cloth_particle_manager.h"
 #include "model_loader.h"
 
 #include "graphics_pass.h"
 
-GraphicsPass::GraphicsPass(Context& context, Swapchain& swapchain, TextureManager& textureManager, ModelManager& modelManager, ParticleManager& particleManager)
-	: context_(context), swapchain_(swapchain), texture_manager_(textureManager), model_manager_(modelManager), particle_manager_(particleManager)
+GraphicsPass::GraphicsPass(Context& context, Swapchain& swapchain, TextureManager& textureManager, ModelManager& modelManager, ClothParticleManager& particleManager)
+	: context_(context), swapchain_(swapchain), texture_manager_(textureManager), model_manager_(modelManager), cloth_particle_manager_(particleManager)
 {
 	//msaa_samples_ = vku::GetMaxUsableSampleCount(context_.physical_device_.getProperties());
 
@@ -107,7 +107,7 @@ void GraphicsPass::UpdateGraphicsUBO(uint32_t currentFrame, Camera& camera, bool
 	}
 
 	{
-		auto& pm = particle_manager_;
+		auto& pm = cloth_particle_manager_;
 
 		const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * pm.clothes_.size() * ubo_size_.cloth);
 		auto* base = static_cast<std::byte*>(ubo_mapped_.cloth) + baseOffset;
@@ -407,7 +407,7 @@ void GraphicsPass::CreateDescriptorSetLayout()
 			vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eStorageBuffer,        1, vk::ShaderStageFlagBits::eVertex },
 			vk::DescriptorSetLayoutBinding{2, vk::DescriptorType::eStorageBuffer,        1, vk::ShaderStageFlagBits::eVertex }
 		};
-		counts_.ubo_dynamic += particle_manager_.clothes_.size() * MAX_FRAMES_IN_FLIGHT;
+		counts_.ubo_dynamic += cloth_particle_manager_.clothes_.size() * MAX_FRAMES_IN_FLIGHT;
 		counts_.sb += 2;
 		counts_.layout += 1;
 
@@ -415,20 +415,20 @@ void GraphicsPass::CreateDescriptorSetLayout()
 		set_layouts_.cloth = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
 	}
 
-	// Softbody
-	{
-		std::array layoutBindings{
-			vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, nullptr),
-			vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eStorageBuffer,        1, vk::ShaderStageFlagBits::eVertex },
-			vk::DescriptorSetLayoutBinding{2, vk::DescriptorType::eStorageBuffer,        1, vk::ShaderStageFlagBits::eVertex },
-		};
-		counts_.ubo_dynamic += particle_manager_.softbodies_.size() * MAX_FRAMES_IN_FLIGHT;
-		counts_.sb += 2;
-		counts_.layout += 1;
+	//// Softbody
+	//{
+	//	std::array layoutBindings{
+	//		vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBufferDynamic, 1, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, nullptr),
+	//		vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eStorageBuffer,        1, vk::ShaderStageFlagBits::eVertex },
+	//		vk::DescriptorSetLayoutBinding{2, vk::DescriptorType::eStorageBuffer,        1, vk::ShaderStageFlagBits::eVertex },
+	//	};
+	//	counts_.ubo_dynamic += cloth_particle_manager_.softbodies_.size() * MAX_FRAMES_IN_FLIGHT;
+	//	counts_.sb += 2;
+	//	counts_.layout += 1;
 
-		vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
-		set_layouts_.softbody = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
-	}
+	//	vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(layoutBindings.size()), .pBindings = layoutBindings.data() };
+	//	set_layouts_.softbody = vk::raii::DescriptorSetLayout(context_.device_, layoutInfo);
+	//}
 
 	// Skinned Model
 	{
@@ -611,7 +611,7 @@ void GraphicsPass::CreateUniformBuffers()
 		auto limits = context_.physical_device_.getProperties().limits;
 		ubo_size_.cloth = (sizeof(ubo_data::Model) + limits.minUniformBufferOffsetAlignment - 1)
 			& ~(limits.minUniformBufferOffsetAlignment - 1);
-		vk::DeviceSize totalSize = particle_manager_.clothes_.size() * ubo_size_.cloth * MAX_FRAMES_IN_FLIGHT;
+		vk::DeviceSize totalSize = cloth_particle_manager_.clothes_.size() * ubo_size_.cloth * MAX_FRAMES_IN_FLIGHT;
 
 		vk::raii::Buffer buffer({});
 		vk::raii::DeviceMemory bufferMem({});
@@ -621,24 +621,24 @@ void GraphicsPass::CreateUniformBuffers()
 		ubo_mapped_.cloth = ubo_memories_.cloth.mapMemory(0, totalSize);
 	}
 
-	// Softbody
-	{
-		ubos_.softbody.clear();
-		ubo_memories_.softbody.clear();
-		ubo_mapped_.softbody = nullptr;
+	//// Softbody
+	//{
+	//	ubos_.softbody.clear();
+	//	ubo_memories_.softbody.clear();
+	//	ubo_mapped_.softbody = nullptr;
 
-		auto limits = context_.physical_device_.getProperties().limits;
-		ubo_size_.softbody = (sizeof(ubo_data::Model) + limits.minUniformBufferOffsetAlignment - 1)
-			& ~(limits.minUniformBufferOffsetAlignment - 1);
-		vk::DeviceSize totalSize = particle_manager_.softbodies_.size() * ubo_size_.softbody * MAX_FRAMES_IN_FLIGHT;
+	//	auto limits = context_.physical_device_.getProperties().limits;
+	//	ubo_size_.softbody = (sizeof(ubo_data::Model) + limits.minUniformBufferOffsetAlignment - 1)
+	//		& ~(limits.minUniformBufferOffsetAlignment - 1);
+	//	vk::DeviceSize totalSize = cloth_particle_manager_.softbodies_.size() * ubo_size_.softbody * MAX_FRAMES_IN_FLIGHT;
 
-		vk::raii::Buffer buffer({});
-		vk::raii::DeviceMemory bufferMem({});
-		vku::CreateBuffer(context_.physical_device_, context_.device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
-		ubos_.softbody = std::move(buffer);
-		ubo_memories_.softbody = std::move(bufferMem);
-		ubo_mapped_.softbody = ubo_memories_.softbody.mapMemory(0, totalSize);
-	}
+	//	vk::raii::Buffer buffer({});
+	//	vk::raii::DeviceMemory bufferMem({});
+	//	vku::CreateBuffer(context_.physical_device_, context_.device_, totalSize, vk::BufferUsageFlagBits::eUniformBuffer, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, buffer, bufferMem);
+	//	ubos_.softbody = std::move(buffer);
+	//	ubo_memories_.softbody = std::move(bufferMem);
+	//	ubo_mapped_.softbody = ubo_memories_.softbody.mapMemory(0, totalSize);
+	//}
 
 	// Skinned Model
 	{
@@ -883,8 +883,8 @@ void GraphicsPass::CreateDescriptorSets()
 		sets_.cloth = std::move(sets.front());
 
 		vk::DescriptorBufferInfo clothUbo{ *ubos_.cloth, 0, ubo_size_.cloth };
-		vk::DescriptorBufferInfo positions(particle_manager_.ssbos_.position, 0, VK_WHOLE_SIZE);
-		vk::DescriptorBufferInfo normals(particle_manager_.ssbos_.normal, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo positions(cloth_particle_manager_.ssbos_.position, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo normals(cloth_particle_manager_.ssbos_.normal, 0, VK_WHOLE_SIZE);
 
 		std::array descriptorWrites{
 			vk::WriteDescriptorSet{
@@ -916,50 +916,50 @@ void GraphicsPass::CreateDescriptorSets()
 		context_.device_.updateDescriptorSets(descriptorWrites, {});
 	}
 
-	// Softbody
-	{
-		vk::DescriptorSetAllocateInfo allocInfo{
-			.descriptorPool = *descriptor_pool_,
-			.descriptorSetCount = 1,
-			.pSetLayouts = &*set_layouts_.softbody
-		};
+	//// Softbody
+	//{
+	//	vk::DescriptorSetAllocateInfo allocInfo{
+	//		.descriptorPool = *descriptor_pool_,
+	//		.descriptorSetCount = 1,
+	//		.pSetLayouts = &*set_layouts_.softbody
+	//	};
 
-		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
-		sets_.softbody = std::move(sets.front());
+	//	auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
+	//	sets_.softbody = std::move(sets.front());
 
-		vk::DescriptorBufferInfo softbodyUbo{ *ubos_.softbody, 0, ubo_size_.softbody };
-		vk::DescriptorBufferInfo positions(particle_manager_.ssbos_.position, 0, VK_WHOLE_SIZE);
-		vk::DescriptorBufferInfo normals(particle_manager_.ssbos_.normal, 0, VK_WHOLE_SIZE);
+	//	vk::DescriptorBufferInfo softbodyUbo{ *ubos_.softbody, 0, ubo_size_.softbody };
+	//	vk::DescriptorBufferInfo positions(cloth_particle_manager_.ssbos_.position, 0, VK_WHOLE_SIZE);
+	//	vk::DescriptorBufferInfo normals(cloth_particle_manager_.ssbos_.normal, 0, VK_WHOLE_SIZE);
 
-		std::array descriptorWrites{
-			vk::WriteDescriptorSet{
-				.dstSet = *sets_.softbody,
-				.dstBinding = 0,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
-				.pBufferInfo = &softbodyUbo
-			},
-			vk::WriteDescriptorSet{
-				.dstSet = *sets_.softbody,
-				.dstBinding = 1,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = vk::DescriptorType::eStorageBuffer,
-				.pBufferInfo = &positions
-			},
-			vk::WriteDescriptorSet{
-				.dstSet = *sets_.softbody,
-				.dstBinding = 2,
-				.dstArrayElement = 0,
-				.descriptorCount = 1,
-				.descriptorType = vk::DescriptorType::eStorageBuffer,
-				.pBufferInfo = &normals
-			},
+	//	std::array descriptorWrites{
+	//		vk::WriteDescriptorSet{
+	//			.dstSet = *sets_.softbody,
+	//			.dstBinding = 0,
+	//			.dstArrayElement = 0,
+	//			.descriptorCount = 1,
+	//			.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
+	//			.pBufferInfo = &softbodyUbo
+	//		},
+	//		vk::WriteDescriptorSet{
+	//			.dstSet = *sets_.softbody,
+	//			.dstBinding = 1,
+	//			.dstArrayElement = 0,
+	//			.descriptorCount = 1,
+	//			.descriptorType = vk::DescriptorType::eStorageBuffer,
+	//			.pBufferInfo = &positions
+	//		},
+	//		vk::WriteDescriptorSet{
+	//			.dstSet = *sets_.softbody,
+	//			.dstBinding = 2,
+	//			.dstArrayElement = 0,
+	//			.descriptorCount = 1,
+	//			.descriptorType = vk::DescriptorType::eStorageBuffer,
+	//			.pBufferInfo = &normals
+	//		},
 
-		};
-		context_.device_.updateDescriptorSets(descriptorWrites, {});
-	}
+	//	};
+	//	context_.device_.updateDescriptorSets(descriptorWrites, {});
+	//}
 
 	// Skinned Model UBO
 	{
@@ -999,7 +999,7 @@ void GraphicsPass::CreateDescriptorSets()
 		auto sets = vk::raii::DescriptorSets{ context_.device_, allocInfo };
 		sets_.shadow_particle = std::move(sets.front());
 
-		vk::DescriptorBufferInfo positions(particle_manager_.ssbos_.position, 0, VK_WHOLE_SIZE);
+		vk::DescriptorBufferInfo positions(cloth_particle_manager_.ssbos_.position, 0, VK_WHOLE_SIZE);
 
 		std::array descriptorWrites{
 			vk::WriteDescriptorSet{
@@ -1690,143 +1690,143 @@ void GraphicsPass::CreateGraphicsPipelines()
 
 	}
 
-	// Softbody
-	{
-		// Shader
-		auto vertCode = vku::ReadFile("shaders/spv/softbody.vert.spv");
-		auto fragCode = vku::ReadFile("shaders/spv/softbody.frag.spv");
+	//// Softbody
+	//{
+	//	// Shader
+	//	auto vertCode = vku::ReadFile("shaders/spv/softbody.vert.spv");
+	//	auto fragCode = vku::ReadFile("shaders/spv/softbody.frag.spv");
 
-		vk::raii::ShaderModule vertModule = vku::CreateShaderModule(context_.device_, vertCode);
-		vk::raii::ShaderModule fragModule = vku::CreateShaderModule(context_.device_, fragCode);
+	//	vk::raii::ShaderModule vertModule = vku::CreateShaderModule(context_.device_, vertCode);
+	//	vk::raii::ShaderModule fragModule = vku::CreateShaderModule(context_.device_, fragCode);
 
-		vk::PipelineShaderStageCreateInfo vertStage{
-			.stage = vk::ShaderStageFlagBits::eVertex,
-			.module = *vertModule,
-			.pName = "main"
-		};
-		vk::PipelineShaderStageCreateInfo fragStage{
-			.stage = vk::ShaderStageFlagBits::eFragment,
-			.module = *fragModule,
-			.pName = "main"
-		};
-		std::array<vk::PipelineShaderStageCreateInfo, 2> stages{ vertStage, fragStage };
+	//	vk::PipelineShaderStageCreateInfo vertStage{
+	//		.stage = vk::ShaderStageFlagBits::eVertex,
+	//		.module = *vertModule,
+	//		.pName = "main"
+	//	};
+	//	vk::PipelineShaderStageCreateInfo fragStage{
+	//		.stage = vk::ShaderStageFlagBits::eFragment,
+	//		.module = *fragModule,
+	//		.pName = "main"
+	//	};
+	//	std::array<vk::PipelineShaderStageCreateInfo, 2> stages{ vertStage, fragStage };
 
-		// SSBO Vertex Pulling
-		vk::PipelineVertexInputStateCreateInfo vi{};
+	//	// SSBO Vertex Pulling
+	//	vk::PipelineVertexInputStateCreateInfo vi{};
 
-		vk::PipelineInputAssemblyStateCreateInfo ia{
-			.topology = vk::PrimitiveTopology::eTriangleList,
-			.primitiveRestartEnable = vk::False
-		};
-		vk::PipelineViewportStateCreateInfo vs{
-			.viewportCount = 1,
-			.scissorCount = 1
-		};
+	//	vk::PipelineInputAssemblyStateCreateInfo ia{
+	//		.topology = vk::PrimitiveTopology::eTriangleList,
+	//		.primitiveRestartEnable = vk::False
+	//	};
+	//	vk::PipelineViewportStateCreateInfo vs{
+	//		.viewportCount = 1,
+	//		.scissorCount = 1
+	//	};
 
-		vk::PipelineRasterizationStateCreateInfo rs{
-			.depthClampEnable = vk::False,
-			.rasterizerDiscardEnable = vk::False,
-			.polygonMode = vk::PolygonMode::eFill,
-			.cullMode = vk::CullModeFlagBits::eBack,
-			.frontFace = vk::FrontFace::eCounterClockwise,
-			.depthBiasEnable = vk::False,
-			.lineWidth = 1.0f
-		};
+	//	vk::PipelineRasterizationStateCreateInfo rs{
+	//		.depthClampEnable = vk::False,
+	//		.rasterizerDiscardEnable = vk::False,
+	//		.polygonMode = vk::PolygonMode::eFill,
+	//		.cullMode = vk::CullModeFlagBits::eBack,
+	//		.frontFace = vk::FrontFace::eCounterClockwise,
+	//		.depthBiasEnable = vk::False,
+	//		.lineWidth = 1.0f
+	//	};
 
-		vk::PipelineMultisampleStateCreateInfo ms{
-			.rasterizationSamples = msaa_samples_,
-			.sampleShadingEnable = vk::False
-		};
-		vk::PipelineDepthStencilStateCreateInfo ds{
-			.depthTestEnable = vk::True,
-			.depthWriteEnable = vk::True,
-			.depthCompareOp = vk::CompareOp::eLess,
-			.depthBoundsTestEnable = vk::False,
-			.stencilTestEnable = vk::False
-		};
+	//	vk::PipelineMultisampleStateCreateInfo ms{
+	//		.rasterizationSamples = msaa_samples_,
+	//		.sampleShadingEnable = vk::False
+	//	};
+	//	vk::PipelineDepthStencilStateCreateInfo ds{
+	//		.depthTestEnable = vk::True,
+	//		.depthWriteEnable = vk::True,
+	//		.depthCompareOp = vk::CompareOp::eLess,
+	//		.depthBoundsTestEnable = vk::False,
+	//		.stencilTestEnable = vk::False
+	//	};
 
-		std::array<vk::PipelineColorBlendAttachmentState, 4> blendAtt{};
-		for (auto& a : blendAtt) {
-			a.colorWriteMask =
-				vk::ColorComponentFlagBits::eR |
-				vk::ColorComponentFlagBits::eG |
-				vk::ColorComponentFlagBits::eB |
-				vk::ColorComponentFlagBits::eA;
-			a.blendEnable = vk::False;
-		}
+	//	std::array<vk::PipelineColorBlendAttachmentState, 4> blendAtt{};
+	//	for (auto& a : blendAtt) {
+	//		a.colorWriteMask =
+	//			vk::ColorComponentFlagBits::eR |
+	//			vk::ColorComponentFlagBits::eG |
+	//			vk::ColorComponentFlagBits::eB |
+	//			vk::ColorComponentFlagBits::eA;
+	//		a.blendEnable = vk::False;
+	//	}
 
-		vk::PipelineColorBlendStateCreateInfo cb{
-			.logicOpEnable = vk::False,
-			.logicOp = vk::LogicOp::eCopy,
-			.attachmentCount = blendAtt.size(),
-			.pAttachments = blendAtt.data()
-		};
+	//	vk::PipelineColorBlendStateCreateInfo cb{
+	//		.logicOpEnable = vk::False,
+	//		.logicOp = vk::LogicOp::eCopy,
+	//		.attachmentCount = blendAtt.size(),
+	//		.pAttachments = blendAtt.data()
+	//	};
 
-		std::array<vk::DynamicState, 2> dynStates = {
-			vk::DynamicState::eViewport,
-			vk::DynamicState::eScissor
-		};
-		vk::PipelineDynamicStateCreateInfo dyn{
-			.dynamicStateCount = (uint32_t)dynStates.size(),
-			.pDynamicStates = dynStates.data()
-		};
+	//	std::array<vk::DynamicState, 2> dynStates = {
+	//		vk::DynamicState::eViewport,
+	//		vk::DynamicState::eScissor
+	//	};
+	//	vk::PipelineDynamicStateCreateInfo dyn{
+	//		.dynamicStateCount = (uint32_t)dynStates.size(),
+	//		.pDynamicStates = dynStates.data()
+	//	};
 
-		// Pipeline Layout
-		std::array<vk::DescriptorSetLayout, 2> setLayouts(
-			*set_layouts_.global,
-			*set_layouts_.softbody
-		);
+	//	// Pipeline Layout
+	//	std::array<vk::DescriptorSetLayout, 2> setLayouts(
+	//		*set_layouts_.global,
+	//		*set_layouts_.softbody
+	//	);
 
-		vk::PushConstantRange pcRange{
-			.stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
-			.offset = 0,
-			.size = static_cast<uint32_t>(sizeof(PushConstant::SoftBody))
-		};
+	//	vk::PushConstantRange pcRange{
+	//		.stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+	//		.offset = 0,
+	//		.size = static_cast<uint32_t>(sizeof(PushConstant::SoftBody))
+	//	};
 
-		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
-			.setLayoutCount = setLayouts.size(),
-			.pSetLayouts = setLayouts.data(),
-			.pushConstantRangeCount = 1,
-			.pPushConstantRanges = &pcRange
-		};
-		pipeline_layouts_.softbody = vk::raii::PipelineLayout(context_.device_, pipelineLayoutInfo);
+	//	vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
+	//		.setLayoutCount = setLayouts.size(),
+	//		.pSetLayouts = setLayouts.data(),
+	//		.pushConstantRangeCount = 1,
+	//		.pPushConstantRanges = &pcRange
+	//	};
+	//	pipeline_layouts_.softbody = vk::raii::PipelineLayout(context_.device_, pipelineLayoutInfo);
 
-		vk::PipelineRenderingCreateInfo renderingInfo{
-			.colorAttachmentCount = static_cast<uint32_t>(geometry_buffers_.formats.size()),
-			.pColorAttachmentFormats = geometry_buffers_.formats.data(),
-			.depthAttachmentFormat = depthFormat,
-			.stencilAttachmentFormat = vk::Format::eUndefined
-		};
+	//	vk::PipelineRenderingCreateInfo renderingInfo{
+	//		.colorAttachmentCount = static_cast<uint32_t>(geometry_buffers_.formats.size()),
+	//		.pColorAttachmentFormats = geometry_buffers_.formats.data(),
+	//		.depthAttachmentFormat = depthFormat,
+	//		.stencilAttachmentFormat = vk::Format::eUndefined
+	//	};
 
-		// Pipeline
-		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain =
-		{
-			{
-				.stageCount = stages.size(),
-				.pStages = stages.data(),
-				.pVertexInputState = &vi,
-				.pInputAssemblyState = &ia,
-				.pViewportState = &vs,
-				.pRasterizationState = &rs,
-				.pMultisampleState = &ms,
-				.pDepthStencilState = &ds,
-				.pColorBlendState = &cb,
-				.pDynamicState = &dyn,
-				.layout = pipeline_layouts_.softbody,
-				.renderPass = nullptr
-			},
-			{
-				renderingInfo
-			}
-		};
-		pipelines_.softbody_solid = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+	//	// Pipeline
+	//	vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain =
+	//	{
+	//		{
+	//			.stageCount = stages.size(),
+	//			.pStages = stages.data(),
+	//			.pVertexInputState = &vi,
+	//			.pInputAssemblyState = &ia,
+	//			.pViewportState = &vs,
+	//			.pRasterizationState = &rs,
+	//			.pMultisampleState = &ms,
+	//			.pDepthStencilState = &ds,
+	//			.pColorBlendState = &cb,
+	//			.pDynamicState = &dyn,
+	//			.layout = pipeline_layouts_.softbody,
+	//			.renderPass = nullptr
+	//		},
+	//		{
+	//			renderingInfo
+	//		}
+	//	};
+	//	pipelines_.softbody_solid = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 
-		rs.polygonMode = vk::PolygonMode::eLine;
-		pipelines_.softbody_wireframe = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+	//	rs.polygonMode = vk::PolygonMode::eLine;
+	//	pipelines_.softbody_wireframe = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 
-		rs.polygonMode = vk::PolygonMode::ePoint;
-		pipelines_.softbody_point = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
-	}
+	//	rs.polygonMode = vk::PolygonMode::ePoint;
+	//	pipelines_.softbody_point = vk::raii::Pipeline(context_.device_, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+	//}
 
 	// Skinned Model
 	{
@@ -2604,9 +2604,9 @@ void GraphicsPass::ShadowDepthOnlyPass(const vk::raii::CommandBuffer& cmd, uint3
 			{  }
 		);
 
-		cmd.bindIndexBuffer(*particle_manager_.index_buffer_, 0, vk::IndexType::eUint32);
+		cmd.bindIndexBuffer(*cloth_particle_manager_.index_buffer_, 0, vk::IndexType::eUint32);
 
-		auto& pm = particle_manager_;
+		auto& pm = cloth_particle_manager_;
 
 		for (uint32_t i = 0; i < pm.clothes_.size(); i++)
 		{
@@ -2617,16 +2617,16 @@ void GraphicsPass::ShadowDepthOnlyPass(const vk::raii::CommandBuffer& cmd, uint3
 			cmd.drawIndexed(cloth.num_indices, 1, cloth.offset_indices, 0, 0);
 		}
 
-		for (uint32_t i = 0; i < pm.softbodies_.size(); i++)
-		{
-			auto& softbody = pm.softbodies_[i];
+		//for (uint32_t i = 0; i < pm.softbodies_.size(); i++)
+		//{
+		//	auto& softbody = pm.softbodies_[i];
 
-			if (!softbody.render) continue;
+		//	if (!softbody.render) continue;
 
-			cmd.drawIndexed(pm.softbodies_[i].num_indices, 1, pm.softbodies_[i].offset_indices, 0, 0);
-		}
+		//	cmd.drawIndexed(pm.softbodies_[i].num_indices, 1, pm.softbodies_[i].offset_indices, 0, 0);
+		//}
 
-		//uint32_t totalIndices = particle_manager_.num_cloth_indices_ + particle_manager_.num_softbody_indices_;
+		//uint32_t totalIndices = cloth_particle_manager_.num_cloth_indices_ + cloth_particle_manager_.num_softbody_indices_;
 		//cmd.drawIndexed(totalIndices, 1, 0, 0, 0);
 	}
 
@@ -2731,7 +2731,7 @@ void GraphicsPass::PreMainRenderPass(const vk::raii::CommandBuffer& cmd, uint32_
 void GraphicsPass::MainRenderPass(const vk::raii::CommandBuffer& cmd, uint32_t currentFrame)
 {
 
-	auto& pm = particle_manager_;
+	auto& pm = cloth_particle_manager_;
 
 	vk::Viewport vp(
 		0.0f,
@@ -2965,55 +2965,55 @@ void GraphicsPass::MainRenderPass(const vk::raii::CommandBuffer& cmd, uint32_t c
 		}
 	}
 
-	// Softbody
-	{
+	//// Softbody
+	//{
 
-		if (polygon_mode_ == vku::PolygonMode::WIREFRAME)
-			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.softbody_wireframe);
-		else if (polygon_mode_ == vku::PolygonMode::POINT)
-			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.softbody_point);
-		else
-			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.softbody_solid);
+	//	if (polygon_mode_ == vku::PolygonMode::WIREFRAME)
+	//		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.softbody_wireframe);
+	//	else if (polygon_mode_ == vku::PolygonMode::POINT)
+	//		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.softbody_point);
+	//	else
+	//		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipelines_.softbody_solid);
 
-		// Global Set
-		cmd.bindDescriptorSets(
-			vk::PipelineBindPoint::eGraphics,
-			pipeline_layouts_.softbody,
-			0,
-			{ *sets_.global },
-			{ globalOffset }
-		);
+	//	// Global Set
+	//	cmd.bindDescriptorSets(
+	//		vk::PipelineBindPoint::eGraphics,
+	//		pipeline_layouts_.softbody,
+	//		0,
+	//		{ *sets_.global },
+	//		{ globalOffset }
+	//	);
 
-		cmd.bindIndexBuffer(*pm.index_buffer_, 0, vk::IndexType::eUint32);
+	//	cmd.bindIndexBuffer(*pm.index_buffer_, 0, vk::IndexType::eUint32);
 
-		const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * pm.softbodies_.size() * ubo_size_.softbody);
+	//	const uint32_t baseOffset = static_cast<uint32_t>(currentFrame * pm.softbodies_.size() * ubo_size_.softbody);
 
-		for (uint32_t i = 0; i < pm.softbodies_.size(); i++)
-		{
-			auto& softbody = pm.softbodies_[i];
+	//	for (uint32_t i = 0; i < pm.softbodies_.size(); i++)
+	//	{
+	//		auto& softbody = pm.softbodies_[i];
 
-			if (!softbody.render) continue;
+	//		if (!softbody.render) continue;
 
-			const uint32_t offset = baseOffset + i * ubo_size_.softbody;
-			cmd.bindDescriptorSets(
-				vk::PipelineBindPoint::eGraphics,
-				pipeline_layouts_.softbody,
-				1,
-				{ *sets_.softbody },
-				{ offset }
-			);
+	//		const uint32_t offset = baseOffset + i * ubo_size_.softbody;
+	//		cmd.bindDescriptorSets(
+	//			vk::PipelineBindPoint::eGraphics,
+	//			pipeline_layouts_.softbody,
+	//			1,
+	//			{ *sets_.softbody },
+	//			{ offset }
+	//		);
 
-			push_constants_.softbody.color = pm.softbodies_[i].color;
-			cmd.pushConstants<PushConstant::SoftBody>(
-				*pipeline_layouts_.softbody,
-				vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
-				0,
-				push_constants_.softbody
-			);
+	//		push_constants_.softbody.color = pm.softbodies_[i].color;
+	//		cmd.pushConstants<PushConstant::SoftBody>(
+	//			*pipeline_layouts_.softbody,
+	//			vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+	//			0,
+	//			push_constants_.softbody
+	//		);
 
-			cmd.drawIndexed(pm.softbodies_[i].num_indices, 1, pm.softbodies_[i].offset_indices, 0, 0);
-		}
-	}
+	//		cmd.drawIndexed(pm.softbodies_[i].num_indices, 1, pm.softbodies_[i].offset_indices, 0, 0);
+	//	}
+	//}
 
 	cmd.endRendering();
 }

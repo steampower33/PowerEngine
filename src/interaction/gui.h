@@ -3,13 +3,13 @@
 class Context;
 class Swapchain;
 class PassManager;
-class SimPassGPU;
+class ClothSimPass;
 class SimulationPassCPU;
 class Model;
 class ModelManager;
 class TextureManager;
 class GraphicsPass;
-class ParticleManager;
+class ClothParticleManager;
 class Camera;
 
 class GUI
@@ -27,6 +27,8 @@ public:
 	TextureManager& texture_manager_;
 	ModelManager& model_manager_;
 	PassManager& pass_manager_;
+
+	float font_scale = 0.0f;
 
 	vk::raii::DescriptorPool imgui_pool_{ nullptr };
 	uint32_t count_ = 0;
@@ -51,9 +53,7 @@ public:
 	template<typename RowFn>
 	void SetTimeingGUI(RowFn&& row);
 	template<typename RowFn>
-	void SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool& paused, bool& pauseEachframe);
-	template<typename RowFn>
-	void SetTestSceneGUI(RowFn&& row);
+	void SetClothGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool& paused, bool& pauseEachframe);
 	template<typename RowFn>
 	void SetStatGUI(RowFn&& row);
 	template<typename RowFn>

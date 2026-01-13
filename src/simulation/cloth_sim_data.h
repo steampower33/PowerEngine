@@ -1,17 +1,9 @@
 #pragma once
 
 #include "model_data.h"
-#include "particle_manager.h"
+#include "cloth_particle_manager.h"
 
-struct SimData {
-
-	enum SimulationType {
-		CLOTH,
-		SOFTBODY,
-		FLUID
-	};
-
-	SimulationType simulation_type_ = SimulationType::CLOTH;
+struct ClothData {
 
 	int broadphase_interval_ = 2;
 	int narrowphase_interval_ = 1;
@@ -21,10 +13,7 @@ struct SimData {
 		float shear = 1.0f;
 		float bend = 1.0f;
 		float area = 1.0f;
-
 		float self_collision = 5.0f;
-		float inter_collision = 10.0f;
-
 		float lra = 0.1f;
 	} stiffness_;
 
@@ -61,17 +50,11 @@ struct SimData {
 		bool bend = false;
 		bool area = true;
 		bool self_collision = true;
-		bool inter_collision = true;
-
-		bool softbody_stretch = true;
-		bool softbody_volume = true;
 		bool lra = false;
 	} solver_config_;
 
 	struct Compliance {
 		float stretch = 1e-6f;
-		float softbody_stretch = 0.0f;
-		float softbody_volume = 0.0f;
 		float shear = 1e-6f;
 		float bend = 500.0f;
 		float area = 1e-2f;
@@ -86,12 +69,8 @@ struct SimData {
 	uint32_t num_shears = 0;
 	uint32_t num_bends = 0;
 	uint32_t num_areas = 0;
-	uint32_t num_volumes = 0;
 	uint32_t num_lras = 0;
 	uint32_t num_colliders = 0;
-
-	uint32_t num_cloth_edges = 0;
-	uint32_t num_softbody_edges = 0;
 
 	float frame_dt = 60.0f;
 	int substeps = 10;
@@ -108,9 +87,6 @@ struct SimData {
 	std::vector<uint32_t> pass_offsets;  // cloth + softbody
 
 	uint32_t num_colors = 0;
-
-	// SoftBody Stretch Edge
-	std::vector<Edge> softbody_stretch_edges;
 
 	struct Shear {
 		uint32_t i0, i1, i2;
@@ -327,7 +303,7 @@ struct SimData {
 
 		pass_offsets = std::move(colorOffset);
 
-		num_cloth_edges = static_cast<uint32_t>(edges.size());
+		num_edges = static_cast<uint32_t>(edges.size());
 	}
 
 	void BuildShearConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices, std::vector<Cloth> cloth)
@@ -355,7 +331,7 @@ struct SimData {
 
 			float restDot = glm::dot(e1, e2);
 
-			SimData::Shear c{};
+			ClothData::Shear c{};
 			c.i0 = i0;
 			c.i1 = i1;
 			c.i2 = i2;
@@ -536,7 +512,7 @@ struct SimData {
 		return dist;
 	}
 
-	void BuildLRAConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices, ParticleManager& pm)
+	void BuildLRAConstraints(std::vector<glm::vec4>& positions, std::vector<uint32_t>& indices, ClothParticleManager& pm)
 	{
 		uint32_t K = 2;
 
@@ -662,7 +638,6 @@ struct SimData {
 		vk::raii::Buffer bend{ nullptr };
 		vk::raii::Buffer grab_state{ nullptr };
 		vk::raii::Buffer area{ nullptr };
-		vk::raii::Buffer volume{ nullptr };
 		vk::raii::Buffer collider{ nullptr };
 		vk::raii::Buffer delta_v{ nullptr };
 		vk::raii::Buffer lra_ids{ nullptr };
@@ -679,7 +654,6 @@ struct SimData {
 		vk::raii::DeviceMemory bend{ nullptr };
 		vk::raii::DeviceMemory grab_state{ nullptr };
 		vk::raii::DeviceMemory area{ nullptr };
-		vk::raii::DeviceMemory volume{ nullptr };
 		vk::raii::DeviceMemory collider{ nullptr };
 		vk::raii::DeviceMemory delta_v{ nullptr };
 		vk::raii::DeviceMemory lra_ids{ nullptr };
@@ -696,7 +670,6 @@ struct SimData {
 		vk::DeviceSize bend = 0;
 		vk::DeviceSize grab_state = 0;
 		vk::DeviceSize area = 0;
-		vk::DeviceSize volume = 0;
 		vk::DeviceSize collider = 0;
 		vk::DeviceSize delta_v = 0;
 		vk::DeviceSize lra_ids = 0;
@@ -709,7 +682,6 @@ struct SimData {
 		vk::raii::Buffer bend{ nullptr };
 		vk::raii::Buffer area{ nullptr };
 		vk::raii::Buffer collider{ nullptr };
-		vk::raii::Buffer volume{ nullptr };
 	} staging_;
 
 	struct StagingMemory {
@@ -718,7 +690,6 @@ struct SimData {
 		vk::raii::DeviceMemory bend{ nullptr };
 		vk::raii::DeviceMemory area{ nullptr };
 		vk::raii::DeviceMemory collider{ nullptr };
-		vk::raii::DeviceMemory volume{ nullptr };
 	} staging_memories_;
 
 	struct StagingMapped {
@@ -727,6 +698,5 @@ struct SimData {
 		void* bend{ nullptr };
 		void* area{ nullptr };
 		void* collider{ nullptr };
-		void* volume{ nullptr };
 	} staging_mapped_;
 };

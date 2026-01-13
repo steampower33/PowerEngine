@@ -31,7 +31,7 @@ void main()
     if (gid >= pc.solve.count) return;
     
     const uint maxN = sim.max_neighbors;
-    const float r   = sim.collision_radius;
+    const float r   = sim.collision_radius * 2;
     const float r2  = r * r;
 
     vec3 p = xp[gid].xyz;

@@ -7,44 +7,44 @@ class TextureManager;
 class Model;
 class ModelManager;
 class MouseInteractor;
-class ParticleManager;
-class GpuProfiler;
-struct SimData;
-struct SimUBO;
+class ClothParticleManager;
+class ClothGpuProfiler;
 
-#include "sim_data.h"
-#include "sim_ubo.h"
+#include "cloth_sim_data.h"
+#include "cloth_ubo.h"
 
 #include "vulkan_utils.h"
 
 #include <vk_radix_sort.h>
 
-class SimPassGPU
+class ClothSimPass
 {
 public:
-	SimPassGPU(Context& context, Swapchain& swapchain, ParticleManager& particleManager, ModelManager& modelManager);
-	SimPassGPU(const SimPassGPU& rhs) = delete;
-	SimPassGPU(SimPassGPU&& rhs) = delete;
-	SimPassGPU& operator=(const SimPassGPU& rhs) = delete;
-	SimPassGPU& operator=(SimPassGPU&& rhs) = delete;
-	~SimPassGPU();
+	ClothSimPass(Context& context, Swapchain& swapchain, ClothParticleManager& particleManager, ModelManager& modelManager);
+	ClothSimPass(const ClothSimPass& rhs) = delete;
+	ClothSimPass(ClothSimPass&& rhs) = delete;
+	ClothSimPass& operator=(const ClothSimPass& rhs) = delete;
+	ClothSimPass& operator=(ClothSimPass&& rhs) = delete;
+	~ClothSimPass();
 
 	Context& context_;
-	ParticleManager& particle_manager_;
+	ClothParticleManager& cloth_particle_manager_;
 	ModelManager& model_manager_;
 
-	std::unique_ptr<GpuProfiler> gpu_profiler_;
+	std::unique_ptr<ClothGpuProfiler> gpu_profiler_;
 
-	SimData sim_datas_;
-	SimUBO ubo_;
+	ClothData datas_;
+	ClothUBO ubo_;
 
 	std::vector<vk::raii::CommandBuffer> cmds_;
 
 	void UpdateMousePushConstant(Camera& camera, MouseInteractor& mouseInteractor, glm::vec2 viewportSize);
 	void UpdateComputeUBO(uint32_t currentFrame, ModelManager& model);
 
-	void RecordCompute(uint32_t currentFrame, vku::TestScene& testScene);
+	void RecordCompute(uint32_t currentFrame);
 	void CalculateGpuTime();
+
+	bool is_reset_ = false;
 
 	vku::Count counts_;
 	vk::raii::DescriptorPool descriptor_pool_{ nullptr };
@@ -76,13 +76,10 @@ public:
 		vk::raii::Pipeline integrate{ nullptr };
 		vk::raii::Pipeline clear_lambdas{ nullptr };
 		vk::raii::Pipeline solve_stretch{ nullptr };
-		vk::raii::Pipeline solve_softbody_stretch{ nullptr };
-		vk::raii::Pipeline solve_softbody_volume{ nullptr };
 		vk::raii::Pipeline solve_shear{ nullptr };
 		vk::raii::Pipeline solve_bend{ nullptr };
 		vk::raii::Pipeline solve_area{ nullptr };
 		vk::raii::Pipeline solve_self_collision{ nullptr };
-		vk::raii::Pipeline solve_inter_cloth_collision{ nullptr };
 		vk::raii::Pipeline apply_deltas{ nullptr };
 		vk::raii::Pipeline solve_lra{ nullptr };
 		vk::raii::Pipeline collide_sdf{ nullptr };
@@ -103,7 +100,6 @@ private:
 	void CreateDescriptorPools();
 	void CreateUniformBuffers();
 	void CreateClothConstraintDatas();
-	void CreateSoftBodyConstraintDatas();
 	void CreateColiiders();
 	void CreateSSBOBuffers();
 	void CreateDescriptorSets();
@@ -112,6 +108,4 @@ private:
 	void CreateVrdxSorter();
 
 	void CopySimDatas(const vk::raii::CommandBuffer& cmd);
-	void ResetTestScene(const vk::raii::CommandBuffer& cmd, vku::TestScene& testScene);
-	void CopyColliders(const vk::raii::CommandBuffer& cmd);
 };

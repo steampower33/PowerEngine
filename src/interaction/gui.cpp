@@ -4,15 +4,15 @@
 #include "swapchain.h"
 #include "vulkan_utils.h"
 #include "pass_manager.h"
-#include "sim_pass_gpu.h"
 #include "model.h"
 #include "model_manager.h"
 #include "texture.h"
 #include "texture_manager.h"
 #include "graphics_pass.h"
-#include "particle_manager.h"
 #include "camera.h"
-#include "gpu_profiler.h"
+#include "cloth_particle_manager.h"
+#include "cloth_gpu_profiler.h"
+#include "cloth_sim_pass.h"
 
 #include "gui.h"
 
@@ -133,7 +133,8 @@ void GUI::SetStyle()
 	style.FrameRounding = 4.0f;
 	style.GrabRounding = 4.0f;
 	style.ScrollbarRounding = 4.0f;
-	style.FontScaleMain = 1.6f * swapchain_.swapchain_extent_.width / 2560.0f;
+	font_scale = 1.5f * swapchain_.swapchain_extent_.width / 2560.0f;
+	style.FontScaleMain = font_scale;
 
 	ImVec4* colors = style.Colors;
 
@@ -226,57 +227,26 @@ void GUI::Update(float& targetSimFPS, double& simDt, Camera& camera, bool& pause
 			drawControl();
 		};
 
-
 	ImGuiWindowFlags wf =
 		ImGuiWindowFlags_NoResize |
 		ImGuiWindowFlags_NoMove;
 
 	float spacing = swapchain_.swapchain_extent_.width * 0.004f;
 
-	// Left Side
-	ImVec2 sceneGuiPos{ spacing, spacing };
-	ImVec2 sceneGuiSize{ swapchain_.swapchain_extent_.width * 0.2f, swapchain_.swapchain_extent_.height * 0.15f };
-
-	ImGui::SetNextWindowPos(sceneGuiPos);
-	ImGui::SetNextWindowSize(sceneGuiSize);
-	if (ImGui::Begin("Scene", nullptr, wf))
-	{
-		SetTestSceneGUI(row);
-	}
-	ImGui::End();
-
-	ImVec2 optionPos{ sceneGuiPos.x, sceneGuiPos.y + sceneGuiSize.y + spacing };
-	ImVec2 optionSize{ sceneGuiSize.x, swapchain_.swapchain_extent_.height - optionPos.y - spacing };
+	ImVec2 optionPos{ spacing, spacing };
+	ImVec2 optionSize{ swapchain_.swapchain_extent_.width * 0.2f, swapchain_.swapchain_extent_.height - optionPos.y - spacing };
 	ImGui::SetNextWindowPos(optionPos);
 	ImGui::SetNextWindowSize(optionSize);
 	if (ImGui::Begin("Option", nullptr, wf))
 	{
-		SetSimulationGUI(row, targetSimFPS, simDt, paused, pauseEachframe);
+		SetStatGUI(row);
+		SetTimeingGUI(row);
+		SetClothGUI(row, targetSimFPS, simDt, paused, pauseEachframe);
 		SetObjectsGUI(row);
 		SetRenderingGUI(row);
 		SetCameraGUI(row, camera);
 	}
 	ImGui::End();
-
-	// Right Side
-	ImVec2 statGuiPos{ swapchain_.swapchain_extent_.width - swapchain_.swapchain_extent_.width * 0.25f - spacing, spacing };
-	ImVec2 StatGuiSize{ swapchain_.swapchain_extent_.width * 0.25f, 0 };
-	ImGui::SetNextWindowPos(statGuiPos);
-	ImGui::SetNextWindowSize(StatGuiSize);
-	if (ImGui::Begin("Performance Monitor", nullptr, wf))
-	{
-		SetStatGUI(row);
-
-		SetTimeingGUI(row);
-	}
-	ImGui::End();
-
-	//if (ImGui::Begin("ShadowBuffer", nullptr))
-	//{
-	//	auto& id = imgui_id_[imgui_id_.size() - 1];
-	//	ImGui::ImageButton(id.first.c_str(), id.second, ImVec2(128, 128));
-	//}
-	//ImGui::End();
 
 	//ImGui::ShowDemoWindow();
 
@@ -390,8 +360,7 @@ void GUI::SetObjectsGUI(RowFn&& row)
 		};
 
 	auto& models = model_manager_.models_;
-	auto& clothes = pass_manager_.particle_manager_->clothes_;
-	auto& softbodies = pass_manager_.particle_manager_->softbodies_;
+	//auto& softbodies = pass_manager_.cloth_particle_manager_->softbodies_;
 
 	if (ImGui::CollapsingHeader("Objects"))//, ImGuiTreeNodeFlags_DefaultOpen))
 	{
@@ -479,7 +448,188 @@ void GUI::SetObjectsGUI(RowFn&& row)
 			}
 		}
 
-		ImGui::SeparatorText("Cloth");
+		//	ImGui::SeparatorText("Softbody");
+		//	ImGui::Indent();
+		//	ImGui::BeginChild("Softbody", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
+
+		//	for (auto& softbody : softbodies)
+		//	{
+		//		if (ImGui::TreeNode(softbody.name.c_str()))
+		//		{
+		//			{
+		//				ImGui::SeparatorText("Factor");
+		//				ImGui::Indent();
+		//				ImGui::BeginChild("Factor", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
+		//				if (ImGui::BeginTable("Factor", 2,
+		//					ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+		//				{
+		//					row("Albedo", [&] { ImGui::DragFloat3("##Albedo", &softbody.ubo_data.albedo[0], 0.1f, 0.0f, 1.0f); });
+		//					row("AO", [&] { ImGui::DragFloat("##AO", &softbody.ubo_data.ao_factor, 0.1f, 0.0f, 1.0f); });
+		//					row("Roughness", [&] { ImGui::DragFloat("##Roughness", &softbody.ubo_data.roughness_factor, 0.1f, 0.0f, 1.0f); });
+		//					row("Meltallic", [&] { ImGui::DragFloat("##Meltallic", &softbody.ubo_data.metallic_factor, 0.1f, 0.0f, 1.0f); });
+		//					row("Height", [&] { ImGui::DragFloat("##Height", &softbody.ubo_data.height_factor, 0.001f, 0.0f, 1.0f); });
+		//					row("Coat", [&] { ImGui::DragFloat("##Coat", &softbody.ubo_data.coat_factor, 0.001f, 0.0f, 1.0f); });
+		//					row("CoatRoughness", [&] { ImGui::DragFloat("##CoatRoughness", &softbody.ubo_data.coat_roughness_factor, 0.001f, 0.0f, 1.0f); });
+		//					row("Fuzz", [&] { ImGui::DragFloat("##Fuzz", &softbody.ubo_data.fuzz_factor, 0.001f, 0.0f, 1.0f); });
+		//					row("FuzzRoughness", [&] { ImGui::DragFloat("##FuzzRoughness", &softbody.ubo_data.fuzz_roughness_factor, 0.001f, 0.0f, 1.0f); });
+		//					row("TileUV", [&] { ImGui::DragFloat2("##TileUV", &softbody.ubo_data.tile_uv[0], 1.0f, 0.0f, 100.0f); });
+
+		//					ImGui::EndTable();
+		//				}
+		//				ImGui::EndChild();
+		//				ImGui::Unindent();
+		//			}
+
+		//			auto CheckEnable = [&](const char* label, uint32_t& enable) {
+		//				bool check = enable; ImGui::Checkbox(label, &check); enable = check;
+		//				};
+
+		//			{
+		//				ImGui::SeparatorText("Enable");
+		//				ImGui::Indent();
+		//				ImGui::BeginChild("Enable", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
+		//				if (ImGui::BeginTable("Enable", 3,
+		//					ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+		//				{
+		//					row3("Albedo",
+		//						[&] { CheckEnable("##Albedo", softbody.ubo_data.albedo_enable); },
+		//						[&] { SelectPopUp("Select##Albedo", softbody.ubo_data.albedo_idx); });
+		//					row3("Normal",
+		//						[&] { CheckEnable("##Normal", softbody.ubo_data.normal_enable); },
+		//						[&] { SelectPopUp("Select##Normal", softbody.ubo_data.normal_idx); });
+		//					row3("ARM",
+		//						[&] { CheckEnable("##ARM", softbody.ubo_data.arm_enable); },
+		//						[&] { SelectPopUp("Select##ARM", softbody.ubo_data.arm_idx); });
+		//					row3("AO",
+		//						[&] { CheckEnable("##AO", softbody.ubo_data.ao_enable); },
+		//						[&] { SelectPopUp("Select##AO", softbody.ubo_data.ao_idx); });
+		//					row3("Roughtness",
+		//						[&] { CheckEnable("##Roughtness", softbody.ubo_data.roughness_enable); },
+		//						[&] { SelectPopUp("Select##Roughtness", softbody.ubo_data.roughness_idx); });
+		//					row3("Meltallic",
+		//						[&] { CheckEnable("##Meltallic", softbody.ubo_data.metallic_enable); },
+		//						[&] { SelectPopUp("Select##Meltallic", softbody.ubo_data.metallic_idx); });
+		//					row3("Height",
+		//						[&] { CheckEnable("##Height", softbody.ubo_data.height_enable); },
+		//						[&] { SelectPopUp("Select##Height", softbody.ubo_data.height_idx); });
+		//					ImGui::EndTable();
+		//				}
+		//				ImGui::EndChild();
+		//				ImGui::Unindent();
+		//			}
+
+		//			ImGui::TreePop();
+		//		}
+
+		//	}
+			//ImGui::EndChild();
+			//ImGui::Unindent();
+	}
+
+}
+
+template<typename RowFn>
+void GUI::SetTimeingGUI(RowFn&& row)
+{
+	auto& gp = *pass_manager_.cloth_sim_pass_->gpu_profiler_;
+
+	auto& labels = gp.labels_;
+	auto& labelToTime = gp.label_time_;
+	auto& labelToAvgTime = gp.label_avg_time_;
+
+	open_timestamps_ = ImGui::CollapsingHeader("Timing"); //, ImGuiTreeNodeFlags_DefaultOpen
+	if (open_timestamps_)
+	{
+		if (ImGui::BeginTable("Timing", 4))//,  ImGuiTableFlags_BordersOuter))
+		{
+			ImGui::TableSetupColumn("Kernel", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+			ImGui::TableSetupColumn("Time (ms)", ImGuiTableColumnFlags_WidthFixed, font_scale * 50.0f);
+			ImGui::TableSetupColumn("Avg (ms)", ImGuiTableColumnFlags_WidthFixed, font_scale * 50.0f);
+			ImGui::TableSetupColumn("%", ImGuiTableColumnFlags_WidthFixed, font_scale * 50.0f);
+			ImGui::TableHeadersRow();
+
+			for (uint32_t i = 0; i < labels.size() - 1; i++)
+			{
+				DisplayKernelTiming(labels[i], labelToTime, labelToAvgTime);
+			}
+
+			DisplayKernelTiming(labels[labels.size() - 1], labelToTime, labelToAvgTime, false);
+
+			ImGui::EndTable();
+		}
+		ImGui::SeparatorText("GpuTime");
+		ImGui::Text("Compute : %.3f", gp.pass_total_time_);
+		ImGui::Text("Graphics : %.3f", pass_manager_.graphics_pass_->pass_total_time_);
+
+		count_ = gp.time_count_;
+	}
+}
+
+template<typename RowFn>
+void GUI::SetClothGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool& paused, bool& pauseEachframe)
+{
+	auto& sim = *pass_manager_.cloth_sim_pass_;
+
+	auto CheckEnable = [&](const char* label, uint32_t& enable) {
+		bool check = enable; ImGui::Checkbox(label, &check); enable = check;
+		};
+
+	auto SelectPopUp = [&](const char* label, int& idx)
+		{
+			if (ImGui::Button(label))
+				ImGui::OpenPopup(label);
+			ImGui::SetNextWindowSize(ImVec2(520, 360), ImGuiCond_Appearing);
+			if (ImGui::BeginPopup(label))
+			{
+				const int cols = 6;
+				const float thumb = 64.0f;
+
+				ImGui::BeginChild("tex_scroll", ImVec2(0, 0), true);
+
+				if (ImGui::BeginTable("tex_grid", cols))
+				{
+					for (int i = 0; i < (int)imgui_id_.size(); ++i)
+					{
+						ImGui::TableNextColumn();
+
+						auto& id = imgui_id_[i];
+						if (ImGui::ImageButton(id.first.c_str(), id.second, ImVec2(thumb, thumb)))
+						{
+							idx = i;
+							ImGui::CloseCurrentPopup();
+						}
+						//ImGui::TextWrapped("%s", id.first.c_str());
+					}
+					ImGui::EndTable();
+				}
+
+				ImGui::EndChild();
+				ImGui::EndPopup();
+			}
+		};
+
+	auto row3 = [&](const char* label, auto&& drawControl, auto&& drawExtra)
+		{
+			ImGui::TableNextRow();
+
+			ImGui::TableSetColumnIndex(0);
+			ImGui::AlignTextToFramePadding();
+			ImGui::TextUnformatted(label);
+
+			ImGui::TableSetColumnIndex(1);
+			ImGui::SetNextItemWidth(-FLT_MIN);
+			drawControl();
+
+			ImGui::TableSetColumnIndex(2);
+			ImGui::SetNextItemWidth(-FLT_MIN);
+			drawExtra();
+		};
+
+	if (ImGui::CollapsingHeader("Cloth", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		auto& pm = *pass_manager_.cloth_particle_manager_;
+		auto& clothes = pass_manager_.cloth_particle_manager_->clothes_;
+
 		ImGui::Indent();
 		ImGui::BeginChild("Cloth", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 		for (auto& cloth : clothes)
@@ -551,152 +701,22 @@ void GUI::SetObjectsGUI(RowFn&& row)
 		ImGui::EndChild();
 		ImGui::Unindent();
 
-		ImGui::SeparatorText("Softbody");
-		ImGui::Indent();
-		ImGui::BeginChild("Softbody", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
-
-		for (auto& softbody : softbodies)
-		{
-			if (ImGui::TreeNode(softbody.name.c_str()))
-			{
-				{
-					ImGui::SeparatorText("Factor");
-					ImGui::Indent();
-					ImGui::BeginChild("Factor", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
-					if (ImGui::BeginTable("Factor", 2,
-						ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
-					{
-						row("Albedo", [&] { ImGui::DragFloat3("##Albedo", &softbody.ubo_data.albedo[0], 0.1f, 0.0f, 1.0f); });
-						row("AO", [&] { ImGui::DragFloat("##AO", &softbody.ubo_data.ao_factor, 0.1f, 0.0f, 1.0f); });
-						row("Roughness", [&] { ImGui::DragFloat("##Roughness", &softbody.ubo_data.roughness_factor, 0.1f, 0.0f, 1.0f); });
-						row("Meltallic", [&] { ImGui::DragFloat("##Meltallic", &softbody.ubo_data.metallic_factor, 0.1f, 0.0f, 1.0f); });
-						row("Height", [&] { ImGui::DragFloat("##Height", &softbody.ubo_data.height_factor, 0.001f, 0.0f, 1.0f); });
-						row("Coat", [&] { ImGui::DragFloat("##Coat", &softbody.ubo_data.coat_factor, 0.001f, 0.0f, 1.0f); });
-						row("CoatRoughness", [&] { ImGui::DragFloat("##CoatRoughness", &softbody.ubo_data.coat_roughness_factor, 0.001f, 0.0f, 1.0f); });
-						row("Fuzz", [&] { ImGui::DragFloat("##Fuzz", &softbody.ubo_data.fuzz_factor, 0.001f, 0.0f, 1.0f); });
-						row("FuzzRoughness", [&] { ImGui::DragFloat("##FuzzRoughness", &softbody.ubo_data.fuzz_roughness_factor, 0.001f, 0.0f, 1.0f); });
-						row("TileUV", [&] { ImGui::DragFloat2("##TileUV", &softbody.ubo_data.tile_uv[0], 1.0f, 0.0f, 100.0f); });
-
-						ImGui::EndTable();
-					}
-					ImGui::EndChild();
-					ImGui::Unindent();
-				}
-
-				auto CheckEnable = [&](const char* label, uint32_t& enable) {
-					bool check = enable; ImGui::Checkbox(label, &check); enable = check;
-					};
-
-				{
-					ImGui::SeparatorText("Enable");
-					ImGui::Indent();
-					ImGui::BeginChild("Enable", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
-					if (ImGui::BeginTable("Enable", 3,
-						ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
-					{
-						row3("Albedo",
-							[&] { CheckEnable("##Albedo", softbody.ubo_data.albedo_enable); },
-							[&] { SelectPopUp("Select##Albedo", softbody.ubo_data.albedo_idx); });
-						row3("Normal",
-							[&] { CheckEnable("##Normal", softbody.ubo_data.normal_enable); },
-							[&] { SelectPopUp("Select##Normal", softbody.ubo_data.normal_idx); });
-						row3("ARM",
-							[&] { CheckEnable("##ARM", softbody.ubo_data.arm_enable); },
-							[&] { SelectPopUp("Select##ARM", softbody.ubo_data.arm_idx); });
-						row3("AO",
-							[&] { CheckEnable("##AO", softbody.ubo_data.ao_enable); },
-							[&] { SelectPopUp("Select##AO", softbody.ubo_data.ao_idx); });
-						row3("Roughtness",
-							[&] { CheckEnable("##Roughtness", softbody.ubo_data.roughness_enable); },
-							[&] { SelectPopUp("Select##Roughtness", softbody.ubo_data.roughness_idx); });
-						row3("Meltallic",
-							[&] { CheckEnable("##Meltallic", softbody.ubo_data.metallic_enable); },
-							[&] { SelectPopUp("Select##Meltallic", softbody.ubo_data.metallic_idx); });
-						row3("Height",
-							[&] { CheckEnable("##Height", softbody.ubo_data.height_enable); },
-							[&] { SelectPopUp("Select##Height", softbody.ubo_data.height_idx); });
-						ImGui::EndTable();
-					}
-					ImGui::EndChild();
-					ImGui::Unindent();
-				}
-
-				ImGui::TreePop();
-			}
-
-		}
-		ImGui::EndChild();
-		ImGui::Unindent();
-	}
-
-}
-
-template<typename RowFn>
-void GUI::SetTimeingGUI(RowFn&& row)
-{
-	auto& gp = *pass_manager_.sim_pass_gpu_->gpu_profiler_;
-
-	auto& labels = gp.labels_;
-	auto& labelToTime = gp.label_time_;
-	auto& labelToAvgTime = gp.label_avg_time_;
-
-	open_timestamps_ = ImGui::CollapsingHeader("Timing"); //, ImGuiTreeNodeFlags_DefaultOpen
-	if (open_timestamps_)
-	{
-		if (ImGui::BeginTable("Timing", 4))//,  ImGuiTableFlags_BordersOuter))
-		{
-			ImGui::TableSetupColumn("Kernel", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-			ImGui::TableSetupColumn("Time (ms)", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-			ImGui::TableSetupColumn("Avg (ms)", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-			ImGui::TableSetupColumn("%", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-			ImGui::TableHeadersRow();
-
-			for (uint32_t i = 0; i < labels.size() - 1; i++)
-			{
-				DisplayKernelTiming(labels[i], labelToTime, labelToAvgTime);
-			}
-
-			DisplayKernelTiming(labels[labels.size() - 1], labelToTime, labelToAvgTime, false);
-
-			ImGui::EndTable();
-		}
-		ImGui::SeparatorText("GpuTime");
-		ImGui::Text("Compute : %.3f", gp.pass_total_time_);
-		ImGui::Text("Graphics : %.3f", pass_manager_.graphics_pass_->pass_total_time_);
-
-		count_ = gp.time_count_;
-	}
-}
-
-template<typename RowFn>
-void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool& paused, bool& pauseEachframe)
-{
-	auto& sim = *pass_manager_.sim_pass_gpu_;
-
-	auto CheckEnable = [&](const char* label, uint32_t& enable) {
-		bool check = enable; ImGui::Checkbox(label, &check); enable = check;
-		};
-
-	if (ImGui::CollapsingHeader("Simulation", ImGuiTreeNodeFlags_DefaultOpen))
-	{
-		auto& pm = *pass_manager_.particle_manager_;
-
 		ImGui::SeparatorText("Parameter");
-
 		ImGui::Indent();
 		ImGui::BeginChild("Parameter", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
 
 		if (ImGui::BeginTable("Parameter", 2,
 			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
+			row("Reset", [&] { ImGui::Checkbox("##Reset", &pass_manager_.cloth_sim_pass_->is_reset_); });
 			row("Pause(X)", [&] { ImGui::Checkbox("##Pause", &paused); });
 			row("PauseEachframe(Z,X)", [&] { ImGui::Checkbox("##PauseEachframe", &pauseEachframe); });
 			row("TargetSimFPS", [&] { ImGui::DragFloat("##TargetSimFPS", &targetSimFPS, 1.0f, 30.0f, 1000.0f); simDt = 1.0 / static_cast<double>(targetSimFPS); });
-			row("1 / FrameDt", [&] { ImGui::DragFloat("##FrameDt", &sim.sim_datas_.frame_dt, 1.0f, 60.0f, 240.0f); });
-			row("Substeps", [&] { ImGui::DragInt("##Substeps", &sim.sim_datas_.substeps, 1, 1, 40); });
-			row("Iterations", [&] { ImGui::DragInt("##Iterations", &sim.sim_datas_.iterations, 1, 1, 40); });
-			row("BroadphaseInterval", [&] { ImGui::DragInt("##BroadphaseInterval", &sim.sim_datas_.broadphase_interval_, 1, 1, sim.sim_datas_.substeps); });
-			row("NarrowphaseInterval", [&] { ImGui::DragInt("##NarrowphaseInterval", &sim.sim_datas_.narrowphase_interval_, 1, 1, sim.sim_datas_.iterations); });
+			row("1 / FrameDt", [&] { ImGui::DragFloat("##FrameDt", &sim.datas_.frame_dt, 1.0f, 60.0f, 240.0f); });
+			row("Substeps", [&] { ImGui::DragInt("##Substeps", &sim.datas_.substeps, 1, 1, 40); });
+			row("Iterations", [&] { ImGui::DragInt("##Iterations", &sim.datas_.iterations, 1, 1, 40); });
+			row("BroadphaseInterval", [&] { ImGui::DragInt("##BroadphaseInterval", &sim.datas_.broadphase_interval_, 1, 1, sim.datas_.substeps); });
+			row("NarrowphaseInterval", [&] { ImGui::DragInt("##NarrowphaseInterval", &sim.datas_.narrowphase_interval_, 1, 1, sim.datas_.iterations); });
 			row("GlobalDamping", [&] { ImGui::DragFloat("##GlobalDamping", &sim.ubo_.datas.sim_params.global_damping, 0.1f, 1.0f, 2.0f); });
 			row("RelaxationFactor", [&] { ImGui::DragFloat("##RelaxationFactor", &sim.ubo_.datas.sim_params.relaxation_factor, 0.1f, 0.0f, 1.0f); });
 			row("Thickness", [&] { ImGui::DragFloat("##Thickness", &sim.ubo_.datas.sim_params.thickness, 0.001f, 0.0f, 1.0f, "%.3f"); });
@@ -704,6 +724,8 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 			row("NeighborFriction", [&] { ImGui::DragFloat("##NeighborFriction", &sim.ubo_.datas.sim_params.neighbor_friction, 0.1f, 0.0f, 10.0f, "%.1f"); });
 			row("MaxNeighbors", [&] { int maxNeighbors = sim.ubo_.datas.sim_params.max_neighbors;  ImGui::DragInt("##MaxNeighbors", &maxNeighbors, 1, 0, 16); sim.ubo_.datas.sim_params.max_neighbors = maxNeighbors; });
 			row("MaxSpeed", [&] { ImGui::DragFloat("##MaxSpeed", &sim.ubo_.datas.sim_params.max_speed, 0.1f, sim.ubo_.datas.sim_params.max_speed, sim.ubo_.datas.sim_params.max_speed, "%.1f"); });
+			row("CellSize", [&] { ImGui::DragFloat("##CellSize", &sim.ubo_.datas.sim_params.cell_size, 0.001f, 0.0f, 1000.0f, "%.3f"); });
+			row("CollisionRadius", [&] { ImGui::DragFloat("##CollisionRadius", &sim.ubo_.datas.sim_params.collision_radius, 0.001f, 0.0f, 1000.0f, "%.3f"); });
 			ImGui::EndTable();
 		}
 		ImGui::EndChild();
@@ -727,151 +749,75 @@ void GUI::SetSimulationGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool
 		ImGui::EndChild();
 		ImGui::Unindent();
 
-		ImGui::SeparatorText("SimulationFactors");
-		if (ImGui::TreeNode("Cloth"))
+		ImGui::SeparatorText("SolverConfig");
+		ImGui::Indent();
+		ImGui::BeginChild("SolverConfig", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
+		if (ImGui::BeginTable("SolverConfig", 2,
+			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
-			ImGui::SeparatorText("SolverConfig");
-			ImGui::Indent();
-			ImGui::BeginChild("SolverConfig", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
-			if (ImGui::BeginTable("SolverConfig", 2,
-				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
-			{
-				row("Stretch", [&] { ImGui::Checkbox("##Stretch", &sim.sim_datas_.solver_config_.stretch); });
-				row("Shear", [&] { ImGui::Checkbox("##Shear", &sim.sim_datas_.solver_config_.shear); });
-				row("Bend", [&] { ImGui::Checkbox("##Bend", &sim.sim_datas_.solver_config_.bend); });
-				row("Area", [&] { ImGui::Checkbox("##Area", &sim.sim_datas_.solver_config_.area); });
-				row("SelfCollision", [&] { ImGui::Checkbox("##SelfCollision", &sim.sim_datas_.solver_config_.self_collision); });
-				row("InterCollision", [&] { ImGui::Checkbox("##InterCollision", &sim.sim_datas_.solver_config_.inter_collision); });
-				row("LRA", [&] { ImGui::Checkbox("##LRA", &sim.sim_datas_.solver_config_.lra); });
+			row("Stretch", [&] { ImGui::Checkbox("##Stretch", &sim.datas_.solver_config_.stretch); });
+			row("Shear", [&] { ImGui::Checkbox("##Shear", &sim.datas_.solver_config_.shear); });
+			row("Bend", [&] { ImGui::Checkbox("##Bend", &sim.datas_.solver_config_.bend); });
+			row("Area", [&] { ImGui::Checkbox("##Area", &sim.datas_.solver_config_.area); });
+			row("SelfCollision", [&] { ImGui::Checkbox("##SelfCollision", &sim.datas_.solver_config_.self_collision); });
+			row("LRA", [&] { ImGui::Checkbox("##LRA", &sim.datas_.solver_config_.lra); });
 
-				ImGui::EndTable();
-			}
-			ImGui::EndChild();
-			ImGui::Unindent();
-
-			ImGui::SeparatorText("Stiffness");
-			ImGui::Indent();
-			ImGui::BeginChild("Stiffness", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
-			if (ImGui::BeginTable("Stiffness", 2,
-				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
-			{
-				row("Stretch", [&] { ImGui::DragFloat("##StretchStiffness", &sim.sim_datas_.stiffness_.stretch, 1e-2f, 0.0f, 100.0f, "%.3f"); });
-				row("Shear", [&] { ImGui::DragFloat("##ShearStiffness", &sim.sim_datas_.stiffness_.shear, 1.0f, 0.0f, 100.0f, "%.1f"); });
-				row("Bend", [&] { ImGui::DragFloat("##BendStiffness", &sim.sim_datas_.stiffness_.bend, 1e-3f, 0.0f, 2.0f, "%.3f"); });
-				row("Area", [&] { ImGui::DragFloat("##AreaStiffness", &sim.sim_datas_.stiffness_.area, 1.0f, 0.0f, 100.0f, "%.1f"); });
-				row("SelfCollision", [&] { ImGui::DragFloat("##SelfCollision", &sim.sim_datas_.stiffness_.self_collision, 1.0f, 0.0f, 100.0f, "%.1f"); });
-				row("InterColiision", [&] { ImGui::DragFloat("##InterColiision", &sim.sim_datas_.stiffness_.inter_collision, 1.0f, 0.0f, 100.0f, "%.1f"); });
-				row("LRA", [&] { ImGui::DragFloat("##LRA", &sim.sim_datas_.stiffness_.lra, 1e-3f, 0.0f, 100.0f, "%.3f"); });
-				ImGui::EndTable();
-			}
-			ImGui::EndChild();
-			ImGui::Unindent();
-
-			ImGui::SeparatorText("Compliance");
-			ImGui::Indent();
-			ImGui::BeginChild("Compliance", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
-			if (ImGui::BeginTable("Compliance", 2,
-				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
-			{
-				row("Stretch", [&] { ImGui::DragFloat("##Stretch", &sim.sim_datas_.compliance.stretch,
-					1e-9f, 0.0f, 1.0f, "%.9f"); });
-				row("Shear", [&] { ImGui::DragFloat("##Shear", &sim.sim_datas_.compliance.shear
-					, 1e-9f, 0.0f, 1.0f, "%.9f"); });
-				row("Bend", [&] { ImGui::DragFloat("##Bend", &sim.sim_datas_.compliance.bend
-					, 1e-2f, 0.0f, 1.0f, "%.9f"); });
-				row("Area", [&] { ImGui::DragFloat("##Area", &sim.sim_datas_.compliance.area
-					, 1e-2f, 0.0f, 1.0f, "%.9f"); });
-				row("SelfCollision", [&] { ImGui::DragFloat("##SelfCollision", &sim.sim_datas_.compliance.self_collision
-					, 1e-9f, 0.0f, 1.0f, "%.9f"); });
-				ImGui::EndTable();
-			}
-			ImGui::EndChild();
-			ImGui::Unindent();
-
-			ImGui::SeparatorText("Beta");
-			ImGui::Indent();
-			ImGui::BeginChild("Beta", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
-			if (ImGui::BeginTable("Beta", 2,
-				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
-			{
-				row("Stretch", [&] { ImGui::DragFloat("##Stretch", &sim.sim_datas_.beta.stretch, 1.0f, 0.0f, 1000.0f, "%.1f"); });
-
-				ImGui::EndTable();
-			}
-			ImGui::EndChild();
-			ImGui::Unindent();
-
-			ImGui::TreePop();
+			ImGui::EndTable();
 		}
+		ImGui::EndChild();
+		ImGui::Unindent();
 
-		if (ImGui::TreeNode("Softbody"))
+		ImGui::SeparatorText("Stiffness");
+		ImGui::Indent();
+		ImGui::BeginChild("Stiffness", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
+		if (ImGui::BeginTable("Stiffness", 2,
+			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
 		{
-			ImGui::SeparatorText("SolverConfig");
-			ImGui::Indent();
-			ImGui::BeginChild("SolverConfig", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
-			if (ImGui::BeginTable("SolverConfig", 2,
-				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
-			{
-				row("Stretch", [&] { ImGui::Checkbox("##SoftbodyStretch", &sim.sim_datas_.solver_config_.softbody_stretch); });
-				row("Volume", [&] { ImGui::Checkbox("##SoftbodyVolume", &sim.sim_datas_.solver_config_.softbody_volume); });
-				ImGui::EndTable();
-			}
-			ImGui::EndChild();
-			ImGui::Unindent();
-
-			ImGui::SeparatorText("Compliance");
-			ImGui::Indent();
-			ImGui::BeginChild("Compliance", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
-			if (ImGui::BeginTable("Compliance", 2,
-				ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
-			{
-				row("Stretch", [&] { ImGui::DragFloat("##SoftbodyStretch", &sim.sim_datas_.compliance.softbody_stretch,
-					1e-9f, 0.0f, 1.0f, "%.9f"); });
-				row("Volume", [&] { ImGui::DragFloat("##SoftbodyVolume", &sim.sim_datas_.compliance.softbody_volume,
-					1e-9f, 0.0f, 1.0f, "%.9f"); });
-
-				ImGui::EndTable();
-			}
-			ImGui::EndChild();
-			ImGui::Unindent();
-
-			ImGui::TreePop();
+			row("Stretch", [&] { ImGui::DragFloat("##StretchStiffness", &sim.datas_.stiffness_.stretch, 1e-2f, 0.0f, 100.0f, "%.3f"); });
+			row("Shear", [&] { ImGui::DragFloat("##ShearStiffness", &sim.datas_.stiffness_.shear, 1.0f, 0.0f, 100.0f, "%.1f"); });
+			row("Bend", [&] { ImGui::DragFloat("##BendStiffness", &sim.datas_.stiffness_.bend, 1e-3f, 0.0f, 2.0f, "%.3f"); });
+			row("Area", [&] { ImGui::DragFloat("##AreaStiffness", &sim.datas_.stiffness_.area, 1.0f, 0.0f, 100.0f, "%.1f"); });
+			row("SelfCollision", [&] { ImGui::DragFloat("##SelfCollision", &sim.datas_.stiffness_.self_collision, 1.0f, 0.0f, 100.0f, "%.1f"); });
+			row("LRA", [&] { ImGui::DragFloat("##LRA", &sim.datas_.stiffness_.lra, 1e-3f, 0.0f, 100.0f, "%.3f"); });
+			ImGui::EndTable();
 		}
+		ImGui::EndChild();
+		ImGui::Unindent();
 
-	}
-}
+		ImGui::SeparatorText("Compliance");
+		ImGui::Indent();
+		ImGui::BeginChild("Compliance", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
+		if (ImGui::BeginTable("Compliance", 2,
+			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+		{
+			row("Stretch", [&] { ImGui::DragFloat("##Stretch", &sim.datas_.compliance.stretch,
+				1e-9f, 0.0f, 1.0f, "%.9f"); });
+			row("Shear", [&] { ImGui::DragFloat("##Shear", &sim.datas_.compliance.shear
+				, 1e-9f, 0.0f, 1.0f, "%.9f"); });
+			row("Bend", [&] { ImGui::DragFloat("##Bend", &sim.datas_.compliance.bend
+				, 1e-2f, 0.0f, 1.0f, "%.9f"); });
+			row("Area", [&] { ImGui::DragFloat("##Area", &sim.datas_.compliance.area
+				, 1e-2f, 0.0f, 1.0f, "%.9f"); });
+			row("SelfCollision", [&] { ImGui::DragFloat("##SelfCollision", &sim.datas_.compliance.self_collision
+				, 1e-9f, 0.0f, 1.0f, "%.9f"); });
+			ImGui::EndTable();
+		}
+		ImGui::EndChild();
+		ImGui::Unindent();
 
-template<typename RowFn>
-void GUI::SetTestSceneGUI(RowFn&& row)
-{
-	auto& scene = pass_manager_.test_scene_;
+		ImGui::SeparatorText("Beta");
+		ImGui::Indent();
+		ImGui::BeginChild("Beta", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
+		if (ImGui::BeginTable("Beta", 2,
+			ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV))
+		{
+			row("Stretch", [&] { ImGui::DragFloat("##Stretch", &sim.datas_.beta.stretch, 1.0f, 0.0f, 1000.0f, "%.1f"); });
 
-	ImVec2 buttonSize = ImVec2(ImGui::GetContentRegionAvail().x, 0);
+			ImGui::EndTable();
+		}
+		ImGui::EndChild();
+		ImGui::Unindent();
 
-	if (ImGui::Button("Horizontal Drop", buttonSize))
-	{
-		scene.horizontal_drop = true;
-	}
-	if (ImGui::Button("Vertical Drop", buttonSize))
-	{
-		scene.vertical_drop = true;
-	}
-	if (ImGui::Button("Pinned Corner", buttonSize))
-	{
-		scene.pinned_corner = true;
-	}
-	if (ImGui::Button("Top Pinned Corner", buttonSize))
-	{
-		scene.top_pinned_corner = true;
-	}
-	if (ImGui::Button("Wind", buttonSize))
-	{
-		scene.wind = true;
-	}
-
-	if (ImGui::Button("Softbody", buttonSize))
-	{
-		scene.softbody = true;
 	}
 }
 
@@ -986,13 +932,12 @@ void GUI::SetRenderingGUI(RowFn&& row)
 template<typename RowFn>
 void GUI::SetStatGUI(RowFn&& row)
 {
-
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 	ImGui::Text("Avr %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 
-	auto& pm = *pass_manager_.particle_manager_;
-	auto& d = pass_manager_.sim_pass_gpu_->sim_datas_;
-	auto& gpuSim = pass_manager_.sim_pass_gpu_;
+	auto& pm = *pass_manager_.cloth_particle_manager_;
+	auto& d = pass_manager_.cloth_sim_pass_->datas_;
+	auto& gpuSim = pass_manager_.cloth_sim_pass_;
 
 	auto row3 = [&](const char* label, auto&& drawControl, auto&& drawExtra)
 		{
@@ -1026,41 +971,19 @@ void GUI::SetStatGUI(RowFn&& row)
 
 			row("NumParticles",
 				[&] { ImGui::Text("%u", pm.num_cloth_particles_); });
-			row3("NumEdges", 
-				[&] { ImGui::Text("%u", d.num_cloth_edges); },
-				[&] { std::string str = gpuSim->sim_datas_.solver_config_.stretch ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
-			row3("NumShears", 
+			row3("NumEdges",
+				[&] { ImGui::Text("%u", d.num_edges); },
+				[&] { std::string str = gpuSim->datas_.solver_config_.stretch ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
+			row3("NumShears",
 				[&] { ImGui::Text("%u", d.num_shears); },
-				[&] { std::string str = gpuSim->sim_datas_.solver_config_.shear ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
-			row3("NumBends", 
+				[&] { std::string str = gpuSim->datas_.solver_config_.shear ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
+			row3("NumBends",
 				[&] { ImGui::Text("%u", d.num_bends); },
-				[&] { std::string str = gpuSim->sim_datas_.solver_config_.bend ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
+				[&] { std::string str = gpuSim->datas_.solver_config_.bend ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
 			row3("NumAreas", [&] { ImGui::Text("%u", d.num_areas); },
-				[&] { std::string str = gpuSim->sim_datas_.solver_config_.area ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
+				[&] { std::string str = gpuSim->datas_.solver_config_.area ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
 			row3("NumLRAs", [&] { ImGui::Text("%u", d.num_lras); },
-				[&] { std::string str = gpuSim->sim_datas_.solver_config_.lra ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
-
-			ImGui::EndTable();
-		}
-
-		ImGui::EndChild();
-		ImGui::Unindent();
-
-		ImGui::SeparatorText("Softbody");
-		ImGui::Indent();
-		ImGui::BeginChild("Softbody", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders);
-		if (ImGui::BeginTable("Stat", 3, ImGuiTableFlags_BordersInnerV))
-		{
-			ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, columnSize);
-			ImGui::TableSetupColumn("Count", ImGuiTableColumnFlags_WidthFixed, columnSize);
-			ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, columnSize);
-			ImGui::TableHeadersRow();
-
-			row("NumParticles", [&] { ImGui::Text("%u", pm.num_softbody_particles_); });
-			row3("NumEdges", [&] { ImGui::Text("%u", d.num_softbody_edges); },
-				[&] { std::string str = gpuSim->sim_datas_.solver_config_.softbody_stretch ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
-			row3("NumVolumes", [&] { ImGui::Text("%u", d.num_volumes); },
-				[&] { std::string str = gpuSim->sim_datas_.solver_config_.softbody_volume ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
+				[&] { std::string str = gpuSim->datas_.solver_config_.lra ? "Active" : "Inactive"; ImGui::Text(str.c_str()); });
 
 			ImGui::EndTable();
 		}
@@ -1081,7 +1004,6 @@ void GUI::SetStatGUI(RowFn&& row)
 			row("NumShears", [&] { ImGui::Text("%u", d.num_shears); });
 			row("NumBends", [&] { ImGui::Text("%u", d.num_bends); });
 			row("NumAreas", [&] { ImGui::Text("%u", d.num_areas); });
-			row("NumVolumes", [&] { ImGui::Text("%u", d.num_volumes); });
 
 			ImGui::EndTable();
 		}

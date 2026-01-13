@@ -190,10 +190,7 @@ set(SIMULATION_SHADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/solve_shear.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/solve_bend.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/solve_area.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/solve_softbody_stretch.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/solve_softbody_volume.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/solve_self_collision.comp
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/solve_inter_cloth_collision.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/apply_deltas.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/solve_lra.comp
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/simulation/collide_sdf.comp

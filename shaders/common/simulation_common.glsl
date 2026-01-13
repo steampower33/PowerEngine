@@ -128,15 +128,6 @@ layout(std430, set = 1, binding = 21) buffer TriNormals { vec4 tri_normals[]; };
 layout(std430, set = 1, binding = 22) buffer VertexTriOffsets { uint vertex_tri_offsets[]; };
 layout(std430, set = 1, binding = 23) buffer VertexTriIndices { uint vertex_tri_indices[]; };
 
-struct Volume {
-    uint i0, i1, i2, i3;
-    float rest_volume;
-    float lambda;
-    float p0;
-    float p1;
-};
-layout(std430, set = 1, binding = 24) buffer Volumes { Volume volumes[]; };
-
 struct Collider {
     vec3 p0;
     int kind; // 0 = sphere, 1 = plane, 2 = capsule
@@ -147,17 +138,17 @@ struct Collider {
     float pad1;
     float pad2;
 };
-layout(std430, set = 1, binding = 25) buffer Colliders { Collider colliders[]; };
+layout(std430, set = 1, binding = 24) buffer Colliders { Collider colliders[]; };
 
 struct ColiisiotnMask {
     uint object_id;
     uint object_type;
 };
-layout(std430, set = 1, binding = 26) buffer CollisionMasks { ColiisiotnMask collision_masks[]; };
-layout(std430, set = 1, binding = 27) buffer DeltaV { vec4 delta_v[]; };
+layout(std430, set = 1, binding = 25) buffer CollisionMasks { ColiisiotnMask collision_masks[]; };
+layout(std430, set = 1, binding = 26) buffer DeltaV { vec4 delta_v[]; };
 
-layout(std430, set = 1, binding = 28) buffer LRAIndexes { uint lra_ids[]; };
-layout(std430, set = 1, binding = 29) buffer LRARests { float  lra_rests[]; };
+layout(std430, set = 1, binding = 27) buffer LRAIndexes { uint lra_ids[]; };
+layout(std430, set = 1, binding = 28) buffer LRARests { float  lra_rests[]; };
 
 
 #endif

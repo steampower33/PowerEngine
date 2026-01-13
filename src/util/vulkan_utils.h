@@ -21,16 +21,6 @@ namespace vku
 		uint32_t layout = 0;
 	};
 
-	struct TestScene {
-		bool horizontal_drop = true;
-		bool vertical_drop = false;
-		bool pinned_corner = false;
-		bool top_pinned_corner = false;
-		bool wind = false;
-
-		bool softbody = false;
-	};
-
 	struct VertexIncludeInfo {
 		bool uv = false;
 		bool normal = false;

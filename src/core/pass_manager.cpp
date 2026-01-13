@@ -1,14 +1,14 @@
 #include "context.h"
 #include "swapchain.h"
-#include "sim_pass_gpu.h"
 #include "texture_manager.h"
 #include "model_manager.h"
 #include "graphics_pass.h"
 #include "gui.h"
-#include "particle_manager.h"
 #include "camera.h"
 #include "mouse_interactor.h"
-#include "gpu_profiler.h"
+#include "cloth_particle_manager.h"
+#include "cloth_gpu_profiler.h"
+#include "cloth_sim_pass.h"
 
 #include "pass_manager.h"
 
@@ -17,19 +17,19 @@ PassManager::PassManager(GLFWwindow* glfwWindow, Context& context, Swapchain& sw
 {
 	CreateSyncObjects();
 
-	particle_manager_ = std::make_unique<ParticleManager>(context, modelManager, textureManager);
+	cloth_particle_manager_ = std::make_unique<ClothParticleManager>(context, modelManager, textureManager);
+	cloth_sim_pass_ = std::make_unique<ClothSimPass>(context, swapchain, *cloth_particle_manager_, modelManager);
 
-	sim_pass_gpu_ = std::make_unique<SimPassGPU>(context, swapchain, *particle_manager_, modelManager);
-	graphics_pass_ = std::make_unique<GraphicsPass>(context, swapchain, textureManager, modelManager, *particle_manager_);
+	graphics_pass_ = std::make_unique<GraphicsPass>(context, swapchain, textureManager, modelManager, *cloth_particle_manager_);
 }
 
 void PassManager::Update(Camera& camera, MouseInteractor& mouseInteractor, ModelManager& modelManager, bool paused)
 {
 	graphics_pass_->UpdateGraphicsUBO(current_frame_, camera, paused);
 
-	sim_pass_gpu_->UpdateComputeUBO(current_frame_, modelManager);
+	cloth_sim_pass_->UpdateComputeUBO(current_frame_, modelManager);
 
-	sim_pass_gpu_->UpdateMousePushConstant(camera, mouseInteractor, glm::vec2(swapchain_.swapchain_extent_.width, swapchain_.swapchain_extent_.height));
+	cloth_sim_pass_->UpdateMousePushConstant(camera, mouseInteractor, glm::vec2(swapchain_.swapchain_extent_.width, swapchain_.swapchain_extent_.height));
 
 }
 
@@ -48,7 +48,7 @@ void PassManager::Draw(std::unique_ptr<GUI>& gui, bool paused)
 			};
 			vku::VK_CHECK(device.waitSemaphores(waitInfo, UINT64_MAX), "waitSemaphores failed");
 
-			sim_pass_gpu_->CalculateGpuTime();
+			cloth_sim_pass_->CalculateGpuTime();
 		}
 	}
 
@@ -84,7 +84,7 @@ void PassManager::Draw(std::unique_ptr<GUI>& gui, bool paused)
 
 	if (!paused)
 	{
-		sim_pass_gpu_->RecordCompute(frame, test_scene_);
+		cloth_sim_pass_->RecordCompute(frame);
 
 		// compute submit
 		uint64_t computeSignalValue = 0;
@@ -105,7 +105,7 @@ void PassManager::Draw(std::unique_ptr<GUI>& gui, bool paused)
 				.pWaitSemaphores = nullptr,
 				.pWaitDstStageMask = nullptr,
 				.commandBufferCount = 1,
-				.pCommandBuffers = &*sim_pass_gpu_->cmds_[frame],
+				.pCommandBuffers = &*cloth_sim_pass_->cmds_[frame],
 				.signalSemaphoreCount = 1,
 				.pSignalSemaphores = &*timeline_semaphore_
 			};

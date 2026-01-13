@@ -42,15 +42,13 @@ void main()
     float wi = w[i];
     if (wi == 0.0) return;
 
-    // Only cloth participates in self-collision in this pass
-    if (collision_masks[i].object_type != TYPE_CLOTH) return;
-
     uint obj_i = collision_masks[i].object_id;
+    uint type_i = collision_masks[i].object_type;
 
     uint maxN = sim.max_neighbors;
     uint base = i * maxN;
 
-    float r  = sim.collision_radius;
+    float r  = sim.collision_radius * 2.0;
     float r2 = r * r;
 
     float dt = sim.dt;
@@ -75,11 +73,13 @@ void main()
         float wj = w[j];
         if (wj == 0.0) continue;
 
-        // same object only
-        if (collision_masks[j].object_id != obj_i) continue;
+        uint obj_j = collision_masks[j].object_id;
+        uint type_j = collision_masks[j].object_type;
 
-        // cloth only
-        if (collision_masks[j].object_type != TYPE_CLOTH) continue;
+        if (i == j) continue;
+
+        bool is_same_object = (obj_i == obj_j);
+        if (is_same_object && type_i == TYPE_SOFTBODY && type_j == TYPE_SOFTBODY) continue;
 
         vec3 xj  = xp[j].xyz;
         vec3 pxj = x[j].xyz;

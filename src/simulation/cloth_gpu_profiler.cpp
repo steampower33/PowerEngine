@@ -1,9 +1,9 @@
 #include "context.h"
-#include "sim_data.h"
+#include "cloth_sim_data.h"
 
-#include "gpu_profiler.h"
+#include "cloth_gpu_profiler.h"
 
-GpuProfiler::GpuProfiler(Context& context, SimData& simData)
+ClothGpuProfiler::ClothGpuProfiler(Context& context, ClothData& simData)
 	: context_(context)
 {
 	CreateQueryPool();
@@ -18,12 +18,12 @@ GpuProfiler::GpuProfiler(Context& context, SimData& simData)
 		+ 1;
 }
 
-GpuProfiler::~GpuProfiler()
+ClothGpuProfiler::~ClothGpuProfiler()
 {
 
 }
 
-void GpuProfiler::CreateQueryPool() {
+void ClothGpuProfiler::CreateQueryPool() {
 	vk::QueryPoolCreateInfo queryInfo = {};
 	queryInfo.queryType = vk::QueryType::eTimestamp;
 	queryInfo.queryCount = 2048;
@@ -31,7 +31,7 @@ void GpuProfiler::CreateQueryPool() {
 	timestamp_pool_ = context_.device_.createQueryPool(queryInfo);
 }
 
-void GpuProfiler::CalculateGpuTime(SimData& simData)
+void ClothGpuProfiler::CalculateGpuTime(ClothData& simData)
 {
 	float nsPerTick = context_.physical_device_.getProperties().limits.timestampPeriod;
 	float toMs = nsPerTick / 1e6f;
@@ -64,10 +64,7 @@ void GpuProfiler::CalculateGpuTime(SimData& simData)
 	float tSolveShear = 0.0f;
 	float tSolveBend = 0.0f;
 	float tSolveArea = 0.0f;
-	float tSolveSoftbodyStretch = 0.0f;
-	float tSolveSoftbodyVolume = 0.0f;
 	float tSolveSelfCollision = 0.0f;
-	float tSolveInterCollision = 0.0f;
 	float tApplyDeltas = 0.0f;
 	float tSolveLRA = 0.0f;
 	float tCollideSdf = 0.0f;
@@ -98,11 +95,8 @@ void GpuProfiler::CalculateGpuTime(SimData& simData)
 			tSolveShear += delta_ms(iterBase + it * tsCnt + 2, iterBase + it * tsCnt + 3);
 			tSolveBend += delta_ms(iterBase + it * tsCnt + 4, iterBase + it * tsCnt + 5);
 			tSolveArea += delta_ms(iterBase + it * tsCnt + 6, iterBase + it * tsCnt + 7);
-			tSolveSoftbodyStretch += delta_ms(iterBase + it * tsCnt + 8, iterBase + it * tsCnt + 9);
-			tSolveSoftbodyVolume += delta_ms(iterBase + it * tsCnt + 10, iterBase + it * tsCnt + 11);
-			tSolveSelfCollision += delta_ms(iterBase + it * tsCnt + 12, iterBase + it * tsCnt + 13);
-			tSolveInterCollision += delta_ms(iterBase + it * tsCnt + 14, iterBase + it * tsCnt + 15);
-			tApplyDeltas += delta_ms(iterBase + it * tsCnt + 16, iterBase + it * tsCnt + 17);
+			tSolveSelfCollision += delta_ms(iterBase + it * tsCnt + 8, iterBase + it * tsCnt + 9);
+			tApplyDeltas += delta_ms(iterBase + it * tsCnt + 10, iterBase + it * tsCnt + 11);
 		}
 		afterIteration = iterBase + simData.iterations * tsCnt;
 
@@ -121,7 +115,7 @@ void GpuProfiler::CalculateGpuTime(SimData& simData)
 	float total =
 		tIntegrate + tClearLambdas +
 		tHashBuild + tRadixSort + tBuildCell + tBuildNeighbor +
-		tSolveStretch + tSolveSoftbodyStretch + tSolveSoftbodyVolume + tSolveBend + tSolveArea + tSolveSelfCollision + tSolveInterCollision + tApplyDeltas +
+		tSolveBend + tSolveArea + tSolveSelfCollision + tApplyDeltas +
 		tCollideSdf + tUpdate +
 		tCalculateNormals;
 
@@ -140,10 +134,7 @@ void GpuProfiler::CalculateGpuTime(SimData& simData)
 		label_time_[labels_[c++]] = tSolveShear;
 		label_time_[labels_[c++]] = tSolveBend;
 		label_time_[labels_[c++]] = tSolveArea;
-		label_time_[labels_[c++]] = tSolveSoftbodyStretch;
-		label_time_[labels_[c++]] = tSolveSoftbodyVolume;
 		label_time_[labels_[c++]] = tSolveSelfCollision;
-		label_time_[labels_[c++]] = tSolveInterCollision;
 		label_time_[labels_[c++]] = tApplyDeltas;
 		label_time_[labels_[c++]] = tSolveLRA;
 		label_time_[labels_[c++]] = tCollideSdf;
@@ -165,10 +156,7 @@ void GpuProfiler::CalculateGpuTime(SimData& simData)
 		label_avg_time_[labels_[c++]] += tSolveShear;
 		label_avg_time_[labels_[c++]] += tSolveBend;
 		label_avg_time_[labels_[c++]] += tSolveArea;
-		label_avg_time_[labels_[c++]] += tSolveSoftbodyStretch;
-		label_avg_time_[labels_[c++]] += tSolveSoftbodyVolume;
 		label_avg_time_[labels_[c++]] += tSolveSelfCollision;
-		label_avg_time_[labels_[c++]] += tSolveInterCollision;
 		label_avg_time_[labels_[c++]] += tApplyDeltas;
 		label_avg_time_[labels_[c++]] += tSolveLRA;
 		label_avg_time_[labels_[c++]] += tCollideSdf;

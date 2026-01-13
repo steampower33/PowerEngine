@@ -45,50 +45,22 @@ struct Cloth
 	std::vector<uint32_t> indices;
 };
 
-struct SoftBody
-{
-	std::string name;
-
-	vku::TetMesh tetmesh;
-
-	glm::vec4 color;
-
-	uint32_t offset_particle = 0;
-	uint32_t offset_indices = 0;
-
-	uint32_t num_particle = 0;
-	uint32_t num_indices = 0;
-
-	glm::vec3 origin;
-	float     angle_deg;
-	glm::vec3 axis;
-
-	bool render;
-
-	ubo_data::Model ubo_data;
-};
-
-class ParticleManager
+class ClothParticleManager
 {
 public:
-	ParticleManager(Context& context, ModelManager& modelManager, TextureManager& textureManager);
-	ParticleManager(const ParticleManager& rhs) = delete;
-	ParticleManager(ParticleManager&& rhs) = delete;
-	ParticleManager& operator=(const ParticleManager& rhs) = delete;
-	ParticleManager& operator=(ParticleManager&& rhs) = delete;
-	~ParticleManager();
+	ClothParticleManager(Context& context, ModelManager& modelManager, TextureManager& textureManager);
+	ClothParticleManager(const ClothParticleManager& rhs) = delete;
+	ClothParticleManager(ClothParticleManager&& rhs) = delete;
+	ClothParticleManager& operator=(const ClothParticleManager& rhs) = delete;
+	ClothParticleManager& operator=(ClothParticleManager&& rhs) = delete;
+	~ClothParticleManager();
 
 	void SetPlaneCloth(Cloth& cloth);
 	void SetClothFromMesh(Cloth& cloth);
-	void SetSoftbody(std::string path, SoftBody& softbody, bool isJson);
 	void ResetCloth(Cloth& cloth);
-	void ResetSoftbody(SoftBody& softbody);
 	void ResetVolumeConstraint();
 
 	Context& context_;
-
-	std::vector<uint32_t> sim_base_;
-	std::vector<uint32_t> sim_count_;
 
 	uint32_t total_particles_ = 0;
 	uint32_t total_indices_ = 0;
@@ -98,12 +70,9 @@ public:
 	uint32_t num_cloth_indices_ = 0;
 	std::vector<Cloth> clothes_;
 
-	uint32_t num_softbody_particles_ = 0;
-	uint32_t num_softbody_indices_ = 0;
-	//SoftBody soft_body_;
-	std::vector<SoftBody> softbodies_;
-
 	float default_cloth_spacing_ = 0.02f;
+	float radius = 0.01f;
+	float cell_size = 0.02f;
 
 	std::vector<glm::vec4> positions_;
 	std::vector<glm::vec4> pred_positions_;

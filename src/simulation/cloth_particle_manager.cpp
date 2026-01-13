@@ -8,63 +8,28 @@
 #include "geometry_generator.h"
 #include "model_loader.h"
 
-#include "particle_manager.h"
+#include "cloth_particle_manager.h"
 
-ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, TextureManager& textureManager)
+ClothParticleManager::ClothParticleManager(Context& context, ModelManager& modelManager, TextureManager& textureManager)
 	: context_(context)
 {
 	{
 		Cloth cloth{};
 
-		cloth.name = "1x1 Cloth";
+		cloth.name = "1x10 Cloth";
 		cloth.spacing = default_cloth_spacing_;
 		cloth.gsm = 0.2f;
-		cloth.cloth_size = glm::vec2(1.0f, 1.0f);
+		cloth.cloth_size = glm::vec2(1.0f, 10.0f);
 
 		cloth.color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
 
-		cloth.origin = glm::vec3(0.0f, 5.0f, 0.0f);
-		cloth.angle_deg = 0.0f;
-		cloth.axis = glm::vec3(0, 1, 0);
-
-		cloth.num_particle = cloth.nx1 * cloth.ny1;
+		cloth.origin = glm::vec3(2.0f, 10.0f, 0.0f);
+		cloth.angle_deg = 90.0f;
+		cloth.axis = glm::vec3(1, 0, 0);
 
 		cloth.render = true;
 
 		std::string base = "assets/fabric/quatrefoil_jacquard_fabric";
-		cloth.ubo_data.albedo_enable = 1;
-		cloth.ubo_data.albedo_idx = textureManager.CreateTexture(base, "diff", false, true);
-		cloth.ubo_data.normal_enable = 1;
-		cloth.ubo_data.normal_idx = textureManager.CreateTexture(base, "nor", false, true);
-		cloth.ubo_data.arm_enable = 1;
-		cloth.ubo_data.arm_idx = textureManager.CreateTexture(base, "arm", false, true);
-		cloth.ubo_data.fuzz_factor = 0.1f;
-		cloth.ubo_data.fuzz_roughness_factor = 1.0f;
-
-		cloth.ubo_data.tile_uv = cloth.cloth_size;
-
-		SetPlaneCloth(cloth);
-	}
-
-	{
-		Cloth cloth{};
-
-		cloth.name = "2x2 Cloth";
-		cloth.spacing = default_cloth_spacing_;
-		cloth.gsm = 0.2f;
-		cloth.cloth_size = glm::vec2(2.0f, 2.0f);
-
-		cloth.color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
-
-		cloth.origin = glm::vec3(0.0f, 4.0f, 0.0f);
-		cloth.angle_deg = 0.0f;
-		cloth.axis = glm::vec3(0, 1, 0);
-
-		cloth.num_particle = cloth.nx1 * cloth.ny1;
-
-		cloth.render = true;
-
-		std::string base = "assets/fabric/gingham_check";
 		cloth.ubo_data.albedo_enable = 1;
 		cloth.ubo_data.albedo_idx = textureManager.CreateTexture(base, "diff", false, true);
 		cloth.ubo_data.normal_enable = 1;
@@ -93,8 +58,6 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, T
 		cloth.angle_deg = 0.0f;
 		cloth.axis = glm::vec3(0, 1, 0);
 
-		cloth.num_particle = cloth.nx1 * cloth.ny1;
-
 		cloth.render = true;
 
 		std::string base = "assets/fabric/terry_cloth";
@@ -113,52 +76,26 @@ ParticleManager::ParticleManager(Context& context, ModelManager& modelManager, T
 
 	}
 
-	{
-		SoftBody softbody;
-		softbody.name = "softbody1";
-		softbody.origin = glm::vec3(1.0f, 1.0f, 0.0f);
-		softbody.color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-		softbody.render = true;
-
-		SetSoftbody("assets/bunny_tets.json", softbody, true);
-	}
-
-	{
-		SoftBody softbody;
-		softbody.name = "softbody2";
-		softbody.origin = glm::vec3(1.0f, 1.0f, 0.0f);
-		softbody.color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-		softbody.render = true;
-
-		SetSoftbody("assets/sphere.msh", softbody, false);
-	}
-
-	sim_base_.push_back(0);
-	sim_base_.push_back(num_cloth_particles_);
-
-	sim_count_.push_back(num_cloth_particles_);
-	sim_count_.push_back(num_softbody_particles_);
-
 	vku::CreateIndexBuffer(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_, indices_, index_buffer_, index_buffer_memory_);
 
-	total_particles_ = num_cloth_particles_ + num_softbody_particles_;
+	total_particles_ = num_cloth_particles_;
 	assert(total_particles_ == positions_.size());
-	total_indices_ = num_cloth_indices_ + num_softbody_indices_;
+	total_indices_ = num_cloth_indices_;
 	assert(total_indices_ == indices_.size());
 
-	total_tries_ = ((num_cloth_indices_ + num_softbody_indices_) / 3);
+	total_tries_ = num_cloth_indices_ / 3;
 
 	BuildVertexAdjacency();
 
 	CreateSSBO();
 }
 
-ParticleManager::~ParticleManager()
+ClothParticleManager::~ClothParticleManager()
 {
 
 }
 
-void ParticleManager::SetPlaneCloth(Cloth& cloth)
+void ClothParticleManager::SetPlaneCloth(Cloth& cloth)
 {
 	cloth.type = Cloth::Type::PLANE;
 	cloth.nx = (uint32_t)std::round(cloth.cloth_size.x / cloth.spacing);
@@ -287,7 +224,7 @@ void ParticleManager::SetPlaneCloth(Cloth& cloth)
 	clothes_.push_back(cloth);
 }
 
-void ParticleManager::SetClothFromMesh(Cloth& cloth)
+void ClothParticleManager::SetClothFromMesh(Cloth& cloth)
 {
 	cloth.type = Cloth::Type::MESH;
 
@@ -392,94 +329,7 @@ void ParticleManager::SetClothFromMesh(Cloth& cloth)
 	//cloth.mesh = std::move(mesh);
 }
 
-void ParticleManager::SetSoftbody(std::string path, SoftBody& softbody, bool isJson)
-{
-	if (isJson)
-	{
-		softbody.tetmesh = vku::LoadJson(path.c_str());
-	}
-	else
-	{
-		softbody.tetmesh = vku::LoadGmshMsh2(path.c_str());
-	}
-
-
-	softbody.offset_particle = positions_.size();
-	softbody.offset_indices = indices_.size();
-
-	softbody.num_particle = softbody.tetmesh.positions.size();
-	softbody.num_indices = softbody.tetmesh.surfaceIndices.size();
-
-	for (auto& p : softbody.tetmesh.positions)
-	{
-		glm::vec4 pos = glm::vec4(p, 1.0f) + glm::vec4(softbody.origin, 0.0f);
-		positions_.push_back(pos);
-		velocities_.push_back(glm::vec4(0.0f));
-		pred_positions_.push_back(pos);
-		masses_.push_back(0.0f);
-		inverse_masses_.push_back(0.0f);
-		normals_.push_back(glm::vec4(0.0f));
-		collision_masks_.push_back({ object_cnt_, ObjectType::SOFTBODY });
-	}
-
-	for (auto idx : softbody.tetmesh.surfaceIndices)
-	{
-		indices_.push_back(softbody.offset_particle + idx);
-	}
-
-	num_softbody_particles_ += softbody.num_particle;
-	num_softbody_indices_ += softbody.num_indices;
-
-	auto SignedVolume = [&](uint32_t i0, uint32_t i1, uint32_t i2, uint32_t i3) {
-		glm::vec3 x0 = softbody.tetmesh.positions[i0];
-		glm::vec3 x1 = softbody.tetmesh.positions[i1];
-		glm::vec3 x2 = softbody.tetmesh.positions[i2];
-		glm::vec3 x3 = softbody.tetmesh.positions[i3];
-		return glm::dot(glm::cross(x1 - x0, x2 - x0), x3 - x0) / 6.0f;
-		};
-
-	for (auto t : softbody.tetmesh.tets)
-	{
-		float v = SignedVolume(t.x, t.y, t.z, t.w);
-
-		if (std::abs(v) < 1e-12f) continue;
-
-		if (v < 0.0f) {
-			std::swap(t.y, t.z);
-			v = -v;
-		}
-
-		Volume c;
-		c.i0 = softbody.offset_particle + t.x;
-		c.i1 = softbody.offset_particle + t.y;
-		c.i2 = softbody.offset_particle + t.z;
-		c.i3 = softbody.offset_particle + t.w;
-
-		c.rest_volume = v;
-		c.lambda = 0.0f;
-
-		volume_constraints.push_back(c);
-
-		float tetMass = c.rest_volume;
-		float pMass = tetMass * 0.25f;
-
-		masses_[c.i0] += pMass;
-		masses_[c.i1] += pMass;
-		masses_[c.i2] += pMass;
-		masses_[c.i3] += pMass;
-	}
-
-	for (uint32_t i = softbody.offset_particle; i < softbody.offset_particle + softbody.num_particle; ++i)
-	{
-		inverse_masses_[i] = (masses_[i] > 0.0f) ? (1.0f / masses_[i]) : 0.0f;
-	}
-
-	object_cnt_++;
-
-	softbodies_.push_back(softbody);
-}
-
-void ParticleManager::ResetCloth(Cloth& cloth)
+void ClothParticleManager::ResetCloth(Cloth& cloth)
 {
 	if (cloth.type == Cloth::Type::MESH)
 		return;
@@ -587,17 +437,7 @@ void ParticleManager::ResetCloth(Cloth& cloth)
 	}
 }
 
-void ParticleManager::ResetSoftbody(SoftBody& softbody)
-{
-	for (uint32_t i = 0; i < softbody.tetmesh.positions.size(); i++)
-	{
-		glm::vec4 pos = glm::vec4(softbody.tetmesh.positions[i] + softbody.origin, 1.0f);
-		positions_[softbody.offset_particle + i] = pos;
-		pred_positions_[softbody.offset_particle + i] = pos;
-	}
-}
-
-void ParticleManager::ResetVolumeConstraint()
+void ClothParticleManager::ResetVolumeConstraint()
 {
 	for (auto& v : volume_constraints)
 	{
@@ -605,7 +445,7 @@ void ParticleManager::ResetVolumeConstraint()
 	}
 }
 
-void ParticleManager::CreateSSBO()
+void ClothParticleManager::CreateSSBO()
 {
 	// position
 	ssbo_size_.position = sizeof(glm::vec4) * total_particles_;
@@ -660,21 +500,21 @@ void ParticleManager::CreateSSBO()
 	staging_mapped_.inverse_mass = staging_memories_.inverse_mass.mapMemory(0, ssbo_size_.inverse_mass);
 
 	// Cloth Self Collision
-	uint32_t tableSize = num_cloth_particles_;
+	uint32_t tableSize = total_particles_;
 	uint32_t maxNeighbors = 16;
 
-	particle_hashes_.resize(num_cloth_particles_, 0);
-	particle_indices_.resize(num_cloth_particles_, 0);
+	particle_hashes_.resize(total_particles_, 0);
+	particle_indices_.resize(total_particles_, 0);
 
 	starts_.resize(tableSize, 0);
 	ends_.resize(tableSize, 0);
 
-	num_neighbors_ = num_cloth_particles_ * maxNeighbors;
+	num_neighbors_ = total_particles_ * maxNeighbors;
 	neighbors_.resize(num_neighbors_, 0);
 	neighbor_lambdas_.resize(num_neighbors_, 0);
 
 	// particle_hash
-	ssbo_size_.particle_hash = sizeof(uint32_t) * num_cloth_particles_;
+	ssbo_size_.particle_hash = sizeof(uint32_t) * total_particles_;
 	vku::CreateSSBO("Particle Hash", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.particle_hash,
 		vk::BufferUsageFlagBits::eTransferSrc,
@@ -685,7 +525,7 @@ void ParticleManager::CreateSSBO()
 		ssbos_.particle_hash, ssbo_memories_.particle_hash);
 
 	// particle_indice
-	ssbo_size_.sorted_indice = sizeof(uint32_t) * num_cloth_particles_;
+	ssbo_size_.sorted_indice = sizeof(uint32_t) * total_particles_;
 	vku::CreateSSBO("Particle Indice", context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_,
 		ssbo_size_.sorted_indice,
 		vk::BufferUsageFlagBits::eTransferSrc,
@@ -808,7 +648,7 @@ void ParticleManager::CreateSSBO()
 
 }
 
-void ParticleManager::BuildVertexAdjacency()
+void ClothParticleManager::BuildVertexAdjacency()
 {
 	const uint32_t numIndices = total_indices_;
 	assert(numIndices % 3 == 0);

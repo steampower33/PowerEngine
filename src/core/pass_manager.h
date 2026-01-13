@@ -4,14 +4,16 @@
 
 class Context;
 class Swapchain;
-class SimPassGPU;
 class TextureManager;
 class ModelManager;
 class GraphicsPass;
 class GUI;
-class ParticleManager;
 class Camera;
 class MouseInteractor;
+class ClothParticleManager;
+class ClothSimPass;
+class SoftbodyParticleManager;
+class SoftbodySimPass;
 
 class PassManager
 {
@@ -26,10 +28,9 @@ public:
 	void Update(Camera& camera, MouseInteractor& mouseInteractor, ModelManager& modelManager, bool paused);
 	void Draw(std::unique_ptr<GUI>& gui, bool paused);
 
-	vku::TestScene test_scene_;
+	std::unique_ptr<ClothParticleManager> cloth_particle_manager_;
+	std::unique_ptr<ClothSimPass> cloth_sim_pass_;
 
-	std::unique_ptr<ParticleManager> particle_manager_;
-	std::unique_ptr<SimPassGPU> sim_pass_gpu_;
 	std::unique_ptr<GraphicsPass> graphics_pass_;
 
 	vk::raii::Semaphore timeline_semaphore_{ nullptr };

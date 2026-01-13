@@ -7,12 +7,12 @@ class Texture;
 class TextureManager;
 class Model;
 class ModelManager;
-class ParticleManager;
+class ClothParticleManager;
 
 class GraphicsPass
 {
 public:
-	GraphicsPass(Context& context, Swapchain& swapchain, TextureManager& textureManager, ModelManager& modelManager, ParticleManager& particleManager);
+	GraphicsPass(Context& context, Swapchain& swapchain, TextureManager& textureManager, ModelManager& modelManager, ClothParticleManager& particleManager);
 	GraphicsPass(const GraphicsPass& rhs) = delete;
 	GraphicsPass(GraphicsPass&& rhs) = delete;
 	GraphicsPass& operator=(const GraphicsPass& rhs) = delete;
@@ -47,7 +47,7 @@ private:
 	Swapchain& swapchain_;
 	TextureManager& texture_manager_;
 	ModelManager& model_manager_;
-	ParticleManager& particle_manager_;
+	ClothParticleManager& cloth_particle_manager_;
 
 	vk::raii::QueryPool timestamp_pool_{ nullptr };
 	uint32_t timestamp_steps_ = 0;
@@ -92,7 +92,7 @@ private:
 		vk::raii::Buffer light{ nullptr };
 		vk::raii::Buffer skybox{ nullptr };
 		vk::raii::Buffer cloth{ nullptr };
-		vk::raii::Buffer softbody{ nullptr };
+		//vk::raii::Buffer softbody{ nullptr };
 		vk::raii::Buffer skinned_model{ nullptr };
 		vk::raii::Buffer grid{ nullptr };
 	} ubos_;
@@ -103,7 +103,7 @@ private:
 		vk::raii::DeviceMemory light{ nullptr };
 		vk::raii::DeviceMemory skybox{ nullptr };
 		vk::raii::DeviceMemory cloth{ nullptr };
-		vk::raii::DeviceMemory softbody{ nullptr };
+		//vk::raii::DeviceMemory softbody{ nullptr };
 		vk::raii::DeviceMemory skinned_model{ nullptr };
 		vk::raii::DeviceMemory grid{ nullptr };
 	} ubo_memories_;
@@ -114,7 +114,7 @@ private:
 		void* light{ nullptr };
 		void* skybox{ nullptr };
 		void* cloth{ nullptr };
-		void* softbody{ nullptr };
+		//void* softbody{ nullptr };
 		void* skinned_model{ nullptr };
 		void* grid{ nullptr };
 	} ubo_mapped_;
@@ -125,7 +125,7 @@ private:
 		vk::DeviceSize light;
 		vk::DeviceSize skybox;
 		vk::DeviceSize cloth;
-		vk::DeviceSize softbody;
+		//vk::DeviceSize softbody;
 		vk::DeviceSize skinned_model;
 		vk::DeviceSize grid;
 	} ubo_size_;
@@ -136,7 +136,7 @@ private:
 		vk::raii::DescriptorSetLayout lighting{ nullptr };
 		vk::raii::DescriptorSetLayout skybox{ nullptr };
 		vk::raii::DescriptorSetLayout cloth{ nullptr };
-		vk::raii::DescriptorSetLayout softbody{ nullptr };
+		//vk::raii::DescriptorSetLayout softbody{ nullptr };
 		vk::raii::DescriptorSetLayout skinned_model{ nullptr };
 		vk::raii::DescriptorSetLayout shadow_particle{ nullptr };
 		vk::raii::DescriptorSetLayout grid{ nullptr };
@@ -148,7 +148,7 @@ private:
 		vk::raii::DescriptorSet lighting{ nullptr };
 		vk::raii::DescriptorSet skybox{ nullptr };
 		vk::raii::DescriptorSet cloth{ nullptr };
-		vk::raii::DescriptorSet softbody{ nullptr };
+		//vk::raii::DescriptorSet softbody{ nullptr };
 		vk::raii::DescriptorSet skinned_model{ nullptr };
 		vk::raii::DescriptorSet shadow_particle{ nullptr };
 		vk::raii::DescriptorSet grid{ nullptr };
@@ -159,7 +159,7 @@ private:
 		vk::raii::PipelineLayout lighting{ nullptr };
 		vk::raii::PipelineLayout skybox{ nullptr };
 		vk::raii::PipelineLayout cloth{ nullptr };
-		vk::raii::PipelineLayout softbody{ nullptr };
+		//vk::raii::PipelineLayout softbody{ nullptr };
 		vk::raii::PipelineLayout skinned_model{ nullptr };
 		vk::raii::PipelineLayout debug_capsule{ nullptr };
 		vk::raii::PipelineLayout shadow_model{ nullptr };
@@ -178,9 +178,9 @@ private:
 		vk::raii::Pipeline cloth_wireframe{ nullptr };
 		vk::raii::Pipeline cloth_point{ nullptr };
 
-		vk::raii::Pipeline softbody_solid{ nullptr };
-		vk::raii::Pipeline softbody_wireframe{ nullptr };
-		vk::raii::Pipeline softbody_point{ nullptr };
+		//vk::raii::Pipeline softbody_solid{ nullptr };
+		//vk::raii::Pipeline softbody_wireframe{ nullptr };
+		//vk::raii::Pipeline softbody_point{ nullptr };
 
 		vk::raii::Pipeline skinned_model_solid{ nullptr };
 		vk::raii::Pipeline skinned_model_wireframe{ nullptr };
