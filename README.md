@@ -117,8 +117,15 @@ void UpdateSimulation(float dt)
 | **Total Constraints** | **~751,000** (Stretch/Shear/Bend/Area/LRA) |
 | **Performance Environment** | RTX 4060 Laptop GPU |
 
-### GPU Performance
-![Performance](./docs/media/performance.png)
+### Performance
+![Performance](./docs/media/gpu_kernel_time.png)
+
+Running on an **RTX 4060 Laptop GPU**, the simulation achieves stable real-time performance with **63,001 particles**.
+
+- **Average Physics Step:** ~7.4 ms
+- **Theoretical Max FPS:** ~135 FPS (Physics Only)
+- **Bottleneck:** The constraint solving stages (`SolveStretch`, `SolveBend`) take up the majority of the computation time (~50%), which is typical for high-stiffness XPBD simulations.
+
 
 ---
 
@@ -212,5 +219,14 @@ debug.bat
 - The timestamp gui code is referenced from the [Velvet](https://github.com/vitalight/Velvet/tree/master) project.
 - Implementation notes referenced: Ten Minute Physics / PBD tutorial notes (Matthias Müller)
 - Vulkan learning was done with [Khronos Vulkan](https://docs.vulkan.org/tutorial/latest/00_Introduction.html).
+
+---
+
+## 💬 Contact & Feedback
+This project reflects my deep interest in Physics Simulation and Graphics Programming. I welcome any feedback, suggestions, or discussions about the code!
+
+- **Email:** devhopper100@gmail.com
+- **LinkedIn:** https://www.linkedin.com/in/seungmin-lee-96b3aa231/
+- **Youtube:** https://www.youtube.com/@Dev.Hopper
 
 ---
