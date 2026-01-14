@@ -159,23 +159,77 @@ Running on an **RTX 4060 Laptop GPU**, the simulation achieves stable real-time 
 - Visual Studio 2022 (MSVC) + C++ Desktop workload
 - vcpkg (set environment variable `VCPKG_ROOT` to your vcpkg directory, e.g. `C:\vcpkg`)
 
-### Build (CMake)
-> Run from **x64 Native Tools Command Prompt for VS 2022**.
+### 1. Get the Source
+First, clone the repository and update submodules.
 
 ```bat
 git clone https://github.com/steampower33/PhysixStudio.git
 cd PhysixStudio
 git submodule update --init --recursive
+```
 
-:: Release
+### 2. Build & Run
+
+#### Option A: Visual Studio 2022 (Recommended)
+You can use the native CMake support in Visual Studio.
+
+1. Open Visual Studio 2022.
+2. Select "Open a local folder" and choose the PhysixStudio folder you just cloned.
+3. Visual Studio will automatically detect CMakeLists.txt and configure the project.
+    Note: If configuration doesn't start, simply open and save CMakeLists.txt to trigger it.
+4. Select the startup target (e.g., PhysixStudio.exe) from the toolbar dropdown menu.
+5. Press F5 or click the Run (Green Play) button to build and launch.
+
+#### Option B: Command Line (CLI)
+Run from x64 Native Tools Command Prompt for VS 2022.
+
+```
+:: Release Build
 cmake --preset windows-release
 cmake --build --preset release
 release.bat
 
-:: Debug
+:: Debug Build
 cmake --preset windows-debug
 cmake --build --preset debug
 debug.bat
+```
+
+---
+
+## 🛠️ How to Add New Cloth
+Currently, the cloth scene setup is hardcoded in the C++ source. To add a new cloth object or modify existing ones, follow these steps:
+
+1. Open `src/cloth_particle_manager.cpp`.
+2. Locate the **constructor** `ClothParticleManager::ClothParticleManager`.
+3. Inside the constructor, you will find a code block creating a `Cloth` object. You can duplicate this block to add multiple cloth instances.
+
+### Example Code
+```cpp
+// Inside ClothParticleManager::ClothParticleManager(...)
+
+{
+    Cloth cloth{}; // Create new instance
+
+    // 1. Physics Properties
+    cloth.name = "MyNewCloth";
+    cloth.spacing = 0.05f;           // Grid spacing (resolution)
+    cloth.gsm = 0.2f;                // Weight (Grams per Square Meter)
+    cloth.cloth_size = glm::vec2(5.0f, 5.0f); // Width x Height
+
+    // 2. Initial Transform
+    cloth.origin = glm::vec3(2.0f, 5.0f, 0.0f); // Position
+    cloth.angle_deg = 90.0f;                    // Rotation angle
+    cloth.axis = glm::vec3(1, 0, 0);            // Rotation axis
+
+    // 3. Rendering Material
+    std::string base = "assets/fabric/denim";   // Texture path
+    cloth.ubo_data.albedo_idx = textureManager.CreateTexture(base, "diff", false, true);
+    // ... set other texture maps (normal, arm) ...
+
+    // 4. Register to Solver (IMPORTANT)
+    SetPlaneCloth(cloth); 
+}
 ```
 
 ---
