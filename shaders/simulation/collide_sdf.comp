@@ -3,35 +3,22 @@
 
 layout(local_size_x = 256) in;
 
-float sdf_sphere(vec3 p, vec3 center, float radius) {
-    return length(p - center) - radius;
-}
-vec3 normal_sphere(vec3 p, vec3 center) {
-    vec3 d = p - center;
-    float l = length(d);
-    return (l > 1e-8) ? (d / l) : vec3(0.0, 1.0, 0.0);
-}
+// --- SDF Functions ---
+float sdf_sphere(vec3 p, vec3 center, float radius) { return length(p - center) - radius; }
+vec3 normal_sphere(vec3 p, vec3 center) { vec3 d = p - center; float l = length(d); return (l > 1e-8) ? (d / l) : vec3(0,1,0); }
 
-float sdf_plane(vec3 p, vec3 pointOnPlane, vec3 n) {
-    return dot(n, p - pointOnPlane);
-}
-vec3 normal_plane(vec3 n) { return n; }
+float sdf_plane(vec3 p, vec3 pointOnPlane, vec3 n) { return dot(n, p - pointOnPlane); }
 
 float sdf_capsule(vec3 p, vec3 a, vec3 b, float r) {
-    vec3 pa = p - a;
-    vec3 ba = b - a;
+    vec3 pa = p - a; vec3 ba = b - a;
     float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-8), 0.0, 1.0);
-    vec3 q = a + h * ba;
-    return length(p - q) - r;
+    vec3 q = a + h * ba; return length(p - q) - r;
 }
 vec3 normal_capsule(vec3 p, vec3 a, vec3 b) {
-    vec3 ba = b - a;
-    float h = clamp(dot(p - a, ba) / max(dot(ba, ba), 1e-8), 0.0, 1.0);
-    vec3 q = a + h * ba;
-    vec3 d = p - q;
-    float l = length(d);
-    return (l > 1e-8) ? (d / l) : vec3(0.0, 1.0, 0.0);
+    vec3 ba = b - a; float h = clamp(dot(p - a, ba) / max(dot(ba, ba), 1e-8), 0.0, 1.0);
+    vec3 q = a + h * ba; vec3 d = p - q; float l = length(d); return (l > 1e-8) ? (d / l) : vec3(0,1,0);
 }
+// --------------------
 
 void main() {
     uint gid = gl_GlobalInvocationID.x;
@@ -40,50 +27,96 @@ void main() {
 
     if (w[id] == 0.0) return;
 
-    vec3 p = xp[id].xyz;          // predicted position
-    float thickness = sim.thickness;
-
-    // "near-contact" slop (prevents micro-separation & jitter)
-    const float SLOP = 1e-4;
+    // Load Data
+    vec3 pred_pos = xp[id].xyz;       // Current predicted position (Before collision solve)
+    vec3 prev_pos = x[id].xyz;        // Previous frame position (Used for velocity/friction)
     
-    for (uint iter = 0; iter < 2; iter++)
+    float thickness = sim.thickness;
+    float mu = sim.friction;          // Friction coefficient
+    const float SLOP = 1e-4;          // Tolerance to prevent jitter
+
+    // Iterations (1 pass is usually sufficient for simple SDFs)
+    for (uint iter = 0; iter < 1; iter++) 
     {
         for (uint c = 0; c < sim.num_colliders; ++c) {
             Collider col = colliders[c];
             if (col.do_collide == 0u) continue;
 
-            int kind = col.kind;
+            vec3 n = vec3(0.0);
+            float penetration = 0.0;
+            bool collided = false;
 
-            if (kind == 0) {
-                // sphere
+            // --- A. Detection Phase ---
+            if (col.kind == 0) { // Sphere
                 float r = col.radius + thickness;
-                float C = sdf_sphere(p, col.p0, r);
-                if (C < 0.0) {
-                    vec3 n = normal_sphere(p, col.p0);
-                    p += (-C + SLOP) * n; // push out + keep a tiny gap
+                float dist = sdf_sphere(pred_pos, col.p0, r);
+                if (dist < 0.0) {
+                    n = normal_sphere(pred_pos, col.p0);
+                    penetration = -dist; // Negative SDF implies penetration
+                    collided = true;
                 }
             }
-            else if (kind == 1) {
-                // plane
-                vec3 n = normalize(col.p1);
-                // plane point is col.p0, push plane "up" by thickness
-                float C = sdf_plane(p, col.p0 + n * thickness, n);
-
-                // treat near-contact as contact to prevent creep/jitter
-                if (C < SLOP) {
-                    p += (SLOP - C) * n; // if penetrating, (SLOP - C) includes penetration
+            else if (col.kind == 1) { // Plane
+                n = normalize(col.p1); // Plane normal
+                float dist = sdf_plane(pred_pos, col.p0 + n * thickness, n);
+                // Use SLOP for planes to ensure stable contact
+                if (dist < SLOP) {
+                    penetration = SLOP - dist; 
+                    collided = true;
                 }
             }
-            else if (kind == 2) {
-                // capsule
+            else if (col.kind == 2) { // Capsule
                 float r = col.radius + thickness;
-                float C = sdf_capsule(p, col.p0, col.p1, r);
-                if (C < 0.0) {
-                    vec3 n = normal_capsule(p, col.p0, col.p1);
-                    p += (-C + SLOP) * n;
+                float dist = sdf_capsule(pred_pos, col.p0, col.p1, r);
+                if (dist < 0.0) {
+                    n = normal_capsule(pred_pos, col.p0, col.p1);
+                    penetration = -dist;
+                    collided = true;
+                }
+            }
+
+            // --- B. Solve Phase ---
+            if (collided) {
+                // 1. Solve Normal (Penetration)
+                // Project the particle out of the collider surface
+                vec3 delta_n = n * penetration;
+                pred_pos += delta_n;
+
+                // 2. Solve Friction (Tangential) - Macklin 2019 Approach
+                // Friction must be calculated *after* projecting to the surface.
+                
+                // Calculate current displacement vector
+                vec3 disp = pred_pos - prev_pos;
+
+                // Extract Tangential Component
+                // Remove the normal component from the displacement
+                vec3 disp_t = disp - n * dot(disp, n);
+                float l_t = length(disp_t);
+
+                if (l_t > 1e-9) {
+                    // Coulomb Friction Limit:
+                    // Friction force is proportional to the normal force (penetration depth)
+                    float max_friction = penetration * mu;
+
+                    // Case 1: Static Friction
+                    // If movement is smaller than the friction limit, stop completely.
+                    if (l_t < max_friction) {
+                        // Cancel out all tangential movement
+                        pred_pos -= disp_t;
+                    } 
+                    // Case 2: Dynamic Friction
+                    // If movement is large, resist by the maximum friction amount.
+                    else {
+                        // Apply correction to reduce sliding.
+                        // Formula: correction = -disp_t * min(1.0, max_friction / l_t)
+                        vec3 friction_delta = -disp_t * min(1.0, max_friction / l_t);
+                        pred_pos += friction_delta;
+                    }
                 }
             }
         }
     }
-    xp[id].xyz = p;
+
+    // Write back the resolved position
+    xp[id].xyz = pred_pos;
 }

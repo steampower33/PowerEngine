@@ -12,8 +12,8 @@ struct ClothUBO {
 			
 			float global_damping = 2.0f;
 			float relaxation_factor = 1.0f;
-			float neighbor_friction = 0.1f;
 			float p0;
+			float p1;
 			
 			uint32_t num_particles;
 			uint32_t num_edges;

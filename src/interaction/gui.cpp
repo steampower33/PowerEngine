@@ -721,7 +721,6 @@ void GUI::SetClothGUI(RowFn&& row, float& targetSimFPS, double& simDt, bool& pau
 			row("RelaxationFactor", [&] { ImGui::DragFloat("##RelaxationFactor", &sim.ubo_.datas.sim_params.relaxation_factor, 0.1f, 0.0f, 1.0f); });
 			row("Thickness", [&] { ImGui::DragFloat("##Thickness", &sim.ubo_.datas.sim_params.thickness, 0.001f, 0.0f, 1.0f, "%.3f"); });
 			row("Friction", [&] { ImGui::DragFloat("##Friction", &sim.ubo_.datas.sim_params.friction, 0.001f, 0.0f, 1000.0f, "%.3f"); });
-			row("NeighborFriction", [&] { ImGui::DragFloat("##NeighborFriction", &sim.ubo_.datas.sim_params.neighbor_friction, 0.1f, 0.0f, 10.0f, "%.1f"); });
 			row("MaxNeighbors", [&] { int maxNeighbors = sim.ubo_.datas.sim_params.max_neighbors;  ImGui::DragInt("##MaxNeighbors", &maxNeighbors, 1, 0, 16); sim.ubo_.datas.sim_params.max_neighbors = maxNeighbors; });
 			row("MaxSpeed", [&] { ImGui::DragFloat("##MaxSpeed", &sim.ubo_.datas.sim_params.max_speed, 0.1f, sim.ubo_.datas.sim_params.max_speed, sim.ubo_.datas.sim_params.max_speed, "%.1f"); });
 			row("CellSize", [&] { ImGui::DragFloat("##CellSize", &sim.ubo_.datas.sim_params.cell_size, 0.001f, 0.0f, 1000.0f, "%.3f"); });

@@ -38,8 +38,8 @@ layout(std140, set = 0, binding = 0) uniform SimParams {
 
     float global_damping;
     float relaxation_factor;
-    float neighbor_friction;
     float p0;
+    float p1;
 
     uint num_particles;
     uint num_edges;

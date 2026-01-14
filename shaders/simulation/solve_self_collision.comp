@@ -8,6 +8,7 @@
 
 layout(local_size_x = 256) in;
 
+// Helper to accumulate position corrections atomically
 void accumulate_delta(uint i, vec3 corr)
 {
     atomicAdd(delta_x[i], corr.x);
@@ -18,20 +19,29 @@ void accumulate_delta(uint i, vec3 corr)
 
 bool isFinite_f(float x){ return !isnan(x) && !isinf(x); }
 
-// PBD/XPBD-style friction approximation:
-// clamp tangential relative displacement based on normal correction magnitude.
-// This is NOT a full Coulomb cone solve.
+// PBD/XPBD friction approximation:
+// Clamps tangential movement based on the Normal Force (dn).
 vec3 friction_clamp(vec3 rel_disp, vec3 n, float dn, float mu)
 {
     if (mu <= 0.0 || dn <= 0.0) return vec3(0.0);
 
+    // Calculate tangential vector
     vec3 t  = rel_disp - n * dot(rel_disp, n);
     float tl = length(t);
-    if (tl < 1e-7) return vec3(0.0);
+    
+    // Ignore if movement is negligible
+    if (tl < 1e-9) return vec3(0.0);
 
-    float max_t = mu * dn;              // tangential displacement limit
+    // Coulomb Friction Limit: mu * NormalForce
+    float max_t = mu * dn;              
+
+    // Calculate scaling factor:
+    // If movement < limit, stop completely (static friction).
+    // If movement > limit, resist by the limit (dynamic friction).
+    // Since this is a position correction, we pull back against 't'.
     float s = min(1.0, max_t / tl);
-    return -t * s;                      // oppose tangential motion
+    
+    return -t * s; 
 }
 
 void main()
@@ -40,7 +50,7 @@ void main()
     if (i >= pc.solve.count) return;
 
     float wi = w[i];
-    if (wi == 0.0) return;
+    if (wi == 0.0) return; // Static particle
 
     uint obj_i = collision_masks[i].object_id;
     uint type_i = collision_masks[i].object_type;
@@ -48,19 +58,20 @@ void main()
     uint maxN = sim.max_neighbors;
     uint base = i * maxN;
 
-    float r  = sim.collision_radius * 2.0;
+    // Detection Diameter (2 * Radius)
+    // Using diameter is safer to prevent tunneling.
+    float r  = sim.collision_radius * 2.0; 
     float r2 = r * r;
 
     float dt = sim.dt;
-
     float alpha_tilde = pc.solve.compliance / (dt * dt);
-
     float stiffness = pc.solve.stiffness;
     float mu        = sim.neighbor_friction;
 
     vec3 xi  = xp[i].xyz;
     vec3 pxi = x[i].xyz;
 
+    // Accumulate corrections for particle 'i' locally to reduce atomic contention
     vec3 sumCorr = vec3(0.0);
     uint sumCount = 0u;
 
@@ -68,7 +79,17 @@ void main()
     {
         uint idx = base + k;
         uint j   = neighbors[idx];
+        
+        // End of neighbor list
         if (j == 0xFFFFFFFFu) break;
+        
+        // 1. Ignore self
+        if (i == j) continue;
+        
+        // [CRITICAL] Prevent Double Counting
+        // Only process the pair if i > j. 
+        // We apply corrections to both 'i' and 'j' in this single pass.
+        if (i > j) continue;
 
         float wj = w[j];
         if (wj == 0.0) continue;
@@ -76,8 +97,7 @@ void main()
         uint obj_j = collision_masks[j].object_id;
         uint type_j = collision_masks[j].object_type;
 
-        if (i == j) continue;
-
+        // Optional: Ignore collisions between particles of the same Softbody
         bool is_same_object = (obj_i == obj_j);
         if (is_same_object && type_i == TYPE_SOFTBODY && type_j == TYPE_SOFTBODY) continue;
 
@@ -86,58 +106,71 @@ void main()
 
         vec3 d = xi - xj;
         float d2 = dot(d, d);
-        if (d2 < 1e-12) continue;
 
-        if (d2 >= r2) continue;
+        // Check if within collision range (and avoid division by zero)
+        if (d2 < 1e-12 || d2 >= r2) continue;
 
         float dist = sqrt(d2);
         vec3  n = d / dist;
 
-        float C = dist - r;
-        if (C >= 0.0) continue;
+        // Calculate penetration depth (C < 0 means collision)
+        float C = dist - r; 
+        if (C >= 0.0) continue; // No collision
 
         float wsum = wi + wj;
         if (wsum <= 0.0) continue;
 
+        // XPBD Solver Logic
         float lam_old = neighbor_lambdas[idx];
-
         float denom = wsum + alpha_tilde;
-        denom = max(denom, 1e-8);
-
         float rhs = C + alpha_tilde * lam_old;
-        float dLam = -rhs / denom;
+        float dLam = -rhs / denom; // dLam is usually positive (repulsive force)
 
-        float lam_new = max(0.0, lam_old + dLam * stiffness);
+        float lam_new = lam_old + dLam * stiffness;
+        
+        // Inequality Constraint: Only push, never pull (Lambda >= 0)
+        if (lam_new < 0.0) lam_new = 0.0;
+        
         dLam = lam_new - lam_old;
+        neighbor_lambdas[idx] = lam_new; // Store lambda for next iteration
 
-        float safeLam = isFinite_f(lam_new) ? lam_new : 0.0;
-        neighbor_lambdas[idx] = safeLam;
-
+        // Calculate Positional Correction
+        // i moves along n, j moves along -n
         vec3 corr_i =  (wi * dLam) * n;
         vec3 corr_j = -(wj * dLam) * n;
 
+        // --- Friction Calculation ---
         vec3 disp_i = xi - pxi;
         vec3 disp_j = xj - pxj;
-        vec3 rel_disp = disp_i - disp_j;
+        vec3 rel_disp = disp_i - disp_j; // Relative displacement
 
-        float dn = abs(wsum * dLam);
+        // Normal Impulse Magnitude (approx)
+        float dn = abs(dLam); 
 
-        vec3 fric = friction_clamp(rel_disp, n, dn, mu);
+        // Calculate friction correction in relative space
+        vec3 fric_rel = friction_clamp(rel_disp, n, dn, mu);
 
-        vec3 fric_i =  (wi / wsum) * fric;
-        vec3 fric_j = -(wj / wsum) * fric;
+        // Distribute friction based on mass ratios
+        vec3 fric_i =  (wi / wsum) * fric_rel;
+        vec3 fric_j = -(wj / wsum) * fric_rel;
 
-        vec3 out_i = (corr_i + fric_i);
-        vec3 out_j = (corr_j + fric_j);
+        // Final Correction Vector
+        vec3 out_i = corr_i + fric_i;
+        vec3 out_j = corr_j + fric_j;
 
+        // Accumulate 'i' locally
         sumCorr += out_i;
         sumCount += 1u;
 
+        // Apply to 'j' immediately (since other threads won't process this pair)
         accumulate_delta(j, out_j);
     }
     
-    atomicAdd(delta_x[i], sumCorr.x);
-    atomicAdd(delta_y[i], sumCorr.y);
-    atomicAdd(delta_z[i], sumCorr.z);
-    atomicAdd(delta_count[i], sumCount);
+    // Apply accumulated results for 'i'
+    if (sumCount > 0) {
+        atomicAdd(delta_x[i], sumCorr.x);
+        atomicAdd(delta_y[i], sumCorr.y);
+        atomicAdd(delta_z[i], sumCorr.z);
+        atomicAdd(delta_count[i], sumCount);
+    }
 }

@@ -532,6 +532,8 @@ void ClothSimPass::RecordCompute(uint32_t currentFrame)
 		}
 		TS(gp.timestamp_steps_);
 
+		vku::ssboCompWtoCompRW(cmd, pmSSBO.pred_position);
+
 		// Update Velocity
 		TS(gp.timestamp_steps_);
 		cmd.bindPipeline(vk::PipelineBindPoint::eCompute, pipelines_.update_velocity);
