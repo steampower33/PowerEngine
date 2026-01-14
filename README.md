@@ -3,6 +3,8 @@
 > GPU-accelerated particle simulation engine based on **Extended Position Based Dynamics (XPBD)**.  
 > Real-time oriented cloth particle system built on a unified XPBD solver.
 
+![Preview](./docs/media/preview.png)
+
 ---
 
 ## Features
@@ -33,20 +35,90 @@
 ---
 ## Technical Deep Dive
 
-### 1. Stability Analysis: The "Jittering Cloth" Problem
+### Stability Analysis: The "Jittering Cloth" Problem
 During the development of the physics solver, a severe instability issue was observed where the cloth would vibrate uncontrollably even in a resting state. This occurred specifically when only Distance (Stretch) and Self-Collision constraints were active.
 
-* **Problem:** Without diagonal constraints, a grid-based cloth mesh suffers from structural instability (**Zero-Energy Modes**). A quad element can easily distort into a rhombus without violating the edge length constraints. This lack of rigidity caused a conflict between the Self-Collision (pushing particles apart) and Stretch (pulling them together), leading to an infinite feedback loop of jitter.
-* **Solution:** I implemented **Shear Constraints** by adding distance constraints across the diagonals of each quad.
-* **Result:** This effectively triangulates the mesh, locking the internal angles of the quads. The system gained significant structural rigidity, and the jittering was completely eliminated, proving that shear constraints are essential not just for material properties but for the numerical stability of the solver.
+Problem: Without shear resistance, a grid-based cloth mesh suffers from structural instability (Zero-Energy Modes). A quad element can easily distort (shear) without violating the edge length constraints. This lack of rigidity caused a conflict between the Self-Collision (pushing particles apart) and Stretch (pulling them together), leading to an infinite feedback loop of jitter.
 
-### 2. Parallel Constraint Solving (Jacobi-style)
-To maximize GPU parallelism using Compute Shaders, I adopted a **Jacobi-style accumulation** scheme for constraints like Shear, Bend, and Self-Collision.
+Solution: I implemented Shear Constraints using a dot-product based approach (preserving the angle between edges) rather than simple diagonal springs.
 
-Instead of sequentially projecting positions (Gauss-Seidel), which is hard to parallelize, each constraint calculates a position correction vector and adds it to a global accumulator using `atomicAdd`.
+Result: This effectively locks the internal angles of the triangle mesh. The system gained significant structural rigidity, and the jittering was completely eliminated. This proved that shear constraints are essential not just for material fidelity but for the numerical stability of the solver.
 
-* **Trade-off:** While this allows massive parallelism, it introduces non-determinism due to the order of atomic operations.
-* **Mitigation:** To mitigate stability issues often associated with Jacobi solvers, I utilized **Small-steps XPBD**, which performs multiple sub-steps per frame to ensure convergence.
+### Parallel Constraint Solving & Small-steps XPBD
+To maximize GPU parallelism using Compute Shaders, I adopted a Jacobi-style accumulation scheme.
+
+Parallelism: Instead of sequentially projecting positions (Gauss-Seidel), which is hard to parallelize, each constraint calculates a position correction vector and adds it to a global accumulator using atomicAdd.
+
+Trade-off: Jacobi solvers often converge slower and can be unstable with high stiffness compared to Gauss-Seidel. Additionally, floating-point atomic operations introduce slight non-determinism.
+
+Mitigation: To ensure stability and robust convergence under these conditions, I utilized Small-steps XPBD [Macklin+19]. By dividing the frame into multiple substeps (e.g., 10 substeps), the solver can handle extremely stiff constraints and collisions without exploding, compensating for the inherent instability of the parallel Jacobi approach.
+
+---
+
+## Simulation Loop
+
+```cpp
+void UpdateSimulation(float dt) 
+{
+    float h = dt / num_substeps;
+
+    for (int substep = 0; substep < num_substeps; ++substep) 
+    {
+        // 1. Prediction & External Forces
+        ApplyWind();
+        Integrate(h);
+
+        // 2. Broadphase (Spatial Hashing)
+        if (substep % broadphase_interval == 0) {
+            BuildHashGrid();
+            SortParticles();
+            IdentifyNeighbors();
+        }
+
+        // 3. XPBD Solver Loop
+        for (int iter = 0; iter < num_iterations; ++iter) 
+        {
+            // Accumulate Constraints (AtomicAdd)
+            SolveStretch();
+            SolveShear();  // Dot-product based
+            SolveBend();   // Dihedral angle
+            SolveArea();
+            
+            if (iter % narrowphase_interval == 0)
+                SolveSelfCollision();
+
+            // Apply averaged corrections to x_pred
+            ApplyDeltas(); 
+        }
+
+        // 4. Post-Solver Steps
+        SolveLRA();   // Long Range Attachments
+        CollideSDF(); // Static Collision (Spheres, Capsules)
+        
+        UpdateVelocity(h);
+    }
+
+    // 5. Rendering Prep
+    ComputeNormals();
+}
+```
+---
+
+## Showcase &Benchmarks
+
+### Demo Video
+[![Demo Video](https://img.youtube.com/vi/ljOphc_zVS8/maxresdefault.jpg)](https://www.youtube.com/watch?v=ljOphc_zVS8)
+
+### Stat
+| Metric | Value |
+| :--- | :--- |
+| **Grid Size** | 5.0m x 5.0m |
+| **Resolution** | 63,001 Particles (251 x 251) |
+| **Total Constraints** | **~751,000** (Stretch/Shear/Bend/Area/LRA) |
+| **Performance Environment** | RTX 4060 Laptop GPU |
+
+### GPU Performance
+![Performance](./docs/media/performance.png)
 
 ---
 
@@ -133,7 +205,6 @@ debug.bat
 - OpenPBR: https://github.com/AcademySoftwareFoundation/OpenPBR
 - Khronos Vulkan Tutorial: https://docs.vulkan.org/tutorial/latest/00_Introduction.html
 
-
 ---
 
 ## Acknowledgements
@@ -141,3 +212,5 @@ debug.bat
 - The timestamp gui code is referenced from the [Velvet](https://github.com/vitalight/Velvet/tree/master) project.
 - Implementation notes referenced: Ten Minute Physics / PBD tutorial notes (Matthias Müller)
 - Vulkan learning was done with [Khronos Vulkan](https://docs.vulkan.org/tutorial/latest/00_Introduction.html).
+
+---

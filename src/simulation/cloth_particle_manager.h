@@ -62,6 +62,8 @@ public:
 
 	Context& context_;
 
+	bool top_pinned_corner_ = false;
+
 	uint32_t total_particles_ = 0;
 	uint32_t total_indices_ = 0;
 	uint32_t total_tries_ = 0;

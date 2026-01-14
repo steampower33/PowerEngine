@@ -13,54 +13,24 @@
 ClothParticleManager::ClothParticleManager(Context& context, ModelManager& modelManager, TextureManager& textureManager)
 	: context_(context)
 {
+
 	{
 		Cloth cloth{};
 
-		cloth.name = "1x10 Cloth";
+		cloth.name = "Cloth";
 		cloth.spacing = default_cloth_spacing_;
 		cloth.gsm = 0.2f;
-		cloth.cloth_size = glm::vec2(1.0f, 10.0f);
+		cloth.cloth_size = glm::vec2(5.0f, 5.0f);
 
 		cloth.color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
 
-		cloth.origin = glm::vec3(2.0f, 10.0f, 0.0f);
+		cloth.origin = glm::vec3(0.0f, 5.0f, 0.0f);
 		cloth.angle_deg = 90.0f;
 		cloth.axis = glm::vec3(1, 0, 0);
 
 		cloth.render = true;
 
-		std::string base = "assets/fabric/quatrefoil_jacquard_fabric";
-		cloth.ubo_data.albedo_enable = 1;
-		cloth.ubo_data.albedo_idx = textureManager.CreateTexture(base, "diff", false, true);
-		cloth.ubo_data.normal_enable = 1;
-		cloth.ubo_data.normal_idx = textureManager.CreateTexture(base, "nor", false, true);
-		cloth.ubo_data.arm_enable = 1;
-		cloth.ubo_data.arm_idx = textureManager.CreateTexture(base, "arm", false, true);
-		cloth.ubo_data.fuzz_factor = 0.1f;
-		cloth.ubo_data.fuzz_roughness_factor = 1.0f;
-
-		cloth.ubo_data.tile_uv = cloth.cloth_size;
-
-		SetPlaneCloth(cloth);
-	}
-
-	{
-		Cloth cloth{};
-
-		cloth.name = "3x3 Cloth";
-		cloth.spacing = default_cloth_spacing_;
-		cloth.gsm = 0.2f;
-		cloth.cloth_size = glm::vec2(3.0f, 3.0f);
-
-		cloth.color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
-
-		cloth.origin = glm::vec3(0.0f, 3.0f, 0.0f);
-		cloth.angle_deg = 0.0f;
-		cloth.axis = glm::vec3(0, 1, 0);
-
-		cloth.render = true;
-
-		std::string base = "assets/fabric/terry_cloth";
+		std::string base = "assets/fabric/gingham_check";
 		cloth.ubo_data.albedo_enable = 1;
 		cloth.ubo_data.albedo_idx = textureManager.CreateTexture(base, "diff", false, true);
 		cloth.ubo_data.normal_enable = 1;
@@ -74,6 +44,7 @@ ClothParticleManager::ClothParticleManager(Context& context, ModelManager& model
 
 		SetPlaneCloth(cloth);
 
+		std::cout << cloth.nx1 << " " << cloth.ny1 << std::endl;
 	}
 
 	vku::CreateIndexBuffer(context_.physical_device_, context_.device_, context_.queue_, context_.command_pool_, indices_, index_buffer_, index_buffer_memory_);
@@ -217,9 +188,6 @@ void ClothParticleManager::SetPlaneCloth(Cloth& cloth)
 	num_cloth_indices_ = indices_.size();
 
 	object_cnt_++;
-
-	//inverse_masses_[cloth.offset_particle] = 0.0f;
-	//inverse_masses_[cloth.offset_particle + cloth.nx1 - 1] = 0.0f;
 
 	clothes_.push_back(cloth);
 }
