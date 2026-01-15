@@ -3,7 +3,8 @@
 > GPU-accelerated particle simulation engine based on **Extended Position Based Dynamics (XPBD)**.  
 > Real-time oriented cloth particle system built on a unified XPBD solver.
 
-![Preview](./docs/media/preview.png)
+### Demo Video
+[![Demo Video](https://img.youtube.com/vi/ljOphc_zVS8/maxresdefault.jpg)](https://www.youtube.com/watch?v=ljOphc_zVS8)
 
 ---
 
@@ -104,10 +105,7 @@ void UpdateSimulation(float dt)
 ```
 ---
 
-## Showcase &Benchmarks
-
-### Demo Video
-[![Demo Video](https://img.youtube.com/vi/ljOphc_zVS8/maxresdefault.jpg)](https://www.youtube.com/watch?v=ljOphc_zVS8)
+## Benchmarks
 
 ### Stat
 | Metric | Value |
@@ -273,6 +271,32 @@ Currently, the cloth scene setup is hardcoded in the C++ source. To add a new cl
 - The timestamp gui code is referenced from the [Velvet](https://github.com/vitalight/Velvet/tree/master) project.
 - Implementation notes referenced: Ten Minute Physics / PBD tutorial notes (Matthias Müller)
 - Vulkan learning was done with [Khronos Vulkan](https://docs.vulkan.org/tutorial/latest/00_Introduction.html).
+
+---
+
+## 🔮 What's Next?
+Recently, I watched a video of a robot folding clothes, and it gave me a lot of inspiration.
+
+It made me want to implement simulations where a robot interacts with cloth—like hanging wet laundry on a drying rack or ironing clothes. I plan to start a robotics-related project soon to try and implement these interactions myself.
+
+---
+
+## 📜 Development Journey & Retrospective
+
+**1. From Vulkan to Physics**
+This project began as a deep dive into **Vulkan**. Having previous experience with DirectX 11 and 12, I started with the Khronos Vulkan Tutorial and quickly adapted to the API. 
+While exploring Sascha Willems' Vulkan examples, I was inspired by the mass-spring cloth demo. My curiosity led me to implement a basic mass-spring system, but I soon craved more stability and realism. This led me to discover **XPBD (Extended Position Based Dynamics)**.
+
+**2. Diving into XPBD**
+I studied Matthias Müller's papers and *Ten Minute Physics* articles to build the foundation. I realized that constraints are not just individual rules but a complex web of interactions designed to resolve conflicts. Implementing these papers one by one and analyzing the interplay between constraints was the core of this project.
+
+**3. The Challenge: Self-Collision**
+A significant portion of development time was dedicated to stabilizing **Self-Collision**.
+I researched alternative approaches like **AVBD (Affine Body Dynamics)** and **Stable Cosserat Rods**, recognizing their potential for better performance and stability. 
+However, since they represent a fundamentally different class of solvers, integrating them would require a complete architectural overhaul. I decided to treat this project as a dedicated study of XPBD and reserve those techniques for future projects.
+
+**4. Conclusion**
+Through this journey, I realized that to fundamentally solve self-collision (beyond heuristics), I need to delve into battle-tested techniques like **Baraff-Witkin** or **Geometric Contact**. My next step is to study these foundational papers to overcome the limitations of my current implementation.
 
 ---
 
