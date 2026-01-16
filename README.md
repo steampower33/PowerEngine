@@ -4,7 +4,7 @@
 > Real-time oriented cloth particle system built on a unified XPBD solver.
 
 ### Demo Video
-[![Demo Video](https://img.youtube.com/vi/ljOphc_zVS8/maxresdefault.jpg)](https://www.youtube.com/watch?v=ljOphc_zVS8)
+[![Demo Video](https://img.youtube.com/vi/nu1VZo1UNBs/maxresdefault.jpg)](https://www.youtube.com/watch?v=nu1VZo1UNBs)
 
 ---
 
