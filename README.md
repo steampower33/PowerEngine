@@ -1,4 +1,4 @@
-# PhysixStudio
+# XPBD-Cloth
 
 > GPU-accelerated particle simulation engine based on **Extended Position Based Dynamics (XPBD)**.  
 > Real-time oriented cloth particle system built on a unified XPBD solver.
@@ -161,8 +161,8 @@ Running on an **RTX 4060 Laptop GPU**, the simulation achieves stable real-time 
 First, clone the repository and update submodules.
 
 ```bat
-git clone https://github.com/steampower33/PhysixStudio.git
-cd PhysixStudio
+git clone https://github.com/steampower33/XPBD-Cloth.git
+cd XPBD-Cloth
 git submodule update --init --recursive
 ```
 
@@ -172,10 +172,10 @@ git submodule update --init --recursive
 You can use the native CMake support in Visual Studio.
 
 1. Open Visual Studio 2022.
-2. Select "Open a local folder" and choose the PhysixStudio folder you just cloned.
+2. Select "Open a local folder" and choose the XPBD-Cloth folder you just cloned.
 3. Visual Studio will automatically detect CMakeLists.txt and configure the project.
     Note: If configuration doesn't start, simply open and save CMakeLists.txt to trigger it.
-4. Select the startup target (e.g., PhysixStudio.exe) from the toolbar dropdown menu.
+4. Select the startup target (e.g., XPBDCloth.exe) from the toolbar dropdown menu.
 5. Press F5 or click the Run (Green Play) button to build and launch.
 
 #### Option B: Command Line (CLI)
