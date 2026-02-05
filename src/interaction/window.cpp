@@ -27,7 +27,7 @@ Window::Window()
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-	glfw_window_ = glfwCreateWindow(init_width_, init_height_, "PhysixStudio", nullptr, nullptr);
+	glfw_window_ = glfwCreateWindow(init_width_, init_height_, "XPBDCloth", nullptr, nullptr);
 
 	glfwSetWindowUserPointer(glfw_window_, this);
 

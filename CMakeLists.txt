@@ -1,5 +1,5 @@
 ﻿cmake_minimum_required(VERSION 3.29)
-project(PowerEngine LANGUAGES CXX)
+project(XPBDCloth LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -42,27 +42,27 @@ file(GLOB SRC CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/interaction/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/src/util/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
-add_executable(PowerEngine ${SRC})
+add_executable(XPBDCloth ${SRC})
 
-target_precompile_headers(PowerEngine PRIVATE
+target_precompile_headers(XPBDCloth PRIVATE
     "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/src/util/pch.h>"
 )
 
 if (MSVC)
 
-target_compile_options(PowerEngine PRIVATE 
+target_compile_options(XPBDCloth PRIVATE 
     $<$<CONFIG:Debug>:/Od /RTC1>                         # Debug
     $<$<CONFIG:Release>:/O2 /Ob2 /DNDEBUG>               # Release
 )
-add_custom_command(TARGET PowerEngine POST_BUILD
+add_custom_command(TARGET XPBDCloth POST_BUILD
 COMMAND ${CMAKE_COMMAND} -E make_directory 
-"$<TARGET_FILE_DIR:PowerEngine>/assets/"
+"$<TARGET_FILE_DIR:XPBDCloth>/assets/"
 COMMAND ${CMAKE_COMMAND} -E copy_directory 
-"${CMAKE_SOURCE_DIR}/assets/" "$<TARGET_FILE_DIR:PowerEngine>/assets/"
+"${CMAKE_SOURCE_DIR}/assets/" "$<TARGET_FILE_DIR:XPBDCloth>/assets/"
 COMMAND ${CMAKE_COMMAND} -E make_directory 
-"$<TARGET_FILE_DIR:PowerEngine>/shaders"
+"$<TARGET_FILE_DIR:XPBDCloth>/shaders"
 COMMAND ${CMAKE_COMMAND} -E copy_directory 
-"${CMAKE_SOURCE_DIR}/shaders" "$<TARGET_FILE_DIR:PowerEngine>/shaders")
+"${CMAKE_SOURCE_DIR}/shaders" "$<TARGET_FILE_DIR:XPBDCloth>/shaders")
 
 endif()
 
@@ -84,7 +84,7 @@ target_sources(VulkanCppModule
     BASE_DIRS "${Vulkan_INCLUDE_DIR}"
     FILES     "${Vulkan_INCLUDE_DIR}/vulkan/vulkan.cppm")
 
-target_link_libraries(PowerEngine
+target_link_libraries(XPBDCloth
   PRIVATE
     Vulkan::cppm
     glfw
@@ -93,7 +93,7 @@ target_link_libraries(PowerEngine
     vk_radix_sort
     fmt::fmt-header-only
 )
-target_include_directories(PowerEngine
+target_include_directories(XPBDCloth
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core
     ${CMAKE_CURRENT_SOURCE_DIR}/src/simulation
@@ -203,4 +203,4 @@ set(SIMULATION_SHADERS
 )
 compile_glsl_shaders(simulation_shaders_target SOURCES ${SIMULATION_SHADERS})
 
-add_dependencies(PowerEngine object_render_shaders_target simulation_shaders_target)
+add_dependencies(XPBDCloth object_render_shaders_target simulation_shaders_target)
