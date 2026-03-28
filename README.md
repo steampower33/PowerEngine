@@ -298,13 +298,3 @@ However, since they represent a fundamentally different class of solvers, integr
 **4. Conclusion**
 Through this journey, I realized that to fundamentally solve self-collision (beyond heuristics), I need to delve into battle-tested techniques like **Baraff-Witkin** or **Geometric Contact**. My next step is to study these foundational papers to overcome the limitations of my current implementation.
 
----
-
-## 💬 Contact & Feedback
-This project reflects my deep interest in Physics Simulation and Graphics Programming. I welcome any feedback, suggestions, or discussions about the code!
-
-- **Email:** devhopper100@gmail.com
-- **LinkedIn:** https://www.linkedin.com/in/seungmin-lee-96b3aa231/
-- **Youtube:** https://www.youtube.com/@Dev.Hopper
-
----
