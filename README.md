@@ -1,3 +1,22 @@
+# Vulkan XPBD Cloth Simulation
+
+## 프로젝트 요약
+
+Vulkan Compute Shader 기반으로 구현한 실시간 XPBD Cloth Simulation 프로젝트입니다.
+
+주요 구현 내용:
+
+- XPBD / Small-Steps XPBD Cloth Solver
+- Stretch / Shear / Bend / Area Constraint
+- Self-Collision / LRA Constraint
+- Sequential Gauss-Seidel Solver
+- Atomic Add 기반 Jacobi-style Parallel Solver
+- Spatial Hashing / GPU Radix Sort
+- Sphere / Capsule SDF Collision
+- Vulkan Compute / Rendering Pipeline 연동
+
+약 63K Particle / 751K Constraint 규모에서 시뮬레이션 및 성능 측정을 진행했습니다.
+
 # XPBD-Cloth
 
 > GPU-accelerated particle simulation engine based on **Extended Position Based Dynamics (XPBD)**.  
