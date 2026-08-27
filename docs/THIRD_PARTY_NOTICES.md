@@ -15,7 +15,8 @@ Please refer to the upstream repositories for the full license texts.
 ### Dear ImGui
 - Upstream: https://github.com/ocornut/imgui
 - License: MIT
-- Local path: `external/imgui` (via `add_subdirectory`)
+- Local path: `external/imgui`
+- Build integration: local static library target
 - License file: `external/imgui/LICENSE.txt`
 
 ### vk_radix_sort (vulkan_radix_sort)
@@ -41,6 +42,18 @@ Please refer to the upstream repositories for the full license texts.
 
 ### fmt
 - Upstream: https://github.com/fmtlib/fmt
+- License: MIT
+
+### GLM
+- Upstream: https://github.com/g-truc/glm
+- License: MIT / Happy Bunny License
+
+### stb
+- Upstream: https://github.com/nothings/stb
+- License: MIT or Public Domain
+
+### tinygltf
+- Upstream: https://github.com/syoyo/tinygltf
 - License: MIT
 
 ---

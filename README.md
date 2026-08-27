@@ -4,23 +4,28 @@
 
 Vulkan Compute Shader 기반으로 구현한 실시간 XPBD Cloth Simulation 프로젝트입니다.
 
+XPBD 기반 Cloth Constraint Solver를 GPU로 병렬화하고,
+Spatial Hashing과 GPU Radix Sort를 이용한 Self-Collision Broadphase,
+Analytic SDF Collision 및 Vulkan Rendering Pipeline을 구현했습니다.
+
 주요 구현 내용:
 
-- XPBD / Small-Steps XPBD Cloth Solver
+- XPBD Cloth Solver
+- Multi-Substep Simulation (Small Steps-inspired)
 - Stretch / Shear / Bend / Area Constraint
-- Self-Collision / LRA Constraint
-- Sequential Gauss-Seidel Solver
-- Atomic Add 기반 Jacobi-style Parallel Solver
-- Spatial Hashing / GPU Radix Sort
-- Sphere / Capsule SDF Collision
+- Self-Collision / Long Range Attachments (LRA)
+- Graph Coloring 기반 Gauss-Seidel-style Stretch Solver
+- Atomic Add 기반 Jacobi-style Parallel Constraint Solver
+- Spatial Hashing / GPU Radix Sort 기반 Neighbor Search
+- Sphere / Plane / Capsule Analytic SDF Collision
 - Vulkan Compute / Rendering Pipeline 연동
 
-약 63K Particle / 751K Constraint 규모에서 시뮬레이션 및 성능 측정을 진행했습니다.
+약 **63K Particle / 751K Generated Constraints** 규모에서 시뮬레이션 및 성능 측정을 진행했습니다.
 
 # XPBD-Cloth
 
-> GPU-accelerated particle simulation engine based on **Extended Position Based Dynamics (XPBD)**.  
-> Real-time oriented cloth particle system built on a unified XPBD solver.
+> GPU-accelerated cloth simulation based on Extended Position Based Dynamics (XPBD).
+> Real-time cloth simulation implemented with Vulkan Compute Shaders.
 
 ### Demo Video
 [![Demo Video](./docs/media/thumbnail.png)](https://www.youtube.com/watch?v=nu1VZo1UNBs)
@@ -30,139 +35,264 @@ Vulkan Compute Shader 기반으로 구현한 실시간 XPBD Cloth Simulation 프
 ## Features
 
 ### Core
-- [x] Extended position-based dynamics (XPBD) [Macklin+16]
-- [x] Small-steps XPBD [Macklin+19]
 
-### Constraints Solve Scheme
-- **G**: Gauss–Seidel (sequential, in-place projection)
-- **A**: Parallel accumulation (atomic add + apply; Jacobi-style)
+- [x] Extended Position Based Dynamics (XPBD) [Macklin+16]
+- [x] Multi-substep XPBD simulation inspired by Small Steps [Macklin+19]
+
+### Constraint Solve Scheme
+
+- **G: Graph-colored Gauss-Seidel-style**
+  - Constraints within the same color are processed in parallel.
+  - Positions are updated in-place.
+  - Colors are dispatched sequentially with synchronization between them.
+
+- **A: Atomic accumulation / Jacobi-style**
+  - Constraints calculate position corrections in parallel.
+  - Corrections are accumulated using `atomicAdd`.
+  - Positions are updated in a separate `ApplyDeltas` pass using averaged and relaxed corrections.
 
 > Note:
-> - The accumulation path is **Jacobi-style** (constraints write to accumulators, then positions are updated in a separate pass).
-> - Due to atomic update order, results are **not bitwise deterministic** and may converge differently from classic GS/Jacobi.
+>
+> - The Stretch solver uses graph coloring to avoid write conflicts while preserving in-place position updates between color passes.
+> - Shear, Bend, Area, and Self-Collision use an atomic accumulation path.
+> - Floating-point atomic update order is not bitwise deterministic.
 
 ### Cloth
-- [x] Distance/Stretch (G) [Müller+07]
-- [x] Shear (A) [Müller+14]
-- [x] Bend (A) [Müller+07]
-- [x] Area (A) [Müller+14]
-- [x] Self-Collision (A)
-- [x] LRA(Long Range Attachments) (per-particle sequential projection; GS-like) [Kim+12]
+
+- [x] Distance / Stretch — Graph-colored GS-style [Müller+07]
+- [x] Shear — Atomic Jacobi-style [Müller+14]
+- [x] Bend — Atomic Jacobi-style [Müller+07]
+- [x] Area — Atomic Jacobi-style [Müller+14]
+- [x] Self-Collision — Atomic Jacobi-style
+- [x] Long Range Attachments (LRA) — Per-particle max-distance projection [Kim+12]
+
+### Collision
+
+- [x] Particle Self-Collision
+- [x] Sphere Analytic SDF
+- [x] Plane Analytic SDF
+- [x] Capsule Analytic SDF
 
 ### External Force
-- [x] Wind effects [Wilson+14] (used in Disney’s Frozen)
+
+- [x] Wind Effects [Wilson+14]
 
 ---
-## Technical Deep Dive
 
 ### Stability Analysis: The "Jittering Cloth" Problem
-During the development of the physics solver, a severe instability issue was observed where the cloth would vibrate uncontrollably even in a resting state. This occurred specifically when only Distance (Stretch) and Self-Collision constraints were active.
 
-Problem: Without shear resistance, a grid-based cloth mesh suffers from structural instability (Zero-Energy Modes). A quad element can easily distort (shear) without violating the edge length constraints. This lack of rigidity caused a conflict between the Self-Collision (pushing particles apart) and Stretch (pulling them together), leading to an infinite feedback loop of jitter.
+During development, strong jittering was observed in resting cloth configurations when Stretch and Self-Collision constraints were active.
 
-Solution: I implemented Shear Constraints using a dot-product based approach (preserving the angle between edges) rather than simple diagonal springs.
+The instability became especially noticeable as Self-Collision corrections repeatedly interacted with the deformation of the cloth mesh.
 
-Result: This effectively locks the internal angles of the triangle mesh. The system gained significant structural rigidity, and the jittering was completely eliminated. This proved that shear constraints are essential not just for material fidelity but for the numerical stability of the solver.
+To improve the behavior, I added a Shear Constraint based on the dot product between two triangle edges:
 
-### Parallel Constraint Solving & Small-steps XPBD
-To maximize GPU parallelism using Compute Shaders, I adopted a Jacobi-style accumulation scheme.
+```text
+C = dot(e1, e2) - restDot
+```
 
-Parallelism: Instead of sequentially projecting positions (Gauss-Seidel), which is hard to parallelize, each constraint calculates a position correction vector and adds it to a global accumulator using atomicAdd.
+The constraint limits changes in the local shape of each triangle by reducing shear deformation.
 
-Trade-off: Jacobi solvers often converge slower and can be unstable with high stiffness compared to Gauss-Seidel. Additionally, floating-point atomic operations introduce slight non-determinism.
+After enabling the Shear Constraint and tuning the solver parameters, the resting-state jitter was significantly reduced in the tested scenes.
 
-Mitigation: To ensure stability and robust convergence under these conditions, I utilized Small-steps XPBD [Macklin+19]. By dividing the frame into multiple substeps (e.g., 10 substeps), the solver can handle extremely stiff constraints and collisions without exploding, compensating for the inherent instability of the parallel Jacobi approach.
+This was an empirical stabilization result from the project rather than a proof of a single numerical root cause. The final solver therefore uses a combination of multiple constraints, substepping, compliance tuning, correction averaging, and relaxation to maintain stable cloth behavior.
+
+### Hybrid Constraint Solver & Multi-Substep XPBD
+
+The cloth solver uses two different GPU constraint solving paths.
+
+#### Graph-colored Stretch Solver
+
+Stretch constraints are preprocessed using vertex-based graph coloring.
+
+Constraints within the same color do not share vertices, so they can be evaluated in parallel without atomic position updates.
+
+Each color is dispatched sequentially, and the predicted positions are updated in-place before the next color pass.
+
+This results in a graph-colored Gauss-Seidel-style solver for Stretch constraints.
+
+#### Atomic Accumulation Solver
+
+Shear, Bend, Area, and Self-Collision constraints use a separate accumulation path.
+
+Each constraint evaluates its position correction in parallel and accumulates the result into per-particle correction buffers using `atomicAdd`.
+
+After the constraint passes are completed, the accumulated corrections are averaged and applied to the predicted positions in a separate `ApplyDeltas` pass.
+
+This path behaves as a Jacobi-style parallel solver.
+
+Because floating-point atomic operations may be executed in different orders, the accumulated results are not guaranteed to be bitwise deterministic.
+
+#### Multi-Substep Simulation
+
+To improve simulation stability, each frame is divided into multiple smaller simulation substeps.
+
+The current default configuration uses:
+
+- 10 substeps per frame
+- 4 solver iterations per substep
+
+Each substep performs position prediction, constraint solving, collision processing, and velocity update using the reduced timestep.
+
+This implementation is inspired by the Small Steps approach [Macklin+19], but it also performs multiple solver iterations inside each substep rather than reproducing the original single-iteration-per-substep configuration.
+
+During development, additional stabilization was required for the atomic accumulation path. The final implementation therefore uses correction averaging, relaxation, constraint-specific compliance values, and substepping together rather than relying on a single stabilization technique.
 
 ---
-
 ## Simulation Loop
 
 ```cpp
-void UpdateSimulation(float dt) 
+void UpdateSimulation(float frameDt)
 {
-    float h = dt / num_substeps;
+    const float h = frameDt / numSubsteps;
 
-    for (int substep = 0; substep < num_substeps; ++substep) 
+    for (uint32_t substep = 0; substep < numSubsteps; ++substep)
     {
-        // 1. Prediction & External Forces
+        // 1. External Forces & Prediction
         ApplyWind();
         Integrate(h);
 
-        // 2. Broadphase (Spatial Hashing)
-        if (substep % broadphase_interval == 0) {
-            BuildHashGrid();
-            SortParticles();
-            IdentifyNeighbors();
-        }
+        // XPBD lambdas are reset at the beginning of each substep.
+        ClearLambdas();
 
-        // 3. XPBD Solver Loop
-        for (int iter = 0; iter < num_iterations; ++iter) 
+        // 2. Self-Collision Broadphase
+        // Neighbor data may be reused between broadphase updates.
+        if (selfCollisionEnabled &&
+            substep % broadphaseInterval == 0)
         {
-            // Accumulate Constraints (AtomicAdd)
-            SolveStretch();
-            SolveShear();  // Dot-product based
-            SolveBend();   // Dihedral angle
-            SolveArea();
-            
-            if (iter % narrowphase_interval == 0)
-                SolveSelfCollision();
-
-            // Apply averaged corrections to x_pred
-            ApplyDeltas(); 
+            BuildParticleHash();
+            GPURadixSort();          // hash key + particle index
+            BuildCellRanges();
+            BuildNeighborList();
         }
 
-        // 4. Post-Solver Steps
-        SolveLRA();   // Long Range Attachments
-        CollideSDF(); // Static Collision (Spheres, Capsules)
-        
+        // 3. Constraint Solver
+        for (uint32_t iter = 0; iter < numIterations; ++iter)
+        {
+            // Stretch:
+            // graph-colored Gauss-Seidel-style in-place projection
+            if (stretchEnabled)
+            {
+                for (uint32_t color = 0; color < numColors; ++color)
+                {
+                    SolveStretchColor(color);
+                    BarrierPredictedPosition();
+                }
+            }
+
+            // Jacobi-style correction accumulation
+            if (shearEnabled)
+                SolveShear();
+
+            if (bendEnabled)
+                SolveBend();
+
+            if (areaEnabled)
+                SolveArea();
+
+            if (selfCollisionEnabled &&
+                iter % narrowphaseInterval == 0)
+            {
+                SolveSelfCollision();
+            }
+
+            // Shear / Bend / Area / Self-Collision corrections
+            // are accumulated using atomic operations.
+            BarrierCorrectionBuffers();
+
+            ApplyAveragedDeltasWithRelaxation();
+            BarrierPredictedPosition();
+        }
+
+        // 4. Post-Solver Constraints
+
+        // Current implementation applies LRA only
+        // on the first substep of the frame.
+        if (lraEnabled && substep == 0)
+            SolveLRA();
+
+        // Analytic SDF collision:
+        // Sphere / Plane / Capsule
+        CollideAnalyticSDF();
+
+        // 5. Velocity Reconstruction
         UpdateVelocity(h);
     }
 
-    // 5. Rendering Prep
-    ComputeNormals();
+    // 6. Rendering Preparation
+    ComputeTriangleNormals();
+    ComputeVertexNormals();
 }
 ```
 ---
 
 ## Benchmarks
 
-### Stat
+### Test Configuration
+
 | Metric | Value |
-| :--- | :--- |
-| **Grid Size** | 5.0m x 5.0m |
-| **Resolution** | 63,001 Particles (251 x 251) |
-| **Total Constraints** | **~751,000** (Stretch/Shear/Bend/Area/LRA) |
-| **Performance Environment** | RTX 4060 Laptop GPU |
+|---|---:|
+| Cloth Size | 5.0 m × 5.0 m |
+| Resolution | 251 × 251 |
+| Particles | 63,001 |
+| Generated Constraints | ~751,000 |
+| GPU | NVIDIA RTX 4060 Laptop GPU |
 
-### Performance
-![Performance](./docs/media/gpu_kernel_time.png)
+The generated constraint count includes the cloth constraint data created for Stretch, Shear, Bend, Area, and LRA.
 
-Running on an **RTX 4060 Laptop GPU**, the simulation achieves stable real-time performance with **63,001 particles**.
+### Measured Performance
 
-- **Average Physics Step:** ~7.4 ms
-- **Theoretical Max FPS:** ~135 FPS (Physics Only)
-- **Bottleneck:** The constraint solving stages (`SolveStretch`, `SolveBend`) take up the majority of the computation time (~50%), which is typical for high-stiffness XPBD simulations.
+In the recorded test configuration, the GPU physics simulation time was approximately:
 
+- **Physics Step: ~7.4 ms**
+- **Particles: 63,001**
+- **Generated Constraints: ~751K**
+- **GPU: RTX 4060 Laptop GPU**
+
+The reported time represents the measured physics workload for the tested scene and configuration.
+
+Because solver cost depends on enabled constraints, substep / iteration counts, self-collision state, and broadphase frequency, the result should be interpreted as a measurement of this project configuration rather than a general throughput limit of the solver.
+
+### Performance Characteristics
+
+Profiling during development showed that constraint solving was one of the major GPU costs as the cloth resolution and solver workload increased.
+
+The current simulation pipeline contains several workload-dependent stages:
+
+- Graph-colored Stretch constraint solving
+- Atomic Shear / Bend / Area constraint solving
+- Self-Collision constraint solving
+- Spatial Hash generation
+- GPU Radix Sort
+- Cell / Neighbor list construction
+- SDF collision
+- Velocity and normal updates
+
+The exact cost distribution depends on which constraints and collision features are enabled.
 
 ---
 
 ## Dependencies
 
-### Third-party libraries
-- **GLFW**: window / input
-- **Dear ImGui**: debug UI (vendored; built via `add_subdirectory`)
-- **KTX-Software** (`KTX::ktx`): KTX/KTX2 texture container support
-- **vk_radix_sort**: GPU radix sort (vendored; built via `add_subdirectory`)
-- **fmt** (`fmt::fmt-header-only`): logging / formatting
+### Vendored / Git Submodules
 
-### How dependencies are included
-- Vendored in this repository (git submodule):
+- Dear ImGui — debug UI
   - `external/imgui`
+  - Built as a local static library target
+- vulkan_radix_sort — GPU radix sort
   - `external/vk_radix_sort`
-- Fetched via package manager (recommended: **vcpkg**):
-  - GLFW, KTX-Software, fmt
-  
-> Note : Check out [THIRD_PARTY_NOTICES.md](./docs/THIRD_PARTY_NOTICES.md)
+  - Included via `add_subdirectory`
+
+### Installed via vcpkg
+
+- GLFW — window / input
+- GLM — mathematics
+- stb — image utilities
+- tinygltf — glTF loading
+- KTX-Software (`KTX::ktx`) — KTX / KTX2 texture support
+- fmt (`fmt::fmt-header-only`) — logging / formatting
+
+> See `docs/THIRD_PARTY_NOTICES.md` for third-party license information.
 
 ---
 
@@ -172,7 +302,8 @@ Running on an **RTX 4060 Laptop GPU**, the simulation achieves stable real-time 
 - Windows
 - CMake >= 3.29
 - C++ 20
-- GPU backend: Vulkan 1.4+ (LunarG SDK)
+- Vulkan 1.4-capable GPU / driver
+- Vulkan SDK
 - Visual Studio 2022 (MSVC) + C++ Desktop workload
 - vcpkg (set environment variable `VCPKG_ROOT` to your vcpkg directory, e.g. `C:\vcpkg`)
 
@@ -197,16 +328,17 @@ You can use the native CMake support in Visual Studio.
 4. Select the startup target (e.g., XPBDCloth.exe) from the toolbar dropdown menu.
 5. Press F5 or click the Run (Green Play) button to build and launch.
 
-#### Option B: Command Line (CLI)
-Run from x64 Native Tools Command Prompt for VS 2022.
+#### Option B: Command Line
 
-```
-:: Release Build
+Run from **x64 Native Tools Command Prompt for VS 2022**.
+
+```bat
+:: Release
 cmake --preset windows-release
 cmake --build --preset release
 release.bat
 
-:: Debug Build
+:: Debug
 cmake --preset windows-debug
 cmake --build --preset debug
 debug.bat
@@ -214,54 +346,16 @@ debug.bat
 
 ---
 
-## 🛠️ How to Add New Cloth
-Currently, the cloth scene setup is hardcoded in the C++ source. To add a new cloth object or modify existing ones, follow these steps:
-
-1. Open `src/cloth_particle_manager.cpp`.
-2. Locate the **constructor** `ClothParticleManager::ClothParticleManager`.
-3. Inside the constructor, you will find a code block creating a `Cloth` object. You can duplicate this block to add multiple cloth instances.
-
-### Example Code
-```cpp
-// Inside ClothParticleManager::ClothParticleManager(...)
-
-{
-    Cloth cloth{}; // Create new instance
-
-    // 1. Physics Properties
-    cloth.name = "MyNewCloth";
-    cloth.spacing = 0.05f;           // Grid spacing (resolution)
-    cloth.gsm = 0.2f;                // Weight (Grams per Square Meter)
-    cloth.cloth_size = glm::vec2(5.0f, 5.0f); // Width x Height
-
-    // 2. Initial Transform
-    cloth.origin = glm::vec3(2.0f, 5.0f, 0.0f); // Position
-    cloth.angle_deg = 90.0f;                    // Rotation angle
-    cloth.axis = glm::vec3(1, 0, 0);            // Rotation axis
-
-    // 3. Rendering Material
-    std::string base = "assets/fabric/denim";   // Texture path
-    cloth.ubo_data.albedo_idx = textureManager.CreateTexture(base, "diff", false, true);
-    // ... set other texture maps (normal, arm) ...
-
-    // 4. Register to Solver (IMPORTANT)
-    SetPlaneCloth(cloth); 
-}
-```
-
----
-
 ## Controls
 
-* **W/A/S/D**: Move the camera
-* **X**: Pause/Resume simulation
-* **Z + X**: After pressing **Z**, pressing **X** steps the simulation **one frame at a time** (frame stepping)
-* **F**: Focus the camera on the world origin
-* **R**: Toggle mouse-driven camera control (enable/disable view rotation by mouse)
-* **Right Mouse Button (RMB)**: Move objects *(particle-based objects are not supported yet)*
-* **Left Mouse Button (LMB)**: Rotate objects
-* **LMB (Particle interaction)**: Drag particles with the mouse
-* **ESC**: Quit the application
+- `W/A/S/D` — Move camera
+- `X` — Pause / Resume
+- `Z + X` — Single-frame stepping
+- `F` — Focus world origin
+- `R` — Toggle mouse camera control
+- `LMB` — Rotate object / drag particles
+- `RMB` — Move supported objects
+- `ESC` — Quit
 
 ---
 
@@ -286,34 +380,107 @@ Currently, the cloth scene setup is hardcoded in the C++ source. To add a new cl
 ---
 
 ## Acknowledgements
-- README structure inspired by: [Velvet](https://github.com/vitalight/Velvet/tree/master) (vitalight/Velvet), [elasty](https://github.com/yuki-koyama/elasty?tab=readme-ov-file) (yuki-koyama/elasty)
-- The timestamp gui code is referenced from the [Velvet](https://github.com/vitalight/Velvet/tree/master) project.
-- Implementation notes referenced: Ten Minute Physics / PBD tutorial notes (Matthias Müller)
-- Vulkan learning was done with [Khronos Vulkan](https://docs.vulkan.org/tutorial/latest/00_Introduction.html).
+
+- README structure and selected implementation patterns were referenced from `Velvet`.
+- README formatting was also inspired by `elasty`.
+- PBD / XPBD implementation notes referenced Matthias Müller's papers and Ten Minute Physics.
+- Vulkan API learning referenced the Khronos Vulkan Tutorial.
 
 ---
 
-## 🔮 What's Next?
-Recently, I watched a video of a robot folding clothes, and it gave me a lot of inspiration.
+## Development Journey & Retrospective
 
-It made me want to implement simulations where a robot interacts with cloth—like hanging wet laundry on a drying rack or ironing clothes. I plan to start a robotics-related project soon to try and implement these interactions myself.
+### 1. From Vulkan Compute to Cloth Simulation
+
+This project originally started as a Vulkan graphics and compute programming study.
+
+After implementing the basic rendering and compute pipeline, I became interested in GPU-based cloth simulation and began experimenting with particle-based cloth dynamics.
+
+I used XPBD papers and PBD-related technical notes as references and gradually expanded the project from basic cloth constraints to self-collision, GPU neighbor search, and multiple collision constraints.
 
 ---
 
-## 📜 Development Journey & Retrospective
+### 2. Iterative Solver Development
 
-**1. From Vulkan to Physics**
-This project began as a deep dive into **Vulkan**. Having previous experience with DirectX 11 and 12, I started with the Khronos Vulkan Tutorial and quickly adapted to the API. 
-While exploring Sascha Willems' Vulkan examples, I was inspired by the mass-spring cloth demo. My curiosity led me to implement a basic mass-spring system, but I soon craved more stability and realism. This led me to discover **XPBD (Extended Position Based Dynamics)**.
+The final solver architecture was not designed all at once.
 
-**2. Diving into XPBD**
-I studied Matthias Müller's papers and *Ten Minute Physics* articles to build the foundation. I realized that constraints are not just individual rules but a complex web of interactions designed to resolve conflicts. Implementing these papers one by one and analyzing the interplay between constraints was the core of this project.
+During development, adding Self-Collision and multiple cloth constraints introduced repeated problems such as jittering, excessive corrections, and unstable motion.
 
-**3. The Challenge: Self-Collision**
-A significant portion of development time was dedicated to stabilizing **Self-Collision**.
-I researched alternative approaches like **AVBD (Affine Body Dynamics)** and **Stable Cosserat Rods**, recognizing their potential for better performance and stability. 
-However, since they represent a fundamentally different class of solvers, integrating them would require a complete architectural overhaul. I decided to treat this project as a dedicated study of XPBD and reserve those techniques for future projects.
+The implementation therefore evolved iteratively:
 
-**4. Conclusion**
-Through this journey, I realized that to fundamentally solve self-collision (beyond heuristics), I need to delve into battle-tested techniques like **Baraff-Witkin** or **Geometric Contact**. My next step is to study these foundational papers to overcome the limitations of my current implementation.
+- Added and adjusted Stretch / Shear / Bend / Area constraints
+- Introduced graph coloring for the in-place Stretch solver
+- Used atomic correction accumulation for parallel multi-particle constraints
+- Added correction averaging and relaxation
+- Increased simulation substeps and adjusted solver iterations
+- Tuned constraint-specific compliance values
+- Added LRA to limit excessive global stretching
+- Added velocity clamping and damping for large positional corrections
+
+Several of these parameters were tuned empirically while debugging unstable simulation cases rather than derived from a complete numerical analysis.
+
+The current implementation should therefore be viewed as the result of iterative solver stabilization and GPU parallelization experiments.
+
+---
+
+### 3. Self-Collision and GPU Broadphase
+
+Self-Collision became one of the largest implementation challenges in the project.
+
+To avoid testing every particle pair, the final implementation uses:
+
+```text
+Predicted Position
+        ↓
+Spatial Hash
+        ↓
+GPU Radix Sort
+        ↓
+Cell Range Construction
+        ↓
+Neighbor List Construction
+        ↓
+XPBD Self-Collision
+```
+
+The neighbor list is reused between selected substeps to reduce broadphase cost.
+
+This reduces GPU work, but it also means that the cached neighbor information can become stale for fast-moving particles.
+
+The implementation therefore represents a practical real-time trade-off rather than a conservative collision-detection guarantee.
+
+---
+
+### 4. What I Would Change Today
+
+Looking back at the project, I would approach solver development more systematically.
+
+Rather than adding several stabilization techniques while debugging the complete simulation, I would isolate and validate each stage independently:
+
+1. Validate each XPBD constraint on a minimal test scene.
+2. Compare Gauss-Seidel and Jacobi-style convergence under controlled conditions.
+3. Measure the effect of substep and iteration counts separately.
+4. Add Self-Collision only after the structural constraints are validated.
+5. Measure broadphase rebuild frequency against missed collision candidates.
+6. Record profiler results before and after each optimization or stabilization change.
+
+The current project helped me understand that a simulation that appears visually stable does not necessarily prove that the numerical cause of an instability has been identified.
+
+For that reason, this README distinguishes between implementation details that can be verified directly from the code and stabilization results that were observed empirically.
+
+---
+
+### 5. Current Scope and Limitations
+
+The current implementation includes a real-time GPU XPBD cloth pipeline, but it also has several known limitations.
+
+* Solver parameters are partially based on empirical tuning.
+* The implementation uses a hybrid constraint solver rather than a single unified solve scheme.
+* The Small Steps paper influenced the substepping structure, but the current implementation uses multiple solver iterations per substep.
+* Self-Collision uses discrete particle-based collision detection with a cached neighbor list.
+* Sphere / Plane / Capsule collisions use analytic SDFs rather than a volumetric SDF or level-set representation.
+* LRA is implemented as a direct maximum-distance projection rather than an XPBD lambda/compliance constraint.
+* The project does not provide a formal convergence or error analysis of the complete solver.
+
+These limitations are areas I would investigate more systematically in a future implementation.
 
